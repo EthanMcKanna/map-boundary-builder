@@ -149,7 +149,20 @@ def georeference_from_labels(
                     )
                     from .extract import load_rgb
 
-                    road_refinement = refine_transform_with_osm_roads(load_rgb(image_path), city_center, geo_transform)
+                    road_refinement = refine_transform_with_osm_roads(
+                        load_rgb(image_path),
+                        city_center,
+                        geo_transform,
+                        lock_scale=should_lock_road_refinement_scale(
+                            scale,
+                            len(inliers),
+                            residual_median,
+                            residual_p90,
+                            control_spread(pixel_positions(controls, inliers)),
+                            width,
+                            height,
+                        ),
+                    )
                     if road_refinement is not None:
                         geo_transform = road_refinement.transform
                     return GeoreferenceResult(
@@ -1203,6 +1216,31 @@ def robust_similarity_fit(
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
     return best
+
+
+def should_lock_road_refinement_scale(
+    meters_per_pixel: float,
+    inlier_count: int,
+    residual_median_m: float,
+    residual_p90_m: float,
+    spread: float,
+    width: int,
+    height: int,
+) -> bool:
+    image_area = max(float(width * height), 1.0)
+    # Wide regional screenshots have enough label spread to establish scale;
+    # road matching should improve placement without stretching that fit.
+    return (
+        meters_per_pixel >= 20.0
+        and inlier_count >= 8
+        and residual_median_m <= 1600.0
+        and residual_p90_m <= 3200.0
+        and spread >= image_area * 0.08
+    )
+
+
+def pixel_positions(controls: list[ControlPoint], indexes: list[int]) -> np.ndarray:
+    return np.array([controls[idx].pixel for idx in indexes], dtype=float)
 
 
 def control_spread(points: np.ndarray) -> float:

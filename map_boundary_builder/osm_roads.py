@@ -34,6 +34,8 @@ def refine_transform_with_osm_roads(
     rgb: np.ndarray,
     city_center: GeocodeResult,
     initial: GeoreferenceTransform,
+    *,
+    lock_scale: bool = False,
 ) -> RoadMatchResult | None:
     if city_center.bbox is None:
         return None
@@ -50,15 +52,30 @@ def refine_transform_with_osm_roads(
     best_count = base_count
     best_transform = initial
 
+    if lock_scale:
+        coarse_scale_multipliers = np.array([1.0])
+        coarse_rotation_offsets = np.deg2rad(np.linspace(-1.0, 1.0, 5))
+        coarse_offset_meters = np.linspace(-2400.0, 2400.0, 13)
+        fine_scale_multipliers = np.array([1.0])
+        fine_rotation_offsets = np.deg2rad(np.linspace(-0.5, 0.5, 5))
+        fine_offset_meters = np.linspace(-500.0, 500.0, 5)
+    else:
+        coarse_scale_multipliers = np.linspace(0.82, 1.12, 13)
+        coarse_rotation_offsets = np.deg2rad(np.linspace(-4.0, 4.0, 9))
+        coarse_offset_meters = np.linspace(-1600.0, 1600.0, 9)
+        fine_scale_multipliers = np.linspace(0.97, 1.03, 7)
+        fine_rotation_offsets = np.deg2rad(np.linspace(-1.0, 1.0, 7))
+        fine_offset_meters = np.linspace(-400.0, 400.0, 5)
+
     coarse = search_near_transform(
         road_points,
         feature_distance,
         initial,
         base_tx,
         base_ty,
-        scale_multipliers=np.linspace(0.82, 1.12, 13),
-        rotation_offsets=np.deg2rad(np.linspace(-4.0, 4.0, 9)),
-        offset_meters=np.linspace(-1600.0, 1600.0, 9),
+        scale_multipliers=coarse_scale_multipliers,
+        rotation_offsets=coarse_rotation_offsets,
+        offset_meters=coarse_offset_meters,
         min_count=1000,
     )
     if coarse is not None:
@@ -70,9 +87,9 @@ def refine_transform_with_osm_roads(
             best_transform,
             best_tx,
             best_ty,
-            scale_multipliers=np.linspace(0.97, 1.03, 7),
-            rotation_offsets=np.deg2rad(np.linspace(-1.0, 1.0, 7)),
-            offset_meters=np.linspace(-400.0, 400.0, 5),
+            scale_multipliers=fine_scale_multipliers,
+            rotation_offsets=fine_rotation_offsets,
+            offset_meters=fine_offset_meters,
             min_count=1000,
         )
         if fine is not None and fine[0] > best_score:
