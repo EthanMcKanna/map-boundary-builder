@@ -53,9 +53,10 @@ copying.
 ## GitHub Pages Site
 
 The public project site is deployed at
-`https://ethanmckanna.github.io/map-boundary-builder/`. GitHub Pages hosts the
-documentation/marketing site only; the screenshot OCR and georeferencing pipeline
-run locally because Pages cannot execute the Python backend.
+`https://projects.ethanmckanna.com/map-boundary-builder/` through GitHub Pages.
+GitHub's `ethanmckanna.github.io` project URL redirects there. Pages hosts the
+documentation/marketing site only; the screenshot OCR and georeferencing
+pipeline runs locally because Pages cannot execute the Python backend.
 
 ## Georeferencing Model
 
