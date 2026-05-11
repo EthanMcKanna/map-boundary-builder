@@ -23,6 +23,7 @@ from .osm_roads import (
 
 MAX_GEOCODED_LABELS = 16
 MAX_PLACE_LABELS = 120
+MAX_CITY_INFERENCE_LABELS = 12
 GENERIC_SINGLE_TOKENS = {
     "area",
     "bay",
@@ -41,6 +42,107 @@ GENERIC_SINGLE_TOKENS = {
     "south",
     "view",
     "west",
+}
+CITY_INFERENCE_STOP_TOKENS = {
+    "are",
+    "bearing",
+    "briefly",
+    "complete",
+    "for",
+    "later",
+    "other",
+    "request",
+    "requests",
+    "ride",
+    "rider",
+    "riders",
+    "thanks",
+    "try",
+    "unavailable",
+    "with",
+}
+BAY_AREA_PLACE_NAMES = {
+    "atherton",
+    "belmont",
+    "brisbane",
+    "burlingame",
+    "daly city",
+    "foster city",
+    "los altos",
+    "menlo park",
+    "millbrae",
+    "mountain view",
+    "palo alto",
+    "redwood city",
+    "san bruno",
+    "san francisco",
+    "san jose",
+    "san mateo",
+    "south san francisco",
+    "sunnyvale",
+}
+SAN_FRANCISCO_PLACE_NAMES = {
+    "alamo square",
+    "bernal heights",
+    "castro",
+    "chinatown",
+    "civic center",
+    "cow hollow",
+    "dogpatch",
+    "financial district",
+    "haight ashbury",
+    "hayes valley",
+    "japantown",
+    "marina district",
+    "mission bay",
+    "mission district",
+    "nob hill",
+    "noe valley",
+    "north beach",
+    "pacific heights",
+    "potrero hill",
+    "presidio",
+    "russian hill",
+    "san francisco",
+    "south beach",
+    "south of market",
+    "telegraph hill",
+    "tenderloin",
+    "western addition",
+}
+LAS_VEGAS_PLACE_NAMES = {
+    "arts district",
+    "downtown las vegas",
+    "enterprise",
+    "fremont",
+    "fremont street",
+    "harry reid international airport",
+    "henderson",
+    "las vegas",
+    "las vegas strip",
+    "north las vegas",
+    "paradise",
+    "spring valley",
+    "summerlin",
+    "sunrise manor",
+    "the strip",
+    "university district",
+    "winchester",
+}
+AUSTIN_PLACE_NAMES = {
+    "austin",
+    "barton creek greenbelt",
+    "barton springs",
+    "cherrywood",
+    "downtown austin",
+    "east austin",
+    "hyde park",
+    "lady bird lake",
+    "mueller",
+    "south congress",
+    "south lamar",
+    "travis heights",
+    "zilker",
 }
 
 
@@ -87,9 +189,31 @@ class LineFeatureSet:
     tree: cKDTree
 
 
+@dataclass(frozen=True)
+class LabelGeocodeCandidate:
+    label: OcrLabel
+    geocode: GeocodeResult
+
+    @property
+    def mercator(self) -> tuple[float, float]:
+        return self.geocode.mercator
+
+    @property
+    def primary_name(self) -> str:
+        return self.geocode.display_name.split(",", 1)[0].strip()
+
+
+@dataclass(frozen=True)
+class CityContext:
+    query: str
+    center: GeocodeResult
+    inferred: bool
+    evidence: tuple[str, ...] = ()
+
+
 def georeference_from_ocr(
     image_path: str,
-    city: str,
+    city: str | None,
     width: int,
     height: int,
     *,
@@ -111,7 +235,7 @@ def georeference_from_ocr(
 def georeference_from_labels(
     labels: list[OcrLabel],
     image_path: str,
-    city: str,
+    city: str | None,
     width: int,
     height: int,
     *,
@@ -120,11 +244,11 @@ def georeference_from_labels(
 ) -> GeoreferenceResult | None:
     if label_y_max is not None:
         labels = [label for label in labels if label.y <= label_y_max]
-    city_results = geocode(city, limit=1)
-    if not city_results:
+    city_context = resolve_city_context(labels, city)
+    if city_context is None:
         return None
-    city_center = city_results[0]
-    controls = build_control_points(labels, city, city_center)
+    city_center = city_context.center
+    controls = build_control_points(labels, city_context.query, city_center)
     if len(controls) >= min_control_points:
         fit = robust_similarity_fit(controls)
         if fit is not None:
@@ -301,6 +425,157 @@ def georeference_from_city_context(
         control_points=[],
         residual_median_m=0.0,
         residual_p90_m=0.0,
+    )
+
+
+def resolve_city_context(labels: list[OcrLabel], city: str | None) -> CityContext | None:
+    if city:
+        city_results = geocode(city, limit=1)
+        if city_results:
+            return CityContext(query=city, center=city_results[0], inferred=False)
+        return None
+    return infer_city_context(labels)
+
+
+def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
+    known_context = infer_known_city_context(labels)
+    if known_context is not None:
+        return known_context
+
+    candidates = geocoded_label_candidates(labels)
+    if not candidates:
+        return None
+
+    members = best_candidate_cluster(candidates)
+    if not members:
+        return None
+
+    if looks_like_bay_area(members):
+        bay_area_results = geocode("Bay Area", limit=1)
+        if bay_area_results:
+            return CityContext(
+                query="Bay Area",
+                center=bay_area_results[0],
+                inferred=True,
+                evidence=tuple(sorted({member.primary_name for member in members})[:8]),
+            )
+
+    anchor = choose_city_anchor(members)
+    return CityContext(
+        query=anchor.primary_name,
+        center=anchor.geocode,
+        inferred=True,
+        evidence=tuple(sorted({member.primary_name for member in members})[:8]),
+    )
+
+
+def infer_known_city_context(labels: list[OcrLabel]) -> CityContext | None:
+    bay_area_matches = matched_place_names(labels, BAY_AREA_PLACE_NAMES)
+    if len(bay_area_matches) >= 4 or {"san francisco", "san jose"} <= bay_area_matches:
+        return context_from_query("Bay Area", bay_area_matches)
+
+    scored_contexts = [
+        ("San Francisco", matched_place_names(labels, SAN_FRANCISCO_PLACE_NAMES), 2),
+        ("Las Vegas", matched_place_names(labels, LAS_VEGAS_PLACE_NAMES), 1),
+        ("Austin", matched_place_names(labels, AUSTIN_PLACE_NAMES), 1),
+    ]
+    scored_contexts.sort(key=lambda item: (len(item[1]), item[0].lower() in item[1]), reverse=True)
+    for query, matches, min_hits in scored_contexts:
+        if query.lower() in matches or len(matches) >= min_hits:
+            return context_from_query(query, matches)
+    return None
+
+
+def context_from_query(query: str, matches: set[str]) -> CityContext | None:
+    city_results = geocode(query, limit=1)
+    if not city_results:
+        return None
+    return CityContext(
+        query=query,
+        center=city_results[0],
+        inferred=True,
+        evidence=tuple(sorted(matches)[:8]),
+    )
+
+
+def matched_place_names(labels: list[OcrLabel], names: set[str]) -> set[str]:
+    matches: set[str] = set()
+    phrase_tokens_by_name = {name: place_tokens(name) for name in names}
+    for label in labels:
+        label_tokens = place_tokens(label.text)
+        if not label_tokens or label_tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        for name, tokens in phrase_tokens_by_name.items():
+            if tokens and tokens <= label_tokens:
+                matches.add(name)
+    return matches
+
+
+def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandidate]:
+    candidates: list[LabelGeocodeCandidate] = []
+    used_text: set[str] = set()
+    for label in rank_geocode_labels(labels)[:MAX_CITY_INFERENCE_LABELS]:
+        tokens = place_tokens(label.text)
+        if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if len(tokens) > 4:
+            continue
+        if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
+            continue
+        text_key = " ".join(sorted(tokens))
+        if text_key in used_text:
+            continue
+        used_text.add(text_key)
+        for result in geocode(label.text, limit=2):
+            if primary_name_matches_label(result.display_name, label.text):
+                candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
+    return candidates
+
+
+def best_candidate_cluster(candidates: list[LabelGeocodeCandidate]) -> list[LabelGeocodeCandidate]:
+    best: tuple[float, list[LabelGeocodeCandidate]] | None = None
+    for anchor in candidates:
+        anchor_x, anchor_y = anchor.mercator
+        members: list[LabelGeocodeCandidate] = []
+        for candidate in candidates:
+            cand_x, cand_y = candidate.mercator
+            if sqrt((cand_x - anchor_x) ** 2 + (cand_y - anchor_y) ** 2) <= 95000.0:
+                members.append(candidate)
+        unique_names = {member.primary_name.lower() for member in members}
+        unique_labels = {member.label.text.lower() for member in members}
+        if not unique_names:
+            continue
+        spread = cluster_spread_m(members)
+        confidence = sum(member.label.confidence for member in members) / max(len(members), 1)
+        spread_bonus = min(2.5, spread / 25000.0)
+        score = len(unique_names) * 2.0 + len(unique_labels) * 0.4 + spread_bonus + confidence / 120.0
+        if best is None or score > best[0]:
+            best = (score, members)
+    return best[1] if best is not None else []
+
+
+def cluster_spread_m(members: list[LabelGeocodeCandidate]) -> float:
+    if len(members) < 2:
+        return 0.0
+    points = np.array([member.mercator for member in members], dtype=float)
+    width, height = np.ptp(points, axis=0)
+    return float(max(width, height))
+
+
+def looks_like_bay_area(members: list[LabelGeocodeCandidate]) -> bool:
+    names = {member.primary_name.lower() for member in members}
+    bay_names = names & BAY_AREA_PLACE_NAMES
+    return len(bay_names) >= 4 or {"san francisco", "san jose"} <= names
+
+
+def choose_city_anchor(members: list[LabelGeocodeCandidate]) -> LabelGeocodeCandidate:
+    return max(
+        members,
+        key=lambda member: (
+            len(place_tokens(member.primary_name)),
+            member.geocode.importance,
+            member.label.confidence,
+        ),
     )
 
 

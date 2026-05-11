@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Extract a scaled GeoJSON service-area polygon from a map screenshot.",
     )
     parser.add_argument("--image", help="Input service-map screenshot.")
-    parser.add_argument("--city", help="City name used for automatic georeferencing.")
+    parser.add_argument("--city", help="Optional city override. Omit to infer from map labels.")
     parser.add_argument("--output", "-o", help="Output GeoJSON path.")
     parser.add_argument("--debug-dir", help="Optional directory for mask and overlay PNGs.")
     parser.add_argument("--simplify-px", type=float, default=DEFAULT_SIMPLIFY_PX, help="Pixel simplification tolerance.")
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    for required_arg in ("image", "city", "output"):
+    for required_arg in ("image", "output"):
         if getattr(args, required_arg) is None:
             parser.error(f"--{required_arg.replace('_', '-')} is required")
 

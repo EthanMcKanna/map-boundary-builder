@@ -76,9 +76,7 @@ class handler(BaseHTTPRequestHandler):
 
     def handle_create_run(self) -> None:
         fields, files = self.parse_multipart()
-        city = fields.get("city", "").strip()
-        if not city:
-            raise RequestError(HTTPStatus.BAD_REQUEST, "City is required.")
+        city = fields.get("city", "").strip() or None
         upload = files.get("image")
         if upload is None:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Image upload is required.")
@@ -117,7 +115,7 @@ class handler(BaseHTTPRequestHandler):
         )
         payload = {
             "id": run_id,
-            "city": city,
+            "city": result.summary["city"],
             "filename": Path(original_filename).name or "uploaded-image",
             "status": "complete",
             "percent": 100,

@@ -55,7 +55,7 @@ def emit_progress(
 
 def build_boundary(
     image_path: str | Path,
-    city: str,
+    city: str | None,
     output_path: str | Path,
     *,
     debug_dir: str | Path | None = None,
@@ -67,6 +67,7 @@ def build_boundary(
     image_path = Path(image_path)
     output_path = Path(output_path)
     debug_path = Path(debug_dir) if debug_dir else None
+    city_input = city.strip() if isinstance(city, str) and city.strip() else None
 
     emit_progress(
         progress,
@@ -106,14 +107,14 @@ def build_boundary(
     emit_progress(
         progress,
         stage="georeference",
-        message="Matching readable map labels",
+        message="Inferring map location from labels" if city_input is None else "Matching readable map labels",
         percent=48,
     )
     if ocr_labels is not None:
         georef = georeference_from_labels(
             ocr_labels,
             str(image_path),
-            city,
+            city_input,
             width,
             height,
             min_control_points=opts.min_control_points,
@@ -122,28 +123,28 @@ def build_boundary(
     else:
         georef = georeference_from_ocr(
             str(image_path),
-            city,
+            city_input,
             width,
             height,
             min_control_points=opts.min_control_points,
             label_y_max=label_y_max,
         )
-    if georef is None:
+    if georef is None and city_input is not None:
         emit_progress(
             progress,
             stage="georeference",
             message="Trying road-network context",
             percent=62,
         )
-        georef = georeference_from_city_context(load_rgb(image_path), city, extraction.pixel_geometry)
+        georef = georeference_from_city_context(load_rgb(image_path), city_input, extraction.pixel_geometry)
     if georef is None:
         raise ValueError(
-            "Could not infer a reliable map georeference from OCR/geocoded map labels. "
-            "The builder did not use presets or ground-truth polygons; provide a higher-resolution map crop with readable labels or visible roads."
+            "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
+            "Provide a higher-resolution map crop with readable city labels or visible roads."
         )
 
     geo_transform = georef.transform
-    data = feature_collection(extraction, width, height, geo_transform, str(image_path), city)
+    data = feature_collection(extraction, width, height, geo_transform, str(image_path), city_input or "Auto")
     geom = shape(data["features"][0]["geometry"])
     combined_confidence = min(extraction.confidence, geo_transform.confidence)
     properties = data["features"][0]["properties"]
@@ -198,7 +199,7 @@ def build_boundary(
     summary = build_summary(
         data,
         output_path=output_path,
-        city=city,
+        city=city_input or "Auto",
         width=width,
         height=height,
         mask_path=mask_path,

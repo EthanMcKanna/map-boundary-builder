@@ -29,7 +29,7 @@ RUNS_LOCK = threading.Lock()
 @dataclass
 class RunState:
     run_id: str
-    city: str
+    city: str | None
     original_filename: str
     run_dir: Path
     image_path: Path
@@ -48,7 +48,7 @@ class RunState:
         with self.condition:
             return {
                 "id": self.run_id,
-                "city": self.city,
+                "city": self.summary["city"] if self.summary else self.city or "Auto",
                 "filename": self.original_filename,
                 "status": self.status,
                 "percent": self.percent,
@@ -122,9 +122,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
 
     def handle_create_run(self) -> None:
         fields, files = self.parse_multipart()
-        city = fields.get("city", "").strip()
-        if not city:
-            raise RequestError(HTTPStatus.BAD_REQUEST, "City is required.")
+        city = fields.get("city", "").strip() or None
         upload = files.get("image")
         if upload is None:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Image upload is required.")

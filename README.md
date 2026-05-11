@@ -21,7 +21,6 @@ python3 -m venv .venv
 
 .venv/bin/map-boundary \
   --image /path/to/service-map.png \
-  --city "Las Vegas" \
   --output out/boundary.geojson \
   --debug-dir out/debug-boundary \
   --print-summary
@@ -36,7 +35,7 @@ georeference fit, pixel coverage, and confidence.
 - Python 3.11 or newer
 - Internet access for OpenStreetMap/Nominatim lookups during georeferencing
 - The hosted and local web apps run OCR in the browser.
-- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then fails closed/falls back if it cannot infer enough map evidence.
+- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then fails closed if it cannot infer enough map evidence.
 
 ## Interactive Web Tool
 
@@ -46,8 +45,8 @@ The same pipeline is available as an end-to-end web workspace:
 .venv/bin/python -m map_boundary_builder.web
 ```
 
-Open `http://127.0.0.1:8765`, drop in a service-map screenshot, enter a city,
-and run the builder. The web tool streams each stage as it happens, writes run
+Open `http://127.0.0.1:8765`, drop in a service-map screenshot, and run the
+builder. The web tool streams each stage as it happens, writes run
 artifacts under `out/web-runs/<run-id>/`, previews the extracted mask overlay,
 renders the generated boundary, and exposes the final GeoJSON for download or
 copying.
@@ -60,18 +59,21 @@ OCR/geocoded map evidence.
 
 ## Georeferencing Model
 
-The final product has no city presets, manual georeference flags, or
-ground-truth-reference fitting. It infers map position from OCR-detected labels,
-matches labels against cached OpenStreetMap place names near the requested city,
-and fits a rotation-aware Web Mercator transform only when there are enough
-control points with low residual error. When that label fit is viable, a local
+The final product has no provider boundary presets, manual georeference flags,
+or ground-truth-reference fitting. It infers map position from OCR-detected
+labels, uses a small local gazetteer for common city and region evidence,
+clusters geocoded label candidates to infer the map city or region, matches
+labels against cached OpenStreetMap place names near that inferred location, and
+fits a rotation-aware Web Mercator transform only when there are enough control
+points with low residual error. When that label fit is viable, a local
 OpenStreetMap road-network refinement can tune scale, rotation, and origin
-against visible road structure in the image.
+against visible road structure in the image. The CLI still accepts `--city` as an
+optional override for unusually sparse screenshots.
 
-If label control points are not available, the CLI can attempt a lower-confidence
-city-context road search using the requested city and public OpenStreetMap road
-data. For low-resolution map crops with visible street grids, it can rerank
-candidate transforms by matching detected image line segments against projected
-OpenStreetMap road segments. If the map does not contain enough readable labels
-or public-map structure, the CLI fails instead of falling back to a hardcoded
-city/provider boundary.
+If label control points are not available and a city override is supplied, the
+CLI can attempt a lower-confidence city-context road search using public
+OpenStreetMap road data. For low-resolution map crops with visible street grids,
+it can rerank candidate transforms by matching detected image line segments
+against projected OpenStreetMap road segments. If the map does not contain
+enough readable labels or public-map structure, the tool fails instead of falling
+back to a hardcoded city/provider boundary.
