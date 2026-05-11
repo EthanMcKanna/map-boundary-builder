@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -15,7 +16,8 @@ from .geocoder import GeocodeResult
 from .georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
 from .ocr import OcrLabel
 
-CACHE_DIR = Path(".cache/map-boundary-builder/overpass")
+_CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
+CACHE_DIR = _CACHE_ROOT / "overpass"
 _TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
 

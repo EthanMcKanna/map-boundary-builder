@@ -1,7 +1,8 @@
 # Map Boundary Builder
 
 `map-boundary-builder` turns a service-map screenshot into a georeferenced
-GeoJSON polygon. It ships as both a CLI and a local browser workspace.
+GeoJSON polygon. It ships as a CLI, a local browser workspace, and a hosted
+Vercel app.
 
 It does three things automatically:
 
@@ -38,7 +39,7 @@ georeference fit, pixel coverage, and confidence.
 
 ## Interactive Web Tool
 
-The same pipeline is available as a local end-to-end web workspace:
+The same pipeline is available as an end-to-end web workspace:
 
 ```bash
 .venv/bin/python -m map_boundary_builder.web
@@ -50,13 +51,9 @@ artifacts under `out/web-runs/<run-id>/`, previews the extracted mask overlay,
 renders the generated boundary, and exposes the final GeoJSON for download or
 copying.
 
-## GitHub Pages Site
-
-The public project site is deployed at
-`https://projects.ethanmckanna.com/map-boundary-builder/` through GitHub Pages.
-GitHub's `ethanmckanna.github.io` project URL redirects there. Pages hosts the
-documentation/marketing site only; the screenshot OCR and georeferencing
-pipeline runs locally because Pages cannot execute the Python backend.
+The hosted Vercel app runs the same Python extraction backend as a serverless
+function. Large or low-detail screenshots can still time out or fail closed if
+there is not enough OCR/geocoded map evidence.
 
 ## Georeferencing Model
 

@@ -85,7 +85,11 @@ form.addEventListener("submit", async (event) => {
     if (!response.ok) {
       throw new Error(payload.error || "Run failed to start.");
     }
-    connectEvents(payload.id);
+    if (payload.status === "complete" && payload.artifacts) {
+      applyInlineRun(payload);
+    } else {
+      connectEvents(payload.id);
+    }
   } catch (error) {
     finishWithError(error.message);
   }
@@ -135,6 +139,40 @@ function connectEvents(runId) {
   eventSource.onerror = () => {
     if (eventSource.readyState === EventSource.CLOSED) return;
   };
+}
+
+function applyInlineRun(status) {
+  for (const event of status.events || []) {
+    applyEvent(event);
+  }
+  const artifacts = status.artifacts || {};
+  if (artifacts.overlay_data_url) {
+    overlayPreview.src = artifacts.overlay_data_url;
+    overlayPreview.classList.add("ready");
+    document.querySelector("#overlayPane").classList.add("has-content");
+  }
+  if (artifacts.geojson_inline) {
+    latestGeojson = artifacts.geojson_inline;
+    geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
+    downloadLink.href = URL.createObjectURL(
+      new Blob([JSON.stringify(latestGeojson, null, 2)], {
+        type: "application/geo+json",
+      }),
+    );
+    downloadLink.download = "boundary.geojson";
+    downloadLink.classList.remove("disabled");
+    downloadLink.removeAttribute("aria-disabled");
+    copyButton.disabled = false;
+    renderBoundary(latestGeojson);
+  }
+  if (status.summary) {
+    renderMetrics(status.summary);
+    workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
+  }
+  setStatus("Boundary export ready", 100, "complete");
+  activateTab(artifacts.overlay_data_url ? "overlay" : "boundary");
+  runButton.disabled = false;
+  runButton.querySelector("span").textContent = "Run Boundary";
 }
 
 function applyEvent(event) {

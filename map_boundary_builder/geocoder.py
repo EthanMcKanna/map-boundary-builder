@@ -3,13 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .georef_transform import lonlat_to_mercator
 
-CACHE_DIR = Path(".cache/map-boundary-builder/geocoder")
+_CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
+CACHE_DIR = _CACHE_ROOT / "geocoder"
 
 
 @dataclass(frozen=True)
