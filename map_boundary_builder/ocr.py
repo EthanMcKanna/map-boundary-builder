@@ -303,6 +303,7 @@ def dedupe_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
 
 def clean_text(text: str) -> str:
     text = text.strip().replace("|", "I")
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
     text = re.sub(r"[^A-Za-z0-9 &'/-]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip(" -/'")
     return text

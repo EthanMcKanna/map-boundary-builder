@@ -126,22 +126,129 @@ function setSelectedFile(file) {
 async function runClientOcr(file) {
   if (!window.Tesseract || !file) return [];
   try {
+    const labels = [];
     setStatus("Reading map labels in browser", 4);
-    const result = await window.Tesseract.recognize(file, "eng", {
-      logger: (message) => {
-        if (message.status === "recognizing text") {
-          setStatus("Reading map labels in browser", 4 + Math.round((message.progress || 0) * 20));
-        }
-      },
-    });
-    const words = Array.isArray(result?.data?.words)
-      ? result.data.words
-      : parseTesseractTsv(result?.data?.tsv || "");
-    return words.map(wordToLabel).filter(Boolean);
+    const result = await recognizeImageLabels(file, "Reading map labels in browser", 4, 20);
+    labels.push(...labelsFromOcrResult(result));
+
+    if (countUsefulLabels(labels) < 30) {
+      const canvas = await imageFileToCanvas(file);
+      const enhanced = makeOcrCanvas(canvas, "neutral-dark");
+      setStatus("Enhancing map labels in browser", 24);
+      const enhancedResult = await recognizeImageLabels(enhanced, "Enhancing map labels in browser", 24, 12);
+      labels.push(...labelsFromOcrResult(enhancedResult));
+    }
+
+    if (countUsefulLabels(labels) < 30) {
+      const canvas = await imageFileToCanvas(file);
+      const neutral = makeOcrCanvas(canvas, "neutral");
+      setStatus("Checking map labels again", 32);
+      const neutralResult = await recognizeImageLabels(neutral, "Checking map labels again", 32, 8);
+      labels.push(...labelsFromOcrResult(neutralResult));
+    }
+
+    return dedupeClientLabels(labels);
   } catch (error) {
     console.warn("Browser OCR unavailable", error);
     return [];
   }
+}
+
+async function recognizeImageLabels(image, statusMessage, start, span) {
+  return window.Tesseract.recognize(image, "eng", {
+    tessedit_pageseg_mode: "11",
+    logger: (event) => {
+      if (event.status === "recognizing text") {
+        setStatus(statusMessage, start + Math.round((event.progress || 0) * span));
+      }
+    },
+  });
+}
+
+function labelsFromOcrResult(result) {
+  const words = Array.isArray(result?.data?.words)
+    ? result.data.words
+    : parseTesseractTsv(result?.data?.tsv || "");
+  return words.map(wordToLabel).filter(Boolean);
+}
+
+function imageFileToCanvas(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(image, 0, 0);
+      URL.revokeObjectURL(image.src);
+      resolve(canvas);
+    };
+    image.onerror = reject;
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+function makeOcrCanvas(source, mode) {
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const sourceContext = source.getContext("2d", { willReadFrequently: true });
+  const outputContext = canvas.getContext("2d", { willReadFrequently: true });
+  const image = sourceContext.getImageData(0, 0, source.width, source.height);
+  const data = image.data;
+  for (let index = 0; index < data.length; index += 4) {
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const serviceFill = isServiceFillPixel(red, green, blue);
+    const nextRed = serviceFill ? 245 : red;
+    const nextGreen = serviceFill ? 245 : green;
+    const nextBlue = serviceFill ? 245 : blue;
+    if (mode === "neutral-dark") {
+      const gray = Math.round(0.299 * nextRed + 0.587 * nextGreen + 0.114 * nextBlue);
+      const value = gray < 125 ? 0 : 255;
+      data[index] = value;
+      data[index + 1] = value;
+      data[index + 2] = value;
+    } else {
+      data[index] = nextRed;
+      data[index + 1] = nextGreen;
+      data[index + 2] = nextBlue;
+    }
+    data[index + 3] = 255;
+  }
+  outputContext.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function isServiceFillPixel(red, green, blue) {
+  const brightBlue = blue >= 135 && green >= 80 && red <= 110 && blue - red >= 55;
+  const greenFill = green >= 120 && green > red + 25 && green > blue + 5;
+  return brightBlue || greenFill;
+}
+
+function countUsefulLabels(labels) {
+  return labels.filter((label) => isUsefulLabelText(label.text)).length;
+}
+
+function isUsefulLabelText(text) {
+  const compact = String(text || "").replace(/\s+/g, "");
+  if (compact.length < 3 || /^\d+$/.test(compact)) return false;
+  const letters = (compact.match(/[A-Za-z]/g) || []).length;
+  return letters >= Math.max(3, Math.floor(compact.length / 2));
+}
+
+function dedupeClientLabels(labels) {
+  const best = new Map();
+  for (const label of labels) {
+    const key = `${label.text.toLowerCase()}|${Math.round(label.x / 20)}|${Math.round(label.y / 20)}`;
+    const old = best.get(key);
+    if (!old || label.confidence > old.confidence) {
+      best.set(key, label);
+    }
+  }
+  return [...best.values()].sort((a, b) => b.confidence - a.confidence);
 }
 
 function parseTesseractTsv(tsv) {
