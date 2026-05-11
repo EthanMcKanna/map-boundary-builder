@@ -1,16 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 300,
-      "memory": 3008,
-      "excludeFiles": "{docs/**,.github/**,out/**,output/**,input/**,.cache/**,.venv/**,**/__pycache__/**,**/*.pyc}"
-    }
-  },
-  "rewrites": [
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "excludeFiles": "{docs/**,.github/**,out/**,output/**,input/**,.cache/**,.venv/**,**/__pycache__/**,**/*.pyc}"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
     }
   ]
 }

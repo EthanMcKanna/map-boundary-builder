@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import csv
+import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -23,6 +25,8 @@ class OcrLabel:
 
 
 def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
+    if not tesseract_available():
+        return []
     words = run_tesseract_words(image_path)
     words = [word for word in words if is_useful_text(word.text)]
     if len(words) < 80:
@@ -34,9 +38,59 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     return dedupe_labels(labels)
 
 
+def tesseract_available() -> bool:
+    return shutil.which("tesseract") is not None
+
+
+def parse_client_ocr_labels(raw: str | None) -> list[OcrLabel] | None:
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+
+    words: list[OcrLabel] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        text = clean_text(str(item.get("text", "")))
+        if not is_useful_text(text):
+            continue
+        try:
+            width = float(item.get("width", 0))
+            height = float(item.get("height", 0))
+            if width <= 0 or height <= 0:
+                continue
+            words.append(
+                OcrLabel(
+                    text=text,
+                    x=float(item["x"]),
+                    y=float(item["y"]),
+                    width=width,
+                    height=height,
+                    confidence=float(item.get("confidence", 50)),
+                )
+            )
+        except Exception:
+            continue
+    words = dedupe_labels(words)
+    if not words:
+        return None
+    labels = list(words)
+    labels.extend(group_line_labels(words))
+    labels.extend(group_stacked_labels(words))
+    return dedupe_labels(labels)
+
+
 def run_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
     command = ["tesseract", str(image_path), "stdout", "--psm", "11", "tsv"]
-    completed = subprocess.run(command, text=True, capture_output=True, check=False)
+    try:
+        completed = subprocess.run(command, text=True, capture_output=True, check=False)
+    except FileNotFoundError:
+        return []
     if completed.returncode != 0:
         return []
     return parse_tesseract_tsv(completed.stdout)
@@ -84,7 +138,10 @@ def run_tesseract_array(image: np.ndarray, *, scale_x: float = 1.0, scale_y: flo
     try:
         cv2.imwrite(tmp_path, image)
         command = ["tesseract", tmp_path, "stdout", "--psm", "11", "tsv"]
-        completed = subprocess.run(command, text=True, capture_output=True, check=False)
+        try:
+            completed = subprocess.run(command, text=True, capture_output=True, check=False)
+        except FileNotFoundError:
+            return []
         if completed.returncode != 0:
             return []
         words = parse_tesseract_tsv(completed.stdout)

@@ -37,6 +37,7 @@ map-boundary = "map_boundary_builder.cli:main"
 map-boundary-web = "map_boundary_builder.web:main"
 
 [project.urls]
+Homepage = "https://map-boundary-builder.vercel.app"
 Repository = "https://github.com/EthanMcKanna/map-boundary-builder"
 Issues = "https://github.com/EthanMcKanna/map-boundary-builder/issues"
 

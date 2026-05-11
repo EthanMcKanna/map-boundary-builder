@@ -34,8 +34,9 @@ georeference fit, pixel coverage, and confidence.
 ## Requirements
 
 - Python 3.11 or newer
-- Tesseract OCR available on your `PATH` (`brew install tesseract` on macOS)
 - Internet access for OpenStreetMap/Nominatim lookups during georeferencing
+- The hosted and local web apps run OCR in the browser.
+- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then fails closed/falls back if it cannot infer enough map evidence.
 
 ## Interactive Web Tool
 
@@ -51,9 +52,11 @@ artifacts under `out/web-runs/<run-id>/`, previews the extracted mask overlay,
 renders the generated boundary, and exposes the final GeoJSON for download or
 copying.
 
-The hosted Vercel app runs the same Python extraction backend as a serverless
-function. Large or low-detail screenshots can still time out or fail closed if
-there is not enough OCR/geocoded map evidence.
+The hosted Vercel app is available at
+`https://map-boundary-builder.vercel.app`. It runs browser-side OCR plus the
+same Python extraction/georeferencing backend as a serverless function. Large or
+low-detail screenshots can still time out or fail closed if there is not enough
+OCR/geocoded map evidence.
 
 ## Georeferencing Model
 

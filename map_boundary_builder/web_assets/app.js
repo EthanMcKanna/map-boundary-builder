@@ -77,6 +77,10 @@ form.addEventListener("submit", async (event) => {
 
   const formData = new FormData(form);
   try {
+    const clientLabels = await runClientOcr(selectedFile);
+    if (clientLabels.length) {
+      formData.append("ocr_labels", JSON.stringify(clientLabels));
+    }
     const response = await fetch("/api/runs", {
       method: "POST",
       body: formData,
@@ -117,6 +121,65 @@ function setSelectedFile(file) {
   inputPreview.classList.add("ready");
   document.querySelector("#inputPane").classList.add("has-content");
   workspaceTitle.textContent = file.name;
+}
+
+async function runClientOcr(file) {
+  if (!window.Tesseract || !file) return [];
+  try {
+    setStatus("Reading map labels in browser", 4);
+    const result = await window.Tesseract.recognize(file, "eng", {
+      logger: (message) => {
+        if (message.status === "recognizing text") {
+          setStatus("Reading map labels in browser", 4 + Math.round((message.progress || 0) * 20));
+        }
+      },
+    });
+    const words = Array.isArray(result?.data?.words)
+      ? result.data.words
+      : parseTesseractTsv(result?.data?.tsv || "");
+    return words.map(wordToLabel).filter(Boolean);
+  } catch (error) {
+    console.warn("Browser OCR unavailable", error);
+    return [];
+  }
+}
+
+function parseTesseractTsv(tsv) {
+  const lines = String(tsv || "").trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split("\t");
+  const index = Object.fromEntries(headers.map((header, position) => [header, position]));
+  return lines.slice(1).map((line) => {
+    const cells = line.split("\t");
+    return {
+      text: cells[index.text] || "",
+      left: Number(cells[index.left] || 0),
+      top: Number(cells[index.top] || 0),
+      width: Number(cells[index.width] || 0),
+      height: Number(cells[index.height] || 0),
+      confidence: Number(cells[index.conf] || 0),
+    };
+  });
+}
+
+function wordToLabel(word) {
+  const text = String(word?.text || "").trim();
+  const box = word?.bbox || {};
+  const x0 = Number(box.x0 ?? word?.x0 ?? word?.left ?? 0);
+  const y0 = Number(box.y0 ?? word?.y0 ?? word?.top ?? 0);
+  const x1 = Number(box.x1 ?? word?.x1 ?? x0 + Number(word?.width || 0));
+  const y1 = Number(box.y1 ?? word?.y1 ?? y0 + Number(word?.height || 0));
+  const width = x1 - x0;
+  const height = y1 - y0;
+  if (!text || width <= 0 || height <= 0) return null;
+  return {
+    text,
+    x: x0 + width / 2,
+    y: y0 + height / 2,
+    width,
+    height,
+    confidence: Number(word?.confidence ?? word?.conf ?? 50),
+  };
 }
 
 function connectEvents(runId) {

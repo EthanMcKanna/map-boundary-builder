@@ -97,6 +97,27 @@ def georeference_from_ocr(
     label_y_max: float | None = None,
 ) -> GeoreferenceResult | None:
     labels = extract_ocr_labels(image_path)
+    return georeference_from_labels(
+        labels,
+        image_path,
+        city,
+        width,
+        height,
+        min_control_points=min_control_points,
+        label_y_max=label_y_max,
+    )
+
+
+def georeference_from_labels(
+    labels: list[OcrLabel],
+    image_path: str,
+    city: str,
+    width: int,
+    height: int,
+    *,
+    min_control_points: int = 3,
+    label_y_max: float | None = None,
+) -> GeoreferenceResult | None:
     if label_y_max is not None:
         labels = [label for label in labels if label.y <= label_y_max]
     city_results = geocode(city, limit=1)

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from .ocr import parse_client_ocr_labels
 from .runner import BoundaryBuildOptions, build_boundary
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -33,6 +34,7 @@ class RunState:
     image_path: Path
     output_path: Path
     debug_dir: Path
+    ocr_labels: list[Any] | None = None
     created_at: float = field(default_factory=time.time)
     status: str = "queued"
     percent: int = 0
@@ -148,6 +150,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             image_path=image_path,
             output_path=output_path,
             debug_dir=debug_dir,
+            ocr_labels=parse_client_ocr_labels(fields.get("ocr_labels")),
         )
         with RUNS_LOCK:
             RUNS[run_id] = state
@@ -296,6 +299,7 @@ def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
             debug_dir=state.debug_dir,
             options=options,
             progress=lambda event: record_event(state, event),
+            ocr_labels=state.ocr_labels,
         )
         with state.condition:
             state.summary = result.summary

@@ -9,7 +9,7 @@ from PIL import Image
 from shapely.geometry import shape
 
 from .extract import extract_service_area, load_rgb, write_mask_png, write_overlay_png
-from .georeference import georeference_from_city_context, georeference_from_ocr
+from .georeference import georeference_from_city_context, georeference_from_labels, georeference_from_ocr
 from .geojson import feature_collection, write_geojson
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -61,6 +61,7 @@ def build_boundary(
     debug_dir: str | Path | None = None,
     options: BoundaryBuildOptions | None = None,
     progress: ProgressCallback | None = None,
+    ocr_labels: list[Any] | None = None,
 ) -> BoundaryBuildResult:
     opts = options or BoundaryBuildOptions()
     image_path = Path(image_path)
@@ -108,14 +109,25 @@ def build_boundary(
         message="Matching readable map labels",
         percent=48,
     )
-    georef = georeference_from_ocr(
-        str(image_path),
-        city,
-        width,
-        height,
-        min_control_points=opts.min_control_points,
-        label_y_max=label_y_max,
-    )
+    if ocr_labels is not None:
+        georef = georeference_from_labels(
+            ocr_labels,
+            str(image_path),
+            city,
+            width,
+            height,
+            min_control_points=opts.min_control_points,
+            label_y_max=label_y_max,
+        )
+    else:
+        georef = georeference_from_ocr(
+            str(image_path),
+            city,
+            width,
+            height,
+            min_control_points=opts.min_control_points,
+            label_y_max=label_y_max,
+        )
     if georef is None:
         emit_progress(
             progress,

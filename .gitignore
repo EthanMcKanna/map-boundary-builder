@@ -7,6 +7,7 @@ __pycache__/
 venv/
 .env
 .env.*
+.vercel/
 
 .cache/
 .playwright-cli/
@@ -15,3 +16,4 @@ output/
 input/
 
 *.log
+.vercel
