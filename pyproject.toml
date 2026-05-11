@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "map-boundary-builder"
+version = "0.1.0"
+description = "Extract georeferenced service-area polygons from map screenshots."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Ethan McKanna" },
+]
+keywords = ["geojson", "maplibre", "computer-vision", "openstreetmap", "ocr"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+  "numpy>=2.0",
+  "opencv-python-headless>=4.10",
+  "pillow>=10.0",
+  "pyproj>=3.6",
+  "scikit-image>=0.24",
+  "scipy>=1.11",
+  "shapely>=2.0",
+]
+
+[project.scripts]
+map-boundary-builder = "map_boundary_builder.cli:main"
+map-boundary = "map_boundary_builder.cli:main"
+map-boundary-web = "map_boundary_builder.web:main"
+
+[project.urls]
+Homepage = "https://ethanmckanna.github.io/map-boundary-builder/"
+Repository = "https://github.com/EthanMcKanna/map-boundary-builder"
+Issues = "https://github.com/EthanMcKanna/map-boundary-builder/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["map_boundary_builder*"]
+
+[tool.setuptools.package-data]
+map_boundary_builder = ["web_assets/*"]

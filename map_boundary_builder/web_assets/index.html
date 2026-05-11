@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Map Boundary Builder</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="%23c88719"/><path d="M15 18h34v28H15z" fill="%23f8f6ee" stroke="%2317211d" stroke-width="4"/><path d="M21 39c8-17 20-17 28-5" fill="none" stroke="%230e6f5c" stroke-width="5" stroke-linecap="round"/></svg>' />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="control-panel">
+        <header class="brand">
+          <div class="brand-mark">MB</div>
+          <div>
+            <h1>Boundary Builder</h1>
+            <p>Image to GeoJSON</p>
+          </div>
+        </header>
+
+        <form id="runForm" class="run-form">
+          <label id="dropZone" class="drop-zone" for="imageInput">
+            <input id="imageInput" name="image" type="file" accept="image/*" />
+            <span class="eyebrow">Image</span>
+            <strong id="fileName">Drop map screenshot</strong>
+            <span id="fileMeta">PNG, JPG, WebP, TIFF</span>
+          </label>
+
+          <label class="field">
+            <span>City</span>
+            <input id="cityInput" name="city" autocomplete="address-level2" placeholder="San Francisco" required />
+          </label>
+
+          <details class="advanced">
+            <summary>Fit Settings</summary>
+            <label class="field compact">
+              <span>Confidence Floor</span>
+              <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
+            </label>
+            <label class="field compact">
+              <span>Control Points</span>
+              <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
+            </label>
+            <label class="field compact">
+              <span>Simplify PX</span>
+              <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="0.25" />
+            </label>
+          </details>
+
+          <button id="runButton" class="primary-action" type="submit">
+            <span>Run Boundary</span>
+            <span aria-hidden="true">-></span>
+          </button>
+        </form>
+
+        <section class="progress-panel" aria-live="polite">
+          <div class="progress-head">
+            <div>
+              <span class="eyebrow">Run</span>
+              <strong id="statusText">Idle</strong>
+            </div>
+            <span id="percentText">0%</span>
+          </div>
+          <div class="meter"><span id="progressFill"></span></div>
+          <ol id="timeline" class="timeline"></ol>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="top-bar">
+          <div>
+            <span class="eyebrow">Workspace</span>
+            <h2 id="workspaceTitle">Ready for a screenshot</h2>
+          </div>
+          <div class="actions">
+            <a id="downloadLink" class="ghost-action disabled" href="#" aria-disabled="true">GeoJSON</a>
+            <button id="copyButton" class="ghost-action" type="button" disabled>Copy</button>
+          </div>
+        </section>
+
+        <section class="preview-stage">
+          <nav class="tabs" aria-label="Preview tabs">
+            <button class="tab active" type="button" data-tab="input">Input</button>
+            <button class="tab" type="button" data-tab="overlay">Overlay</button>
+            <button class="tab" type="button" data-tab="boundary">Boundary</button>
+            <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
+          </nav>
+
+          <div class="pane active" id="inputPane" data-pane="input">
+            <div class="empty-state">No image selected</div>
+            <img id="inputPreview" alt="Uploaded map screenshot preview" />
+          </div>
+
+          <div class="pane" id="overlayPane" data-pane="overlay">
+            <div class="empty-state">Overlay appears after extraction</div>
+            <img id="overlayPreview" alt="Extracted mask overlay preview" />
+          </div>
+
+          <div class="pane boundary-pane" id="boundaryPane" data-pane="boundary">
+            <div id="boundaryMap" class="boundary-map" role="img" aria-label="Generated GeoJSON boundary on OpenFreeMap"></div>
+            <svg id="boundarySvg" class="boundary-fallback" role="img" aria-label="Generated GeoJSON boundary preview"></svg>
+            <div id="boundaryEmpty" class="empty-state">Boundary appears after export</div>
+          </div>
+
+          <pre class="pane code-pane" id="geojsonPane" data-pane="geojson">{}</pre>
+        </section>
+
+        <section id="metricGrid" class="metric-grid" aria-label="Run metrics"></section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

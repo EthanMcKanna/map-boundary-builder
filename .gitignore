@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+.venv/
+venv/
+.env
+.env.*
+
+.cache/
+.playwright-cli/
+out/
+output/
+input/
+
+*.log
