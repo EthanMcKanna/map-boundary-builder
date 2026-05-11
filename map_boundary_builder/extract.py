@@ -11,6 +11,8 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 from skimage import morphology
 
+DEFAULT_SIMPLIFY_PX = 6.0
+
 
 @dataclass(frozen=True)
 class ExtractionResult:
@@ -33,7 +35,7 @@ def load_rgb(path: str | Path) -> np.ndarray:
     return np.clip(composited, 0, 255).astype(np.uint8)
 
 
-def extract_service_area(image_path: str | Path, simplify_px: float = 0.25) -> ExtractionResult:
+def extract_service_area(image_path: str | Path, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
     rgb = load_rgb(image_path)
     style = classify_style(rgb)
     if style == "bright-blue":
@@ -225,7 +227,8 @@ def remove_dark_teal_chrome(mask: np.ndarray, style: str) -> np.ndarray:
 
 def mask_to_geometry(mask: np.ndarray, simplify_px: float) -> tuple[Polygon | MultiPolygon, int]:
     h, w = mask.shape
-    contours, _ = cv2.findContours(mask.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    tolerance = max(0.0, float(simplify_px))
+    contours, _ = cv2.findContours(mask.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     polygons: list[Polygon] = []
     min_area = max(200.0, h * w * 0.00005)
     for contour in contours:
@@ -239,7 +242,7 @@ def mask_to_geometry(mask: np.ndarray, simplify_px: float) -> tuple[Polygon | Mu
             poly = poly.buffer(0)
         if poly.is_empty or poly.area < min_area:
             continue
-        poly = poly.simplify(simplify_px, preserve_topology=True)
+        poly = simplify_geometry(poly, tolerance)
         if poly.is_valid and not poly.is_empty:
             polygons.append(poly)
 
@@ -247,11 +250,21 @@ def mask_to_geometry(mask: np.ndarray, simplify_px: float) -> tuple[Polygon | Mu
         raise ValueError("No service-area polygon could be extracted from the image.")
 
     merged = unary_union(polygons)
+    merged = simplify_geometry(merged, tolerance)
     if isinstance(merged, Polygon):
         return orient_pixel_polygon(merged), len(polygons)
     if isinstance(merged, MultiPolygon):
         return MultiPolygon([orient_pixel_polygon(poly) for poly in merged.geoms]), len(polygons)
     raise ValueError("Extracted service area did not form a polygon.")
+
+
+def simplify_geometry(geometry: Polygon | MultiPolygon, tolerance: float) -> Polygon | MultiPolygon:
+    if tolerance <= 0:
+        return geometry
+    simplified = geometry.simplify(tolerance, preserve_topology=True)
+    if not simplified.is_valid:
+        simplified = simplified.buffer(0)
+    return simplified
 
 
 def orient_pixel_polygon(poly: Polygon) -> Polygon:

@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from .extract import DEFAULT_SIMPLIFY_PX
 from .runner import BoundaryBuildOptions, build_boundary
 
 
@@ -17,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--city", help="City name used for automatic georeferencing.")
     parser.add_argument("--output", "-o", help="Output GeoJSON path.")
     parser.add_argument("--debug-dir", help="Optional directory for mask and overlay PNGs.")
-    parser.add_argument("--simplify-px", type=float, default=0.25, help="Pixel simplification tolerance.")
+    parser.add_argument("--simplify-px", type=float, default=DEFAULT_SIMPLIFY_PX, help="Pixel simplification tolerance.")
     parser.add_argument("--min-confidence", type=float, default=0.55, help="Fail below this combined confidence.")
     parser.add_argument("--min-control-points", type=int, default=3, help="Minimum OCR/geocoder control points for georeferencing.")
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")

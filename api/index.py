@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlparse
 
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
+from map_boundary_builder.extract import DEFAULT_SIMPLIFY_PX
 from map_boundary_builder.runner import BoundaryBuildOptions, build_boundary
 from map_boundary_builder.ocr import parse_client_ocr_labels
 from map_boundary_builder.web import RequestError, float_field, int_field, safe_extension
@@ -101,7 +102,7 @@ class handler(BaseHTTPRequestHandler):
             events.append({"timestamp": time.time(), **event})
 
         options = BoundaryBuildOptions(
-            simplify_px=float_field(fields, "simplify_px", 0.25, 0.0, 10.0),
+            simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
         )
@@ -186,4 +187,3 @@ def inline_overlay(path: Path | None) -> str | None:
     if len(data) > MAX_INLINE_OVERLAY_BYTES:
         return None
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
-

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from .extract import DEFAULT_SIMPLIFY_PX
 from .ocr import parse_client_ocr_labels
 from .runner import BoundaryBuildOptions, build_boundary
 
@@ -156,7 +157,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             RUNS[run_id] = state
 
         options = BoundaryBuildOptions(
-            simplify_px=float_field(fields, "simplify_px", 0.25, 0.0, 10.0),
+            simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
         )

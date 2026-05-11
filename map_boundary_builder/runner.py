@@ -8,7 +8,7 @@ from typing import Any, Callable
 from PIL import Image
 from shapely.geometry import shape
 
-from .extract import extract_service_area, load_rgb, write_mask_png, write_overlay_png
+from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
 from .georeference import georeference_from_city_context, georeference_from_labels, georeference_from_ocr
 from .geojson import feature_collection, write_geojson
 
@@ -17,7 +17,7 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 
 @dataclass(frozen=True)
 class BoundaryBuildOptions:
-    simplify_px: float = 0.25
+    simplify_px: float = DEFAULT_SIMPLIFY_PX
     min_confidence: float = 0.55
     min_control_points: int = 3
 
