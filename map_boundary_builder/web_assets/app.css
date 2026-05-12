@@ -536,6 +536,18 @@ input {
   color: var(--ink);
   font-size: 0.84rem;
   line-height: 1.15;
+}
+
+.history-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.history-title-text {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -555,26 +567,28 @@ input {
 }
 
 .history-star {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
-  background: var(--gold);
-  transform: rotate(45deg);
-  vertical-align: 1px;
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  color: var(--gold);
+  fill: currentColor;
+  stroke: rgba(23, 33, 29, 0.28);
+  stroke-width: 0.8px;
+  overflow: visible;
 }
 
 .history-menu {
   position: relative;
-  align-self: start;
-  margin: 5px 4px 0 0;
+  align-self: center;
+  margin: 0 4px 0 0;
 }
 
 .history-menu summary {
-  display: grid;
+  display: flex;
   width: 30px;
   height: 30px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--muted);
@@ -593,6 +607,23 @@ input {
   border-color: var(--line);
   background: var(--panel);
   color: var(--ink);
+}
+
+.kebab-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.kebab-icon span {
+  display: block;
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .history-menu-panel {

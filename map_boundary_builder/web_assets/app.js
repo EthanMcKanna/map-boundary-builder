@@ -850,7 +850,9 @@ function renderHistory() {
 function renderHistoryEntry(entry) {
   const thumb = entry.inputImage || entry.overlayImage;
   const detail = historyDetail(entry);
-  const starred = entry.starred ? `<span class="history-star" aria-label="Starred"></span>` : "";
+  const starred = entry.starred
+    ? `<svg class="history-star" viewBox="0 0 20 20" aria-label="Starred"><path d="M10 1.8l2.4 5 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8L10 1.8z"></path></svg>`
+    : "";
   const classes = [
     "history-item",
     entry.starred ? "starred" : "",
@@ -861,13 +863,13 @@ function renderHistoryEntry(entry) {
       <button class="history-main" type="button" data-history-load="${escapeHtml(entry.id)}">
         <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
         <span class="history-copy">
-          <strong>${starred}${escapeHtml(entry.title)}</strong>
+          <strong><span class="history-title-row">${starred}<span class="history-title-text">${escapeHtml(entry.title)}</span></span></strong>
           <span class="history-meta">${escapeHtml(formatHistoryTime(entry.createdAt))}</span>
           <span class="history-detail">${escapeHtml(detail)}</span>
         </span>
       </button>
       <details class="history-menu">
-        <summary aria-label="Generation actions">...</summary>
+        <summary aria-label="Generation actions"><span class="kebab-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
         <div class="history-menu-panel">
           <button type="button" data-history-action="star">${entry.starred ? "Unstar" : "Star"}</button>
           <button type="button" data-history-action="delete">Delete</button>
