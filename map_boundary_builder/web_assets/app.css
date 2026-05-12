@@ -576,6 +576,10 @@ input {
   cursor: pointer;
 }
 
+.history-main-edit {
+  cursor: default;
+}
+
 .history-main:hover strong {
   color: var(--green);
 }
@@ -637,6 +641,54 @@ input {
 
 .history-detail {
   display: none;
+}
+
+.history-rename-form {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.history-rename-input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--green);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 5px 8px;
+  font-size: 0.84rem;
+  font-weight: 850;
+  outline: none;
+}
+
+.history-rename-input:focus {
+  box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.16);
+}
+
+.history-rename-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.history-rename-actions button {
+  min-height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.history-rename-save {
+  background: var(--ink);
+  color: white;
+}
+
+.history-rename-cancel {
+  background: rgba(248, 246, 238, 0.78);
+  color: var(--ink);
 }
 
 .history-star {
@@ -705,7 +757,7 @@ input {
   left: var(--history-menu-left, 0);
   z-index: 60;
   display: grid;
-  min-width: 120px;
+  min-width: 132px;
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 14px 28px rgba(23, 33, 29, 0.15);

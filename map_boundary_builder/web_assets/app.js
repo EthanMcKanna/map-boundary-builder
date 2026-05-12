@@ -40,6 +40,7 @@ let activeProgressStep = null;
 let stepStates = new Map();
 let historyEntries = [];
 let activeHistoryId = null;
+let renamingHistoryId = null;
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -47,6 +48,7 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const MAX_HISTORY_ENTRIES = 14;
 const MAX_HISTORY_BYTES = 4_400_000;
+const MAX_HISTORY_TITLE_LENGTH = 80;
 
 const stageLabels = {
   queued: "Queued",
@@ -201,7 +203,15 @@ historyList.addEventListener("click", (event) => {
     if (!id) return;
     const action = actionButton.dataset.historyAction;
     if (action === "star") toggleHistoryStar(id);
+    if (action === "rename") startHistoryRename(id);
     if (action === "delete") deleteHistoryEntry(id);
+    return;
+  }
+
+  const cancelRenameButton = event.target.closest("[data-history-rename-cancel]");
+  if (cancelRenameButton) {
+    event.preventDefault();
+    cancelHistoryRename();
     return;
   }
 
@@ -210,6 +220,27 @@ historyList.addEventListener("click", (event) => {
     const entry = historyEntries.find((item) => item.id === loadButton.dataset.historyLoad);
     if (entry) restoreHistoryEntry(entry);
   }
+});
+
+historyList.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-history-rename]");
+  if (!form) return;
+  event.preventDefault();
+  const input = form.querySelector(".history-rename-input");
+  const title = normalizeHistoryTitle(input?.value || "");
+  if (!title) {
+    input?.focus();
+    input?.select();
+    return;
+  }
+  renameHistoryEntry(form.dataset.historyRename, title);
+});
+
+historyList.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!event.target.closest("[data-history-rename]")) return;
+  event.preventDefault();
+  cancelHistoryRename();
 });
 
 historyList.addEventListener("toggle", (event) => {
@@ -230,6 +261,7 @@ function setSelectedFile(file) {
   selectedFile = file;
   if (!file) return;
   activeHistoryId = null;
+  renamingHistoryId = null;
   progressValue = 0;
   resetProgressSteps();
   stepStates.set("labels", {
@@ -750,11 +782,12 @@ async function saveHistoryEntry(payload) {
   ]);
   const entry = {
     id: String(payload.id || Date.now()),
-    title,
+    title: existing?.renamedAt ? existing.title : title,
     filename: payload.filename || selectedFile?.name || "Map screenshot",
     city: payload.summary?.city || payload.city || "Auto",
     createdAt: existing?.createdAt || Date.now(),
     starred: Boolean(existing?.starred),
+    renamedAt: existing?.renamedAt || null,
     summary: payload.summary || null,
     geojson: payload.geojson,
     inputImage,
@@ -787,8 +820,10 @@ function loadHistoryEntries() {
       parsed.filter((entry) => entry && entry.id && entry.geojson).map((entry) => ({
         ...entry,
         id: String(entry.id),
+        title: normalizeHistoryTitle(entry.title || entry.filename || "Generated boundary") || "Generated boundary",
         createdAt: Number(entry.createdAt) || Date.now(),
         starred: Boolean(entry.starred),
+        renamedAt: Number(entry.renamedAt) || null,
       })),
     );
   } catch (error) {
@@ -850,6 +885,7 @@ function renderHistory() {
 function renderHistoryEntry(entry) {
   const thumb = entry.inputImage || entry.overlayImage;
   const detail = historyDetail(entry);
+  const isRenaming = entry.id === renamingHistoryId;
   const starred = entry.starred
     ? `<svg class="history-star" viewBox="0 0 20 20" aria-label="Starred"><path d="M10 1.8l2.4 5 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8L10 1.8z"></path></svg>`
     : "";
@@ -860,22 +896,53 @@ function renderHistoryEntry(entry) {
   ].filter(Boolean).join(" ");
   return `
     <li class="${escapeHtml(classes)}" data-history-id="${escapeHtml(entry.id)}">
-      <button class="history-main" type="button" data-history-load="${escapeHtml(entry.id)}">
-        <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
-        <span class="history-copy">
-          <strong><span class="history-title-row">${starred}<span class="history-title-text">${escapeHtml(entry.title)}</span></span></strong>
-          <span class="history-meta">${escapeHtml(formatHistoryTime(entry.createdAt))}</span>
-          <span class="history-detail">${escapeHtml(detail)}</span>
-        </span>
-      </button>
-      <details class="history-menu">
-        <summary aria-label="Generation actions"><span class="kebab-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
-        <div class="history-menu-panel">
-          <button type="button" data-history-action="star">${entry.starred ? "Unstar" : "Star"}</button>
-          <button type="button" data-history-action="delete">Delete</button>
-        </div>
-      </details>
+      ${isRenaming ? renderHistoryRenameEntry(entry, thumb) : renderHistoryLoadEntry(entry, thumb, starred, detail)}
+      ${isRenaming ? "" : `
+        <details class="history-menu">
+          <summary aria-label="Generation actions"><span class="kebab-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
+          <div class="history-menu-panel">
+            <button type="button" data-history-action="rename">Rename</button>
+            <button type="button" data-history-action="star">${entry.starred ? "Unstar" : "Star"}</button>
+            <button type="button" data-history-action="delete">Delete</button>
+          </div>
+        </details>
+      `}
     </li>
+  `;
+}
+
+function renderHistoryLoadEntry(entry, thumb, starred, detail) {
+  return `
+    <button class="history-main" type="button" data-history-load="${escapeHtml(entry.id)}">
+      <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
+      <span class="history-copy">
+        <strong><span class="history-title-row">${starred}<span class="history-title-text">${escapeHtml(entry.title)}</span></span></strong>
+        <span class="history-meta">${escapeHtml(formatHistoryTime(entry.createdAt))}</span>
+        <span class="history-detail">${escapeHtml(detail)}</span>
+      </span>
+    </button>
+  `;
+}
+
+function renderHistoryRenameEntry(entry, thumb) {
+  return `
+    <div class="history-main history-main-edit">
+      <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
+      <form class="history-rename-form" data-history-rename="${escapeHtml(entry.id)}">
+        <input
+          class="history-rename-input"
+          type="text"
+          aria-label="Run name"
+          maxlength="${MAX_HISTORY_TITLE_LENGTH}"
+          value="${escapeHtml(entry.title)}"
+          autocomplete="off"
+        />
+        <span class="history-rename-actions">
+          <button class="history-rename-save" type="submit">Save</button>
+          <button class="history-rename-cancel" type="button" data-history-rename-cancel>Cancel</button>
+        </span>
+      </form>
+    </div>
   `;
 }
 
@@ -898,6 +965,7 @@ function formatHistoryTime(timestamp) {
 }
 
 function toggleHistoryStar(id) {
+  renamingHistoryId = null;
   historyEntries = historyEntries.map((entry) => (
     entry.id === id ? { ...entry, starred: !entry.starred } : entry
   ));
@@ -906,8 +974,53 @@ function toggleHistoryStar(id) {
   closeHistoryMenus();
 }
 
+function startHistoryRename(id) {
+  renamingHistoryId = id;
+  closeHistoryMenus();
+  renderHistory();
+  window.setTimeout(() => {
+    const input = [...historyList.querySelectorAll("[data-history-rename]")]
+      .find((form) => form.dataset.historyRename === id)
+      ?.querySelector(".history-rename-input");
+    input?.focus();
+    input?.select();
+  }, 0);
+}
+
+function cancelHistoryRename() {
+  renamingHistoryId = null;
+  renderHistory();
+}
+
+function renameHistoryEntry(id, title) {
+  const nextTitle = normalizeHistoryTitle(title);
+  if (!nextTitle) return;
+  let renamed = false;
+  historyEntries = historyEntries.map((entry) => {
+    if (entry.id !== id) return entry;
+    renamed = true;
+    return {
+      ...entry,
+      title: nextTitle,
+      renamedAt: Date.now(),
+    };
+  });
+  if (!renamed) return;
+  renamingHistoryId = null;
+  persistHistoryEntries();
+  if (activeHistoryId === id) {
+    fileName.textContent = nextTitle;
+    workspaceTitle.textContent = nextTitle;
+    if (!downloadLink.classList.contains("disabled")) {
+      downloadLink.download = `${nextTitle || "boundary"}.geojson`;
+    }
+  }
+  renderHistory();
+}
+
 function deleteHistoryEntry(id) {
   if (activeHistoryId === id) activeHistoryId = null;
+  if (renamingHistoryId === id) renamingHistoryId = null;
   historyEntries = historyEntries.filter((entry) => entry.id !== id);
   persistHistoryEntries();
   renderHistory();
@@ -915,6 +1028,7 @@ function deleteHistoryEntry(id) {
 
 function restoreHistoryEntry(entry) {
   closeHistoryMenus();
+  renamingHistoryId = null;
   activeHistoryId = entry.id;
   selectedFile = null;
   imageInput.value = "";
@@ -984,8 +1098,9 @@ function positionHistoryMenu(menu) {
   const summary = menu.querySelector("summary");
   if (!summary) return;
   const rect = summary.getBoundingClientRect();
-  const panelWidth = 120;
-  const panelHeight = 84;
+  const panel = menu.querySelector(".history-menu-panel");
+  const panelWidth = panel?.offsetWidth || 132;
+  const panelHeight = panel?.offsetHeight || 120;
   const margin = 8;
   const left = Math.min(
     window.innerWidth - panelWidth - margin,
@@ -997,6 +1112,13 @@ function positionHistoryMenu(menu) {
   }
   menu.style.setProperty("--history-menu-left", `${left}px`);
   menu.style.setProperty("--history-menu-top", `${top}px`);
+}
+
+function normalizeHistoryTitle(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_HISTORY_TITLE_LENGTH);
 }
 
 function imageUrlToStoredDataUrl(src) {
