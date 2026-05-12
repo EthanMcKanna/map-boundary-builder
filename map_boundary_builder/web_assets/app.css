@@ -46,6 +46,8 @@ input {
 }
 
 .control-panel {
+  position: relative;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -213,7 +215,7 @@ input {
   border-bottom: 1px solid var(--line);
   min-height: 44px;
   padding: 0;
-  z-index: 10;
+  z-index: 30;
 }
 
 .advanced summary {
@@ -228,11 +230,12 @@ input {
   position: absolute;
   top: 0;
   left: calc(100% + 12px);
+  z-index: 40;
   display: none;
   width: 320px;
   gap: 12px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--panel);
   box-shadow: 0 18px 36px rgba(23, 33, 29, 0.16);
   padding: 12px;
 }
@@ -386,6 +389,8 @@ input {
 }
 
 .workspace {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto minmax(420px, 1fr) auto;
   gap: 18px;
