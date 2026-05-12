@@ -34,6 +34,7 @@ dependencies = [
 [project.scripts]
 map-boundary-builder = "map_boundary_builder.cli:main"
 map-boundary = "map_boundary_builder.cli:main"
+map-boundary-benchmark = "map_boundary_builder.benchmark:main"
 map-boundary-web = "map_boundary_builder.web:main"
 
 [project.urls]

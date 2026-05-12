@@ -1,0 +1,8 @@
+{
+  "fixtures": {
+    "las-vegas-zoox": {
+      "status": "reference_mismatch",
+      "note": "The local Zoox Las Vegas screenshot boundary and av-coverage-checker reference polygon are different shapes, so this pair is tracked as data debt instead of scored as model accuracy."
+    }
+  }
+}

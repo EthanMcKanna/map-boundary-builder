@@ -77,3 +77,23 @@ it can rerank candidate transforms by matching detected image line segments
 against projected OpenStreetMap road segments. If the map does not contain
 enough readable labels or public-map structure, the tool fails instead of falling
 back to a hardcoded city/provider boundary.
+
+## Service-Area Benchmark
+
+The local benchmark compares known service-area screenshots with reference
+polygons from the Robotaxi Tracker service-area registry. By default it runs the
+fast extraction benchmark: it extracts the pixel polygon, fits that shape into
+the reference bounds, and reports IoU, area ratio, vertex count, and unmatched
+inventory. Fixture-status overrides live in
+`benchmarks/service-area-fixtures.json`, so known bad screenshot/reference pairs
+stay visible as skipped data debt instead of weakening the model score.
+
+```bash
+.venv/bin/map-boundary-benchmark \
+  --polygon-dir /Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons \
+  --image-dir "/Users/ethanmckanna/Downloads/service area images"
+```
+
+For slower end-to-end georeferencing checks, run `--mode full`. The full mode
+uses the same CLI output path as production and scores the exported GeoJSON
+against the same references.

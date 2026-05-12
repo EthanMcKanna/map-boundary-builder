@@ -45,6 +45,8 @@ def extract_service_area(image_path: str | Path, simplify_px: float = DEFAULT_SI
     else:
         raw_mask = dark_teal_service_mask(rgb)
     mask = repair_mask(raw_mask, style)
+    if style == "gray-fill":
+        mask = keep_main_components(mask, max_components=1)
     mask = remove_dark_teal_chrome(mask, style)
     geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
     coverage_ratio = float(mask.mean())
@@ -68,8 +70,16 @@ def classify_style(rgb: np.ndarray) -> str:
     dark_pixels = (val < 95).mean()
     low_saturation = (sat < 25).mean()
     teal_pixels = ((hue >= 78) & (hue <= 104) & (sat >= 45) & (val >= 50) & (val <= 190)).mean()
+    r, g, _b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    green_pixels = (
+        ((hue >= 55) & (hue <= 90) & (sat >= 45) & (val >= 80) & (g.astype(np.int16) > r.astype(np.int16) + 25))
+    ).mean()
     if bright_blue > 0.02 and bright_blue > teal_pixels * 1.5:
         return "bright-blue"
+    if green_pixels > 0.015:
+        return "dark-teal"
+    if dark_pixels > 0.80 and teal_pixels < 0.01 and bright_blue < 0.01:
+        return "gray-fill"
     if low_saturation > 0.85 and dark_pixels > 0.35:
         return "gray-fill"
     if dark_pixels > 0.35 or teal_pixels > 0.08:
@@ -148,8 +158,9 @@ def green_service_fill_mask(
 def gray_fill_service_mask(rgb: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     otsu, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    threshold = int(np.clip(otsu - 15, 28, 46))
-    return gray > threshold
+    lower = int(np.clip(otsu - 4, 20, 70))
+    upper = int(np.clip(otsu + 175, lower + 8, 220))
+    return (gray >= lower) & (gray <= upper)
 
 
 def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:

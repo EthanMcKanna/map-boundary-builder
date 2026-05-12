@@ -1,0 +1,494 @@
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from statistics import mean
+from typing import Any
+
+from pyproj import Transformer
+from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.ops import transform
+
+from .extract import extract_service_area
+
+DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons")
+DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
+DEFAULT_OUT_DIR = Path("out/service-area-benchmark")
+DEFAULT_FIXTURE_CONFIG = Path("benchmarks/service-area-fixtures.json")
+
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+AREA_ALIASES = {
+    "bay area": "bay-area",
+    "san francisco": "bay-area",
+    "sf": "bay-area",
+    "las vegas": "las-vegas",
+    "los angeles": "los-angeles",
+    "san antonio": "san-antonio",
+}
+
+PROJECT_TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform
+
+
+@dataclass(frozen=True)
+class BenchmarkFixture:
+    slug: str
+    provider: str
+    area: str
+    image_path: Path
+    reference_path: Path
+    status: str = "active"
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class BenchmarkScore:
+    slug: str
+    image: str
+    mode: str
+    passed: bool
+    iou: float | None
+    area_ratio: float | None
+    centroid_distance_m: float | None
+    vertices: int | None
+    style: str | None
+    error: str | None = None
+    status: str = "active"
+    note: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "slug": self.slug,
+            "image": self.image,
+            "mode": self.mode,
+            "passed": self.passed,
+            "iou": round(self.iou, 6) if self.iou is not None else None,
+            "area_ratio": round(self.area_ratio, 6) if self.area_ratio is not None else None,
+            "centroid_distance_m": round(self.centroid_distance_m, 1) if self.centroid_distance_m is not None else None,
+            "vertices": self.vertices,
+            "style": self.style,
+            "error": self.error,
+            "status": self.status,
+            "note": self.note,
+        }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="map-boundary-benchmark",
+        description="Benchmark service-area screenshot extraction against reference service-area polygons.",
+    )
+    parser.add_argument("--polygon-dir", type=Path, default=DEFAULT_POLYGON_DIR)
+    parser.add_argument("--image-dir", type=Path, default=DEFAULT_IMAGE_DIR)
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    parser.add_argument(
+        "--fixture-config",
+        type=Path,
+        default=DEFAULT_FIXTURE_CONFIG,
+        help="Optional JSON config for fixture status overrides and notes.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("extraction", "full"),
+        default="extraction",
+        help="extraction scores the detected pixel shape after reference-bounds fitting; full scores the exported GeoJSON.",
+    )
+    parser.add_argument("--min-iou", type=float, default=0.78)
+    parser.add_argument("--mean-iou", type=float, default=0.90)
+    parser.add_argument("--timeout-seconds", type=int, default=180, help="Per-image timeout for --mode full.")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        help="Run only fixtures whose slug or image name contains this value. Repeat or comma-separate values.",
+    )
+    parser.add_argument(
+        "--city-overrides",
+        action="store_true",
+        help="For --mode full, pass the reference area name as --city. The default tests image-only inference.",
+    )
+    parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    report = run_benchmark(
+        polygon_dir=args.polygon_dir,
+        image_dir=args.image_dir,
+        out_dir=args.out_dir,
+        mode=args.mode,
+        min_iou=args.min_iou,
+        mean_iou=args.mean_iou,
+        timeout_seconds=args.timeout_seconds,
+        city_overrides=args.city_overrides,
+        only_filters=args.only,
+        fixture_config=args.fixture_config,
+    )
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    report_path = args.out_dir / f"{args.mode}-report.json"
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print_table(report, report_path)
+    return 0 if report["summary"]["passed"] else 1
+
+
+def run_benchmark(
+    *,
+    polygon_dir: Path,
+    image_dir: Path,
+    out_dir: Path,
+    mode: str,
+    min_iou: float,
+    mean_iou: float,
+    timeout_seconds: int,
+    city_overrides: bool,
+    only_filters: list[str],
+    fixture_config: Path,
+) -> dict[str, Any]:
+    config = load_fixture_config(fixture_config)
+    fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
+    filters = normalize_only_filters(only_filters)
+    if filters:
+        before_count = len(fixtures)
+        fixtures = [fixture for fixture in fixtures if fixture_matches_filters(fixture, filters)]
+        inventory["filtered_from"] = before_count
+        inventory["only_filters"] = filters
+    scores: list[BenchmarkScore] = []
+    for fixture in fixtures:
+        if mode == "full":
+            scores.append(
+                score_full_fixture(
+                    fixture,
+                    out_dir=out_dir,
+                    min_iou=min_iou,
+                    timeout_seconds=timeout_seconds,
+                    city_overrides=city_overrides,
+                )
+            )
+        else:
+            scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
+
+    scored = [score for score in scores if score.status == "active"]
+    skipped = [score for score in scores if score.status != "active"]
+    ious = [score.iou for score in scored if score.iou is not None]
+    average_iou = float(mean(ious)) if ious else 0.0
+    min_seen_iou = float(min(ious)) if ious else 0.0
+    passed_count = sum(score.passed for score in scored)
+    failed_count = len(scored) - passed_count
+    passed = bool(scored) and failed_count == 0 and average_iou >= mean_iou
+    return {
+        "mode": mode,
+        "thresholds": {
+            "min_iou": min_iou,
+            "mean_iou": mean_iou,
+        },
+        "summary": {
+            "passed": passed,
+            "fixtures": len(scores),
+            "scored_fixtures": len(scored),
+            "skipped_fixtures": len(skipped),
+            "passed_fixtures": passed_count,
+            "failed_fixtures": failed_count,
+            "average_iou": round(average_iou, 6),
+            "min_iou": round(min_seen_iou, 6),
+        },
+        "inventory": inventory,
+        "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
+    }
+
+
+def load_fixture_config(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"path": str(path), "fixtures": {}}
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise ValueError(f"Fixture config must be a JSON object: {path}")
+    fixtures = data.setdefault("fixtures", {})
+    if not isinstance(fixtures, dict):
+        raise ValueError(f"Fixture config 'fixtures' must be an object: {path}")
+    data["path"] = str(path)
+    return data
+
+
+def discover_fixtures(
+    polygon_dir: Path,
+    image_dir: Path,
+    config: dict[str, Any],
+) -> tuple[list[BenchmarkFixture], dict[str, Any]]:
+    references = {path.stem: path for path in sorted(polygon_dir.glob("*.json"))}
+    images = [path for path in sorted(image_dir.iterdir()) if path.suffix.lower() in IMAGE_SUFFIXES]
+    fixtures: list[BenchmarkFixture] = []
+    missing_references: list[str] = []
+    fixture_config = config.get("fixtures", {})
+    for image_path in images:
+        provider, area_slug, area_name = parse_image_name(image_path)
+        slug = f"{area_slug}-{provider}" if provider and area_slug else ""
+        reference_path = references.get(slug)
+        if reference_path is None:
+            missing_references.append(image_path.name)
+            continue
+        override = fixture_config.get(slug, {})
+        if not isinstance(override, dict):
+            raise ValueError(f"Fixture override for {slug} must be an object")
+        fixtures.append(
+            BenchmarkFixture(
+                slug=slug,
+                provider=provider,
+                area=area_name,
+                image_path=image_path,
+                reference_path=reference_path,
+                status=str(override.get("status", "active")),
+                note=str(override["note"]) if override.get("note") else None,
+            )
+        )
+    covered = {fixture.slug for fixture in fixtures}
+    return fixtures, {
+        "polygon_dir": str(polygon_dir),
+        "image_dir": str(image_dir),
+        "fixture_config": str(config.get("path", "")),
+        "matched_images": len(fixtures),
+        "missing_reference_images": missing_references,
+        "references_without_images": sorted(set(references) - covered),
+    }
+
+
+def parse_image_name(path: Path) -> tuple[str, str, str]:
+    text = normalized_words(path.stem)
+    provider = ""
+    for candidate in ("tesla", "waymo", "zoox"):
+        if candidate in text.split():
+            provider = candidate
+            text = " ".join(word for word in text.split() if word != candidate)
+            break
+    area_name = " ".join(text.split())
+    area_slug = AREA_ALIASES.get(area_name, slugify(area_name))
+    return provider, area_slug, area_name.title()
+
+
+def normalize_only_filters(raw_filters: list[str]) -> list[str]:
+    filters: list[str] = []
+    for raw in raw_filters:
+        filters.extend(value.strip().lower() for value in raw.split(",") if value.strip())
+    return filters
+
+
+def fixture_matches_filters(fixture: BenchmarkFixture, filters: list[str]) -> bool:
+    haystack = f"{fixture.slug} {fixture.image_path.name}".lower()
+    normalized_haystack = normalized_words(haystack)
+    return any(value in haystack or normalized_words(value) in normalized_haystack for value in filters)
+
+
+def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:
+    try:
+        extraction = extract_service_area(fixture.image_path)
+        reference = project_geometry(load_reference_geometry(fixture.reference_path))
+        fitted = fit_pixel_geometry_to_reference_bounds(extraction.pixel_geometry, reference)
+        metrics = compare_geometries(fitted, reference)
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="extraction",
+            passed=metrics["iou"] >= min_iou,
+            iou=metrics["iou"],
+            area_ratio=metrics["area_ratio"],
+            centroid_distance_m=metrics["centroid_distance_m"],
+            vertices=count_vertices(extraction.pixel_geometry),
+            style=extraction.style,
+            status=fixture.status,
+            note=fixture.note,
+        )
+    except Exception as exc:
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="extraction",
+            passed=False,
+            iou=None,
+            area_ratio=None,
+            centroid_distance_m=None,
+            vertices=None,
+            style=None,
+            error=str(exc),
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+
+def score_full_fixture(
+    fixture: BenchmarkFixture,
+    *,
+    out_dir: Path,
+    min_iou: float,
+    timeout_seconds: int,
+    city_overrides: bool,
+) -> BenchmarkScore:
+    output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
+    debug_dir = out_dir / "full-debug" / fixture.slug
+    command = [
+        sys.executable,
+        "-m",
+        "map_boundary_builder.cli",
+        "--image",
+        str(fixture.image_path),
+        "--output",
+        str(output_path),
+        "--debug-dir",
+        str(debug_dir),
+        "--print-summary",
+    ]
+    if city_overrides:
+        command.extend(["--city", fixture.area])
+    try:
+        completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout_seconds, check=False)
+    except subprocess.TimeoutExpired:
+        return failed_full_score(fixture, f"timed out after {timeout_seconds}s")
+    if completed.returncode != 0:
+        error = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        return failed_full_score(fixture, error)
+
+    try:
+        output = json.loads(output_path.read_text())
+        predicted = project_geometry(shape(output["features"][0]["geometry"]))
+        reference = project_geometry(load_reference_geometry(fixture.reference_path))
+        metrics = compare_geometries(predicted, reference)
+        summary = json.loads(completed.stdout)
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=metrics["iou"] >= min_iou,
+            iou=metrics["iou"],
+            area_ratio=metrics["area_ratio"],
+            centroid_distance_m=metrics["centroid_distance_m"],
+            vertices=count_vertices(shape(output["features"][0]["geometry"])),
+            style=summary.get("style"),
+            status=fixture.status,
+            note=fixture.note,
+        )
+    except Exception as exc:
+        return failed_full_score(fixture, str(exc))
+
+
+def failed_full_score(fixture: BenchmarkFixture, error: str) -> BenchmarkScore:
+    return BenchmarkScore(
+        slug=fixture.slug,
+        image=fixture.image_path.name,
+        mode="full",
+        passed=False,
+        iou=None,
+        area_ratio=None,
+        centroid_distance_m=None,
+        vertices=None,
+            style=None,
+            error=error,
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+
+def load_reference_geometry(path: Path) -> Polygon | MultiPolygon:
+    data = json.loads(path.read_text())
+    if data.get("type"):
+        return shape(data["features"][0]["geometry"] if data["type"] == "FeatureCollection" else data)
+    coordinates = data["coordinates"]
+    if coordinates[0] != coordinates[-1]:
+        coordinates = [*coordinates, coordinates[0]]
+    return Polygon(coordinates)
+
+
+def fit_pixel_geometry_to_reference_bounds(
+    pixel_geometry: Polygon | MultiPolygon,
+    reference_mercator: Polygon | MultiPolygon,
+) -> Polygon | MultiPolygon:
+    min_x, min_y, max_x, max_y = pixel_geometry.bounds
+    ref_min_x, ref_min_y, ref_max_x, ref_max_y = reference_mercator.bounds
+    width = max_x - min_x
+    height = max_y - min_y
+    if width <= 0 or height <= 0:
+        raise ValueError("extracted pixel geometry has empty bounds")
+
+    scale_x = (ref_max_x - ref_min_x) / width
+    scale_y = (ref_max_y - ref_min_y) / height
+
+    def fit(x: float, y: float, z: float | None = None) -> tuple[float, float]:
+        return ref_min_x + (x - min_x) * scale_x, ref_max_y - (y - min_y) * scale_y
+
+    return transform(fit, pixel_geometry)
+
+
+def project_geometry(geometry: Polygon | MultiPolygon) -> Polygon | MultiPolygon:
+    return transform(PROJECT_TO_MERCATOR, geometry)
+
+
+def compare_geometries(predicted: Polygon | MultiPolygon, reference: Polygon | MultiPolygon) -> dict[str, float]:
+    predicted = predicted.buffer(0)
+    reference = reference.buffer(0)
+    intersection = predicted.intersection(reference).area
+    union = predicted.union(reference).area
+    iou = intersection / union if union else 0.0
+    area_ratio = predicted.area / reference.area if reference.area else 0.0
+    centroid_distance_m = predicted.centroid.distance(reference.centroid)
+    return {
+        "iou": float(iou),
+        "area_ratio": float(area_ratio),
+        "centroid_distance_m": float(centroid_distance_m),
+    }
+
+
+def count_vertices(geometry: Polygon | MultiPolygon) -> int:
+    polygons = list(geometry.geoms) if isinstance(geometry, MultiPolygon) else [geometry]
+    return sum(len(poly.exterior.coords) + sum(len(ring.coords) for ring in poly.interiors) for poly in polygons)
+
+
+def normalized_words(text: str) -> str:
+    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in text).split())
+
+
+def slugify(text: str) -> str:
+    return "-".join(normalized_words(text).split())
+
+
+def score_sort_key(score: BenchmarkScore) -> tuple[int, bool, float]:
+    return (0 if score.status == "active" else 1, score.passed, score.iou or -1.0)
+
+
+def print_table(report: dict[str, Any], report_path: Path) -> None:
+    summary = report["summary"]
+    status = "PASS" if summary["passed"] else "FAIL"
+    print(
+        f"{status} {report['mode']} benchmark: "
+        f"{summary['passed_fixtures']}/{summary['scored_fixtures']} scored fixtures, "
+        f"{summary['skipped_fixtures']} skipped, "
+        f"avg IoU {summary['average_iou']:.3f}, min IoU {summary['min_iou']:.3f}"
+    )
+    print(f"report: {report_path}")
+    print("")
+    print(f"{'status':6s} {'iou':>6s} {'area':>6s} {'verts':>6s} {'style':12s} slug")
+    for row in report["scores"]:
+        row_status = "PASS" if row["passed"] else "FAIL"
+        if row["status"] != "active":
+            row_status = "SKIP"
+        iou = f"{row['iou']:.3f}" if row["iou"] is not None else "err"
+        area = f"{row['area_ratio']:.2f}" if row["area_ratio"] is not None else "-"
+        vertices = str(row["vertices"]) if row["vertices"] is not None else "-"
+        style = row["style"] or "-"
+        print(f"{row_status:6s} {iou:>6s} {area:>6s} {vertices:>6s} {style:12s} {row['slug']}")
+        if row["error"]:
+            print(f"       error: {row['error']}")
+        if row["note"]:
+            print(f"       note: {row['note']}")
+    references_without_images = report["inventory"]["references_without_images"]
+    if references_without_images:
+        print("")
+        print("references without screenshots: " + ", ".join(references_without_images))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
