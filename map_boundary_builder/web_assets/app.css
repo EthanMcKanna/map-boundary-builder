@@ -398,6 +398,15 @@ textarea,
   padding: 12px 6px 0;
 }
 
+.progress-panel[hidden] {
+  display: none;
+}
+
+.progress-panel:not(.is-running) .meter,
+.progress-panel:not(.is-running) .timeline {
+  display: none;
+}
+
 .progress-head {
   display: flex;
   align-items: center;

@@ -9,6 +9,7 @@ const fileName = document.querySelector("#fileName");
 const fileMeta = document.querySelector("#fileMeta");
 const brandButton = document.querySelector("#brandButton");
 const runButton = document.querySelector("#runButton");
+const progressPanel = document.querySelector("#progressPanel");
 const statusText = document.querySelector("#statusText");
 const percentText = document.querySelector("#percentText");
 const progressMeter = document.querySelector("#progressMeter");
@@ -551,6 +552,7 @@ function applyEvent(event) {
 }
 
 function setStatus(message, percent, status = "running", options = {}) {
+  setProgressPanelState(status);
   statusText.textContent = message;
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
   progressValue = status === "complete" ? 100 : Math.max(progressValue, clamped);
@@ -566,6 +568,13 @@ function setStatus(message, percent, status = "running", options = {}) {
     progressFill.style.background = "";
     progressMeter.classList.remove("error");
   }
+}
+
+function setProgressPanelState(status) {
+  const isRunning = status === "running";
+  const isError = status === "error";
+  progressPanel.hidden = !(isRunning || isError);
+  progressPanel.classList.toggle("is-running", isRunning);
 }
 
 function resetProgressSteps() {
