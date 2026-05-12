@@ -39,6 +39,18 @@ input {
   font: inherit;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: minmax(300px, 380px) 1fr;
@@ -76,8 +88,7 @@ input {
   object-fit: cover;
 }
 
-.brand h1,
-.top-bar h2 {
+.brand h1 {
   margin: 0;
   font-size: 1.35rem;
   line-height: 1.1;
@@ -210,32 +221,94 @@ input {
   box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.18);
 }
 
+.run-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: start;
+}
+
 .advanced {
   position: relative;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  min-height: 44px;
+  min-height: 40px;
   padding: 0;
   z-index: 30;
 }
 
 .advanced summary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
+  display: grid;
+  width: 40px;
+  min-height: 40px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(248, 246, 238, 0.78);
+  color: var(--ink);
   cursor: pointer;
-  font-weight: 850;
+  list-style: none;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced[open] summary,
+.advanced summary:hover {
+  border-color: var(--green);
+  background: rgba(47, 178, 143, 0.12);
+  box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.12);
+}
+
+.settings-icon {
+  display: grid;
+  width: 18px;
+  gap: 3px;
+}
+
+.settings-icon span {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.settings-icon span::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--panel);
+  transform: translate(-50%, -50%);
+}
+
+.settings-icon span:nth-child(1)::after {
+  left: 5px;
+}
+
+.settings-icon span:nth-child(2)::after {
+  left: 13px;
+}
+
+.settings-icon span:nth-child(3)::after {
+  left: 8px;
 }
 
 .advanced-fields {
   position: absolute;
   top: 0;
   left: calc(100% + 12px);
-  z-index: 40;
+  z-index: 60;
   display: none;
   width: 320px;
   gap: 12px;
   border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 18px 36px rgba(23, 33, 29, 0.16);
   padding: 12px;
@@ -663,17 +736,10 @@ input {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto minmax(420px, 1fr) auto;
+  grid-template-rows: minmax(420px, 1fr) auto;
   gap: 18px;
   min-width: 0;
   padding: 24px;
-}
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
 }
 
 .actions {
@@ -681,6 +747,7 @@ input {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: end;
+  flex: 0 0 auto;
 }
 
 .ghost-action {
@@ -708,12 +775,23 @@ input {
   box-shadow: var(--shadow);
 }
 
+.preview-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
-  border-bottom: 1px solid var(--line);
-  padding: 12px;
+  padding: 0;
 }
 
 .tab {
@@ -888,15 +966,15 @@ input {
 
   .workspace {
     order: 1;
-    grid-template-rows: auto minmax(360px, 1fr) auto;
+    grid-template-rows: minmax(360px, 1fr) auto;
     padding: 18px;
   }
 
   .advanced-fields {
     top: calc(100% + 8px);
     right: 0;
-    left: 0;
-    width: auto;
+    left: auto;
+    width: min(320px, calc(100vw - 28px));
   }
 
   .metric-grid {
@@ -910,9 +988,13 @@ input {
     padding: 14px;
   }
 
-  .top-bar {
-    align-items: flex-start;
+  .preview-header {
+    align-items: stretch;
     flex-direction: column;
+  }
+
+  .tabs {
+    width: 100%;
   }
 
   .actions {

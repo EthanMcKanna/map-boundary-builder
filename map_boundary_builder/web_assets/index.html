@@ -27,28 +27,33 @@
             <span id="fileMeta">Drop a screenshot in the workspace</span>
           </label>
 
-          <details class="advanced">
-            <summary>Fit Settings</summary>
-            <div class="advanced-fields">
-              <label class="field compact">
-                <span>Confidence Floor</span>
-                <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
-              </label>
-              <label class="field compact">
-                <span>Control Points</span>
-                <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
-              </label>
-              <label class="field compact">
-                <span>Simplify PX</span>
-                <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
-              </label>
-            </div>
-          </details>
+          <div class="run-actions">
+            <button id="runButton" class="primary-action" type="submit">
+              <span>Run Boundary</span>
+              <span aria-hidden="true">-></span>
+            </button>
 
-          <button id="runButton" class="primary-action" type="submit">
-            <span>Run Boundary</span>
-            <span aria-hidden="true">-></span>
-          </button>
+            <details class="advanced">
+              <summary aria-label="Fit settings" title="Fit settings">
+                <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span class="sr-only">Fit Settings</span>
+              </summary>
+              <div class="advanced-fields">
+                <label class="field compact">
+                  <span>Confidence Floor</span>
+                  <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
+                </label>
+                <label class="field compact">
+                  <span>Control Points</span>
+                  <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
+                </label>
+                <label class="field compact">
+                  <span>Simplify PX</span>
+                  <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
+                </label>
+              </div>
+            </details>
+          </div>
         </form>
 
         <section class="history-panel" aria-labelledby="historyTitle">
@@ -80,24 +85,21 @@
       </aside>
 
       <main class="workspace">
-        <section class="top-bar">
-          <div>
-            <span class="eyebrow">Workspace</span>
-            <h2 id="workspaceTitle">Ready for a screenshot</h2>
-          </div>
-          <div class="actions">
-            <a id="downloadLink" class="ghost-action disabled" href="#" aria-disabled="true">GeoJSON</a>
-            <button id="copyButton" class="ghost-action" type="button" disabled>Copy</button>
-          </div>
-        </section>
+        <h2 id="workspaceTitle" class="sr-only">Ready for a screenshot</h2>
 
         <section class="preview-stage">
-          <nav class="tabs" aria-label="Preview tabs">
-            <button class="tab active" type="button" data-tab="input">Input</button>
-            <button class="tab" type="button" data-tab="overlay">Overlay</button>
-            <button class="tab" type="button" data-tab="boundary">Boundary</button>
-            <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
-          </nav>
+          <div class="preview-header">
+            <nav class="tabs" aria-label="Preview tabs">
+              <button class="tab active" type="button" data-tab="input">Input</button>
+              <button class="tab" type="button" data-tab="overlay">Overlay</button>
+              <button class="tab" type="button" data-tab="boundary">Boundary</button>
+              <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
+            </nav>
+            <div class="actions" aria-label="Output actions">
+              <a id="downloadLink" class="ghost-action disabled" href="#" aria-disabled="true">GeoJSON</a>
+              <button id="copyButton" class="ghost-action" type="button" disabled>Copy</button>
+            </div>
+          </div>
 
           <div class="pane active" id="inputPane" data-pane="input">
             <label id="dropZone" class="drop-zone primary-drop" data-drop-target for="imageInput">
