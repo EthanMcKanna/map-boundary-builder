@@ -44,6 +44,22 @@ GENERIC_SINGLE_TOKENS = {
     "view",
     "west",
 }
+OCR_PLACE_TOKEN_ALIASES = {
+    "dakland": "oakland",
+    "daklanda": "oakland",
+    "daklang": "oakland",
+    "edwood": "redwood",
+    "fran": "francisco",
+    "frankisco": "francisco",
+    "fransisco": "francisco",
+    "isco": "francisco",
+    "jakland": "oakland",
+    "jaklang": "oakland",
+    "jos": "jose",
+    "sco": "francisco",
+    "uakland": "oakland",
+    "vakland": "oakland",
+}
 ADMIN_CONTEXT_TYPES = {
     "borough",
     "city",
@@ -53,12 +69,15 @@ ADMIN_CONTEXT_TYPES = {
     "village",
 }
 CITY_INFERENCE_STOP_TOKENS = {
+    "acy",
     "are",
     "bearing",
+    "bmw",
     "briefly",
     "busy",
     "complete",
     "edit",
+    "fan",
     "for",
     "later",
     "lay",
@@ -73,9 +92,13 @@ CITY_INFERENCE_STOP_TOKENS = {
     "ride",
     "rider",
     "riders",
+    "rae",
+    "sayy",
     "thanks",
     "thr",
     "tap",
+    "tile",
+    "tiles",
     "try",
     "unavailable",
     "walk",
@@ -208,6 +231,7 @@ def georeference_from_ocr(
     height: int,
     *,
     min_control_points: int = 3,
+    label_y_min: float | None = None,
     label_y_max: float | None = None,
 ) -> GeoreferenceResult | None:
     labels = extract_ocr_labels(image_path)
@@ -218,6 +242,7 @@ def georeference_from_ocr(
         width,
         height,
         min_control_points=min_control_points,
+        label_y_min=label_y_min,
         label_y_max=label_y_max,
     )
 
@@ -230,10 +255,15 @@ def georeference_from_labels(
     height: int,
     *,
     min_control_points: int = 3,
+    label_y_min: float | None = None,
     label_y_max: float | None = None,
 ) -> GeoreferenceResult | None:
+    control_labels = labels
+    if label_y_min is not None:
+        control_labels = [label for label in control_labels if label.y >= label_y_min]
     if label_y_max is not None:
-        labels = [label for label in labels if label.y <= label_y_max]
+        control_labels = [label for label in control_labels if label.y <= label_y_max]
+    control_labels = anchor_labels_to_marker_dots(control_labels, image_path)
     city_contexts = resolve_city_contexts(labels, city)
     regional_display_name = (
         city_contexts[0].center.display_name
@@ -243,7 +273,7 @@ def georeference_from_labels(
     best: tuple[float, GeoreferenceResult] | None = None
     for city_context in city_contexts:
         result = georeference_from_label_context(
-            labels,
+            control_labels,
             image_path,
             city_context,
             width,
@@ -258,6 +288,84 @@ def georeference_from_labels(
                 best = (score, result)
             if is_decisive_georeference_result(result):
                 break
+    return best[1] if best is not None else None
+
+
+def anchor_labels_to_marker_dots(labels: list[OcrLabel], image_path: str) -> list[OcrLabel]:
+    markers = detect_label_marker_dots(image_path)
+    if not markers:
+        return labels
+
+    anchored: list[OcrLabel] = []
+    for label in labels:
+        marker = nearest_label_marker(label, markers)
+        if marker is None:
+            anchored.append(label)
+            continue
+        anchored.append(
+            OcrLabel(
+                text=label.text,
+                x=marker[0],
+                y=marker[1],
+                width=label.width,
+                height=label.height,
+                confidence=label.confidence,
+            )
+        )
+    return anchored
+
+
+def detect_label_marker_dots(image_path: str) -> list[tuple[float, float]]:
+    bgr = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if bgr is None:
+        return []
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    if float(np.median(gray)) > 115.0:
+        return []
+    mask = (gray >= 105).astype(np.uint8)
+    component_count, _, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+    markers: list[tuple[float, float]] = []
+    for idx in range(1, component_count):
+        _, _, width, height, area = stats[idx]
+        if width < 4 or width > 9 or height < 4 or height > 9:
+            continue
+        aspect = width / max(float(height), 1.0)
+        fill = area / max(float(width * height), 1.0)
+        if 0.65 <= aspect <= 1.55 and 12 <= area <= 55 and fill >= 0.45:
+            x, y = centroids[idx]
+            markers.append((float(x), float(y)))
+    return markers
+
+
+def nearest_label_marker(label: OcrLabel, markers: list[tuple[float, float]]) -> tuple[float, float] | None:
+    tokens = place_tokens(label.text)
+    if token_quality(tokens) == 0 or len(tokens) > 3:
+        return None
+    if label.height > 36.0 or label.width > 180.0:
+        return None
+
+    left = label.x - label.width / 2.0
+    right = label.x + label.width / 2.0
+    top = label.y - label.height / 2.0
+    bottom = label.y + label.height / 2.0
+    min_x = left - max(20.0, label.height)
+    max_x = right + max(48.0, min(125.0, label.width * 1.35 + 35.0))
+    min_y = label.y + max(2.0, label.height * 0.10)
+    max_y = label.y + max(38.0, label.height * 1.85)
+    max_distance = max(42.0, min(130.0, label.width * 1.35 + 38.0))
+
+    best: tuple[float, tuple[float, float]] | None = None
+    for marker_x, marker_y in markers:
+        if marker_x < min_x or marker_x > max_x or marker_y < min_y or marker_y > max_y:
+            continue
+        if left - 2.0 <= marker_x <= right + 2.0 and top - 2.0 <= marker_y <= bottom + 2.0:
+            continue
+        distance = sqrt((marker_x - label.x) ** 2 + (marker_y - label.y) ** 2)
+        if distance > max_distance:
+            continue
+        score = distance + (12.0 if marker_x < left else 0.0)
+        if best is None or score < best[0]:
+            best = (score, (marker_x, marker_y))
     return best[1] if best is not None else None
 
 
@@ -276,12 +384,30 @@ def georeference_result_with_city(result: GeoreferenceResult, city: str) -> Geor
 def georeference_result_score(result: GeoreferenceResult) -> float:
     road_score = result.road_match.score if result.road_match is not None else 0.0
     road_base_score = result.road_match.base_score if result.road_match is not None else 0.0
-    control_score = min(0.18, len(result.control_points) * 0.025)
+    control_count = len(result.control_points)
+    road_weight = min(1.0, max(0.15, (control_count - 2) / 8.0))
+    control_score = min(0.42, control_count * 0.035)
+    spread_score = min(0.28, georeference_control_spread_m(result.control_points) / 220000.0)
     residual_penalty = min(0.35, result.residual_p90_m / 12000.0) + min(0.25, result.residual_median_m / 8000.0)
-    return result.transform.confidence + control_score + road_score + 0.2 * road_base_score - residual_penalty
+    return (
+        result.transform.confidence
+        + control_score
+        + spread_score
+        + road_weight * road_score
+        + 0.2 * road_weight * road_base_score
+        - residual_penalty
+    )
 
 
 def is_decisive_georeference_result(result: GeoreferenceResult) -> bool:
+    if (
+        result.transform.meters_per_pixel >= 15.0
+        and result.transform.confidence >= 0.84
+        and len(result.control_points) >= 8
+        and result.residual_median_m <= 1600
+        and result.residual_p90_m <= 3200
+    ):
+        return True
     if (
         result.road_match is not None
         and result.road_match.score >= 0.60
@@ -295,6 +421,14 @@ def is_decisive_georeference_result(result: GeoreferenceResult) -> bool:
         and len(result.control_points) >= 6
         and result.residual_p90_m <= 500
     )
+
+
+def georeference_control_spread_m(controls: list[ControlPoint]) -> float:
+    if len(controls) < 2:
+        return 0.0
+    points = np.array([control.mercator for control in controls], dtype=float)
+    width, height = np.ptp(points, axis=0)
+    return float(max(width, height))
 
 
 def georeference_from_label_context(
@@ -1675,7 +1809,12 @@ def primary_name_matches_label(display_name: str, label_text: str) -> bool:
 
 
 def place_tokens(value: str) -> set[str]:
-    return {part for part in re.split(r"[^a-z0-9]+", value.lower()) if len(part) >= 3}
+    tokens: set[str] = set()
+    for part in re.split(r"[^a-z0-9]+", value.lower()):
+        if len(part) < 3:
+            continue
+        tokens.add(OCR_PLACE_TOKEN_ALIASES.get(part, part))
+    return tokens
 
 
 def robust_similarity_fit(

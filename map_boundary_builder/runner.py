@@ -106,6 +106,11 @@ def build_boundary(
         if extraction.style == "dark-teal"
         else None
     )
+    label_y_min = (
+        extraction.pixel_geometry.bounds[1] - max(6.0, height * 0.012)
+        if extraction.style == "gray-fill"
+        else None
+    )
     emit_progress(
         progress,
         stage="georeference",
@@ -120,6 +125,7 @@ def build_boundary(
             width,
             height,
             min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
             label_y_max=label_y_max,
         )
     else:
@@ -129,6 +135,7 @@ def build_boundary(
             width,
             height,
             min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
             label_y_max=label_y_max,
         )
     if georef is None and city_input is not None:

@@ -118,10 +118,12 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
     blur = cv2.GaussianBlur(neutral_gray, (0, 0), 3)
     high_pass = cv2.addWeighted(neutral_gray, 1.8, blur, -0.8, 0)
     dark_ink = ((neutral_gray < 175).astype(np.uint8) * 255)
+    light_map_text = (((value > 95) & (saturation < 150)).astype(np.uint8) * 255)
     variants = [
         (gray, 1.0, 1.0),
         (cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(gray), 1.0, 1.0),
         ((((value > 145) & (saturation < 120)).astype(np.uint8) * 255), 1.0, 1.0),
+        (cv2.resize(light_map_text, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC), 3.0, 3.0),
         (cv2.resize(neutral_clahe, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC), 2.0, 2.0),
         (cv2.resize(high_pass, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC), 2.0, 2.0),
         (cv2.resize(dark_ink, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST), 2.0, 2.0),
