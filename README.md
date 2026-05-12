@@ -61,14 +61,14 @@ OCR/geocoded map evidence.
 
 The final product has no provider boundary presets, manual georeference flags,
 or ground-truth-reference fitting. It infers map position from OCR-detected
-labels, uses a small local gazetteer for common city and region evidence,
+labels, queries public OpenStreetMap-backed geocoders with a cached fallback,
 clusters geocoded label candidates to infer the map city or region, matches
 labels against cached OpenStreetMap place names near that inferred location, and
 fits a rotation-aware Web Mercator transform only when there are enough control
-points with low residual error. When that label fit is viable, a local
-OpenStreetMap road-network refinement can tune scale, rotation, and origin
-against visible road structure in the image. The CLI still accepts `--city` as an
-optional override for unusually sparse screenshots.
+points with low residual error. When multiple inferred contexts fit, the builder
+scores them by residuals, control-point support, and visible-road alignment so
+large regional screenshots are not forced into a single city scale. The CLI still
+accepts `--city` as an optional override for unusually sparse screenshots.
 
 If label control points are not available and a city override is supplied, the
 CLI can attempt a lower-confidence city-context road search using public

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
 import re
@@ -23,7 +23,8 @@ from .osm_roads import (
 
 MAX_GEOCODED_LABELS = 16
 MAX_PLACE_LABELS = 120
-MAX_CITY_INFERENCE_LABELS = 12
+MAX_CITY_INFERENCE_LABELS = 48
+MAX_CITY_CONTEXTS = 6
 GENERIC_SINGLE_TOKENS = {
     "area",
     "bay",
@@ -43,106 +44,95 @@ GENERIC_SINGLE_TOKENS = {
     "view",
     "west",
 }
+ADMIN_CONTEXT_TYPES = {
+    "borough",
+    "city",
+    "municipality",
+    "region",
+    "town",
+    "village",
+}
 CITY_INFERENCE_STOP_TOKENS = {
     "are",
     "bearing",
     "briefly",
+    "busy",
     "complete",
+    "edit",
     "for",
     "later",
+    "lay",
+    "liv",
+    "live",
+    "min",
     "other",
+    "pickup",
+    "plate",
     "request",
     "requests",
     "ride",
     "rider",
     "riders",
     "thanks",
+    "thr",
+    "tap",
     "try",
     "unavailable",
+    "walk",
     "with",
 }
-BAY_AREA_PLACE_NAMES = {
-    "atherton",
-    "belmont",
-    "brisbane",
-    "burlingame",
-    "daly city",
-    "foster city",
-    "los altos",
-    "menlo park",
-    "millbrae",
-    "mountain view",
-    "palo alto",
-    "redwood city",
-    "san bruno",
-    "san francisco",
-    "san jose",
-    "san mateo",
-    "south san francisco",
-    "sunnyvale",
-}
-SAN_FRANCISCO_PLACE_NAMES = {
-    "alamo square",
-    "bernal heights",
-    "castro",
-    "chinatown",
-    "civic center",
-    "cow hollow",
-    "dogpatch",
-    "financial district",
-    "haight ashbury",
-    "hayes valley",
-    "japantown",
-    "marina district",
-    "mission bay",
-    "mission district",
-    "nob hill",
-    "noe valley",
-    "north beach",
-    "pacific heights",
-    "potrero hill",
-    "presidio",
-    "russian hill",
-    "san francisco",
-    "south beach",
-    "south of market",
-    "telegraph hill",
-    "tenderloin",
-    "western addition",
-}
-LAS_VEGAS_PLACE_NAMES = {
-    "arts district",
-    "downtown las vegas",
-    "enterprise",
-    "fremont",
-    "fremont street",
-    "harry reid international airport",
-    "henderson",
-    "las vegas",
-    "las vegas strip",
-    "north las vegas",
-    "paradise",
-    "spring valley",
-    "summerlin",
-    "sunrise manor",
-    "the strip",
-    "university district",
-    "winchester",
-}
-AUSTIN_PLACE_NAMES = {
-    "austin",
-    "barton creek greenbelt",
-    "barton springs",
-    "cherrywood",
-    "downtown austin",
-    "east austin",
-    "hyde park",
-    "lady bird lake",
-    "mueller",
-    "south congress",
-    "south lamar",
-    "travis heights",
-    "zilker",
+NON_CONTEXT_COMPONENTS = {
+    "alabama",
+    "alaska",
+    "arizona",
+    "arkansas",
+    "california",
+    "colorado",
+    "connecticut",
+    "delaware",
+    "florida",
+    "georgia",
+    "hawaii",
+    "idaho",
+    "illinois",
+    "indiana",
+    "iowa",
+    "kansas",
+    "kentucky",
+    "louisiana",
+    "maine",
+    "maryland",
+    "massachusetts",
+    "michigan",
+    "minnesota",
+    "mississippi",
+    "missouri",
+    "montana",
+    "nebraska",
+    "nevada",
+    "new hampshire",
+    "new jersey",
+    "new mexico",
+    "new york",
+    "north carolina",
+    "north dakota",
+    "ohio",
+    "oklahoma",
+    "oregon",
+    "pennsylvania",
+    "rhode island",
+    "south carolina",
+    "south dakota",
+    "tennessee",
+    "texas",
+    "united states",
+    "utah",
+    "vermont",
+    "virginia",
+    "washington",
+    "west virginia",
+    "wisconsin",
+    "wyoming",
 }
 
 
@@ -244,9 +234,78 @@ def georeference_from_labels(
 ) -> GeoreferenceResult | None:
     if label_y_max is not None:
         labels = [label for label in labels if label.y <= label_y_max]
-    city_context = resolve_city_context(labels, city)
-    if city_context is None:
-        return None
+    city_contexts = resolve_city_contexts(labels, city)
+    regional_display_name = (
+        city_contexts[0].center.display_name
+        if city is None and city_contexts and city_contexts[0].query == "Inferred map area"
+        else None
+    )
+    best: tuple[float, GeoreferenceResult] | None = None
+    for city_context in city_contexts:
+        result = georeference_from_label_context(
+            labels,
+            image_path,
+            city_context,
+            width,
+            height,
+            min_control_points=min_control_points,
+        )
+        if result is not None:
+            if regional_display_name is not None:
+                result = georeference_result_with_city(result, regional_display_name)
+            score = georeference_result_score(result)
+            if best is None or score > best[0]:
+                best = (score, result)
+            if is_decisive_georeference_result(result):
+                break
+    return best[1] if best is not None else None
+
+
+def georeference_result_with_city(result: GeoreferenceResult, city: str) -> GeoreferenceResult:
+    if result.transform.city == city:
+        return result
+    return GeoreferenceResult(
+        transform=replace(result.transform, city=city),
+        control_points=result.control_points,
+        residual_median_m=result.residual_median_m,
+        residual_p90_m=result.residual_p90_m,
+        road_match=result.road_match,
+    )
+
+
+def georeference_result_score(result: GeoreferenceResult) -> float:
+    road_score = result.road_match.score if result.road_match is not None else 0.0
+    road_base_score = result.road_match.base_score if result.road_match is not None else 0.0
+    control_score = min(0.18, len(result.control_points) * 0.025)
+    residual_penalty = min(0.35, result.residual_p90_m / 12000.0) + min(0.25, result.residual_median_m / 8000.0)
+    return result.transform.confidence + control_score + road_score + 0.2 * road_base_score - residual_penalty
+
+
+def is_decisive_georeference_result(result: GeoreferenceResult) -> bool:
+    if (
+        result.road_match is not None
+        and result.road_match.score >= 0.60
+        and len(result.control_points) >= 5
+        and result.residual_p90_m <= 3500
+    ):
+        return True
+    return (
+        result.road_match is None
+        and result.transform.confidence >= 0.9
+        and len(result.control_points) >= 6
+        and result.residual_p90_m <= 500
+    )
+
+
+def georeference_from_label_context(
+    labels: list[OcrLabel],
+    image_path: str,
+    city_context: CityContext,
+    width: int,
+    height: int,
+    *,
+    min_control_points: int,
+) -> GeoreferenceResult | None:
     city_center = city_context.center
     controls = build_control_points(labels, city_context.query, city_center)
     if len(controls) >= min_control_points:
@@ -296,7 +355,6 @@ def georeference_from_labels(
                         residual_p90_m=residual_p90,
                         road_match=road_refinement,
                     )
-
     return None
 
 
@@ -428,87 +486,276 @@ def georeference_from_city_context(
     )
 
 
-def resolve_city_context(labels: list[OcrLabel], city: str | None) -> CityContext | None:
+def resolve_city_contexts(labels: list[OcrLabel], city: str | None) -> list[CityContext]:
     if city:
         city_results = geocode(city, limit=1)
         if city_results:
-            return CityContext(query=city, center=city_results[0], inferred=False)
-        return None
-    return infer_city_context(labels)
+            return [CityContext(query=city, center=city_results[0], inferred=False)]
+        return []
+    return infer_city_contexts(labels)
 
 
 def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
-    known_context = infer_known_city_context(labels)
-    if known_context is not None:
-        return known_context
+    contexts = infer_city_contexts(labels)
+    return contexts[0] if contexts else None
 
-    candidates = geocoded_label_candidates(labels)
+
+def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
+    inference_labels = city_inference_labels(labels)
+    candidates = geocoded_label_candidates(inference_labels)
     if not candidates:
-        return None
+        return prominent_contexts_from_labels(inference_labels)
 
     members = best_candidate_cluster(candidates)
-    if not members:
-        return None
+    if not members or not has_enough_context_members(members):
+        return prominent_contexts_from_labels(inference_labels)
 
-    if looks_like_bay_area(members):
-        bay_area_results = geocode("Bay Area", limit=1)
-        if bay_area_results:
-            return CityContext(
-                query="Bay Area",
-                center=bay_area_results[0],
-                inferred=True,
-                evidence=tuple(sorted({member.primary_name for member in members})[:8]),
-            )
+    contexts: list[CityContext] = []
+    prominent_contexts = prominent_contexts_from_labels(inference_labels)
+    covering_prominent_contexts = [
+        context
+        for context in prominent_contexts
+        if context.center.place_type.lower() in ADMIN_CONTEXT_TYPES
+        and cluster_coverage(context.center, members) >= 0.55
+    ]
+    parent_name = choose_parent_component(members)
+    if parent_name:
+        contexts.extend(contexts_from_parent_name(parent_name, members))
+
+    synthetic = synthetic_context_from_members(members, parent_name)
+    if synthetic is not None:
+        if synthetic.query == "Inferred map area":
+            contexts.insert(0, synthetic)
+        else:
+            contexts.append(synthetic)
+
+    if contexts and contexts[0].query == "Inferred map area" and covering_prominent_contexts:
+        contexts = [
+            *covering_prominent_contexts,
+            *contexts,
+            *[context for context in prominent_contexts if context not in covering_prominent_contexts],
+        ]
+    elif contexts and contexts[0].query == "Inferred map area":
+        contexts.extend(prominent_contexts)
+    else:
+        contexts = [*prominent_contexts, *contexts]
 
     anchor = choose_city_anchor(members)
+    contexts.append(
+        CityContext(
+            query=anchor.primary_name,
+            center=anchor.geocode,
+            inferred=True,
+            evidence=tuple(sorted({member.primary_name for member in members})[:8]),
+        )
+    )
+    return dedupe_city_contexts(contexts)[:MAX_CITY_CONTEXTS]
+
+
+def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
+    return sorted(
+        [label for label in labels if is_plausible_context_label(label)],
+        key=context_label_score,
+        reverse=True,
+    )
+
+
+def is_plausible_context_label(label: OcrLabel) -> bool:
+    tokens = place_tokens(label.text)
+    if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
+        return False
+    if len(tokens) > 4:
+        return False
+    if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
+        return False
+    compact = re.sub(r"[^A-Za-z]", "", label.text)
+    if len(compact) < 4:
+        return False
+    return label.confidence >= 45 or label.width * label.height >= 5000
+
+
+def context_label_score(label: OcrLabel) -> tuple[float, float, int]:
+    tokens = place_tokens(label.text)
+    area_score = min(4.0, (label.width * label.height) / 12000.0)
+    return label.confidence + area_score * 10.0, area_score, -len(tokens)
+
+
+def prominent_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
+    scored_contexts: list[tuple[float, CityContext]] = []
+    for query in prominent_context_queries(labels):
+        for result in geocode(query, limit=3):
+            if not result.bbox:
+                continue
+            if not primary_name_matches_label(result.display_name, query):
+                continue
+            if not is_broad_context_result(result):
+                continue
+            scored_contexts.append(
+                (
+                    prominent_context_score(result, query, labels),
+                    CityContext(
+                        query=result.display_name.split(",", 1)[0],
+                        center=result,
+                        inferred=True,
+                        evidence=(query,),
+                    ),
+                )
+            )
+            break
+    contexts = [context for _, context in sorted(scored_contexts, key=lambda item: item[0], reverse=True)]
+    return dedupe_city_contexts(contexts)[:3]
+
+
+def prominent_context_score(result: GeocodeResult, query: str, labels: list[OcrLabel]) -> float:
+    type_score = {
+        "city": 5.0,
+        "town": 3.0,
+        "municipality": 3.0,
+        "village": 2.0,
+        "region": 1.0,
+    }.get(result.place_type.lower(), 0.0)
+    query_tokens = place_tokens(query)
+    support = 0.0
+    for label in labels:
+        tokens = place_tokens(label.text)
+        if query_tokens and query_tokens <= tokens:
+            support += 1.0 + min(2.0, label.width * label.height / 25000.0)
+    return type_score + result.importance + min(6.0, support)
+
+
+def prominent_context_queries(labels: list[OcrLabel]) -> list[str]:
+    scores: dict[str, float] = {}
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        tokens = place_tokens(label.text)
+        if not tokens:
+            continue
+        label_score = context_label_score(label)[0]
+        if 1 <= len(tokens) <= 3:
+            scores[clean_query_text(label.text)] = max(scores.get(clean_query_text(label.text), 0.0), label_score)
+        for token in tokens:
+            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
+                continue
+            token_score = label_score + (label.width * label.height) / 20000.0
+            scores[token.title()] = max(scores.get(token.title(), 0.0), token_score)
+    return [query for query, _ in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:10]]
+
+
+def clean_query_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def is_broad_context_result(result: GeocodeResult) -> bool:
+    if result.place_type.lower() == "county":
+        return False
+    if result.place_type.lower() in ADMIN_CONTEXT_TYPES:
+        return True
+    if result.bbox is None:
+        return False
+    west, south, east, north = result.bbox
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
+    return max(abs(east_m - west_m), abs(north_m - south_m)) >= 12000.0
+
+
+def contexts_from_parent_name(parent_name: str, members: list[LabelGeocodeCandidate]) -> list[CityContext]:
+    contexts: list[CityContext] = []
+    evidence = tuple(sorted({member.primary_name for member in members})[:8])
+    for result in geocode(parent_name, limit=2):
+        if not result.bbox:
+            continue
+        if result.place_type.lower() == "county":
+            continue
+        if not is_broad_context_result(result):
+            continue
+        if cluster_coverage(result, members) < 0.55:
+            continue
+        contexts.append(CityContext(query=parent_name, center=result, inferred=True, evidence=evidence))
+    return contexts
+
+
+def cluster_coverage(result: GeocodeResult, members: list[LabelGeocodeCandidate]) -> float:
+    if result.bbox is None or not members:
+        return 0.0
+    west, south, east, north = result.bbox
+    covered = sum(
+        1
+        for member in members
+        if west <= member.geocode.lon <= east and south <= member.geocode.lat <= north
+    )
+    return covered / len(members)
+
+
+def synthetic_context_from_members(
+    members: list[LabelGeocodeCandidate],
+    parent_name: str | None,
+) -> CityContext | None:
+    if not members:
+        return None
+    points = np.array([member.mercator for member in members], dtype=float)
+    min_x, min_y = points.min(axis=0)
+    max_x, max_y = points.max(axis=0)
+    span = max(max_x - min_x, max_y - min_y)
+    padding = max(9000.0, min(45000.0, span * 0.45))
+    west, south = mercator_to_lonlat(float(min_x - padding), float(min_y - padding))
+    east, north = mercator_to_lonlat(float(max_x + padding), float(max_y + padding))
+    lon, lat = mercator_to_lonlat(float((min_x + max_x) / 2.0), float((min_y + max_y) / 2.0))
+    unique_names = {member.primary_name.lower() for member in members}
+    is_multi_city_region = len(unique_names) >= 8 and span >= 30000.0
+    name = parent_name if parent_name and not is_multi_city_region else "Inferred map area"
     return CityContext(
-        query=anchor.primary_name,
-        center=anchor.geocode,
+        query=name,
+        center=GeocodeResult(
+            label=name,
+            lon=lon,
+            lat=lat,
+            display_name=name,
+            bbox=(west, south, east, north),
+            importance=0.5,
+            place_type="region",
+        ),
         inferred=True,
         evidence=tuple(sorted({member.primary_name for member in members})[:8]),
     )
 
 
-def infer_known_city_context(labels: list[OcrLabel]) -> CityContext | None:
-    bay_area_matches = matched_place_names(labels, BAY_AREA_PLACE_NAMES)
-    if len(bay_area_matches) >= 4 or {"san francisco", "san jose"} <= bay_area_matches:
-        return context_from_query("Bay Area", bay_area_matches)
-
-    scored_contexts = [
-        ("San Francisco", matched_place_names(labels, SAN_FRANCISCO_PLACE_NAMES), 2),
-        ("Las Vegas", matched_place_names(labels, LAS_VEGAS_PLACE_NAMES), 1),
-        ("Austin", matched_place_names(labels, AUSTIN_PLACE_NAMES), 1),
-    ]
-    scored_contexts.sort(key=lambda item: (len(item[1]), item[0].lower() in item[1]), reverse=True)
-    for query, matches, min_hits in scored_contexts:
-        if query.lower() in matches or len(matches) >= min_hits:
-            return context_from_query(query, matches)
-    return None
-
-
-def context_from_query(query: str, matches: set[str]) -> CityContext | None:
-    city_results = geocode(query, limit=1)
-    if not city_results:
+def choose_parent_component(members: list[LabelGeocodeCandidate]) -> str | None:
+    votes: dict[str, float] = {}
+    for member in members:
+        for component in member.geocode.display_name.split(",")[1:5]:
+            component = clean_query_text(component)
+            if not is_context_component(component):
+                continue
+            votes[component] = votes.get(component, 0.0) + 1.0 + member.geocode.importance
+    if not votes:
         return None
-    return CityContext(
-        query=query,
-        center=city_results[0],
-        inferred=True,
-        evidence=tuple(sorted(matches)[:8]),
-    )
+    name, score = max(votes.items(), key=lambda item: item[1])
+    return name if score >= 2.0 else None
 
 
-def matched_place_names(labels: list[OcrLabel], names: set[str]) -> set[str]:
-    matches: set[str] = set()
-    phrase_tokens_by_name = {name: place_tokens(name) for name in names}
-    for label in labels:
-        label_tokens = place_tokens(label.text)
-        if not label_tokens or label_tokens & CITY_INFERENCE_STOP_TOKENS:
+def is_context_component(component: str) -> bool:
+    lowered = component.lower()
+    if not lowered or lowered in NON_CONTEXT_COMPONENTS:
+        return False
+    if any(char.isdigit() for char in lowered):
+        return False
+    if "county" in lowered or "parish" in lowered:
+        return False
+    tokens = place_tokens(component)
+    if not tokens or tokens <= GENERIC_SINGLE_TOKENS:
+        return False
+    return True
+
+
+def dedupe_city_contexts(contexts: list[CityContext]) -> list[CityContext]:
+    deduped: list[CityContext] = []
+    seen: set[tuple[str, int, int]] = set()
+    for context in contexts:
+        key = (context.center.display_name.lower(), round(context.center.lon, 3), round(context.center.lat, 3))
+        if key in seen:
             continue
-        for name, tokens in phrase_tokens_by_name.items():
-            if tokens and tokens <= label_tokens:
-                matches.add(name)
-    return matches
+        seen.add(key)
+        deduped.append(context)
+    return deduped
 
 
 def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandidate]:
@@ -529,7 +776,25 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
         for result in geocode(label.text, limit=2):
             if primary_name_matches_label(result.display_name, label.text):
                 candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
+        if has_reliable_candidate_cluster(candidates):
+            break
     return candidates
+
+
+def has_reliable_candidate_cluster(candidates: list[LabelGeocodeCandidate]) -> bool:
+    if len(candidates) < 8:
+        return False
+    members = best_candidate_cluster(candidates)
+    unique_names = {member.primary_name.lower() for member in members}
+    if len(unique_names) < 4:
+        return False
+    return choose_parent_component(members) is not None or cluster_spread_m(members) >= 12000.0
+
+
+def has_enough_context_members(members: list[LabelGeocodeCandidate]) -> bool:
+    unique_names = {member.primary_name.lower() for member in members}
+    unique_labels = {member.label.text.lower() for member in members}
+    return len(members) >= 3 and len(unique_names) >= 2 and len(unique_labels) >= 2
 
 
 def best_candidate_cluster(candidates: list[LabelGeocodeCandidate]) -> list[LabelGeocodeCandidate]:
@@ -560,12 +825,6 @@ def cluster_spread_m(members: list[LabelGeocodeCandidate]) -> float:
     points = np.array([member.mercator for member in members], dtype=float)
     width, height = np.ptp(points, axis=0)
     return float(max(width, height))
-
-
-def looks_like_bay_area(members: list[LabelGeocodeCandidate]) -> bool:
-    names = {member.primary_name.lower() for member in members}
-    bay_names = names & BAY_AREA_PLACE_NAMES
-    return len(bay_names) >= 4 or {"san francisco", "san jose"} <= names
 
 
 def choose_city_anchor(members: list[LabelGeocodeCandidate]) -> LabelGeocodeCandidate:
