@@ -62,7 +62,9 @@ textarea,
 .app-shell {
   display: grid;
   grid-template-columns: minmax(300px, 380px) 1fr;
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -825,8 +827,9 @@ textarea,
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: minmax(420px, 1fr) auto;
-  gap: 18px;
+  grid-template-rows: minmax(420px, 1fr);
+  gap: 0;
+  min-height: 0;
   min-width: 0;
   padding: 24px;
 }
@@ -859,6 +862,7 @@ textarea,
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.8);
   box-shadow: var(--shadow);
@@ -1003,7 +1007,10 @@ textarea,
 }
 
 .code-pane {
+  height: 100%;
+  min-height: 0;
   margin: 0;
+  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
   color: #16382f;
@@ -1012,38 +1019,15 @@ textarea,
   font-size: 0.84rem;
 }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.metric {
-  min-width: 0;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
-  padding: 13px;
-}
-
-.metric span {
+.code-pane.active {
   display: block;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 8px;
-  overflow-wrap: anywhere;
-  font-size: 1rem;
 }
 
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
   }
 
   .control-panel {
@@ -1055,7 +1039,8 @@ textarea,
 
   .workspace {
     order: 1;
-    grid-template-rows: minmax(360px, 1fr) auto;
+    grid-template-rows: minmax(360px, 1fr);
+    height: min(720px, calc(100vh - 36px));
     padding: 18px;
   }
 
@@ -1066,15 +1051,16 @@ textarea,
     width: min(320px, calc(100vw - 28px));
   }
 
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 560px) {
   .control-panel,
   .workspace {
     padding: 14px;
+  }
+
+  .workspace {
+    height: min(680px, calc(100vh - 28px));
   }
 
   .preview-header {
@@ -1095,7 +1081,4 @@ textarea,
     flex: 1;
   }
 
-  .metric-grid {
-    grid-template-columns: 1fr;
-  }
 }

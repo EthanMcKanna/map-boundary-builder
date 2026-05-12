@@ -22,7 +22,6 @@ const boundaryMapEl = document.querySelector("#boundaryMap");
 const boundarySvg = document.querySelector("#boundarySvg");
 const boundaryEmpty = document.querySelector("#boundaryEmpty");
 const geojsonPane = document.querySelector("#geojsonPane");
-const metricGrid = document.querySelector("#metricGrid");
 const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
 const historyList = document.querySelector("#historyList");
@@ -516,10 +515,7 @@ function applyInlineRun(status) {
     copyButton.disabled = false;
     renderBoundary(latestGeojson);
   }
-  if (status.summary) {
-    renderMetrics(status.summary);
-    workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
-  }
+  if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
   setStatus("Boundary export ready", 100, "complete");
   markAllProgressStepsDone();
   activateTab(artifacts.overlay_data_url ? "overlay" : "boundary");
@@ -737,10 +733,7 @@ async function loadArtifacts(runId) {
     copyButton.disabled = false;
     renderBoundary(latestGeojson);
   }
-  if (status.summary) {
-    renderMetrics(status.summary);
-    workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
-  }
+  if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
   activateTab(artifacts.overlay ? "overlay" : "boundary");
   queueHistorySave({
     id: status.id,
@@ -750,22 +743,6 @@ async function loadArtifacts(runId) {
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay,
   });
-}
-
-function renderMetrics(summary) {
-  const metrics = [
-    ["Confidence", formatNumber(summary.combined_confidence, 3)],
-    ["Source", summary.georeference_source],
-    ["Coverage", `${formatNumber(summary.coverage_ratio * 100, 2)}%`],
-    ["Control Points", summary.control_points],
-    ["Residual P90", `${formatNumber(summary.p90_residual_m, 0)} m`],
-    ["Meters / PX", formatNumber(summary.meters_per_pixel, 2)],
-    ["Rotation", `${formatNumber(summary.rotation_degrees, 2)} deg`],
-    ["Geometry", summary.geometry_type],
-  ];
-  metricGrid.innerHTML = metrics
-    .map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "n/a")}</strong></div>`)
-    .join("");
 }
 
 function queueHistorySave(payload) {
@@ -1070,13 +1047,12 @@ function restoreHistoryEntry(entry) {
   dropZone.classList.remove("has-file");
   compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = entry.title;
-  if (entry.summary) renderMetrics(entry.summary);
-  renderBoundary(latestGeojson);
   markAllProgressStepsDone();
   setStatus("Loaded from history", 100, "complete", {
     note: "Previous GeoJSON and previews are restored locally.",
   });
   activateTab("boundary");
+  renderBoundary(latestGeojson);
   updateRunButton();
   renderHistory();
 }
@@ -1162,11 +1138,25 @@ function renderBoundary(geojson) {
     boundarySvg.innerHTML = "";
     boundaryMapEl.classList.add("ready");
     if (document.querySelector("#boundaryPane").classList.contains("active")) {
-      renderBoundaryMap(geojson);
+      renderBoundaryMapWhenVisible(geojson);
     }
     return;
   }
   renderBoundarySvg(geojson);
+}
+
+function renderBoundaryMapWhenVisible(geojson) {
+  window.requestAnimationFrame(() => {
+    renderBoundaryMap(geojson);
+    window.setTimeout(() => {
+      if (boundaryMap && latestBoundaryBounds) {
+        boundaryMap.resize();
+        fitBoundaryMap(latestBoundaryBounds);
+      } else {
+        renderBoundaryMap(geojson);
+      }
+    }, 80);
+  });
 }
 
 function renderBoundaryMap(geojson) {
@@ -1333,7 +1323,7 @@ function activateTab(name) {
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
   panes.forEach((pane) => pane.classList.toggle("active", pane.dataset.pane === name));
   if (name === "boundary" && latestGeojson) {
-    window.setTimeout(() => renderBoundaryMap(latestGeojson), 0);
+    renderBoundaryMapWhenVisible(latestGeojson);
   } else if (boundaryMap && latestBoundaryBounds) {
     window.setTimeout(() => {
       boundaryMap.resize();
@@ -1386,7 +1376,6 @@ function resetRun() {
 
 function clearGeneratedArtifacts() {
   latestGeojson = null;
-  metricGrid.innerHTML = "";
   overlayPreview.removeAttribute("src");
   overlayPreview.classList.remove("ready");
   document.querySelector("#overlayPane").classList.remove("has-content");
