@@ -407,6 +407,57 @@ textarea,
   display: none;
 }
 
+.report-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(204, 74, 74, 0.28);
+  border-radius: 8px;
+  background: rgba(204, 74, 74, 0.08);
+  padding: 10px;
+}
+
+.report-panel[hidden] {
+  display: none;
+}
+
+.report-panel p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.report-button,
+.report-link {
+  min-height: 32px;
+  border: 1px solid var(--coral);
+  border-radius: 8px;
+  background: var(--coral);
+  color: white;
+  cursor: pointer;
+  padding: 0 10px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 30px;
+  text-decoration: none;
+}
+
+.report-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.report-link {
+  display: inline-block;
+  background: var(--panel);
+  color: var(--coral);
+}
+
+.report-link[hidden] {
+  display: none;
+}
+
 .progress-head {
   display: flex;
   align-items: center;

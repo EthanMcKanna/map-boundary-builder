@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlparse
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
 from map_boundary_builder.extract import DEFAULT_SIMPLIFY_PX
+from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
 from map_boundary_builder.runner import BoundaryBuildOptions, build_boundary
 from map_boundary_builder.ocr import parse_client_ocr_labels
 from map_boundary_builder.web import RequestError, float_field, int_field, safe_extension
@@ -67,6 +68,9 @@ class handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/runs":
                 self.handle_create_run()
+                return
+            if parsed.path == "/api/reports":
+                self.handle_create_report()
                 return
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
         except RequestError as exc:
@@ -127,6 +131,37 @@ class handler(BaseHTTPRequestHandler):
             },
         }
         self.send_json(payload, status=HTTPStatus.CREATED)
+
+    def handle_create_report(self) -> None:
+        fields, files = self.parse_multipart()
+        upload = files.get("image")
+        if upload is None:
+            raise RequestError(HTTPStatus.BAD_REQUEST, "Image upload is required.")
+        original_filename, image_bytes = upload
+        try:
+            events = json.loads(fields.get("events", "[]") or "[]")
+        except json.JSONDecodeError:
+            events = []
+        try:
+            settings = json.loads(fields.get("settings", "{}") or "{}")
+        except json.JSONDecodeError:
+            settings = {}
+        try:
+            result = create_failure_issue(
+                FailureReport(
+                    filename=original_filename,
+                    image_bytes=image_bytes,
+                    error=fields.get("error", "").strip() or "Generation failed without an error message.",
+                    run_id=fields.get("run_id", "").strip() or None,
+                    events=events if isinstance(events, list) else [],
+                    user_agent=fields.get("user_agent", "").strip() or self.headers.get("User-Agent"),
+                    page_url=fields.get("page_url", "").strip() or None,
+                    settings=settings if isinstance(settings, dict) else {},
+                )
+            )
+        except GithubReportError as exc:
+            raise RequestError(HTTPStatus.BAD_GATEWAY, str(exc)) from exc
+        self.send_json(result, status=HTTPStatus.CREATED)
 
     def parse_multipart(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
         from map_boundary_builder.web import BoundaryWebHandler
