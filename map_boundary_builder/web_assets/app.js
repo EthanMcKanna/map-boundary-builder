@@ -7,6 +7,7 @@ const dropTitle = document.querySelector("#dropTitle");
 const dropMeta = document.querySelector("#dropMeta");
 const fileName = document.querySelector("#fileName");
 const fileMeta = document.querySelector("#fileMeta");
+const brandButton = document.querySelector("#brandButton");
 const runButton = document.querySelector("#runButton");
 const statusText = document.querySelector("#statusText");
 const percentText = document.querySelector("#percentText");
@@ -184,6 +185,7 @@ copyButton.addEventListener("click", async () => {
 });
 
 newRunButton.addEventListener("click", startNewRun);
+brandButton.addEventListener("click", startNewRun);
 
 historyList.addEventListener("click", (event) => {
   const menuSummary = event.target.closest(".history-menu summary");
@@ -1416,6 +1418,7 @@ function finishWithError(message) {
 function updateRunButton() {
   const isRunning = runButton.disabled && runButton.querySelector("span").textContent === "Running";
   newRunButton.disabled = isRunning;
+  brandButton.disabled = isRunning;
   if (isRunning) return;
   runButton.disabled = !selectedFile;
   runButton.querySelector("span").textContent = selectedFile ? "Run Boundary" : "Add image first";

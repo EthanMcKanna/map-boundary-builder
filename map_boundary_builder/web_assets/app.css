@@ -39,6 +39,14 @@ input {
   font: inherit;
 }
 
+input,
+textarea,
+.code-pane,
+.code-pane * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -55,6 +63,8 @@ input {
   display: grid;
   grid-template-columns: minmax(300px, 380px) 1fr;
   min-height: 100vh;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .control-panel {
@@ -76,9 +86,30 @@ input {
   gap: 14px;
 }
 
-.brand-mark {
+.brand-mark-button {
   display: block;
   flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.brand-mark-button:focus-visible {
+  outline: 3px solid rgba(47, 178, 143, 0.35);
+  outline-offset: 6px;
+}
+
+.brand-mark-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.brand-mark {
+  display: block;
   width: 48px;
   height: 48px;
   border: 2px solid var(--ink);
@@ -86,6 +117,12 @@ input {
   background: var(--paper);
   box-shadow: 5px 5px 0 var(--ink);
   object-fit: cover;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.brand-mark-button:not(:disabled):hover .brand-mark {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--ink);
 }
 
 .brand h1 {
