@@ -24,6 +24,8 @@ const geojsonPane = document.querySelector("#geojsonPane");
 const metricGrid = document.querySelector("#metricGrid");
 const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
+const historyList = document.querySelector("#historyList");
+const historyEmpty = document.querySelector("#historyEmpty");
 const tabs = [...document.querySelectorAll(".tab")];
 const panes = [...document.querySelectorAll(".pane")];
 
@@ -35,10 +37,14 @@ let latestBoundaryBounds = null;
 let progressValue = 0;
 let activeProgressStep = null;
 let stepStates = new Map();
+let historyEntries = [];
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
 const BOUNDARY_LINE_ID = "generated-boundary-line";
+const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
+const MAX_HISTORY_ENTRIES = 14;
+const MAX_HISTORY_BYTES = 4_400_000;
 
 const stageLabels = {
   queued: "Queued",
@@ -54,6 +60,7 @@ const progressSteps = [
   {
     key: "labels",
     title: "Read labels",
+    shortTitle: "Labels",
     idle: "Waiting for a screenshot",
     running: "Browser OCR is scanning map text.",
     done: "Map labels captured.",
@@ -61,6 +68,7 @@ const progressSteps = [
   {
     key: "extract",
     title: "Extract area",
+    shortTitle: "Area",
     idle: "Waiting for image pixels",
     running: "Finding the colored service boundary.",
     done: "Service pixels traced.",
@@ -68,6 +76,7 @@ const progressSteps = [
   {
     key: "georeference",
     title: "Locate map",
+    shortTitle: "Locate",
     idle: "Waiting for map evidence",
     running: "Matching labels and roads to geography.",
     done: "Map transform fitted.",
@@ -75,6 +84,7 @@ const progressSteps = [
   {
     key: "export",
     title: "Build export",
+    shortTitle: "Export",
     idle: "Waiting for transform",
     running: "Writing GeoJSON and previews.",
     done: "GeoJSON ready.",
@@ -83,6 +93,8 @@ const progressSteps = [
 
 resetProgressSteps();
 renderProgressSteps();
+historyEntries = loadHistoryEntries();
+renderHistory();
 updateRunButton();
 
 imageInput.addEventListener("change", () => {
@@ -164,6 +176,49 @@ copyButton.addEventListener("click", async () => {
   setTimeout(() => {
     copyButton.textContent = "Copy";
   }, 1000);
+});
+
+historyList.addEventListener("click", (event) => {
+  const menuSummary = event.target.closest(".history-menu summary");
+  if (menuSummary) {
+    window.setTimeout(() => {
+      const menu = menuSummary.closest(".history-menu");
+      if (menu?.open) openHistoryMenu(menu);
+    }, 0);
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-history-action]");
+  if (actionButton) {
+    event.preventDefault();
+    const item = actionButton.closest("[data-history-id]");
+    const id = item?.dataset.historyId;
+    if (!id) return;
+    const action = actionButton.dataset.historyAction;
+    if (action === "star") toggleHistoryStar(id);
+    if (action === "delete") deleteHistoryEntry(id);
+    return;
+  }
+
+  const loadButton = event.target.closest("[data-history-load]");
+  if (loadButton) {
+    const entry = historyEntries.find((item) => item.id === loadButton.dataset.historyLoad);
+    if (entry) restoreHistoryEntry(entry);
+  }
+});
+
+historyList.addEventListener("toggle", (event) => {
+  const menu = event.target;
+  if (!menu.matches?.(".history-menu") || !menu.open) return;
+  openHistoryMenu(menu);
+}, true);
+
+historyList.addEventListener("scroll", closeHistoryMenus);
+window.addEventListener("resize", closeHistoryMenus);
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest(".history-menu")) return;
+  closeHistoryMenus();
 });
 
 function setSelectedFile(file) {
@@ -426,6 +481,14 @@ function applyInlineRun(status) {
   setStatus("Boundary export ready", 100, "complete");
   markAllProgressStepsDone();
   activateTab(artifacts.overlay_data_url ? "overlay" : "boundary");
+  queueHistorySave({
+    id: status.id,
+    filename: status.filename,
+    city: status.city,
+    summary: status.summary,
+    geojson: latestGeojson,
+    overlaySrc: artifacts.overlay_data_url,
+  });
   runButton.disabled = false;
   runButton.querySelector("span").textContent = "Run Boundary";
 }
@@ -524,13 +587,20 @@ function renderProgressSteps() {
         <li class="${escapeHtml(status.state)}">
           <span class="step-dot" aria-hidden="true"></span>
           <span>
-            <b>${escapeHtml(step.title)}</b>
-            ${escapeHtml(status.message)}
+            <b>${escapeHtml(step.shortTitle || step.title)}</b>
+            <small>${escapeHtml(progressStateLabel(status.state))}</small>
           </span>
         </li>
       `;
     })
     .join("");
+}
+
+function progressStateLabel(state) {
+  if (state === "running") return "Active";
+  if (state === "done") return "Done";
+  if (state === "error") return "Issue";
+  return "Waiting";
 }
 
 function progressStepForEvent(event) {
@@ -629,6 +699,14 @@ async function loadArtifacts(runId) {
     workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
   }
   activateTab(artifacts.overlay ? "overlay" : "boundary");
+  queueHistorySave({
+    id: status.id,
+    filename: status.filename,
+    city: status.city,
+    summary: status.summary,
+    geojson: latestGeojson,
+    overlaySrc: artifacts.overlay,
+  });
 }
 
 function renderMetrics(summary) {
@@ -645,6 +723,292 @@ function renderMetrics(summary) {
   metricGrid.innerHTML = metrics
     .map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "n/a")}</strong></div>`)
     .join("");
+}
+
+function queueHistorySave(payload) {
+  if (!payload.geojson) return;
+  saveHistoryEntry(payload).catch((error) => {
+    console.warn("Could not save generation history", error);
+  });
+}
+
+async function saveHistoryEntry(payload) {
+  const existing = historyEntries.find((entry) => entry.id === String(payload.id));
+  const title = historyTitle(payload);
+  const [inputImage, overlayImage] = await Promise.all([
+    imageUrlToStoredDataUrl(inputPreview.src),
+    imageUrlToStoredDataUrl(payload.overlaySrc),
+  ]);
+  const entry = {
+    id: String(payload.id || Date.now()),
+    title,
+    filename: payload.filename || selectedFile?.name || "Map screenshot",
+    city: payload.summary?.city || payload.city || "Auto",
+    createdAt: existing?.createdAt || Date.now(),
+    starred: Boolean(existing?.starred),
+    summary: payload.summary || null,
+    geojson: payload.geojson,
+    inputImage,
+    overlayImage,
+  };
+  upsertHistoryEntry(entry);
+}
+
+function historyTitle(payload) {
+  const city = payload.summary?.city || payload.city;
+  if (city && city !== "Auto") return `${city} boundary`;
+  if (payload.filename) return payload.filename;
+  return selectedFile?.name || "Generated boundary";
+}
+
+function upsertHistoryEntry(entry) {
+  historyEntries = [entry, ...historyEntries.filter((item) => item.id !== entry.id)];
+  persistHistoryEntries();
+  renderHistory();
+}
+
+function loadHistoryEntries() {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return sortHistoryEntries(
+      parsed.filter((entry) => entry && entry.id && entry.geojson).map((entry) => ({
+        ...entry,
+        id: String(entry.id),
+        createdAt: Number(entry.createdAt) || Date.now(),
+        starred: Boolean(entry.starred),
+      })),
+    );
+  } catch (error) {
+    console.warn("Could not load generation history", error);
+    return [];
+  }
+}
+
+function persistHistoryEntries() {
+  let entries = sortHistoryEntries(historyEntries).slice(0, MAX_HISTORY_ENTRIES);
+  entries = trimHistoryEntries(entries);
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries));
+    historyEntries = entries;
+  } catch (error) {
+    const lighterEntries = trimHistoryEntries(entries.map((entry) => ({
+      ...entry,
+      inputImage: null,
+      overlayImage: null,
+    })));
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(lighterEntries));
+      historyEntries = lighterEntries;
+    } catch (retryError) {
+      console.warn("Could not persist generation history", retryError);
+    }
+  }
+}
+
+function trimHistoryEntries(entries) {
+  const next = [...entries];
+  while (next.length > 1 && JSON.stringify(next).length > MAX_HISTORY_BYTES) {
+    let removeIndex = next.length - 1;
+    for (let index = next.length - 1; index >= 0; index -= 1) {
+      if (!next[index].starred) {
+        removeIndex = index;
+        break;
+      }
+    }
+    next.splice(removeIndex, 1);
+  }
+  return next;
+}
+
+function sortHistoryEntries(entries) {
+  return [...entries].sort((a, b) => {
+    if (Boolean(a.starred) !== Boolean(b.starred)) return a.starred ? -1 : 1;
+    return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+  });
+}
+
+function renderHistory() {
+  const entries = sortHistoryEntries(historyEntries);
+  historyEmpty.hidden = entries.length > 0;
+  historyList.hidden = entries.length === 0;
+  historyList.innerHTML = entries.map(renderHistoryEntry).join("");
+}
+
+function renderHistoryEntry(entry) {
+  const thumb = entry.inputImage || entry.overlayImage;
+  const detail = historyDetail(entry);
+  const starred = entry.starred ? `<span class="history-star" aria-label="Starred"></span>` : "";
+  return `
+    <li class="history-item${entry.starred ? " starred" : ""}" data-history-id="${escapeHtml(entry.id)}">
+      <button class="history-main" type="button" data-history-load="${escapeHtml(entry.id)}">
+        <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
+        <span class="history-copy">
+          <strong>${starred}${escapeHtml(entry.title)}</strong>
+          <span class="history-meta">${escapeHtml(formatHistoryTime(entry.createdAt))}</span>
+          <span class="history-detail">${escapeHtml(detail)}</span>
+        </span>
+      </button>
+      <details class="history-menu">
+        <summary aria-label="Generation actions">...</summary>
+        <div class="history-menu-panel">
+          <button type="button" data-history-action="star">${entry.starred ? "Unstar" : "Star"}</button>
+          <button type="button" data-history-action="delete">Delete</button>
+        </div>
+      </details>
+    </li>
+  `;
+}
+
+function historyDetail(entry) {
+  const summary = entry.summary || {};
+  const pieces = [];
+  if (summary.combined_confidence != null) pieces.push(`${formatNumber(summary.combined_confidence, 2)} confidence`);
+  if (summary.control_points != null) pieces.push(`${summary.control_points} points`);
+  if (summary.geometry_type) pieces.push(summary.geometry_type);
+  return pieces.join(" · ") || entry.filename || "GeoJSON saved";
+}
+
+function formatHistoryTime(timestamp) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(Number(timestamp) || Date.now()));
+}
+
+function toggleHistoryStar(id) {
+  historyEntries = historyEntries.map((entry) => (
+    entry.id === id ? { ...entry, starred: !entry.starred } : entry
+  ));
+  persistHistoryEntries();
+  renderHistory();
+  closeHistoryMenus();
+}
+
+function deleteHistoryEntry(id) {
+  historyEntries = historyEntries.filter((entry) => entry.id !== id);
+  persistHistoryEntries();
+  renderHistory();
+}
+
+function restoreHistoryEntry(entry) {
+  closeHistoryMenus();
+  selectedFile = null;
+  imageInput.value = "";
+  clearGeneratedArtifacts();
+  latestGeojson = entry.geojson;
+  geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
+  downloadLink.href = URL.createObjectURL(
+    new Blob([JSON.stringify(latestGeojson, null, 2)], {
+      type: "application/geo+json",
+    }),
+  );
+  downloadLink.download = `${entry.title || "boundary"}.geojson`;
+  downloadLink.classList.remove("disabled");
+  downloadLink.removeAttribute("aria-disabled");
+  copyButton.disabled = false;
+
+  if (entry.inputImage) {
+    inputPreview.src = entry.inputImage;
+    inputPreview.classList.add("ready");
+    document.querySelector("#inputPane").classList.add("has-content");
+  } else {
+    inputPreview.removeAttribute("src");
+    inputPreview.classList.remove("ready");
+    document.querySelector("#inputPane").classList.remove("has-content");
+  }
+
+  if (entry.overlayImage) {
+    overlayPreview.src = entry.overlayImage;
+    overlayPreview.classList.add("ready");
+    document.querySelector("#overlayPane").classList.add("has-content");
+  }
+
+  fileName.textContent = entry.title;
+  fileMeta.textContent = "Loaded from local history";
+  dropTitle.textContent = "Drop map screenshot";
+  dropMeta.textContent = "PNG, JPG, WebP, TIFF";
+  dropZone.classList.remove("has-file");
+  compactDropZone.classList.add("has-file");
+  workspaceTitle.textContent = entry.title;
+  if (entry.summary) renderMetrics(entry.summary);
+  renderBoundary(latestGeojson);
+  markAllProgressStepsDone();
+  setStatus("Loaded from history", 100, "complete", {
+    note: "Previous GeoJSON and previews are restored locally.",
+  });
+  activateTab("boundary");
+  updateRunButton();
+}
+
+function closeHistoryMenus() {
+  document.querySelectorAll(".history-menu[open]").forEach((menu) => {
+    menu.open = false;
+    menu.style.removeProperty("--history-menu-left");
+    menu.style.removeProperty("--history-menu-top");
+  });
+}
+
+function openHistoryMenu(menu) {
+  document.querySelectorAll(".history-menu[open]").forEach((openMenu) => {
+    if (openMenu !== menu) openMenu.open = false;
+  });
+  positionHistoryMenu(menu);
+}
+
+function positionHistoryMenu(menu) {
+  const summary = menu.querySelector("summary");
+  if (!summary) return;
+  const rect = summary.getBoundingClientRect();
+  const panelWidth = 120;
+  const panelHeight = 84;
+  const margin = 8;
+  const left = Math.min(
+    window.innerWidth - panelWidth - margin,
+    Math.max(margin, rect.right - panelWidth),
+  );
+  let top = rect.bottom + 4;
+  if (top + panelHeight > window.innerHeight - margin) {
+    top = Math.max(margin, rect.top - panelHeight - 4);
+  }
+  menu.style.setProperty("--history-menu-left", `${left}px`);
+  menu.style.setProperty("--history-menu-top", `${top}px`);
+}
+
+function imageUrlToStoredDataUrl(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      try {
+        const maxSize = 520;
+        const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+        const width = Math.max(1, Math.round(image.naturalWidth * scale));
+        const height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#f8f6ee";
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
+      } catch (error) {
+        console.warn("Could not snapshot history image", error);
+        resolve(null);
+      }
+    };
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
 }
 
 function renderBoundary(geojson) {
