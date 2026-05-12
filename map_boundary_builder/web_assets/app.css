@@ -796,7 +796,7 @@ textarea,
   left: var(--history-menu-left, 0);
   z-index: 60;
   display: grid;
-  min-width: 132px;
+  min-width: 164px;
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 14px 28px rgba(23, 33, 29, 0.15);
@@ -812,6 +812,7 @@ textarea,
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .history-menu-panel button:hover {

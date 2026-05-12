@@ -205,6 +205,7 @@ historyList.addEventListener("click", (event) => {
     const action = actionButton.dataset.historyAction;
     if (action === "star") toggleHistoryStar(id);
     if (action === "rename") startHistoryRename(id);
+    if (action === "download") downloadHistoryGeojson(id);
     if (action === "delete") deleteHistoryEntry(id);
     return;
   }
@@ -881,6 +882,7 @@ function renderHistoryEntry(entry) {
           <summary aria-label="Generation actions"><span class="kebab-icon" aria-hidden="true"><span></span><span></span><span></span></span></summary>
           <div class="history-menu-panel">
             <button type="button" data-history-action="rename">Rename</button>
+            <button type="button" data-history-action="download">Download GeoJSON</button>
             <button type="button" data-history-action="star">${entry.starred ? "Unstar" : "Star"}</button>
             <button type="button" data-history-action="delete">Delete</button>
           </div>
@@ -991,10 +993,29 @@ function renameHistoryEntry(id, title) {
     fileName.textContent = nextTitle;
     workspaceTitle.textContent = nextTitle;
     if (!downloadLink.classList.contains("disabled")) {
-      downloadLink.download = `${nextTitle || "boundary"}.geojson`;
+      downloadLink.download = geojsonDownloadName(nextTitle);
     }
   }
   renderHistory();
+}
+
+function downloadHistoryGeojson(id) {
+  const entry = historyEntries.find((item) => item.id === id);
+  if (!entry?.geojson) return;
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(entry.geojson, null, 2)], {
+      type: "application/geo+json",
+    }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = geojsonDownloadName(entry.title);
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  closeHistoryMenus();
 }
 
 function deleteHistoryEntry(id) {
@@ -1019,7 +1040,7 @@ function restoreHistoryEntry(entry) {
       type: "application/geo+json",
     }),
   );
-  downloadLink.download = `${entry.title || "boundary"}.geojson`;
+  downloadLink.download = geojsonDownloadName(entry.title);
   downloadLink.classList.remove("disabled");
   downloadLink.removeAttribute("aria-disabled");
   copyButton.disabled = false;
@@ -1077,7 +1098,7 @@ function positionHistoryMenu(menu) {
   if (!summary) return;
   const rect = summary.getBoundingClientRect();
   const panel = menu.querySelector(".history-menu-panel");
-  const panelWidth = panel?.offsetWidth || 132;
+  const panelWidth = panel?.offsetWidth || 164;
   const panelHeight = panel?.offsetHeight || 120;
   const margin = 8;
   const left = Math.min(
@@ -1097,6 +1118,14 @@ function normalizeHistoryTitle(value) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, MAX_HISTORY_TITLE_LENGTH);
+}
+
+function geojsonDownloadName(title) {
+  const safeTitle = normalizeHistoryTitle(title)
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\.+$/g, "")
+    .trim();
+  return `${safeTitle || "boundary"}.geojson`;
 }
 
 function imageUrlToStoredDataUrl(src) {
