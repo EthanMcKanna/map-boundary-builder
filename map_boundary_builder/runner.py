@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from math import hypot
 from pathlib import Path
 from typing import Any, Callable
 
@@ -10,6 +11,7 @@ from shapely.geometry import shape
 
 from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
 from .georeference import georeference_from_city_context, georeference_from_labels, georeference_from_ocr
+from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -153,6 +155,8 @@ def build_boundary(
     properties["georeference_control_points"] = len(georef.control_points)
     properties["georeference_residual_median_m"] = georef.residual_median_m
     properties["georeference_residual_p90_m"] = georef.residual_p90_m
+    if city_input is None and should_label_as_regional_area(geom.bounds, properties["city"], georef):
+        properties["city"] = "Inferred map area"
     if georef.road_match is not None:
         properties["road_match_score"] = georef.road_match.score
         properties["road_match_base_score"] = georef.road_match.base_score
@@ -223,6 +227,24 @@ def build_boundary(
         mask_path=mask_path,
         overlay_path=overlay_path,
     )
+
+
+def should_label_as_regional_area(bounds: tuple[float, float, float, float], city: str, georef) -> bool:
+    if city == "Inferred map area":
+        return False
+    west, south, east, north = bounds
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
+    diagonal_m = hypot(east_m - west_m, north_m - south_m)
+    if diagonal_m < 55000:
+        return False
+    distinct_places = {
+        control.geocode.display_name.split(",", 1)[0].strip().lower()
+        for control in georef.control_points
+        if control.geocode.display_name
+    }
+    distinct_labels = {control.label.text.strip().lower() for control in georef.control_points if control.label.text}
+    return len(distinct_places) >= 4 or len(distinct_labels) >= 4
 
 
 def build_summary(

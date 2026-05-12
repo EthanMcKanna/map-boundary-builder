@@ -20,11 +20,10 @@
         </header>
 
         <form id="runForm" class="run-form">
-          <label id="dropZone" class="drop-zone" for="imageInput">
-            <input id="imageInput" name="image" type="file" accept="image/*" />
+          <label id="compactDropZone" class="file-summary" data-drop-target for="imageInput">
             <span class="eyebrow">Image</span>
-            <strong id="fileName">Drop map screenshot</strong>
-            <span id="fileMeta">PNG, JPG, WebP, TIFF</span>
+            <strong id="fileName">No image selected</strong>
+            <span id="fileMeta">Drop a screenshot in the workspace</span>
           </label>
 
           <details class="advanced">
@@ -55,9 +54,12 @@
               <span class="eyebrow">Run</span>
               <strong id="statusText">Idle</strong>
             </div>
-            <span id="percentText">0%</span>
+            <span id="percentText">Ready</span>
           </div>
-          <div class="meter"><span id="progressFill"></span></div>
+          <p id="progressNote" class="progress-note">Add a map screenshot to start.</p>
+          <div id="progressMeter" class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="progressFill"></span>
+          </div>
           <ol id="timeline" class="timeline"></ol>
         </section>
       </aside>
@@ -83,7 +85,13 @@
           </nav>
 
           <div class="pane active" id="inputPane" data-pane="input">
-            <div class="empty-state">No image selected</div>
+            <label id="dropZone" class="drop-zone primary-drop" data-drop-target for="imageInput">
+              <input id="imageInput" name="image" type="file" accept="image/*" form="runForm" />
+              <span class="drop-mark" aria-hidden="true">+</span>
+              <span class="eyebrow">Image Upload</span>
+              <strong id="dropTitle">Drop map screenshot</strong>
+              <span id="dropMeta">PNG, JPG, WebP, TIFF</span>
+            </label>
             <img id="inputPreview" alt="Uploaded map screenshot preview" />
           </div>
 

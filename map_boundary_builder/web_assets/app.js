@@ -1,12 +1,18 @@
 const form = document.querySelector("#runForm");
 const imageInput = document.querySelector("#imageInput");
 const dropZone = document.querySelector("#dropZone");
+const compactDropZone = document.querySelector("#compactDropZone");
+const dropTargets = [...document.querySelectorAll("[data-drop-target]")];
+const dropTitle = document.querySelector("#dropTitle");
+const dropMeta = document.querySelector("#dropMeta");
 const fileName = document.querySelector("#fileName");
 const fileMeta = document.querySelector("#fileMeta");
 const runButton = document.querySelector("#runButton");
 const statusText = document.querySelector("#statusText");
 const percentText = document.querySelector("#percentText");
+const progressMeter = document.querySelector("#progressMeter");
 const progressFill = document.querySelector("#progressFill");
+const progressNote = document.querySelector("#progressNote");
 const timeline = document.querySelector("#timeline");
 const workspaceTitle = document.querySelector("#workspaceTitle");
 const inputPreview = document.querySelector("#inputPreview");
@@ -26,6 +32,9 @@ let latestGeojson = null;
 let eventSource = null;
 let boundaryMap = null;
 let latestBoundaryBounds = null;
+let progressValue = 0;
+let activeProgressStep = null;
+let stepStates = new Map();
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -41,33 +50,72 @@ const stageLabels = {
   error: "Error",
 };
 
+const progressSteps = [
+  {
+    key: "labels",
+    title: "Read labels",
+    idle: "Waiting for a screenshot",
+    running: "Browser OCR is scanning map text.",
+    done: "Map labels captured.",
+  },
+  {
+    key: "extract",
+    title: "Extract area",
+    idle: "Waiting for image pixels",
+    running: "Finding the colored service boundary.",
+    done: "Service pixels traced.",
+  },
+  {
+    key: "georeference",
+    title: "Locate map",
+    idle: "Waiting for map evidence",
+    running: "Matching labels and roads to geography.",
+    done: "Map transform fitted.",
+  },
+  {
+    key: "export",
+    title: "Build export",
+    idle: "Waiting for transform",
+    running: "Writing GeoJSON and previews.",
+    done: "GeoJSON ready.",
+  },
+];
+
+resetProgressSteps();
+renderProgressSteps();
+updateRunButton();
+
 imageInput.addEventListener("change", () => {
   const [file] = imageInput.files;
   setSelectedFile(file);
 });
 
-dropZone.addEventListener("dragover", (event) => {
-  event.preventDefault();
-  dropZone.classList.add("dragging");
-});
+dropTargets.forEach((target) => {
+  target.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    target.classList.add("dragging");
+  });
 
-dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
+  target.addEventListener("dragleave", () => target.classList.remove("dragging"));
 
-dropZone.addEventListener("drop", (event) => {
-  event.preventDefault();
-  dropZone.classList.remove("dragging");
-  const [file] = event.dataTransfer.files;
-  if (!file) return;
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  imageInput.files = transfer.files;
-  setSelectedFile(file);
+  target.addEventListener("drop", (event) => {
+    event.preventDefault();
+    target.classList.remove("dragging");
+    const [file] = event.dataTransfer.files;
+    if (!file) return;
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    imageInput.files = transfer.files;
+    setSelectedFile(file);
+  });
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedFile) {
-    setStatus("Choose an image", 0, "error");
+    setStatus("Choose an image", 0, "error", {
+      note: "Drop a screenshot in the workspace first.",
+    });
     return;
   }
 
@@ -76,11 +124,17 @@ form.addEventListener("submit", async (event) => {
   runButton.querySelector("span").textContent = "Running";
 
   const formData = new FormData(form);
+  formData.set("image", selectedFile, selectedFile.name);
   try {
     const clientLabels = await runClientOcr(selectedFile);
     if (clientLabels.length) {
       formData.append("ocr_labels", JSON.stringify(clientLabels));
     }
+    markProgressStep("labels", "done");
+    setStatus("Sending image to builder", 42, "running", {
+      step: "extract",
+      note: "The backend is starting extraction and georeferencing.",
+    });
     const response = await fetch("/api/runs", {
       method: "POST",
       body: formData,
@@ -115,26 +169,50 @@ copyButton.addEventListener("click", async () => {
 function setSelectedFile(file) {
   selectedFile = file;
   if (!file) return;
+  progressValue = 0;
+  resetProgressSteps();
+  stepStates.set("labels", {
+    state: "pending",
+    message: "Ready to scan map text.",
+  });
+  renderProgressSteps();
+  clearGeneratedArtifacts();
   fileName.textContent = file.name;
   fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
+  dropTitle.textContent = file.name;
+  dropMeta.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
   inputPreview.src = URL.createObjectURL(file);
   inputPreview.classList.add("ready");
   document.querySelector("#inputPane").classList.add("has-content");
+  dropZone.classList.add("has-file");
+  compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = file.name;
+  updateRunButton();
+  setStatus("Image ready", 0, "idle", {
+    note: "Review settings, then run the boundary export.",
+  });
+  activateTab("input");
 }
 
 async function runClientOcr(file) {
   if (!window.Tesseract || !file) return [];
   try {
     const labels = [];
-    setStatus("Reading map labels in browser", 4);
+    markProgressStep("labels", "running", "Browser OCR is scanning map text.");
+    setStatus("Reading map labels", 6, "running", {
+      step: "labels",
+      note: "This happens locally in your browser before upload.",
+    });
     const result = await recognizeImageLabels(file, "Reading map labels in browser", 4, 20);
     labels.push(...labelsFromOcrResult(result));
 
     if (countUsefulLabels(labels) < 30) {
       const canvas = await imageFileToCanvas(file);
       const enhanced = makeOcrCanvas(canvas, "neutral-dark");
-      setStatus("Enhancing map labels in browser", 24);
+      setStatus("Enhancing map labels", 26, "running", {
+        step: "labels",
+        note: "Trying a higher-contrast OCR pass for faint labels.",
+      });
       const enhancedResult = await recognizeImageLabels(enhanced, "Enhancing map labels in browser", 24, 12);
       labels.push(...labelsFromOcrResult(enhancedResult));
     }
@@ -142,7 +220,10 @@ async function runClientOcr(file) {
     if (countUsefulLabels(labels) < 30) {
       const canvas = await imageFileToCanvas(file);
       const neutral = makeOcrCanvas(canvas, "neutral");
-      setStatus("Checking map labels again", 32);
+      setStatus("Checking map labels again", 34, "running", {
+        step: "labels",
+        note: "One final pass helps sparse or low-contrast screenshots.",
+      });
       const neutralResult = await recognizeImageLabels(neutral, "Checking map labels again", 32, 8);
       labels.push(...labelsFromOcrResult(neutralResult));
     }
@@ -159,7 +240,9 @@ async function recognizeImageLabels(image, statusMessage, start, span) {
     tessedit_pageseg_mode: "11",
     logger: (event) => {
       if (event.status === "recognizing text") {
-        setStatus(statusMessage, start + Math.round((event.progress || 0) * span));
+        setStatus(statusMessage, start + Math.round((event.progress || 0) * span), "running", {
+          step: "labels",
+        });
       }
     },
   });
@@ -295,12 +378,13 @@ function connectEvents(runId) {
   eventSource.addEventListener("update", async (message) => {
     const event = JSON.parse(message.data);
     applyEvent(event);
-    if (event.status === "complete") {
-      eventSource.close();
-      await loadArtifacts(runId);
-      runButton.disabled = false;
-      runButton.querySelector("span").textContent = "Run Boundary";
-    }
+      if (event.status === "complete") {
+        eventSource.close();
+        await loadArtifacts(runId);
+        markAllProgressStepsDone();
+        runButton.disabled = false;
+        runButton.querySelector("span").textContent = "Run Boundary";
+      }
     if (event.status === "error") {
       eventSource.close();
       finishWithError(event.message);
@@ -340,6 +424,7 @@ function applyInlineRun(status) {
     workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
   }
   setStatus("Boundary export ready", 100, "complete");
+  markAllProgressStepsDone();
   activateTab(artifacts.overlay_data_url ? "overlay" : "boundary");
   runButton.disabled = false;
   runButton.querySelector("span").textContent = "Run Boundary";
@@ -347,27 +432,175 @@ function applyInlineRun(status) {
 
 function applyEvent(event) {
   const label = stageLabels[event.stage] || event.stage;
-  const percent = Number(event.percent || 0);
-  setStatus(event.message || label, percent, event.status);
-  const item = document.createElement("li");
-  item.className = event.status === "error" ? "active error" : "active";
-  item.innerHTML = `<b>${escapeHtml(label)}</b>${escapeHtml(event.message || "")}`;
-  timeline.prepend(item);
-  while (timeline.children.length > 8) {
-    timeline.lastElementChild.remove();
+  const step = progressStepForEvent(event);
+  if (event.status === "complete") {
+    markAllProgressStepsDone();
+  } else if (event.status === "error") {
+    markProgressStep(step || activeProgressStep || "georeference", "error", event.message || label);
+  } else if (step) {
+    markPreviousProgressStepsDone(step);
+    markProgressStep(step, "running", humanProgressMessage(event));
+  }
+  setStatus(event.message || label, progressPercentForEvent(event), event.status, {
+    step,
+    note: humanProgressNote(event),
+  });
+}
+
+function setStatus(message, percent, status = "running", options = {}) {
+  statusText.textContent = message;
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  progressValue = status === "complete" ? 100 : Math.max(progressValue, clamped);
+  const step = options.step || activeProgressStep;
+  percentText.textContent = progressLabel(status, step);
+  progressNote.textContent = options.note || defaultProgressNote(status, step);
+  progressFill.style.width = `${progressValue}%`;
+  progressMeter.setAttribute("aria-valuenow", String(progressValue));
+  if (status === "error") {
+    progressFill.style.background = "var(--coral)";
+    progressMeter.classList.add("error");
+  } else {
+    progressFill.style.background = "";
+    progressMeter.classList.remove("error");
   }
 }
 
-function setStatus(message, percent, status = "running") {
-  statusText.textContent = message;
-  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-  percentText.textContent = `${clamped}%`;
-  progressFill.style.width = `${clamped}%`;
-  if (status === "error") {
-    progressFill.style.background = "var(--coral)";
-  } else {
-    progressFill.style.background = "";
+function resetProgressSteps() {
+  stepStates = new Map(
+    progressSteps.map((step) => [
+      step.key,
+      {
+        state: "pending",
+        message: step.idle,
+      },
+    ]),
+  );
+  activeProgressStep = null;
+  renderProgressSteps();
+}
+
+function markProgressStep(key, state, message) {
+  if (!key || !stepStates.has(key)) return;
+  activeProgressStep = state === "done" ? activeProgressStep : key;
+  const step = progressSteps.find((item) => item.key === key);
+  stepStates.set(key, {
+    state,
+    message: message || step?.[state] || step?.running || "",
+  });
+  renderProgressSteps();
+}
+
+function markPreviousProgressStepsDone(key) {
+  const index = progressSteps.findIndex((step) => step.key === key);
+  if (index < 0) return;
+  for (const step of progressSteps.slice(0, index)) {
+    const old = stepStates.get(step.key);
+    if (old?.state !== "done") {
+      stepStates.set(step.key, {
+        state: "done",
+        message: step.done,
+      });
+    }
   }
+  renderProgressSteps();
+}
+
+function markAllProgressStepsDone() {
+  for (const step of progressSteps) {
+    stepStates.set(step.key, {
+      state: "done",
+      message: step.done,
+    });
+  }
+  activeProgressStep = "export";
+  renderProgressSteps();
+}
+
+function renderProgressSteps() {
+  timeline.innerHTML = progressSteps
+    .map((step) => {
+      const status = stepStates.get(step.key) || { state: "pending", message: step.idle };
+      return `
+        <li class="${escapeHtml(status.state)}">
+          <span class="step-dot" aria-hidden="true"></span>
+          <span>
+            <b>${escapeHtml(step.title)}</b>
+            ${escapeHtml(status.message)}
+          </span>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function progressStepForEvent(event) {
+  return {
+    queued: "extract",
+    inspect: "extract",
+    extract: "extract",
+    georeference: "georeference",
+    export: "export",
+    complete: "export",
+  }[event.stage] || activeProgressStep;
+}
+
+function progressPercentForEvent(event) {
+  const percent = Number(event.percent || 0);
+  if (event.status === "complete" || event.stage === "complete") return 100;
+  if (event.status === "error") return progressValue;
+  if (event.stage === "queued") return 42;
+  if (event.stage === "inspect") return 46;
+  if (event.stage === "extract") return percent < 30 ? 54 : 64;
+  if (event.stage === "georeference") {
+    if (percent < 60) return 74;
+    if (percent < 75) return 82;
+    return 88;
+  }
+  if (event.stage === "export") return 94;
+  return percent;
+}
+
+function humanProgressMessage(event) {
+  if (event.stage === "queued") return "Run queued.";
+  if (event.stage === "inspect") return "Reading image size and metadata.";
+  if (event.stage === "extract") return event.percent < 30 ? "Finding service-area pixels." : "Service pixels traced.";
+  if (event.stage === "georeference") return "Matching map labels, roads, and geography.";
+  if (event.stage === "export") return "Writing GeoJSON and previews.";
+  return event.message || stageLabels[event.stage] || "";
+}
+
+function humanProgressNote(event) {
+  if (event.stage === "queued" || event.stage === "inspect") {
+    return "The image is being prepared on the backend.";
+  }
+  if (event.stage === "extract") {
+    return "The colored service-area shape is being separated from the map.";
+  }
+  if (event.stage === "georeference") {
+    return "Large regions can take longer while road alignment is checked.";
+  }
+  if (event.stage === "export") {
+    return "The boundary, overlay, and download are being finalized.";
+  }
+  if (event.stage === "complete") {
+    return "GeoJSON and previews are ready.";
+  }
+  return "";
+}
+
+function progressLabel(status, stepKey) {
+  if (status === "complete") return "Done";
+  if (status === "error") return "Issue";
+  const index = progressSteps.findIndex((step) => step.key === stepKey);
+  return index >= 0 ? `Step ${index + 1}/${progressSteps.length}` : selectedFile ? "Ready" : "Idle";
+}
+
+function defaultProgressNote(status, stepKey) {
+  if (status === "complete") return "GeoJSON and previews are ready.";
+  if (status === "error") return "The run needs attention.";
+  const step = progressSteps.find((item) => item.key === stepKey);
+  if (!step) return selectedFile ? "Review settings, then run the boundary export." : "Add a map screenshot to start.";
+  return stepStates.get(step.key)?.message || step.running;
 }
 
 async function loadArtifacts(runId) {
@@ -602,8 +835,18 @@ function activateTab(name) {
 }
 
 function resetRun() {
+  progressValue = 0;
+  resetProgressSteps();
+  markProgressStep("labels", "running", "Browser OCR is scanning map text.");
+  clearGeneratedArtifacts();
+  setStatus("Preparing image", 2, "running", {
+    step: "labels",
+    note: "Reading labels locally before the backend run starts.",
+  });
+}
+
+function clearGeneratedArtifacts() {
   latestGeojson = null;
-  timeline.innerHTML = "";
   metricGrid.innerHTML = "";
   overlayPreview.removeAttribute("src");
   overlayPreview.classList.remove("ready");
@@ -621,13 +864,22 @@ function resetRun() {
   downloadLink.classList.add("disabled");
   downloadLink.setAttribute("aria-disabled", "true");
   copyButton.disabled = true;
-  setStatus("Starting", 0);
 }
 
 function finishWithError(message) {
-  setStatus(message, 0, "error");
+  markProgressStep(activeProgressStep || "georeference", "error", message);
+  setStatus(message, progressValue, "error", {
+    note: "The run stopped before a reliable boundary could be exported.",
+  });
   runButton.disabled = false;
   runButton.querySelector("span").textContent = "Run Boundary";
+  updateRunButton();
+}
+
+function updateRunButton() {
+  if (runButton.disabled && runButton.querySelector("span").textContent === "Running") return;
+  runButton.disabled = !selectedFile;
+  runButton.querySelector("span").textContent = selectedFile ? "Run Boundary" : "Add image first";
 }
 
 async function fetchJson(url) {
