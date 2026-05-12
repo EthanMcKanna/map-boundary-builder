@@ -251,6 +251,7 @@ input {
 
 .primary-action,
 .ghost-action,
+.new-run-button,
 .tab {
   min-height: 40px;
   border-radius: 8px;
@@ -425,6 +426,26 @@ input {
   margin: 3px 0 0;
   font-size: 1rem;
   line-height: 1.1;
+}
+
+.new-run-button {
+  min-height: 32px;
+  border-color: var(--line);
+  background: rgba(248, 246, 238, 0.78);
+  color: var(--ink);
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.new-run-button:hover {
+  border-color: var(--green);
+  background: rgba(47, 178, 143, 0.12);
+}
+
+.new-run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .history-empty {

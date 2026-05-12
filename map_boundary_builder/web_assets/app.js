@@ -26,6 +26,7 @@ const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
 const historyList = document.querySelector("#historyList");
 const historyEmpty = document.querySelector("#historyEmpty");
+const newRunButton = document.querySelector("#newRunButton");
 const tabs = [...document.querySelectorAll(".tab")];
 const panes = [...document.querySelectorAll(".pane")];
 
@@ -135,6 +136,7 @@ form.addEventListener("submit", async (event) => {
   resetRun();
   runButton.disabled = true;
   runButton.querySelector("span").textContent = "Running";
+  newRunButton.disabled = true;
 
   const formData = new FormData(form);
   formData.set("image", selectedFile, selectedFile.name);
@@ -178,6 +180,8 @@ copyButton.addEventListener("click", async () => {
     copyButton.textContent = "Copy";
   }, 1000);
 });
+
+newRunButton.addEventListener("click", startNewRun);
 
 historyList.addEventListener("click", (event) => {
   const menuSummary = event.target.closest(".history-menu summary");
@@ -442,6 +446,7 @@ function connectEvents(runId) {
         markAllProgressStepsDone();
         runButton.disabled = false;
         runButton.querySelector("span").textContent = "Run Boundary";
+        updateRunButton();
       }
     if (event.status === "error") {
       eventSource.close();
@@ -494,6 +499,7 @@ function applyInlineRun(status) {
   });
   runButton.disabled = false;
   runButton.querySelector("span").textContent = "Run Boundary";
+  updateRunButton();
 }
 
 function applyEvent(event) {
@@ -1210,6 +1216,37 @@ function activateTab(name) {
   }
 }
 
+function startNewRun() {
+  if (runButton.disabled && runButton.querySelector("span").textContent === "Running") return;
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  selectedFile = null;
+  activeHistoryId = null;
+  imageInput.value = "";
+  progressValue = 0;
+  resetProgressSteps();
+  clearGeneratedArtifacts();
+  inputPreview.removeAttribute("src");
+  inputPreview.classList.remove("ready");
+  document.querySelector("#inputPane").classList.remove("has-content");
+  dropZone.classList.remove("has-file");
+  compactDropZone.classList.remove("has-file");
+  fileName.textContent = "No image selected";
+  fileMeta.textContent = "Drop a screenshot in the workspace";
+  dropTitle.textContent = "Drop map screenshot";
+  dropMeta.textContent = "PNG, JPG, WebP, TIFF";
+  workspaceTitle.textContent = "Ready for a screenshot";
+  copyButton.textContent = "Copy";
+  setStatus("Idle", 0, "idle", {
+    note: "Add a map screenshot to start.",
+  });
+  renderHistory();
+  updateRunButton();
+  activateTab("input");
+}
+
 function resetRun() {
   progressValue = 0;
   resetProgressSteps();
@@ -1253,7 +1290,9 @@ function finishWithError(message) {
 }
 
 function updateRunButton() {
-  if (runButton.disabled && runButton.querySelector("span").textContent === "Running") return;
+  const isRunning = runButton.disabled && runButton.querySelector("span").textContent === "Running";
+  newRunButton.disabled = isRunning;
+  if (isRunning) return;
   runButton.disabled = !selectedFile;
   runButton.querySelector("span").textContent = selectedFile ? "Run Boundary" : "Add image first";
 }
