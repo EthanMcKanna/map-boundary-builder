@@ -263,6 +263,10 @@ def join_windows(words: list[OcrLabel]) -> list[OcrLabel]:
 
 
 def group_stacked_labels(words: list[OcrLabel]) -> list[OcrLabel]:
+    if not words:
+        return []
+    heights = sorted(max(1.0, word.height) for word in words)
+    median_height = heights[len(heights) // 2]
     labels: list[OcrLabel] = []
     for top in words:
         for bottom in words:
@@ -271,7 +275,11 @@ def group_stacked_labels(words: list[OcrLabel]) -> list[OcrLabel]:
             if abs(top.x - bottom.x) > max(90.0, top.width, bottom.width):
                 continue
             vertical_gap = bottom.y - top.y - top.height / 2 - bottom.height / 2
-            if vertical_gap < -8.0 or vertical_gap > max(90.0, (top.height + bottom.height) * 2.2):
+            vertical_threshold = min(
+                48.0,
+                max(14.0, median_height * 3.0, (top.height + bottom.height) * 1.8),
+            )
+            if vertical_gap < -8.0 or vertical_gap > vertical_threshold:
                 continue
             text = clean_text(f"{top.text} {bottom.text}")
             if not is_useful_text(text):

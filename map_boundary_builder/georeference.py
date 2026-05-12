@@ -481,7 +481,21 @@ def georeference_from_label_context(
                         ),
                     )
                     if road_refinement is not None:
-                        geo_transform = road_refinement.transform
+                        refined_residuals = control_residuals_for_transform(
+                            road_refinement.transform,
+                            [controls[i] for i in inliers],
+                            width,
+                            height,
+                        )
+                        if refinement_preserves_label_fit(
+                            refined_residuals,
+                            residual_median,
+                            residual_p90,
+                            len(inliers),
+                        ):
+                            geo_transform = road_refinement.transform
+                        else:
+                            road_refinement = None
                     return GeoreferenceResult(
                         transform=geo_transform,
                         control_points=[controls[i] for i in inliers],
@@ -1688,7 +1702,7 @@ def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeR
     max_distance_m = max_place_distance_m(search_bbox, city_center)
     best_by_place: dict[tuple[str, float, float], tuple[float, ControlPoint]] = {}
     used_label_keys: set[tuple[str, int, int]] = set()
-    for label in rank_place_labels(labels)[:MAX_PLACE_LABELS]:
+    for label in candidate_place_labels(labels):
         label_tokens = place_tokens(label.text)
         if not label_tokens or len(label_tokens) > 3:
             continue
@@ -1738,6 +1752,46 @@ def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeR
 
     controls = [control for _, control in sorted(best_by_place.values(), key=lambda item: item[0], reverse=True)]
     return dedupe_place_controls(controls)
+
+
+def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
+    candidates: list[OcrLabel] = []
+    seen: set[tuple[str, int, int]] = set()
+
+    def add(label: OcrLabel) -> None:
+        tokens = place_tokens(label.text)
+        if not tokens:
+            return
+        key = (" ".join(sorted(tokens)), round(label.x / 12), round(label.y / 12))
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(label)
+
+    for label in rank_place_labels(labels)[:MAX_PLACE_LABELS]:
+        add(label)
+
+    concise_labels = sorted(
+        labels,
+        key=lambda label: (
+            len(place_tokens(label.text)) in {1, 2},
+            label.confidence,
+            -label.width * label.height,
+        ),
+        reverse=True,
+    )
+    for label in concise_labels:
+        tokens = place_tokens(label.text)
+        if not tokens or len(tokens) > 2:
+            continue
+        if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
+            continue
+        if label.confidence < 55.0:
+            continue
+        add(label)
+        if len(candidates) >= MAX_PLACE_LABELS + 64:
+            break
+    return candidates
 
 
 def max_place_distance_m(bbox: tuple[float, float, float, float], city_center: GeocodeResult) -> float:
@@ -1972,6 +2026,40 @@ def should_lock_road_refinement_scale(
         and residual_p90_m <= 3200.0
         and spread >= image_area * 0.08
     )
+
+
+def control_residuals_for_transform(
+    transform: GeoreferenceTransform,
+    controls: list[ControlPoint],
+    width: int,
+    height: int,
+) -> np.ndarray:
+    origin_x = transform.origin_x_ratio * width
+    origin_y = transform.origin_y_ratio * height
+    pixel = np.array([(control.label.x - origin_x, origin_y - control.label.y) for control in controls], dtype=float)
+    merc = np.array([control.mercator for control in controls], dtype=float)
+    tx, ty = lonlat_to_mercator(transform.lon, transform.lat)
+    transformed = apply_similarity(pixel, transform.meters_per_pixel, transform.rotation_radians, tx, ty)
+    return np.linalg.norm(transformed - merc, axis=1)
+
+
+def refinement_preserves_label_fit(
+    residuals: np.ndarray,
+    base_median_m: float,
+    base_p90_m: float,
+    control_count: int,
+) -> bool:
+    if residuals.size == 0:
+        return False
+    median = float(np.median(residuals))
+    p90 = float(np.percentile(residuals, 90))
+    if control_count <= 4:
+        median_limit = max(650.0, base_median_m + 650.0)
+        p90_limit = max(1200.0, base_p90_m + 900.0)
+    else:
+        median_limit = max(1200.0, base_median_m * 2.5)
+        p90_limit = max(2500.0, base_p90_m * 2.2)
+    return median <= median_limit and p90 <= p90_limit
 
 
 def pixel_positions(controls: list[ControlPoint], indexes: list[int]) -> np.ndarray:
