@@ -64,15 +64,15 @@ input {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
+  flex: 0 0 48px;
   width: 48px;
   height: 48px;
-  place-items: center;
   border: 2px solid var(--ink);
-  background: var(--gold);
+  border-radius: 8px;
+  background: var(--paper);
   box-shadow: 5px 5px 0 var(--ink);
-  font-weight: 900;
-  letter-spacing: 0;
+  object-fit: cover;
 }
 
 .brand h1,
