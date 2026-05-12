@@ -208,19 +208,37 @@ input {
 }
 
 .advanced {
+  position: relative;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  padding: 10px 0;
+  min-height: 44px;
+  padding: 0;
+  z-index: 10;
 }
 
 .advanced summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
   cursor: pointer;
   font-weight: 850;
 }
 
-.advanced[open] {
-  display: grid;
+.advanced-fields {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  display: none;
+  width: 320px;
   gap: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 36px rgba(23, 33, 29, 0.16);
+  padding: 12px;
+}
+
+.advanced[open] .advanced-fields {
+  display: grid;
 }
 
 .compact input {
@@ -316,9 +334,15 @@ input {
   grid-template-columns: 16px 1fr;
   gap: 10px;
   align-items: start;
+  min-height: 52px;
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.25;
+}
+
+.timeline li > span:last-child {
+  display: block;
+  min-height: 44px;
 }
 
 .timeline li.running,
@@ -589,6 +613,13 @@ input {
     order: 1;
     grid-template-rows: auto minmax(360px, 1fr) auto;
     padding: 18px;
+  }
+
+  .advanced-fields {
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    width: auto;
   }
 
   .metric-grid {
