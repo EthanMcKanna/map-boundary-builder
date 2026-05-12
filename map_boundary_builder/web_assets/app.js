@@ -1223,16 +1223,27 @@ function renderBoundaryMap(geojson) {
   }
 
   const draw = () => {
-    boundaryMap.resize();
-    upsertBoundaryLayers(geojson);
-    fitBoundaryMap(bounds);
+    try {
+      // map.loaded() can be false after the one-time load event.
+      // Defer only if the style itself is unavailable.
+      boundaryMap.resize();
+      upsertBoundaryLayers(geojson);
+      fitBoundaryMap(bounds);
+    } catch (error) {
+      if (isBoundaryStyleLoadingError(error)) {
+        boundaryMap.once("load", draw);
+        return;
+      }
+      throw error;
+    }
   };
 
-  if (boundaryMap.loaded()) {
-    draw();
-  } else {
-    boundaryMap.once("load", draw);
-  }
+  draw();
+}
+
+function isBoundaryStyleLoadingError(error) {
+  const message = String(error?.message || error || "");
+  return message.includes("Style is not done loading") || message.includes("style is not loaded");
 }
 
 function upsertBoundaryLayers(geojson) {
