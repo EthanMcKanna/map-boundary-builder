@@ -636,6 +636,10 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
+    direct_contexts = direct_city_contexts_from_labels(inference_labels)
+    if direct_contexts:
+        return direct_contexts
+
     candidates = geocoded_label_candidates(inference_labels)
     if not candidates:
         return prominent_contexts_from_labels(inference_labels)
@@ -692,6 +696,64 @@ def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
         key=context_label_score,
         reverse=True,
     )
+
+
+def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
+    query_scores: dict[str, float] = {}
+    query_evidence: dict[str, set[str]] = {}
+    used_positions: set[tuple[str, int, int]] = set()
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        tokens = place_tokens(label.text)
+        if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if len(tokens) > 2:
+            continue
+        if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
+            continue
+        position_key = (" ".join(sorted(tokens)), round(label.x / 16), round(label.y / 16))
+        if position_key in used_positions:
+            continue
+        used_positions.add(position_key)
+        score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
+        query = clean_query_text(label.text)
+        query_scores[query] = query_scores.get(query, 0.0) + score
+        query_evidence.setdefault(query, set()).add(label.text)
+        if len(tokens) == 1:
+            token_query = next(iter(tokens)).title()
+            query_scores[token_query] = query_scores.get(token_query, 0.0) + score
+            query_evidence.setdefault(token_query, set()).add(label.text)
+
+    scored_contexts: list[tuple[float, CityContext]] = []
+    for query, score in sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:6]:
+        for result in geocode(query, limit=2):
+            if not result.bbox:
+                continue
+            if not primary_name_matches_label(result.display_name, query):
+                continue
+            if result.place_type.lower() not in ADMIN_CONTEXT_TYPES and not is_broad_context_result(result):
+                continue
+            scored_contexts.append(
+                (
+                    score + result.importance * 10.0,
+                    CityContext(
+                        query=result.display_name.split(",", 1)[0],
+                        center=result,
+                        inferred=True,
+                        evidence=tuple(sorted(query_evidence.get(query, {query}))[:4]),
+                    ),
+                )
+            )
+            break
+
+    if not scored_contexts:
+        return []
+    scored_contexts.sort(key=lambda item: item[0], reverse=True)
+    top_score, top_context = scored_contexts[0]
+    if top_score < 160.0:
+        return []
+    if len(scored_contexts) > 1 and scored_contexts[1][0] >= top_score * 0.62:
+        return []
+    return [top_context]
 
 
 def is_plausible_context_label(label: OcrLabel) -> bool:

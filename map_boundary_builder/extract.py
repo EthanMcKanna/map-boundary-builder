@@ -40,12 +40,16 @@ def extract_service_area(image_path: str | Path, simplify_px: float = DEFAULT_SI
     style = classify_style(rgb)
     if style == "bright-blue":
         raw_mask = blue_service_mask(rgb)
+    elif style == "purple-fill":
+        raw_mask = purple_service_mask(rgb)
+    elif style == "light-fill":
+        raw_mask = light_fill_service_mask(rgb)
     elif style == "gray-fill":
         raw_mask = gray_fill_service_mask(rgb)
     else:
         raw_mask = dark_teal_service_mask(rgb)
     mask = repair_mask(raw_mask, style)
-    if style == "gray-fill":
+    if style in {"gray-fill", "light-fill"}:
         mask = keep_main_components(mask, max_components=1)
     mask = remove_dark_teal_chrome(mask, style)
     geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
@@ -67,6 +71,9 @@ def classify_style(rgb: np.ndarray) -> str:
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
     bright_blue = ((hue >= 92) & (hue <= 116) & (sat >= 90) & (val >= 130)).mean()
+    purple_fill = purple_service_mask(rgb).mean()
+    light_fill = light_fill_service_mask(rgb)
+    light_fill_ratio = float(light_fill.mean())
     dark_pixels = (val < 95).mean()
     low_saturation = (sat < 25).mean()
     teal_pixels = ((hue >= 78) & (hue <= 104) & (sat >= 45) & (val >= 50) & (val <= 190)).mean()
@@ -76,6 +83,10 @@ def classify_style(rgb: np.ndarray) -> str:
     ).mean()
     if bright_blue > 0.02 and bright_blue > teal_pixels * 1.5:
         return "bright-blue"
+    if purple_fill > 0.02:
+        return "purple-fill"
+    if 0.025 <= light_fill_ratio <= 0.55:
+        return "light-fill"
     if green_pixels > 0.015:
         return "dark-teal"
     if dark_pixels > 0.80 and teal_pixels < 0.01 and bright_blue < 0.01:
@@ -97,6 +108,44 @@ def blue_service_mask(rgb: np.ndarray) -> np.ndarray:
     saturated_blue = (hue >= 92) & (hue <= 116) & (sat >= 75) & (val >= 105)
     app_blue = (b >= 145) & (g >= 80) & (r <= 95) & ((b.astype(np.int16) - r.astype(np.int16)) >= 80)
     return saturated_blue | app_blue
+
+
+def purple_service_mask(rgb: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    hue = hsv[:, :, 0]
+    sat = hsv[:, :, 1]
+    val = hsv[:, :, 2]
+    r, _g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    return (
+        (hue >= 112)
+        & (hue <= 145)
+        & (sat >= 55)
+        & (val >= 120)
+        & ((b.astype(np.int16) - r.astype(np.int16)) >= 45)
+    )
+
+
+def light_fill_service_mask(rgb: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    sat = hsv[:, :, 1]
+    val = hsv[:, :, 2]
+    light = (val >= 230) & (sat <= 75)
+    return remove_edge_connected_components(light)
+
+
+def remove_edge_connected_components(mask: np.ndarray) -> np.ndarray:
+    labels, count = ndimage.label(mask)
+    if count == 0:
+        return mask
+    h, w = mask.shape
+    edge_labels = set(labels[0, :])
+    edge_labels.update(labels[h - 1, :])
+    edge_labels.update(labels[:, 0])
+    edge_labels.update(labels[:, w - 1])
+    edge_labels.discard(0)
+    if not edge_labels:
+        return mask
+    return mask & ~np.isin(labels, list(edge_labels))
 
 
 def dark_teal_service_mask(rgb: np.ndarray) -> np.ndarray:
