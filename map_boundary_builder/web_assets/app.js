@@ -38,6 +38,7 @@ let progressValue = 0;
 let activeProgressStep = null;
 let stepStates = new Map();
 let historyEntries = [];
+let activeHistoryId = null;
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -224,6 +225,7 @@ document.addEventListener("click", (event) => {
 function setSelectedFile(file) {
   selectedFile = file;
   if (!file) return;
+  activeHistoryId = null;
   progressValue = 0;
   resetProgressSteps();
   stepStates.set("labels", {
@@ -246,6 +248,7 @@ function setSelectedFile(file) {
   setStatus("Image ready", 0, "idle", {
     note: "Review settings, then run the boundary export.",
   });
+  renderHistory();
   activateTab("input");
 }
 
@@ -762,6 +765,7 @@ function historyTitle(payload) {
 }
 
 function upsertHistoryEntry(entry) {
+  activeHistoryId = entry.id;
   historyEntries = [entry, ...historyEntries.filter((item) => item.id !== entry.id)];
   persistHistoryEntries();
   renderHistory();
@@ -841,8 +845,13 @@ function renderHistoryEntry(entry) {
   const thumb = entry.inputImage || entry.overlayImage;
   const detail = historyDetail(entry);
   const starred = entry.starred ? `<span class="history-star" aria-label="Starred"></span>` : "";
+  const classes = [
+    "history-item",
+    entry.starred ? "starred" : "",
+    entry.id === activeHistoryId ? "active" : "",
+  ].filter(Boolean).join(" ");
   return `
-    <li class="history-item${entry.starred ? " starred" : ""}" data-history-id="${escapeHtml(entry.id)}">
+    <li class="${escapeHtml(classes)}" data-history-id="${escapeHtml(entry.id)}">
       <button class="history-main" type="button" data-history-load="${escapeHtml(entry.id)}">
         <span class="history-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" />` : ""}</span>
         <span class="history-copy">
@@ -890,6 +899,7 @@ function toggleHistoryStar(id) {
 }
 
 function deleteHistoryEntry(id) {
+  if (activeHistoryId === id) activeHistoryId = null;
   historyEntries = historyEntries.filter((entry) => entry.id !== id);
   persistHistoryEntries();
   renderHistory();
@@ -897,6 +907,7 @@ function deleteHistoryEntry(id) {
 
 function restoreHistoryEntry(entry) {
   closeHistoryMenus();
+  activeHistoryId = entry.id;
   selectedFile = null;
   imageInput.value = "";
   clearGeneratedArtifacts();
@@ -943,6 +954,7 @@ function restoreHistoryEntry(entry) {
   });
   activateTab("boundary");
   updateRunButton();
+  renderHistory();
 }
 
 function closeHistoryMenus() {
