@@ -88,7 +88,14 @@ def parse_client_ocr_labels(raw: str | None) -> list[OcrLabel] | None:
 def run_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
     command = ["tesseract", str(image_path), "stdout", "--psm", "11", "tsv"]
     try:
-        completed = subprocess.run(command, text=True, capture_output=True, check=False)
+        completed = subprocess.run(
+            command,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
     except FileNotFoundError:
         return []
     if completed.returncode != 0:
@@ -141,7 +148,14 @@ def run_tesseract_array(image: np.ndarray, *, scale_x: float = 1.0, scale_y: flo
         cv2.imwrite(tmp_path, image)
         command = ["tesseract", tmp_path, "stdout", "--psm", "11", "tsv"]
         try:
-            completed = subprocess.run(command, text=True, capture_output=True, check=False)
+            completed = subprocess.run(
+                command,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
         except FileNotFoundError:
             return []
         if completed.returncode != 0:

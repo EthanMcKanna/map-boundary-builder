@@ -10,11 +10,19 @@ from PIL import Image
 from shapely.geometry import shape
 
 from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
-from .georeference import georeference_from_city_context, georeference_from_labels, georeference_from_ocr
+from .georeference import (
+    CityContext,
+    georeference_from_city_context,
+    georeference_from_label_context,
+    georeference_from_labels,
+    infer_city_contexts,
+)
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
+from .ocr import extract_ocr_labels
 
 ProgressCallback = Callable[[dict[str, Any]], None]
+MAX_ROAD_CONTEXT_CANDIDATES = 3
 
 
 @dataclass(frozen=True)
@@ -117,35 +125,48 @@ def build_boundary(
         message="Inferring map location from labels" if city_input is None else "Matching readable map labels",
         percent=48,
     )
-    if ocr_labels is not None:
-        georef = georeference_from_labels(
-            ocr_labels,
-            str(image_path),
-            city_input,
-            width,
-            height,
-            min_control_points=opts.min_control_points,
-            label_y_min=label_y_min,
-            label_y_max=label_y_max,
-        )
-    else:
-        georef = georeference_from_ocr(
-            str(image_path),
-            city_input,
-            width,
-            height,
-            min_control_points=opts.min_control_points,
-            label_y_min=label_y_min,
-            label_y_max=label_y_max,
-        )
-    if georef is None and city_input is not None:
+    labels = ocr_labels if ocr_labels is not None else extract_ocr_labels(str(image_path))
+    road_contexts = road_contexts_from_labels(city_input, labels)
+    road_context_candidates = [city_input] if city_input is not None else road_context_queries(road_contexts)
+    try_ranked_context_first = should_try_ranked_context_first(city_input, extraction.coverage_ratio, road_contexts)
+
+    georef = None
+    if try_ranked_context_first:
         emit_progress(
             progress,
             stage="georeference",
-            message="Trying road-network context",
+            message="Trying regional label context",
             percent=62,
+            details={"candidates": road_context_candidates},
         )
-        georef = georeference_from_city_context(load_rgb(image_path), city_input, extraction.pixel_geometry)
+        georef = georeference_from_ranked_label_contexts(
+            labels,
+            str(image_path),
+            road_contexts,
+            width,
+            height,
+            min_control_points=opts.min_control_points,
+        )
+
+    if georef is None:
+        georef = georeference_from_labels(
+            labels,
+            str(image_path),
+            city_input,
+            width,
+            height,
+            min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+        )
+
+    if georef is None and road_context_candidates:
+        georef = georeference_from_road_contexts(
+            image_path,
+            extraction.pixel_geometry,
+            road_context_candidates,
+            progress=progress,
+        )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
@@ -234,6 +255,141 @@ def build_boundary(
         mask_path=mask_path,
         overlay_path=overlay_path,
     )
+
+
+def georeference_from_road_contexts(
+    image_path: Path,
+    pixel_geometry,
+    road_context_candidates: list[str],
+    *,
+    progress: ProgressCallback | None,
+):
+    if road_context_candidates:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Trying road-network context",
+            percent=62,
+            details={"candidates": road_context_candidates},
+        )
+    rgb = load_rgb(image_path)
+    for candidate in road_context_candidates:
+        georef = georeference_from_city_context(rgb, candidate, pixel_geometry)
+        if georef is not None:
+            return georef
+    return None
+
+
+def georeference_from_ranked_label_contexts(
+    labels: list[Any],
+    image_path: str,
+    contexts: list[CityContext],
+    width: int,
+    height: int,
+    *,
+    min_control_points: int,
+):
+    best = None
+    best_score = -1.0
+    for context in contexts:
+        result = georeference_from_label_context(
+            labels,
+            image_path,
+            context,
+            width,
+            height,
+            min_control_points=min_control_points,
+        )
+        if result is None:
+            continue
+        score = result.transform.confidence + min(0.12, len(result.control_points) * 0.015)
+        score -= min(0.2, result.residual_p90_m / 30000.0)
+        if score > best_score:
+            best = result
+            best_score = score
+        if (
+            result.transform.confidence >= 0.80
+            and len(result.control_points) >= 6
+            and result.residual_p90_m <= 3500.0
+        ):
+            return result
+    return best
+
+
+def road_contexts_from_labels(city: str | None, labels: list[Any]) -> list[CityContext]:
+    if city is not None:
+        return []
+
+    contexts = [context for context in infer_city_contexts(labels) if context.query != "Inferred map area"]
+    return rank_road_contexts(contexts)[:MAX_ROAD_CONTEXT_CANDIDATES]
+
+
+def road_context_queries(contexts: list[CityContext]) -> list[str]:
+    return [context.query for context in contexts if context.query.strip()]
+
+
+def should_try_ranked_context_first(
+    city: str | None,
+    coverage_ratio: float,
+    contexts: list[CityContext],
+) -> bool:
+    if city is not None or not contexts:
+        return False
+    return coverage_ratio >= 0.08 and context_bbox_span_m(contexts[0]) >= 30000.0
+
+
+def rank_road_context_queries(contexts: list[CityContext]) -> list[str]:
+    return road_context_queries(rank_road_contexts(contexts))
+
+
+def rank_road_contexts(contexts: list[CityContext]) -> list[CityContext]:
+    scored: list[tuple[float, str]] = []
+    for context in contexts:
+        query = context.query.strip()
+        if not query:
+            continue
+        scored.append((road_context_score(context), query))
+
+    ranked: list[CityContext] = []
+    seen: set[str] = set()
+    by_query = {context.query: context for context in contexts}
+    for _, query in sorted(scored, key=lambda item: item[0], reverse=True):
+        if query in seen:
+            continue
+        seen.add(query)
+        ranked.append(by_query[query])
+    return ranked
+
+
+def road_context_score(context: CityContext) -> float:
+    span_m = context_bbox_span_m(context)
+    place_type = context.center.place_type.lower()
+    display_name = context.center.display_name.lower()
+
+    score = context.center.importance
+    score += min(3.0, span_m / 18000.0)
+    score += min(1.5, len(context.evidence) * 0.25)
+    if place_type in {"region", "municipality", "borough"}:
+        score += 1.35
+    elif place_type in {"city", "town", "village"}:
+        score += 0.55
+    if span_m >= 30000.0:
+        score += 1.25
+    elif span_m < 9000.0:
+        score -= 1.0
+    if any(token in display_name for token in ("school", "district", "campus", "hospital")):
+        score -= 1.75
+    return score
+
+
+def context_bbox_span_m(context: CityContext) -> float:
+    bbox = context.center.bbox
+    if bbox is None:
+        return 0.0
+    west, south, east, north = bbox
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
+    return float(max(abs(east_m - west_m), abs(north_m - south_m)))
 
 
 def should_label_as_regional_area(bounds: tuple[float, float, float, float], city: str, georef) -> bool:
