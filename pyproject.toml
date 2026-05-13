@@ -42,6 +42,19 @@ Homepage = "https://map-boundary-builder.vercel.app"
 Repository = "https://github.com/EthanMcKanna/map-boundary-builder"
 Issues = "https://github.com/EthanMcKanna/map-boundary-builder/issues"
 
+[[tool.uv.dependency-metadata]]
+name = "rapidocr-onnxruntime"
+requires-dist = [
+  "pyclipper>=1.2.0",
+  "numpy<3.0.0,>=1.19.5",
+  "six>=1.15.0",
+  "Shapely!=2.0.4,>=1.7.1",
+  "PyYAML",
+  "Pillow",
+  "onnxruntime>=1.7.0",
+  "tqdm",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["map_boundary_builder*"]
