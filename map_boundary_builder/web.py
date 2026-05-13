@@ -191,16 +191,24 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             settings = {}
         try:
+            summary = json.loads(fields.get("summary", "{}") or "{}")
+        except json.JSONDecodeError:
+            summary = {}
+        try:
             result = create_failure_issue(
                 FailureReport(
                     filename=original_filename,
                     image_bytes=image_bytes,
                     error=fields.get("error", "").strip() or "Generation failed without an error message.",
+                    issue_type=fields.get("issue_type", "").strip() or "Generation issue",
+                    generation_status=fields.get("generation_status", "").strip() or "unknown",
+                    user_note=fields.get("user_note", "").strip() or None,
                     run_id=fields.get("run_id", "").strip() or None,
                     events=events if isinstance(events, list) else [],
                     user_agent=fields.get("user_agent", "").strip() or self.headers.get("User-Agent"),
                     page_url=fields.get("page_url", "").strip() or None,
                     settings=settings if isinstance(settings, dict) else {},
+                    summary=summary if isinstance(summary, dict) else {},
                 )
             )
         except GithubReportError as exc:

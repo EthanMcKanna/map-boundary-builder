@@ -57,12 +57,13 @@ same Python extraction/georeferencing backend as a serverless function. Large or
 low-detail screenshots can still time out or fail closed if there is not enough
 OCR/geocoded map evidence.
 
-When a web generation fails, the UI can create a one-click GitHub debug report.
-Set `GITHUB_REPORT_TOKEN` in the deployment environment with access to create
-issues and write repository contents. The app stores the failed screenshot on
-the public `debug-reports` branch, embeds it in the issue, and warns the user
-that the uploaded image will be public before they report it. Optional overrides
-are `GITHUB_REPORT_REPOSITORY` and `GITHUB_REPORT_BRANCH`.
+When a web generation fails, or when a completed boundary looks wrong, the UI
+can create a GitHub debug report. Set `GITHUB_REPORT_TOKEN` in the deployment
+environment with access to create issues and write repository contents. The app
+stores the reported screenshot on the public `debug-reports` branch, embeds it
+in the issue, and warns the user that the uploaded image will be public before
+they report it. Optional overrides are `GITHUB_REPORT_REPOSITORY` and
+`GITHUB_REPORT_BRANCH`.
 
 ## Georeferencing Model
 

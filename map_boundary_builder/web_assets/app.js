@@ -20,6 +20,16 @@ const reportPanel = document.querySelector("#reportPanel");
 const reportText = document.querySelector("#reportText");
 const reportButton = document.querySelector("#reportButton");
 const reportLink = document.querySelector("#reportLink");
+const reportTrigger = document.querySelector("#reportTrigger");
+const reportDialog = document.querySelector("#reportDialog");
+const reportForm = document.querySelector("#reportForm");
+const reportIssueType = document.querySelector("#reportIssueType");
+const reportUserNote = document.querySelector("#reportUserNote");
+const reportCloseButton = document.querySelector("#reportCloseButton");
+const reportCancelButton = document.querySelector("#reportCancelButton");
+const reportSubmitButton = document.querySelector("#reportSubmitButton");
+const reportFormStatus = document.querySelector("#reportFormStatus");
+const reportIssueLink = document.querySelector("#reportIssueLink");
 const workspaceTitle = document.querySelector("#workspaceTitle");
 const inputPreview = document.querySelector("#inputPreview");
 const overlayPreview = document.querySelector("#overlayPreview");
@@ -49,6 +59,9 @@ let renamingHistoryId = null;
 let latestRunId = null;
 let latestRunError = null;
 let latestRunEvents = [];
+let latestRunStatus = "idle";
+let latestRunSummary = null;
+let activeReportStatus = "completed";
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -194,7 +207,11 @@ copyButton.addEventListener("click", async () => {
 
 newRunButton.addEventListener("click", startNewRun);
 brandButton.addEventListener("click", startNewRun);
-reportButton.addEventListener("click", submitFailureReport);
+reportButton.addEventListener("click", () => openReportDialog("failed"));
+reportTrigger.addEventListener("click", () => openReportDialog("completed"));
+reportForm.addEventListener("submit", submitGenerationReport);
+reportCloseButton.addEventListener("click", closeReportDialog);
+reportCancelButton.addEventListener("click", closeReportDialog);
 
 historyList.addEventListener("click", (event) => {
   const menuSummary = event.target.closest(".history-menu summary");
@@ -277,6 +294,8 @@ function setSelectedFile(file) {
   latestRunId = null;
   latestRunError = null;
   latestRunEvents = [];
+  latestRunStatus = "idle";
+  latestRunSummary = null;
   progressValue = 0;
   resetProgressSteps();
   stepStates.set("labels", {
@@ -296,6 +315,7 @@ function setSelectedFile(file) {
   compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = file.name;
   updateRunButton();
+  updateReportTrigger();
   hideFailureReport();
   setStatus("Image ready", 0, "idle", {
     note: "Review settings, then run the boundary export.",
@@ -510,6 +530,8 @@ function connectEvents(runId) {
 function applyInlineRun(status) {
   latestRunId = status.id || latestRunId;
   latestRunEvents = status.events || latestRunEvents;
+  latestRunStatus = "completed";
+  latestRunSummary = status.summary || null;
   for (const event of status.events || []) {
     applyEvent(event);
   }
@@ -548,6 +570,7 @@ function applyInlineRun(status) {
   runButton.disabled = false;
   runButton.querySelector("span").textContent = "Run Boundary";
   updateRunButton();
+  updateReportTrigger();
 }
 
 function applyEvent(event) {
@@ -555,8 +578,10 @@ function applyEvent(event) {
   const label = stageLabels[event.stage] || event.stage;
   const step = progressStepForEvent(event);
   if (event.status === "complete") {
+    latestRunStatus = "completed";
     markAllProgressStepsDone();
   } else if (event.status === "error") {
+    latestRunStatus = "failed";
     markProgressStep(step || activeProgressStep || "georeference", "error", event.message || label);
   } else if (step) {
     markPreviousProgressStepsDone(step);
@@ -741,6 +766,9 @@ function defaultProgressNote(status, stepKey) {
 
 async function loadArtifacts(runId) {
   const status = await fetchJson(`/api/runs/${runId}`);
+  latestRunId = status.id || runId;
+  latestRunStatus = status.status === "complete" ? "completed" : status.status || latestRunStatus;
+  latestRunSummary = status.summary || null;
   const artifacts = status.artifacts || {};
   if (artifacts.input) {
     inputPreview.src = artifacts.input;
@@ -770,6 +798,7 @@ async function loadArtifacts(runId) {
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay,
   });
+  updateReportTrigger();
 }
 
 function queueHistorySave(payload) {
@@ -1057,6 +1086,11 @@ function restoreHistoryEntry(entry) {
   renamingHistoryId = null;
   activeHistoryId = entry.id;
   selectedFile = null;
+  latestRunId = entry.id;
+  latestRunError = null;
+  latestRunEvents = [];
+  latestRunStatus = "completed";
+  latestRunSummary = entry.summary || null;
   imageInput.value = "";
   clearGeneratedArtifacts();
   latestGeojson = entry.geojson;
@@ -1102,6 +1136,7 @@ function restoreHistoryEntry(entry) {
   activateTab("boundary");
   renderBoundary(latestGeojson);
   updateRunButton();
+  updateReportTrigger();
   renderHistory();
 }
 
@@ -1410,6 +1445,8 @@ function startNewRun() {
   latestRunId = null;
   latestRunError = null;
   latestRunEvents = [];
+  latestRunStatus = "idle";
+  latestRunSummary = null;
   imageInput.value = "";
   progressValue = 0;
   resetProgressSteps();
@@ -1431,6 +1468,7 @@ function startNewRun() {
   });
   renderHistory();
   updateRunButton();
+  updateReportTrigger();
   activateTab("input");
 }
 
@@ -1439,6 +1477,8 @@ function resetRun() {
   latestRunId = null;
   latestRunError = null;
   latestRunEvents = [];
+  latestRunStatus = "running";
+  latestRunSummary = null;
   hideFailureReport();
   resetProgressSteps();
   markProgressStep("labels", "running", "Browser OCR is scanning map text.");
@@ -1467,10 +1507,12 @@ function clearGeneratedArtifacts() {
   downloadLink.classList.add("disabled");
   downloadLink.setAttribute("aria-disabled", "true");
   copyButton.disabled = true;
+  updateReportTrigger();
 }
 
 function finishWithError(message) {
   latestRunError = message || "Generation failed.";
+  latestRunStatus = "failed";
   markProgressStep(activeProgressStep || "georeference", "error", message);
   setStatus(message, progressValue, "error", {
     note: "The run stopped before a reliable boundary could be exported.",
@@ -1486,35 +1528,67 @@ function showFailureReport() {
   reportPanel.hidden = false;
   reportButton.hidden = false;
   reportButton.disabled = false;
-  reportButton.textContent = "Report to GitHub";
+  reportButton.textContent = "Report issue";
   reportLink.hidden = true;
   reportLink.href = "#";
-  reportText.textContent = "Report this failed generation to GitHub. Your uploaded screenshot will be public in the issue.";
+  reportText.textContent = "Tell us what went wrong. Your uploaded screenshot will be public in the GitHub issue.";
 }
 
 function hideFailureReport() {
   reportPanel.hidden = true;
   reportButton.disabled = false;
   reportButton.hidden = false;
-  reportButton.textContent = "Report to GitHub";
+  reportButton.textContent = "Report issue";
   reportLink.hidden = true;
   reportLink.href = "#";
-  reportText.textContent = "Report this failed generation to GitHub. Your uploaded screenshot will be public in the issue.";
+  reportText.textContent = "Tell us what went wrong. Your uploaded screenshot will be public in the GitHub issue.";
 }
 
-async function submitFailureReport() {
-  if (!selectedFile) return;
-  reportButton.disabled = true;
-  reportButton.textContent = "Reporting";
-  reportText.textContent = "Uploading the failed screenshot and run details to a public GitHub issue.";
+function openReportDialog(status) {
+  if (!canReportGeneration(status)) return;
+  activeReportStatus = status;
+  reportForm.reset();
+  reportIssueType.value = status === "failed" ? "Generation failed" : "Boundary shape is wrong";
+  reportFormStatus.textContent = "";
+  reportFormStatus.className = "report-form-status";
+  reportIssueLink.hidden = true;
+  reportIssueLink.href = "#";
+  reportSubmitButton.disabled = false;
+  reportSubmitButton.textContent = "Create Issue";
+  if (reportDialog.showModal) {
+    reportDialog.showModal();
+  } else {
+    reportDialog.setAttribute("open", "");
+  }
+}
+
+function closeReportDialog() {
+  if (reportDialog.open && reportDialog.close) {
+    reportDialog.close();
+  } else {
+    reportDialog.removeAttribute("open");
+  }
+}
+
+async function submitGenerationReport(event) {
+  event.preventDefault();
+  if (!canReportGeneration(activeReportStatus)) return;
+  reportSubmitButton.disabled = true;
+  reportSubmitButton.textContent = "Creating";
+  reportFormStatus.className = "report-form-status";
+  reportFormStatus.textContent = "Uploading the screenshot and run details to a public GitHub issue.";
   try {
-    const reportImage = await prepareReportImage(selectedFile);
+    const reportImage = await reportImageFile();
     const formData = new FormData();
-    formData.set("image", reportImage, reportImage.name || selectedFile.name || "failed-generation.png");
-    formData.set("error", latestRunError || "Generation failed.");
+    formData.set("image", reportImage, reportImage.name || reportFilename());
+    formData.set("issue_type", reportIssueType.value);
+    formData.set("generation_status", activeReportStatus);
+    formData.set("user_note", reportUserNote.value.trim());
+    formData.set("error", latestRunError || reportStatusMessage(activeReportStatus));
     formData.set("run_id", latestRunId || "");
     formData.set("events", JSON.stringify(latestRunEvents));
     formData.set("settings", JSON.stringify(collectRunSettings()));
+    formData.set("summary", JSON.stringify(latestRunSummary || {}));
     formData.set("user_agent", navigator.userAgent);
     formData.set("page_url", window.location.href);
     const response = await fetch("/api/reports", {
@@ -1523,15 +1597,81 @@ async function submitFailureReport() {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Report failed.");
-    reportText.textContent = "Issue created. The screenshot is now public in GitHub for debugging.";
-    reportLink.href = payload.issue_url;
-    reportLink.hidden = false;
-    reportButton.hidden = true;
+    reportFormStatus.textContent = "Issue created. The screenshot is now public in GitHub for debugging.";
+    reportFormStatus.classList.add("success");
+    reportIssueLink.href = payload.issue_url;
+    reportIssueLink.hidden = false;
+    if (activeReportStatus === "failed") {
+      reportText.textContent = "Issue created. The screenshot is now public in GitHub for debugging.";
+      reportLink.href = payload.issue_url;
+      reportLink.hidden = false;
+      reportButton.hidden = true;
+    }
+    reportSubmitButton.textContent = "Created";
   } catch (error) {
-    reportText.textContent = error.message || "Could not create the GitHub issue.";
-    reportButton.disabled = false;
-    reportButton.textContent = "Try Again";
+    reportFormStatus.textContent = error.message || "Could not create the GitHub issue.";
+    reportFormStatus.classList.add("error");
+    reportSubmitButton.disabled = false;
+    reportSubmitButton.textContent = "Try Again";
+    if (activeReportStatus === "failed") {
+      reportText.textContent = reportFormStatus.textContent;
+      reportButton.disabled = false;
+      reportButton.textContent = "Try Again";
+    }
   }
+}
+
+function canReportGeneration(status) {
+  if (status === "failed") return Boolean(selectedFile);
+  return Boolean(latestGeojson && reportImageSource());
+}
+
+function updateReportTrigger() {
+  reportTrigger.disabled = !canReportGeneration("completed");
+}
+
+async function reportImageFile() {
+  const source = reportImageSource();
+  if (!source) throw new Error("No screenshot is available to report.");
+  if (source instanceof File) return prepareReportImage(source);
+  if (source.startsWith("data:")) {
+    return prepareReportImage(dataUrlToFile(source, reportFilename()));
+  }
+  const response = await fetch(source);
+  if (!response.ok) throw new Error("Could not read the screenshot for the report.");
+  const blob = await response.blob();
+  return prepareReportImage(new File([blob], reportFilename(), { type: blob.type || "image/png" }));
+}
+
+function reportImageSource() {
+  if (selectedFile) return selectedFile;
+  const src = inputPreview.getAttribute("src");
+  return src || null;
+}
+
+function reportFilename() {
+  const base = selectedFile?.name || fileName.textContent || "generation";
+  const safe = String(base)
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\.+$/g, "")
+    .trim();
+  return `${safe || "generation"}.png`;
+}
+
+function reportStatusMessage(status) {
+  if (status === "failed") return latestRunError || "Generation failed.";
+  return "Completed generation was reported by the user.";
+}
+
+function dataUrlToFile(dataUrl, filename) {
+  const [header, data] = dataUrl.split(",");
+  const mime = /data:([^;]+)/.exec(header)?.[1] || "image/png";
+  const binary = atob(data || "");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new File([bytes], filename, { type: mime });
 }
 
 async function prepareReportImage(file) {
@@ -1546,7 +1686,7 @@ async function prepareReportImage(file) {
   context.drawImage(canvas, 0, 0, output.width, output.height);
   const blob = await new Promise((resolve) => output.toBlob(resolve, "image/jpeg", 0.82));
   if (!blob) return file;
-  return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "failed-generation"}-report.jpg`, {
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "generation"}-report.jpg`, {
     type: "image/jpeg",
   });
 }

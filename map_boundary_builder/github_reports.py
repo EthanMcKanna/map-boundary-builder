@@ -24,18 +24,25 @@ class GithubReportError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class FailureReport:
+class GenerationReport:
     filename: str
     image_bytes: bytes
     error: str
+    issue_type: str = "Generation failed"
+    generation_status: str = "failed"
+    user_note: str | None = None
     run_id: str | None = None
     events: list[dict[str, Any]] | None = None
     user_agent: str | None = None
     page_url: str | None = None
     settings: dict[str, Any] | None = None
+    summary: dict[str, Any] | None = None
 
 
-def create_failure_issue(report: FailureReport) -> dict[str, Any]:
+FailureReport = GenerationReport
+
+
+def create_failure_issue(report: GenerationReport) -> dict[str, Any]:
     token = github_token()
     if not token:
         raise GithubReportError("GitHub reporting is not configured on this deployment.")
@@ -104,12 +111,12 @@ def upload_report_image(
     repository: str,
     branch: str,
     artifact_path: str,
-    report: FailureReport,
+    report: GenerationReport,
     token: str,
 ) -> dict[str, Any]:
     content = base64.b64encode(report.image_bytes).decode("ascii")
     payload = {
-        "message": "Add failed Boundary Builder report image",
+        "message": "Add Boundary Builder report image",
         "content": content,
         "branch": branch,
     }
@@ -126,10 +133,13 @@ def create_issue(
     branch: str,
     artifact_path: str,
     image_url: str,
-    report: FailureReport,
+    report: GenerationReport,
     token: str,
 ) -> dict[str, Any]:
-    title = f"Failed generation report: {Path(report.filename).name or 'uploaded image'}"
+    title = "{} report: {}".format(
+        sanitize_title(report.issue_type),
+        Path(report.filename).name or "uploaded image",
+    )
     body = issue_body(branch, artifact_path, image_url, report)
     return github_json(
         f"/repos/{repository}/issues",
@@ -139,17 +149,20 @@ def create_issue(
     )
 
 
-def issue_body(branch: str, artifact_path: str, image_url: str, report: FailureReport) -> str:
+def issue_body(branch: str, artifact_path: str, image_url: str, report: GenerationReport) -> str:
     events = json.dumps(report.events or [], indent=2, default=str)
     settings = json.dumps(report.settings or {}, indent=2, default=str)
+    summary = json.dumps(report.summary or {}, indent=2, default=str)
     return "\n".join(
         [
-            "A user reported a failed Boundary Builder generation from the app.",
+            "A user reported a Boundary Builder generation from the app.",
             "",
             "**Public image notice:** the uploaded screenshot is intentionally stored in this public GitHub repository for debugging.",
             "",
-            f"![Failed map screenshot]({image_url})",
+            f"![Reported map screenshot]({image_url})",
             "",
+            f"- Issue type: `{report.issue_type or 'Unspecified'}`",
+            f"- Generation status: `{report.generation_status or 'unknown'}`",
             f"- Original filename: `{Path(report.filename).name or 'uploaded-image'}`",
             f"- Run ID: `{report.run_id or 'not available'}`",
             f"- Debug branch: `{branch}`",
@@ -157,10 +170,20 @@ def issue_body(branch: str, artifact_path: str, image_url: str, report: FailureR
             f"- Page URL: `{report.page_url or 'not provided'}`",
             f"- User agent: `{report.user_agent or 'not provided'}`",
             "",
-            "## Error",
+            "## User Note",
+            "",
+            (report.user_note or "No additional note provided.")[:4000],
+            "",
+            "## Error Or Status",
             "",
             "```text",
             (report.error or "No error message provided.")[:4000],
+            "```",
+            "",
+            "## Generation Summary",
+            "",
+            "```json",
+            summary[:12000],
             "```",
             "",
             "## Settings",
@@ -219,6 +242,11 @@ def safe_report_extension(filename: str) -> str:
     if ext in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         return ext
     return ".png"
+
+
+def sanitize_title(value: str) -> str:
+    title = re.sub(r"\s+", " ", str(value or "Generation issue")).strip()
+    return title[:80] or "Generation issue"
 
 
 def raw_github_url(repository: str, branch: str, artifact_path: str) -> str:

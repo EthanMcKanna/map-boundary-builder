@@ -35,7 +35,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -363,6 +365,7 @@ textarea,
 
 .primary-action,
 .ghost-action,
+.icon-action,
 .new-run-button,
 .tab {
   min-height: 40px;
@@ -427,6 +430,10 @@ textarea,
   line-height: 1.25;
 }
 
+.report-panel .report-button {
+  width: 100%;
+}
+
 .report-button,
 .report-link {
   min-height: 32px;
@@ -456,6 +463,76 @@ textarea,
 
 .report-link[hidden] {
   display: none;
+}
+
+.report-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  padding: 0;
+}
+
+.report-dialog::backdrop {
+  background: rgba(23, 33, 29, 0.28);
+}
+
+.report-form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.report-dialog-head,
+.report-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-dialog h2 {
+  margin: 3px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.report-form select,
+.report-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fffefa;
+  color: var(--ink);
+  padding: 10px 11px;
+}
+
+.report-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.report-disclosure,
+.report-form-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.report-form-status.error {
+  color: var(--coral);
+}
+
+.report-form-status.success {
+  color: var(--green);
+}
+
+.report-form-actions {
+  justify-content: end;
 }
 
 .progress-head {
@@ -913,6 +990,57 @@ textarea,
   text-decoration: none;
 }
 
+.icon-action {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0;
+}
+
+.icon-action:disabled {
+  pointer-events: none;
+  opacity: 0.42;
+}
+
+.report-trigger {
+  border-color: var(--line-strong);
+}
+
+.report-trigger:not(:disabled):hover {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+
+.report-flag {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 18px;
+}
+
+.report-flag::before {
+  position: absolute;
+  top: 2px;
+  bottom: 1px;
+  left: 3px;
+  width: 2px;
+  background: currentColor;
+  content: "";
+}
+
+.report-flag span {
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 9px;
+  height: 7px;
+  border: 2px solid currentColor;
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+}
+
 .ghost-action:disabled,
 .ghost-action.disabled {
   pointer-events: none;
@@ -1140,6 +1268,10 @@ textarea,
 
   .ghost-action {
     flex: 1;
+  }
+
+  .icon-action {
+    flex: 0 0 40px;
   }
 
 }
