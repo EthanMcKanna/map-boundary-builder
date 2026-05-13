@@ -97,8 +97,7 @@
         <section class="preview-stage">
           <div class="preview-header">
             <nav class="tabs" aria-label="Preview tabs">
-              <button class="tab active" type="button" data-tab="input">Input</button>
-              <button class="tab" type="button" data-tab="overlay">Overlay</button>
+              <button class="tab active" type="button" data-tab="input">Image</button>
               <button class="tab" type="button" data-tab="boundary">Boundary</button>
               <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
             </nav>
@@ -134,12 +133,14 @@
                 <span id="dropMeta" class="drop-meta">PNG, JPG, WebP, TIFF, SVG</span>
               </span>
             </label>
-            <img id="inputPreview" alt="Uploaded map screenshot preview" />
-          </div>
-
-          <div class="pane" id="overlayPane" data-pane="overlay">
-            <div class="empty-state">Overlay appears after extraction</div>
-            <img id="overlayPreview" alt="Extracted mask overlay preview" />
+            <div id="imageToggle" class="image-toggle" aria-label="Image preview mode" hidden>
+              <button class="image-mode active" type="button" data-image-mode="original">Original</button>
+              <button class="image-mode" type="button" data-image-mode="overlay" disabled>Overlay</button>
+            </div>
+            <div class="image-preview-stack">
+              <img id="inputPreview" alt="Uploaded map screenshot preview" />
+              <img id="overlayPreview" alt="Extracted mask overlay preview" />
+            </div>
           </div>
 
           <div class="pane boundary-pane" id="boundaryPane" data-pane="boundary">

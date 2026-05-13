@@ -31,6 +31,9 @@ const reportSubmitButton = document.querySelector("#reportSubmitButton");
 const reportFormStatus = document.querySelector("#reportFormStatus");
 const reportIssueLink = document.querySelector("#reportIssueLink");
 const workspaceTitle = document.querySelector("#workspaceTitle");
+const inputPane = document.querySelector("#inputPane");
+const imageToggle = document.querySelector("#imageToggle");
+const imageModeButtons = [...document.querySelectorAll("[data-image-mode]")];
 const inputPreview = document.querySelector("#inputPreview");
 const overlayPreview = document.querySelector("#overlayPreview");
 const boundaryMapEl = document.querySelector("#boundaryMap");
@@ -64,6 +67,7 @@ let latestRunStatus = "idle";
 let latestRunSummary = null;
 let activeReportStatus = "completed";
 let copyFeedbackTimeout = null;
+let activeImageMode = "original";
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -197,6 +201,10 @@ tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
 
+imageModeButtons.forEach((button) => {
+  button.addEventListener("click", () => setImageMode(button.dataset.imageMode));
+});
+
 copyButton.addEventListener("click", async () => {
   if (!latestGeojson) return;
   await navigator.clipboard.writeText(JSON.stringify(latestGeojson, null, 2));
@@ -324,7 +332,8 @@ function setSelectedFile(file) {
   dropMeta.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
   inputPreview.src = URL.createObjectURL(file);
   inputPreview.classList.add("ready");
-  document.querySelector("#inputPane").classList.add("has-content");
+  setImageMode("original");
+  updateImagePane();
   dropZone.classList.add("has-file");
   compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = file.name;
@@ -457,7 +466,8 @@ function applyInlineRun(status) {
   if (artifacts.overlay_data_url) {
     overlayPreview.src = artifacts.overlay_data_url;
     overlayPreview.classList.add("ready");
-    document.querySelector("#overlayPane").classList.add("has-content");
+    setImageMode("overlay");
+    updateImagePane();
   }
   if (artifacts.geojson_inline) {
     latestGeojson = artifacts.geojson_inline;
@@ -477,7 +487,7 @@ function applyInlineRun(status) {
   if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
   setStatus("Boundary export ready", 100, "complete");
   markAllProgressStepsDone();
-  activateTab(artifacts.overlay_data_url ? "overlay" : "boundary");
+  activateTab(artifacts.overlay_data_url ? "input" : "boundary");
   queueHistorySave({
     id: status.id,
     filename: status.filename,
@@ -698,11 +708,13 @@ async function loadArtifacts(runId) {
   if (artifacts.input) {
     inputPreview.src = artifacts.input;
     inputPreview.classList.add("ready");
+    updateImagePane();
   }
   if (artifacts.overlay) {
     overlayPreview.src = artifacts.overlay;
     overlayPreview.classList.add("ready");
-    document.querySelector("#overlayPane").classList.add("has-content");
+    setImageMode("overlay");
+    updateImagePane();
   }
   if (artifacts.geojson) {
     latestGeojson = await fetchJson(artifacts.geojson);
@@ -715,7 +727,7 @@ async function loadArtifacts(runId) {
     renderBoundary(latestGeojson);
   }
   if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
-  activateTab(artifacts.overlay ? "overlay" : "boundary");
+  activateTab(artifacts.overlay ? "input" : "boundary");
   queueHistorySave({
     id: status.id,
     filename: status.filename,
@@ -1035,23 +1047,22 @@ function restoreHistoryEntry(entry) {
   if (entry.inputImage) {
     inputPreview.src = entry.inputImage;
     inputPreview.classList.add("ready");
-    document.querySelector("#inputPane").classList.add("has-content");
   } else {
     inputPreview.removeAttribute("src");
     inputPreview.classList.remove("ready");
-    document.querySelector("#inputPane").classList.remove("has-content");
   }
 
   if (entry.overlayImage) {
     overlayPreview.src = entry.overlayImage;
     overlayPreview.classList.add("ready");
-    document.querySelector("#overlayPane").classList.add("has-content");
   }
+  setImageMode(entry.overlayImage ? "overlay" : "original");
+  updateImagePane();
 
   fileName.textContent = entry.title;
   fileMeta.textContent = "Loaded from local history";
   dropTitle.textContent = "Drop map screenshot";
-  dropMeta.textContent = "PNG, JPG, WebP, TIFF";
+  dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
   dropZone.classList.remove("has-file");
   compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = entry.title;
@@ -1349,6 +1360,7 @@ function extractRings(geojson) {
 }
 
 function activateTab(name) {
+  if (name === "overlay") name = "input";
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
   panes.forEach((pane) => pane.classList.toggle("active", pane.dataset.pane === name));
   if (name === "boundary" && latestGeojson) {
@@ -1359,6 +1371,27 @@ function activateTab(name) {
       fitBoundaryMap(latestBoundaryBounds);
     }, 0);
   }
+}
+
+function setImageMode(mode) {
+  activeImageMode = mode === "overlay" ? "overlay" : "original";
+  updateImagePane();
+}
+
+function updateImagePane() {
+  const hasOriginal = inputPreview.classList.contains("ready");
+  const hasOverlay = overlayPreview.classList.contains("ready");
+  if (activeImageMode === "overlay" && !hasOverlay) activeImageMode = "original";
+  if (activeImageMode === "original" && !hasOriginal && hasOverlay) activeImageMode = "overlay";
+  inputPane.classList.toggle("has-content", hasOriginal || hasOverlay);
+  imageToggle.hidden = !(hasOriginal && hasOverlay);
+  imageModeButtons.forEach((button) => {
+    const mode = button.dataset.imageMode;
+    button.classList.toggle("active", mode === activeImageMode);
+    button.disabled = mode === "overlay" && !hasOverlay;
+  });
+  inputPreview.classList.toggle("preview-visible", hasOriginal && activeImageMode === "original");
+  overlayPreview.classList.toggle("preview-visible", hasOverlay && activeImageMode === "overlay");
 }
 
 function startNewRun() {
@@ -1380,13 +1413,13 @@ function startNewRun() {
   clearGeneratedArtifacts();
   inputPreview.removeAttribute("src");
   inputPreview.classList.remove("ready");
-  document.querySelector("#inputPane").classList.remove("has-content");
+  updateImagePane();
   dropZone.classList.remove("has-file");
   compactDropZone.classList.remove("has-file");
   fileName.textContent = "No image selected";
   fileMeta.textContent = "Drop a screenshot in the workspace";
   dropTitle.textContent = "Drop map screenshot";
-  dropMeta.textContent = "PNG, JPG, WebP, TIFF";
+  dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
   workspaceTitle.textContent = "Ready for a screenshot";
   setCopyCommandCopied(false);
   hideFailureReport();
@@ -1420,7 +1453,8 @@ function clearGeneratedArtifacts() {
   latestGeojson = null;
   overlayPreview.removeAttribute("src");
   overlayPreview.classList.remove("ready");
-  document.querySelector("#overlayPane").classList.remove("has-content");
+  setImageMode("original");
+  updateImagePane();
   boundaryMapEl.classList.remove("ready");
   boundarySvg.innerHTML = "";
   boundarySvg.classList.remove("ready");
