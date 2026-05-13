@@ -55,6 +55,8 @@ let eventSource = null;
 let boundaryMap = null;
 let latestBoundaryBounds = null;
 let progressValue = 0;
+let estimatedProgressTimer = null;
+let estimatedProgressStartedAt = 0;
 let activeProgressStep = null;
 let stepStates = new Map();
 let historyEntries = [];
@@ -91,36 +93,82 @@ const stageLabels = {
 
 const progressSteps = [
   {
-    key: "labels",
-    title: "Read labels",
-    shortTitle: "Labels",
-    idle: "Waiting for a screenshot",
-    running: "Server OCR is scanning map text.",
-    done: "Map labels captured.",
+    key: "prepare",
+    title: "Prepare",
+    shortTitle: "Prep",
+    idle: "Waiting",
+    running: "Preparing image.",
+    done: "Image ready.",
   },
   {
     key: "extract",
-    title: "Extract area",
+    title: "Trace area",
     shortTitle: "Area",
-    idle: "Waiting for image pixels",
-    running: "Finding the colored service boundary.",
-    done: "Service pixels traced.",
+    idle: "Waiting",
+    running: "Tracing service pixels.",
+    done: "Area traced.",
+  },
+  {
+    key: "labels",
+    title: "Read text",
+    shortTitle: "Text",
+    idle: "Waiting",
+    running: "Reading map labels.",
+    done: "Labels read.",
   },
   {
     key: "georeference",
-    title: "Locate map",
-    shortTitle: "Locate",
-    idle: "Waiting for map evidence",
-    running: "Matching labels and roads to geography.",
-    done: "Map transform fitted.",
+    title: "Fit map",
+    shortTitle: "Fit",
+    idle: "Waiting",
+    running: "Matching map evidence.",
+    done: "Map fitted.",
   },
   {
     key: "export",
-    title: "Build export",
+    title: "Export",
     shortTitle: "Export",
-    idle: "Waiting for transform",
-    running: "Writing GeoJSON and previews.",
+    idle: "Waiting",
+    running: "Writing files.",
     done: "GeoJSON ready.",
+  },
+];
+
+const estimatedProgressStages = [
+  {
+    afterMs: 0,
+    key: "prepare",
+    percent: 6,
+    message: "Preparing image",
+    note: "Queued for processing.",
+  },
+  {
+    afterMs: 1200,
+    key: "extract",
+    percent: 24,
+    message: "Tracing boundary",
+    note: "Finding service-area pixels.",
+  },
+  {
+    afterMs: 4200,
+    key: "labels",
+    percent: 44,
+    message: "Reading labels",
+    note: "OCR and place hints are running.",
+  },
+  {
+    afterMs: 9000,
+    key: "georeference",
+    percent: 68,
+    message: "Fitting map",
+    note: "Matching labels and roads.",
+  },
+  {
+    afterMs: 18000,
+    key: "export",
+    percent: 88,
+    message: "Finalizing export",
+    note: "Writing GeoJSON and preview.",
   },
 ];
 
@@ -165,6 +213,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   resetRun();
+  startEstimatedProgress();
   runButton.disabled = true;
   runButton.querySelector("span").textContent = "Running";
   newRunButton.disabled = true;
@@ -173,10 +222,10 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
-    markProgressStep("labels", "running", "Server OCR will scan the map text.");
-    setStatus("Uploading image to builder", 18, "running", {
-      step: "labels",
-      note: "The backend will read labels and build the boundary.",
+    markProgressStep("prepare", "running", "Uploading image.");
+    setStatus("Uploading image", 8, "running", {
+      step: "prepare",
+      note: "Sending screenshot to the builder.",
     });
     const response = await fetch("/api/runs", {
       method: "POST",
@@ -319,10 +368,11 @@ function setSelectedFile(file) {
   latestRunStatus = "idle";
   latestRunSummary = null;
   progressValue = 0;
+  stopEstimatedProgress();
   resetProgressSteps();
-  stepStates.set("labels", {
+  stepStates.set("prepare", {
     state: "pending",
-    message: "Ready to scan map text.",
+    message: "Ready to run.",
   });
   renderProgressSteps();
   clearGeneratedArtifacts();
@@ -349,10 +399,10 @@ function setSelectedFile(file) {
 
 async function prepareRunImage(file) {
   if (!isSvgFile(file)) return file;
-  markProgressStep("labels", "running", "Converting vector map to pixels.");
+  markProgressStep("prepare", "running", "Converting vector map.");
   setStatus("Rasterizing SVG map", 4, "running", {
-    step: "labels",
-    note: "Vector uploads are converted in your browser before extraction.",
+    step: "prepare",
+    note: "Converting vector upload before extraction.",
   });
   const canvas = await svgFileToCanvas(file);
   const blob = await canvasToBlob(canvas, "image/png");
@@ -438,6 +488,7 @@ function connectEvents(runId) {
     applyEvent(event);
       if (event.status === "complete") {
         eventSource.close();
+        stopEstimatedProgress();
         await loadArtifacts(runId);
         markAllProgressStepsDone();
         runButton.disabled = false;
@@ -446,6 +497,7 @@ function connectEvents(runId) {
       }
     if (event.status === "error") {
       eventSource.close();
+      stopEstimatedProgress();
       finishWithError(event.message);
     }
   });
@@ -455,6 +507,7 @@ function connectEvents(runId) {
 }
 
 function applyInlineRun(status) {
+  stopEstimatedProgress();
   latestRunId = status.id || latestRunId;
   latestRunEvents = status.events || latestRunEvents;
   latestRunStatus = "completed";
@@ -503,6 +556,9 @@ function applyInlineRun(status) {
 }
 
 function applyEvent(event) {
+  if (event.status === "complete" || event.status === "error" || event.stage !== "queued") {
+    stopEstimatedProgress();
+  }
   latestRunEvents = [...latestRunEvents, event].slice(-20);
   const label = stageLabels[event.stage] || event.stage;
   const step = progressStepForEvent(event);
@@ -542,10 +598,41 @@ function setStatus(message, percent, status = "running", options = {}) {
 }
 
 function setProgressPanelState(status) {
-  const isRunning = status === "running";
+  const isRunning = status === "running" || status === "queued";
   const isError = status === "error";
   progressPanel.hidden = !(isRunning || isError);
   progressPanel.classList.toggle("is-running", isRunning);
+}
+
+function startEstimatedProgress() {
+  stopEstimatedProgress();
+  estimatedProgressStartedAt = performance.now();
+  applyEstimatedProgress();
+  estimatedProgressTimer = window.setInterval(applyEstimatedProgress, 350);
+}
+
+function stopEstimatedProgress() {
+  if (!estimatedProgressTimer) return;
+  window.clearInterval(estimatedProgressTimer);
+  estimatedProgressTimer = null;
+}
+
+function applyEstimatedProgress() {
+  if (latestRunStatus !== "running") {
+    stopEstimatedProgress();
+    return;
+  }
+  const elapsed = performance.now() - estimatedProgressStartedAt;
+  let milestone = estimatedProgressStages[0];
+  for (const stage of estimatedProgressStages) {
+    if (elapsed >= stage.afterMs) milestone = stage;
+  }
+  markPreviousProgressStepsDone(milestone.key);
+  markProgressStep(milestone.key, "running", milestone.note);
+  setStatus(milestone.message, milestone.percent, "running", {
+    step: milestone.key,
+    note: milestone.note,
+  });
 }
 
 function resetProgressSteps() {
@@ -604,11 +691,10 @@ function renderProgressSteps() {
     .map((step) => {
       const status = stepStates.get(step.key) || { state: "pending", message: step.idle };
       return `
-        <li class="${escapeHtml(status.state)}">
+        <li class="${escapeHtml(status.state)}" title="${escapeHtml(status.message)}">
           <span class="step-dot" aria-hidden="true"></span>
           <span>
             <b>${escapeHtml(step.shortTitle || step.title)}</b>
-            <small>${escapeHtml(progressStateLabel(status.state))}</small>
           </span>
         </li>
       `;
@@ -616,19 +702,12 @@ function renderProgressSteps() {
     .join("");
 }
 
-function progressStateLabel(state) {
-  if (state === "running") return "Active";
-  if (state === "done") return "Done";
-  if (state === "error") return "Issue";
-  return "Waiting";
-}
-
 function progressStepForEvent(event) {
   return {
-    queued: "labels",
-    ocr: "labels",
-    inspect: "extract",
+    queued: "prepare",
+    inspect: "prepare",
     extract: "extract",
+    ocr: "labels",
     georeference: "georeference",
     export: "export",
     complete: "export",
@@ -639,47 +718,47 @@ function progressPercentForEvent(event) {
   const percent = Number(event.percent || 0);
   if (event.status === "complete" || event.stage === "complete") return 100;
   if (event.status === "error") return progressValue;
-  if (event.stage === "queued") return 42;
-  if (event.stage === "ocr") return 48;
-  if (event.stage === "inspect") return 46;
-  if (event.stage === "extract") return percent < 30 ? 54 : 64;
+  if (event.stage === "queued") return 4;
+  if (event.stage === "inspect") return 12;
+  if (event.stage === "extract") return percent < 30 ? 28 : 38;
+  if (event.stage === "ocr") return 52;
   if (event.stage === "georeference") {
-    if (percent < 60) return 74;
-    if (percent < 75) return 82;
-    return 88;
+    if (percent < 60) return 64;
+    if (percent < 75) return 76;
+    return 84;
   }
-  if (event.stage === "export") return 94;
+  if (event.stage === "export") return 92;
   return percent;
 }
 
 function humanProgressMessage(event) {
   if (event.stage === "queued") return "Run queued.";
-  if (event.stage === "ocr") return "Reading map labels on the backend.";
-  if (event.stage === "inspect") return "Reading image size and metadata.";
-  if (event.stage === "extract") return event.percent < 30 ? "Finding service-area pixels." : "Service pixels traced.";
-  if (event.stage === "georeference") return "Matching map labels, roads, and geography.";
-  if (event.stage === "export") return "Writing GeoJSON and previews.";
+  if (event.stage === "inspect") return "Preparing image.";
+  if (event.stage === "extract") return event.percent < 30 ? "Tracing boundary." : "Area traced.";
+  if (event.stage === "ocr") return "Reading labels.";
+  if (event.stage === "georeference") return "Fitting map.";
+  if (event.stage === "export") return "Finalizing export.";
   return event.message || stageLabels[event.stage] || "";
 }
 
 function humanProgressNote(event) {
   if (event.stage === "queued" || event.stage === "inspect") {
-    return "The image is being prepared on the backend.";
+    return "The image is being prepared.";
   }
   if (event.stage === "ocr") {
-    return "Server-side OCR is reading map labels before georeferencing.";
+    return "Reading labels for georeferencing.";
   }
   if (event.stage === "extract") {
-    return "The colored service-area shape is being separated from the map.";
+    return "Separating the service area from the map.";
   }
   if (event.stage === "georeference") {
-    return "Large regions can take longer while road alignment is checked.";
+    return "Matching labels and roads.";
   }
   if (event.stage === "export") {
-    return "The boundary, overlay, and download are being finalized.";
+    return "Writing GeoJSON and preview.";
   }
   if (event.stage === "complete") {
-    return "GeoJSON and previews are ready.";
+    return "GeoJSON and preview are ready.";
   }
   return "";
 }
@@ -1400,6 +1479,7 @@ function startNewRun() {
     eventSource.close();
     eventSource = null;
   }
+  stopEstimatedProgress();
   selectedFile = null;
   activeHistoryId = null;
   latestRunId = null;
@@ -1433,6 +1513,7 @@ function startNewRun() {
 }
 
 function resetRun() {
+  stopEstimatedProgress();
   progressValue = 0;
   latestRunId = null;
   latestRunError = null;
@@ -1441,11 +1522,11 @@ function resetRun() {
   latestRunSummary = null;
   hideFailureReport();
   resetProgressSteps();
-  markProgressStep("labels", "running", "Server OCR will scan map text.");
+  markProgressStep("prepare", "running", "Preparing image.");
   clearGeneratedArtifacts();
   setStatus("Preparing image", 2, "running", {
-    step: "labels",
-    note: "The backend will read map labels after upload.",
+    step: "prepare",
+    note: "Queued for processing.",
   });
 }
 
@@ -1468,6 +1549,7 @@ function clearGeneratedArtifacts() {
 }
 
 function finishWithError(message) {
+  stopEstimatedProgress();
   latestRunError = message || "Generation failed.";
   latestRunStatus = "failed";
   markProgressStep(activeProgressStep || "georeference", "error", message);

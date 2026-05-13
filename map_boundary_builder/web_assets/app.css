@@ -423,9 +423,9 @@ textarea,
 .progress-panel {
   display: grid;
   flex: 0 0 auto;
-  gap: 7px;
+  gap: 5px;
   border-top: 1px solid var(--line);
-  padding: 12px 6px 0;
+  padding: 9px 4px 0;
 }
 
 .progress-panel[hidden] {
@@ -577,23 +577,25 @@ textarea,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 #statusText {
   display: block;
   margin-top: 2px;
+  font-size: 0.9rem;
   line-height: 1.1;
 }
 
 #percentText {
   font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
   font-weight: 900;
   white-space: nowrap;
 }
 
 .meter {
-  height: 9px;
+  height: 6px;
   border: 1px solid var(--ink);
   background: var(--panel);
   overflow: hidden;
@@ -609,38 +611,38 @@ textarea,
 
 .progress-note {
   margin: -2px 0 0;
-  min-height: 1.9rem;
+  min-height: 1rem;
   color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.18;
+  font-size: 0.74rem;
+  line-height: 1.15;
 }
 
 .timeline {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .timeline li {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 4px;
-  align-content: start;
-  min-height: 34px;
+  min-height: 22px;
   border: 1px solid rgba(217, 213, 200, 0.72);
   background: rgba(248, 246, 238, 0.45);
-  padding: 5px;
+  padding: 3px 4px;
   color: var(--muted);
-  font-size: 0.69rem;
+  font-size: 0.64rem;
   line-height: 1.05;
 }
 
 .timeline li > span:last-child {
-  display: grid;
-  gap: 2px;
+  display: block;
   min-height: 0;
+  min-width: 0;
 }
 
 .timeline small {
@@ -661,8 +663,9 @@ textarea,
 }
 
 .step-dot {
-  width: 9px;
-  height: 9px;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
   background: var(--panel);
@@ -671,7 +674,7 @@ textarea,
 .timeline li.running .step-dot {
   border-color: var(--green);
   background: var(--green-2);
-  box-shadow: 0 0 0 4px rgba(47, 178, 143, 0.14);
+  box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.13);
 }
 
 .timeline li.done .step-dot {
@@ -688,7 +691,7 @@ textarea,
   display: block;
   color: inherit;
   overflow: hidden;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
