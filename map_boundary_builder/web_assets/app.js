@@ -37,6 +37,7 @@ const boundaryMapEl = document.querySelector("#boundaryMap");
 const boundarySvg = document.querySelector("#boundarySvg");
 const boundaryEmpty = document.querySelector("#boundaryEmpty");
 const geojsonPane = document.querySelector("#geojsonPane");
+const outputMenu = document.querySelector("#outputMenu");
 const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
 const historyList = document.querySelector("#historyList");
@@ -62,6 +63,7 @@ let latestRunEvents = [];
 let latestRunStatus = "idle";
 let latestRunSummary = null;
 let activeReportStatus = "completed";
+let copyFeedbackTimeout = null;
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -70,6 +72,7 @@ const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const MAX_HISTORY_ENTRIES = 14;
 const MAX_HISTORY_BYTES = 4_400_000;
 const MAX_HISTORY_TITLE_LENGTH = 80;
+const COPY_BUTTON_IDLE_HTML = copyButton.innerHTML;
 
 const stageLabels = {
   queued: "Queued",
@@ -197,19 +200,32 @@ tabs.forEach((tab) => {
 copyButton.addEventListener("click", async () => {
   if (!latestGeojson) return;
   await navigator.clipboard.writeText(JSON.stringify(latestGeojson, null, 2));
-  copyButton.textContent = "Copied";
-  setTimeout(() => {
-    copyButton.textContent = "Copy";
+  closeOutputMenu();
+  setCopyCommandCopied(true);
+  copyFeedbackTimeout = setTimeout(() => {
+    setCopyCommandCopied(false);
   }, 1000);
 });
+downloadLink.addEventListener("click", closeOutputMenu);
 
 newRunButton.addEventListener("click", startNewRun);
 brandButton.addEventListener("click", startNewRun);
 reportButton.addEventListener("click", () => openReportDialog("failed"));
-reportTrigger.addEventListener("click", () => openReportDialog("completed"));
+reportTrigger.addEventListener("click", () => {
+  closeOutputMenu();
+  openReportDialog("completed");
+});
 reportForm.addEventListener("submit", submitGenerationReport);
 reportCloseButton.addEventListener("click", closeReportDialog);
 reportCancelButton.addEventListener("click", closeReportDialog);
+
+document.addEventListener("click", (event) => {
+  if (outputMenu?.open && !outputMenu.contains(event.target)) closeOutputMenu();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeOutputMenu();
+});
 
 historyList.addEventListener("click", (event) => {
   const menuSummary = event.target.closest(".history-menu summary");
@@ -455,6 +471,7 @@ function applyInlineRun(status) {
     downloadLink.classList.remove("disabled");
     downloadLink.removeAttribute("aria-disabled");
     copyButton.disabled = false;
+    showOutputActions();
     renderBoundary(latestGeojson);
   }
   if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
@@ -694,6 +711,7 @@ async function loadArtifacts(runId) {
     downloadLink.classList.remove("disabled");
     downloadLink.removeAttribute("aria-disabled");
     copyButton.disabled = false;
+    showOutputActions();
     renderBoundary(latestGeojson);
   }
   if (status.summary) workspaceTitle.textContent = `${status.summary.city || status.city} boundary`;
@@ -1012,6 +1030,7 @@ function restoreHistoryEntry(entry) {
   downloadLink.classList.remove("disabled");
   downloadLink.removeAttribute("aria-disabled");
   copyButton.disabled = false;
+  showOutputActions();
 
   if (entry.inputImage) {
     inputPreview.src = entry.inputImage;
@@ -1369,7 +1388,7 @@ function startNewRun() {
   dropTitle.textContent = "Drop map screenshot";
   dropMeta.textContent = "PNG, JPG, WebP, TIFF";
   workspaceTitle.textContent = "Ready for a screenshot";
-  copyButton.textContent = "Copy";
+  setCopyCommandCopied(false);
   hideFailureReport();
   setStatus("Idle", 0, "idle", {
     note: "Add a map screenshot to start.",
@@ -1411,11 +1430,7 @@ function clearGeneratedArtifacts() {
     boundaryMap.getSource(BOUNDARY_SOURCE_ID).setData({ type: "FeatureCollection", features: [] });
   }
   geojsonPane.textContent = "{}";
-  downloadLink.href = "#";
-  downloadLink.classList.add("disabled");
-  downloadLink.setAttribute("aria-disabled", "true");
-  copyButton.disabled = true;
-  updateReportTrigger();
+  hideOutputActions();
 }
 
 function finishWithError(message) {
@@ -1535,7 +1550,47 @@ function canReportGeneration(status) {
 }
 
 function updateReportTrigger() {
-  reportTrigger.disabled = !canReportGeneration("completed");
+  const canReport = canReportGeneration("completed");
+  reportTrigger.disabled = !canReport;
+  reportTrigger.hidden = !canReport;
+}
+
+function showOutputActions() {
+  if (!latestGeojson) {
+    hideOutputActions();
+    return;
+  }
+  outputMenu.hidden = false;
+  downloadLink.classList.remove("disabled");
+  downloadLink.removeAttribute("aria-disabled");
+  copyButton.disabled = false;
+  setCopyCommandCopied(false);
+  updateReportTrigger();
+}
+
+function hideOutputActions() {
+  closeOutputMenu();
+  outputMenu.hidden = true;
+  downloadLink.href = "#";
+  downloadLink.classList.add("disabled");
+  downloadLink.setAttribute("aria-disabled", "true");
+  copyButton.disabled = true;
+  setCopyCommandCopied(false);
+  updateReportTrigger();
+}
+
+function closeOutputMenu() {
+  if (outputMenu) outputMenu.open = false;
+}
+
+function setCopyCommandCopied(copied) {
+  if (copyFeedbackTimeout) {
+    clearTimeout(copyFeedbackTimeout);
+    copyFeedbackTimeout = null;
+  }
+  copyButton.innerHTML = copied
+    ? "<span>Copied</span><small>Ready to paste</small>"
+    : COPY_BUTTON_IDLE_HTML;
 }
 
 async function reportImageFile() {

@@ -102,15 +102,26 @@
               <button class="tab" type="button" data-tab="boundary">Boundary</button>
               <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
             </nav>
-            <div class="actions" aria-label="Output actions">
-              <a id="downloadLink" class="ghost-action disabled" href="#" aria-disabled="true">GeoJSON</a>
-              <button id="copyButton" class="ghost-action" type="button" disabled>Copy</button>
-              <button id="reportTrigger" class="icon-action report-trigger" type="button" title="Report generation issue" aria-label="Report generation issue" disabled>
-                <svg class="report-flag-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 21V5.6c0-.8.6-1.4 1.4-1.4h7.2c.8 0 1.4.6 1.4 1.4v.5c0 .6.4 1 1 1h1.5c.7 0 1.1.8.7 1.4l-1.8 2.7c-.2.3-.2.8 0 1.1l1.8 2.7c.4.6 0 1.4-.7 1.4H8.2c-.7 0-1.2.5-1.2 1.2V21" />
-                </svg>
-              </button>
-            </div>
+            <details id="outputMenu" class="output-menu" aria-label="Output actions" hidden>
+              <summary>
+                <span>Output</span>
+                <span class="output-menu-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              </summary>
+              <div class="output-menu-panel">
+                <a id="downloadLink" class="output-menu-item disabled" href="#" aria-disabled="true">
+                  <span>Download GeoJSON</span>
+                  <small>Boundary file</small>
+                </a>
+                <button id="copyButton" class="output-menu-item" type="button" disabled>
+                  <span>Copy GeoJSON</span>
+                  <small>Formatted to clipboard</small>
+                </button>
+                <button id="reportTrigger" class="output-menu-item report-trigger" type="button" disabled>
+                  <span>Report issue</span>
+                  <small>Attach this generation</small>
+                </button>
+              </div>
+            </details>
           </div>
 
           <div class="pane active" id="inputPane" data-pane="input">

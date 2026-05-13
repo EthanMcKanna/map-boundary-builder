@@ -1010,12 +1010,25 @@ textarea,
   padding: 24px;
 }
 
-.actions {
+.preview-stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow);
+}
+
+.preview-header {
+  position: relative;
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: end;
-  flex: 0 0 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px;
 }
 
 .ghost-action {
@@ -1026,6 +1039,12 @@ textarea,
   color: var(--ink);
   padding: 0 13px;
   text-decoration: none;
+}
+
+.ghost-action:disabled,
+.ghost-action.disabled {
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 .icon-action {
@@ -1042,49 +1061,112 @@ textarea,
   opacity: 0.42;
 }
 
-.report-trigger {
-  border-color: var(--line-strong);
+.output-menu {
+  position: relative;
+  z-index: 40;
+  flex: 0 0 auto;
 }
 
-.report-trigger:not(:disabled):hover {
-  border-color: var(--coral);
-  color: var(--coral);
+.output-menu[hidden] {
+  display: none;
 }
 
-.report-flag-icon {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.ghost-action:disabled,
-.ghost-action.disabled {
-  pointer-events: none;
-  opacity: 0.45;
-}
-
-.preview-stage {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: var(--shadow);
-}
-
-.preview-header {
+.output-menu summary {
   display: flex;
-  min-width: 0;
+  min-height: 40px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid var(--line);
-  padding: 12px;
+  gap: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(255, 254, 250, 0.92);
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  padding: 0 11px 0 13px;
+  font-size: 0.82rem;
+  font-weight: 850;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.output-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.output-menu summary:hover,
+.output-menu[open] summary {
+  border-color: var(--green);
+  background: rgba(47, 178, 143, 0.11);
+  box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.12);
+}
+
+.output-menu-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.output-menu-dots span {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.output-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 218px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 254, 250, 0.98);
+  box-shadow: 0 18px 42px rgba(23, 33, 29, 0.18);
+  padding: 5px;
+}
+
+.output-menu-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 9px 10px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.output-menu-item span {
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.output-menu-item small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.output-menu-item:hover,
+.output-menu-item:focus-visible {
+  background: rgba(47, 178, 143, 0.1);
+  outline: none;
+}
+
+.output-menu-item:disabled,
+.output-menu-item.disabled {
+  display: none;
+}
+
+.output-menu-item.report-trigger:hover,
+.output-menu-item.report-trigger:focus-visible {
+  background: rgba(225, 95, 63, 0.1);
+  color: var(--coral);
 }
 
 .tabs {
@@ -1281,17 +1363,19 @@ textarea,
     width: 100%;
   }
 
-  .actions {
+  .output-menu {
     width: 100%;
-    justify-content: stretch;
   }
 
-  .ghost-action {
-    flex: 1;
+  .output-menu summary {
+    justify-content: space-between;
+    width: 100%;
   }
 
-  .icon-action {
-    flex: 0 0 40px;
+  .output-menu-panel {
+    right: auto;
+    left: 0;
+    width: 100%;
   }
 
 }
