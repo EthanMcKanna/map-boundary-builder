@@ -73,6 +73,7 @@ const MAX_HISTORY_TITLE_LENGTH = 80;
 
 const stageLabels = {
   queued: "Queued",
+  ocr: "OCR",
   inspect: "Inspect",
   extract: "Extract",
   georeference: "Georeference",
@@ -87,7 +88,7 @@ const progressSteps = [
     title: "Read labels",
     shortTitle: "Labels",
     idle: "Waiting for a screenshot",
-    running: "Browser OCR is scanning map text.",
+    running: "Server OCR is scanning map text.",
     done: "Map labels captured.",
   },
   {
@@ -165,14 +166,10 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
-    const clientLabels = await runClientOcr(uploadFile);
-    if (clientLabels.length) {
-      formData.append("ocr_labels", JSON.stringify(clientLabels));
-    }
-    markProgressStep("labels", "done");
-    setStatus("Sending image to builder", 42, "running", {
-      step: "extract",
-      note: "The backend is starting extraction and georeferencing.",
+    markProgressStep("labels", "running", "Server OCR will scan the map text.");
+    setStatus("Uploading image to builder", 18, "running", {
+      step: "labels",
+      note: "The backend will read labels and build the boundary.",
     });
     const response = await fetch("/api/runs", {
       method: "POST",
@@ -386,68 +383,6 @@ function parseSvgLength(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function runClientOcr(file) {
-  if (!window.Tesseract || !file) return [];
-  try {
-    const labels = [];
-    markProgressStep("labels", "running", "Browser OCR is scanning map text.");
-    setStatus("Reading map labels", 6, "running", {
-      step: "labels",
-      note: "This happens locally in your browser before upload.",
-    });
-    const result = await recognizeImageLabels(file, "Reading map labels in browser", 4, 20);
-    labels.push(...labelsFromOcrResult(result));
-
-    let ocrCanvas = null;
-    if (countUsefulLabels(labels) < 30) {
-      ocrCanvas = await imageFileToCanvas(file);
-      const enhanced = makeOcrCanvas(ocrCanvas, "neutral-dark");
-      setStatus("Enhancing map labels", 26, "running", {
-        step: "labels",
-        note: "Trying a higher-contrast OCR pass for faint labels.",
-      });
-      const enhancedResult = await recognizeImageLabels(enhanced, "Enhancing map labels in browser", 24, 12);
-      labels.push(...labelsFromOcrResult(enhancedResult));
-    }
-
-    if (countUsefulLabels(labels) < 30) {
-      ocrCanvas ||= await imageFileToCanvas(file);
-      const neutral = makeOcrCanvas(ocrCanvas, "neutral");
-      setStatus("Checking map labels again", 34, "running", {
-        step: "labels",
-        note: "One final pass helps sparse or low-contrast screenshots.",
-      });
-      const neutralResult = await recognizeImageLabels(neutral, "Checking map labels again", 32, 8);
-      labels.push(...labelsFromOcrResult(neutralResult));
-    }
-
-    return dedupeClientLabels(labels);
-  } catch (error) {
-    console.warn("Browser OCR unavailable", error);
-    return [];
-  }
-}
-
-async function recognizeImageLabels(image, statusMessage, start, span) {
-  return window.Tesseract.recognize(image, "eng", {
-    tessedit_pageseg_mode: "11",
-    logger: (event) => {
-      if (event.status === "recognizing text") {
-        setStatus(statusMessage, start + Math.round((event.progress || 0) * span), "running", {
-          step: "labels",
-        });
-      }
-    },
-  });
-}
-
-function labelsFromOcrResult(result) {
-  const words = Array.isArray(result?.data?.words)
-    ? result.data.words
-    : parseTesseractTsv(result?.data?.tsv || "");
-  return words.map(wordToLabel).filter(Boolean);
-}
-
 function imageFileToCanvas(file, targetSize = null) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -467,106 +402,6 @@ function imageFileToCanvas(file, targetSize = null) {
 
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
-}
-
-function makeOcrCanvas(source, mode) {
-  const canvas = document.createElement("canvas");
-  canvas.width = source.width;
-  canvas.height = source.height;
-  const sourceContext = source.getContext("2d", { willReadFrequently: true });
-  const outputContext = canvas.getContext("2d", { willReadFrequently: true });
-  const image = sourceContext.getImageData(0, 0, source.width, source.height);
-  const data = image.data;
-  for (let index = 0; index < data.length; index += 4) {
-    const red = data[index];
-    const green = data[index + 1];
-    const blue = data[index + 2];
-    const serviceFill = isServiceFillPixel(red, green, blue);
-    const nextRed = serviceFill ? 245 : red;
-    const nextGreen = serviceFill ? 245 : green;
-    const nextBlue = serviceFill ? 245 : blue;
-    if (mode === "neutral-dark") {
-      const gray = Math.round(0.299 * nextRed + 0.587 * nextGreen + 0.114 * nextBlue);
-      const value = gray < 125 ? 0 : 255;
-      data[index] = value;
-      data[index + 1] = value;
-      data[index + 2] = value;
-    } else {
-      data[index] = nextRed;
-      data[index + 1] = nextGreen;
-      data[index + 2] = nextBlue;
-    }
-    data[index + 3] = 255;
-  }
-  outputContext.putImageData(image, 0, 0);
-  return canvas;
-}
-
-function isServiceFillPixel(red, green, blue) {
-  const brightBlue = blue >= 135 && green >= 80 && red <= 110 && blue - red >= 55;
-  const greenFill = green >= 120 && green > red + 25 && green > blue + 5;
-  return brightBlue || greenFill;
-}
-
-function countUsefulLabels(labels) {
-  return labels.filter((label) => isUsefulLabelText(label.text)).length;
-}
-
-function isUsefulLabelText(text) {
-  const compact = String(text || "").replace(/\s+/g, "");
-  if (compact.length < 3 || /^\d+$/.test(compact)) return false;
-  const letters = (compact.match(/[A-Za-z]/g) || []).length;
-  return letters >= Math.max(3, Math.floor(compact.length / 2));
-}
-
-function dedupeClientLabels(labels) {
-  const best = new Map();
-  for (const label of labels) {
-    const key = `${label.text.toLowerCase()}|${Math.round(label.x / 20)}|${Math.round(label.y / 20)}`;
-    const old = best.get(key);
-    if (!old || label.confidence > old.confidence) {
-      best.set(key, label);
-    }
-  }
-  return [...best.values()].sort((a, b) => b.confidence - a.confidence);
-}
-
-function parseTesseractTsv(tsv) {
-  const lines = String(tsv || "").trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split("\t");
-  const index = Object.fromEntries(headers.map((header, position) => [header, position]));
-  return lines.slice(1).map((line) => {
-    const cells = line.split("\t");
-    return {
-      text: cells[index.text] || "",
-      left: Number(cells[index.left] || 0),
-      top: Number(cells[index.top] || 0),
-      width: Number(cells[index.width] || 0),
-      height: Number(cells[index.height] || 0),
-      confidence: Number(cells[index.conf] || 0),
-    };
-  });
-}
-
-function wordToLabel(word) {
-  const text = String(word?.text || "").trim();
-  const box = word?.bbox || {};
-  const x0 = Number(box.x0 ?? word?.x0 ?? word?.left ?? 0);
-  const y0 = Number(box.y0 ?? word?.y0 ?? word?.top ?? 0);
-  const x1 = Number(box.x1 ?? word?.x1 ?? x0 + Number(word?.width || 0));
-  const y1 = Number(box.y1 ?? word?.y1 ?? y0 + Number(word?.height || 0));
-  const width = x1 - x0;
-  const height = y1 - y0;
-  if (!text || width <= 0 || height <= 0) return null;
-  return {
-    text,
-    x: x0 + width / 2,
-    y: y0 + height / 2,
-    width,
-    height,
-    confidence: Number(word?.confidence ?? word?.conf ?? 50),
-  };
 }
 
 function connectEvents(runId) {
@@ -763,7 +598,8 @@ function progressStateLabel(state) {
 
 function progressStepForEvent(event) {
   return {
-    queued: "extract",
+    queued: "labels",
+    ocr: "labels",
     inspect: "extract",
     extract: "extract",
     georeference: "georeference",
@@ -777,6 +613,7 @@ function progressPercentForEvent(event) {
   if (event.status === "complete" || event.stage === "complete") return 100;
   if (event.status === "error") return progressValue;
   if (event.stage === "queued") return 42;
+  if (event.stage === "ocr") return 48;
   if (event.stage === "inspect") return 46;
   if (event.stage === "extract") return percent < 30 ? 54 : 64;
   if (event.stage === "georeference") {
@@ -790,6 +627,7 @@ function progressPercentForEvent(event) {
 
 function humanProgressMessage(event) {
   if (event.stage === "queued") return "Run queued.";
+  if (event.stage === "ocr") return "Reading map labels on the backend.";
   if (event.stage === "inspect") return "Reading image size and metadata.";
   if (event.stage === "extract") return event.percent < 30 ? "Finding service-area pixels." : "Service pixels traced.";
   if (event.stage === "georeference") return "Matching map labels, roads, and geography.";
@@ -800,6 +638,9 @@ function humanProgressMessage(event) {
 function humanProgressNote(event) {
   if (event.stage === "queued" || event.stage === "inspect") {
     return "The image is being prepared on the backend.";
+  }
+  if (event.stage === "ocr") {
+    return "Server-side OCR is reading map labels before georeferencing.";
   }
   if (event.stage === "extract") {
     return "The colored service-area shape is being separated from the map.";
@@ -1548,11 +1389,11 @@ function resetRun() {
   latestRunSummary = null;
   hideFailureReport();
   resetProgressSteps();
-  markProgressStep("labels", "running", "Browser OCR is scanning map text.");
+  markProgressStep("labels", "running", "Server OCR will scan map text.");
   clearGeneratedArtifacts();
   setStatus("Preparing image", 2, "running", {
     step: "labels",
-    note: "Reading labels locally before the backend run starts.",
+    note: "The backend will read map labels after upload.",
   });
 }
 

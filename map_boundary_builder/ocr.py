@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 import csv
 import json
 import os
@@ -26,12 +27,14 @@ class OcrLabel:
 
 
 def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
-    if not tesseract_available():
-        return []
-    words = run_tesseract_words(image_path)
-    words = [word for word in words if is_useful_text(word.text)]
-    if len(words) < 80:
-        words.extend(word for word in run_preprocessed_tesseract_words(image_path) if is_useful_text(word.text))
+    words: list[OcrLabel] = []
+    if tesseract_available():
+        words = run_tesseract_words(image_path)
+        words = [word for word in words if is_useful_text(word.text)]
+        if len(words) < 80:
+            words.extend(word for word in run_preprocessed_tesseract_words(image_path) if is_useful_text(word.text))
+    if count_useful_labels(words) < 12:
+        words.extend(run_rapidocr_words(image_path))
     words = dedupe_labels(words)
     labels = list(words)
     labels.extend(group_line_labels(words))
@@ -146,6 +149,58 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
         for future in futures:
             words.extend(future.result())
     return words
+
+
+def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
+    try:
+        engine = rapidocr_engine()
+        result, _elapsed = engine(str(image_path))
+    except Exception:
+        return []
+    return rapidocr_items_to_labels(result)
+
+
+@lru_cache(maxsize=1)
+def rapidocr_engine():
+    from rapidocr_onnxruntime import RapidOCR
+
+    return RapidOCR()
+
+
+def rapidocr_items_to_labels(items: object) -> list[OcrLabel]:
+    if not isinstance(items, list):
+        return []
+
+    labels: list[OcrLabel] = []
+    for item in items:
+        try:
+            box, raw_text, raw_score = item
+            points = [(float(point[0]), float(point[1])) for point in box]
+            text = clean_text(str(raw_text))
+            score = float(raw_score)
+        except Exception:
+            continue
+        if score < 0.35 or not is_useful_text(text):
+            continue
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        left, right = min(xs), max(xs)
+        top, bottom = min(ys), max(ys)
+        width = right - left
+        height = bottom - top
+        if width <= 0 or height <= 0:
+            continue
+        labels.append(
+            OcrLabel(
+                text=text,
+                x=(left + right) / 2.0,
+                y=(top + bottom) / 2.0,
+                width=width,
+                height=height,
+                confidence=max(0.0, min(100.0, score * 100.0)),
+            )
+        )
+    return labels
 
 
 def run_tesseract_array(image: np.ndarray, *, scale_x: float = 1.0, scale_y: float = 1.0) -> list[OcrLabel]:
@@ -330,6 +385,10 @@ def dedupe_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
         if old is None or label.confidence > old.confidence:
             best[key] = label
     return sorted(best.values(), key=lambda label: label.confidence, reverse=True)
+
+
+def count_useful_labels(labels: list[OcrLabel]) -> int:
+    return sum(1 for label in labels if is_useful_text(label.text))
 
 
 def clean_text(text: str) -> str:

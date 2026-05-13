@@ -127,53 +127,49 @@ def build_boundary(
     )
     emit_progress(
         progress,
-        stage="georeference",
-        message="Inferring map location from labels" if city_input is None else "Matching readable map labels",
-        percent=48,
+        stage="ocr",
+        message="Reading map labels on server" if ocr_labels is None else "Using supplied map labels",
+        percent=44,
     )
-    labels = ocr_labels if ocr_labels is not None else extract_ocr_labels(str(image_path))
-    road_contexts = road_contexts_from_labels(city_input, labels)
-    road_context_candidates = [city_input] if city_input is not None else road_context_queries(road_contexts)
-    try_ranked_context_first = should_try_ranked_context_first(city_input, extraction.coverage_ratio, road_contexts)
-
-    georef = None
-    if try_ranked_context_first:
+    labels = list(ocr_labels) if ocr_labels is not None else extract_ocr_labels(str(image_path))
+    georef = fit_georeference(
+        labels,
+        image_path,
+        extraction.pixel_geometry,
+        rgb=rgb,
+        city_input=city_input,
+        width=width,
+        height=height,
+        coverage_ratio=extraction.coverage_ratio,
+        min_control_points=opts.min_control_points,
+        label_y_min=label_y_min,
+        label_y_max=label_y_max,
+        progress=progress,
+    )
+    if georef is None and ocr_labels is not None:
         emit_progress(
             progress,
-            stage="georeference",
-            message="Trying regional label context",
-            percent=62,
-            details={"candidates": road_context_candidates},
+            stage="ocr",
+            message="Retrying with server-side OCR",
+            percent=58,
         )
-        georef = georeference_from_ranked_label_contexts(
-            labels,
-            str(image_path),
-            road_contexts,
-            width,
-            height,
-            min_control_points=opts.min_control_points,
-        )
-
-    if georef is None and (not try_ranked_context_first or label_y_min is not None):
-        georef = georeference_from_labels(
-            labels,
-            str(image_path),
-            city_input,
-            width,
-            height,
-            min_control_points=opts.min_control_points,
-            label_y_min=label_y_min,
-            label_y_max=label_y_max,
-        )
-
-    if georef is None and road_context_candidates:
-        georef = georeference_from_road_contexts(
-            image_path,
-            extraction.pixel_geometry,
-            road_context_candidates,
-            rgb=rgb,
-            progress=progress,
-        )
+        server_labels = extract_ocr_labels(str(image_path))
+        if server_labels:
+            labels = merge_ocr_labels(server_labels, labels)
+            georef = fit_georeference(
+                labels,
+                image_path,
+                extraction.pixel_geometry,
+                rgb=rgb,
+                city_input=city_input,
+                width=width,
+                height=height,
+                coverage_ratio=extraction.coverage_ratio,
+                min_control_points=opts.min_control_points,
+                label_y_min=label_y_min,
+                label_y_max=label_y_max,
+                progress=progress,
+            )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
@@ -285,6 +281,84 @@ def georeference_from_road_contexts(
         if georef is not None:
             return georef
     return None
+
+
+def fit_georeference(
+    labels: list[Any],
+    image_path: Path,
+    pixel_geometry,
+    *,
+    rgb,
+    city_input: str | None,
+    width: int,
+    height: int,
+    coverage_ratio: float,
+    min_control_points: int,
+    label_y_min: float | None,
+    label_y_max: float | None,
+    progress: ProgressCallback | None,
+):
+    emit_progress(
+        progress,
+        stage="georeference",
+        message="Inferring map location from labels" if city_input is None else "Matching readable map labels",
+        percent=48,
+    )
+    road_contexts = road_contexts_from_labels(city_input, labels)
+    road_context_candidates = [city_input] if city_input is not None else road_context_queries(road_contexts)
+    try_ranked_context_first = should_try_ranked_context_first(city_input, coverage_ratio, road_contexts)
+
+    georef = None
+    if try_ranked_context_first:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Trying regional label context",
+            percent=62,
+            details={"candidates": road_context_candidates},
+        )
+        georef = georeference_from_ranked_label_contexts(
+            labels,
+            str(image_path),
+            road_contexts,
+            width,
+            height,
+            min_control_points=min_control_points,
+        )
+
+    if georef is None and (not try_ranked_context_first or label_y_min is not None):
+        georef = georeference_from_labels(
+            labels,
+            str(image_path),
+            city_input,
+            width,
+            height,
+            min_control_points=min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+        )
+
+    if georef is None and road_context_candidates:
+        georef = georeference_from_road_contexts(
+            image_path,
+            pixel_geometry,
+            road_context_candidates,
+            rgb=rgb,
+            progress=progress,
+        )
+    return georef
+
+
+def merge_ocr_labels(*label_sets: list[Any]) -> list[Any]:
+    best: dict[tuple[str, int, int], Any] = {}
+    for labels in label_sets:
+        for label in labels:
+            text = str(getattr(label, "text", "")).lower()
+            key = (text, round(float(getattr(label, "x", 0.0)) / 20), round(float(getattr(label, "y", 0.0)) / 20))
+            old = best.get(key)
+            if old is None or float(getattr(label, "confidence", 0.0)) > float(getattr(old, "confidence", 0.0)):
+                best[key] = label
+    return sorted(best.values(), key=lambda label: float(getattr(label, "confidence", 0.0)), reverse=True)
 
 
 def georeference_from_ranked_label_contexts(

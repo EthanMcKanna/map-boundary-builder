@@ -34,8 +34,8 @@ georeference fit, pixel coverage, and confidence.
 
 - Python 3.11 or newer
 - Internet access for OpenStreetMap/Nominatim lookups during georeferencing
-- The hosted and local web apps run OCR in the browser.
-- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then fails closed if it cannot infer enough map evidence.
+- The hosted and local web apps run OCR on the server so uploaded screenshots follow the same backend georeferencing path.
+- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then falls back to RapidOCR/ONNX before failing closed if it cannot infer enough map evidence.
 
 ## Interactive Web Tool
 

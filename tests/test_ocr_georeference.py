@@ -2,7 +2,7 @@ import unittest
 
 from map_boundary_builder.georeference import candidate_place_labels, is_reliable_single_token_context, place_query_text
 from map_boundary_builder.geocoder import GeocodeResult
-from map_boundary_builder.ocr import OcrLabel, group_stacked_labels
+from map_boundary_builder.ocr import OcrLabel, group_stacked_labels, rapidocr_items_to_labels
 from map_boundary_builder.runner import rank_road_context_queries
 
 
@@ -26,6 +26,28 @@ class OcrGroupingTests(unittest.TestCase):
         grouped = group_stacked_labels(labels)
 
         self.assertIn("NORTH OAKLAWN", {label.text for label in grouped})
+
+    def test_rapidocr_items_are_converted_to_ocr_labels(self) -> None:
+        labels = rapidocr_items_to_labels(
+            [
+                (
+                    [[10, 20], [110, 24], [108, 54], [12, 50]],
+                    "Miami Beach",
+                    0.96,
+                ),
+                (
+                    [[0, 0], [10, 0], [10, 10], [0, 10]],
+                    "12",
+                    0.99,
+                ),
+            ]
+        )
+
+        self.assertEqual(len(labels), 1)
+        self.assertEqual(labels[0].text, "Miami Beach")
+        self.assertAlmostEqual(labels[0].x, 60.0)
+        self.assertAlmostEqual(labels[0].y, 37.0)
+        self.assertAlmostEqual(labels[0].confidence, 96.0)
 
 
 class PlaceCandidateTests(unittest.TestCase):
