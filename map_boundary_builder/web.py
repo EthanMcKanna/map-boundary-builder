@@ -18,6 +18,7 @@ from urllib.parse import unquote, urlparse
 
 from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
+from .image_io import safe_image_extension
 from .ocr import parse_client_ocr_labels
 from .runner import BoundaryBuildOptions, build_boundary
 
@@ -412,10 +413,7 @@ def sse_event(event: dict[str, Any]) -> bytes:
 
 
 def safe_extension(filename: str) -> str:
-    ext = Path(filename).suffix.lower()
-    if ext in {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}:
-        return ext
-    return ".png"
+    return safe_image_extension(filename)
 
 
 def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:

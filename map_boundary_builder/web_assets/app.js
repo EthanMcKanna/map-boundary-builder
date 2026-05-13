@@ -161,10 +161,11 @@ form.addEventListener("submit", async (event) => {
   runButton.querySelector("span").textContent = "Running";
   newRunButton.disabled = true;
 
-  const formData = new FormData(form);
-  formData.set("image", selectedFile, selectedFile.name);
   try {
-    const clientLabels = await runClientOcr(selectedFile);
+    const uploadFile = await prepareRunImage(selectedFile);
+    const formData = new FormData(form);
+    formData.set("image", uploadFile, uploadFile.name);
+    const clientLabels = await runClientOcr(uploadFile);
     if (clientLabels.length) {
       formData.append("ocr_labels", JSON.stringify(clientLabels));
     }
@@ -324,6 +325,67 @@ function setSelectedFile(file) {
   activateTab("input");
 }
 
+async function prepareRunImage(file) {
+  if (!isSvgFile(file)) return file;
+  markProgressStep("labels", "running", "Converting vector map to pixels.");
+  setStatus("Rasterizing SVG map", 4, "running", {
+    step: "labels",
+    note: "Vector uploads are converted in your browser before extraction.",
+  });
+  const canvas = await svgFileToCanvas(file);
+  const blob = await canvasToBlob(canvas, "image/png");
+  if (!blob) {
+    throw new Error("Could not rasterize SVG upload.");
+  }
+  return new File([blob], `${fileBaseName(file.name)}.png`, {
+    type: "image/png",
+    lastModified: file.lastModified,
+  });
+}
+
+function isSvgFile(file) {
+  return file?.type === "image/svg+xml" || /\.svgz?$/i.test(file?.name || "");
+}
+
+function fileBaseName(filename) {
+  return (filename || "map-upload").replace(/\.[^.]+$/, "") || "map-upload";
+}
+
+async function svgFileToCanvas(file) {
+  const targetSize = svgRasterSize(await file.text());
+  return imageFileToCanvas(file, targetSize);
+}
+
+function svgRasterSize(svgText) {
+  const fallback = { width: 1600, height: 1000 };
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg") return fallback;
+
+  const viewBox = (svg.getAttribute("viewBox") || "")
+    .trim()
+    .split(/[\s,]+/)
+    .map((value) => Number.parseFloat(value));
+  const viewBoxWidth = viewBox.length === 4 && Number.isFinite(viewBox[2]) ? viewBox[2] : null;
+  const viewBoxHeight = viewBox.length === 4 && Number.isFinite(viewBox[3]) ? viewBox[3] : null;
+  const width = parseSvgLength(svg.getAttribute("width")) || viewBoxWidth || fallback.width;
+  const height = parseSvgLength(svg.getAttribute("height")) || viewBoxHeight || fallback.height;
+  const maxDimension = 4096;
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+function parseSvgLength(value) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.endsWith("%")) return null;
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 async function runClientOcr(file) {
   if (!window.Tesseract || !file) return [];
   try {
@@ -386,21 +448,25 @@ function labelsFromOcrResult(result) {
   return words.map(wordToLabel).filter(Boolean);
 }
 
-function imageFileToCanvas(file) {
+function imageFileToCanvas(file, targetSize = null) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = targetSize?.width || image.naturalWidth || 1;
+      canvas.height = targetSize?.height || image.naturalHeight || 1;
       const context = canvas.getContext("2d", { willReadFrequently: true });
-      context.drawImage(image, 0, 0);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(image.src);
       resolve(canvas);
     };
     image.onerror = reject;
     image.src = URL.createObjectURL(file);
   });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
 function makeOcrCanvas(source, mode) {

@@ -19,6 +19,7 @@ from .georeference import (
 )
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
+from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -82,8 +83,12 @@ def build_boundary(
     emit_progress(
         progress,
         stage="inspect",
-        message="Reading image metadata",
+        message="Rasterizing SVG upload" if is_svg_image(image_path) else "Reading image metadata",
         percent=5,
+    )
+    image_path = normalize_image_for_processing(
+        image_path,
+        output_dir=debug_path or output_path.parent,
     )
     with Image.open(image_path) as img:
         width, height = img.size

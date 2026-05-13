@@ -22,6 +22,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: GIS",
 ]
 dependencies = [
+  "cairosvg>=2.9",
   "numpy>=2.0",
   "opencv-python-headless>=4.10",
   "pillow>=10.0",
