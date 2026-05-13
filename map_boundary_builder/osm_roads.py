@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -42,6 +43,7 @@ def refine_transform_with_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
+    road_points = sample_road_points(road_points, max_points=12000)
     feature_distance = image_feature_distance(rgb)
     base_score, base_count = score_georeference_transform(road_points, feature_distance, initial)
     if base_count < 1000:
@@ -174,6 +176,7 @@ def georeference_from_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
+    road_points = sample_road_points(road_points, max_points=12000)
     feature_distance = image_feature_distance(rgb)
 
     west, south, east, north = city_center.bbox
@@ -279,6 +282,14 @@ def score_georeference_transform(
     return float(scores.mean()), int(keep.sum())
 
 
+def sample_road_points(road_points: np.ndarray, *, max_points: int) -> np.ndarray:
+    if len(road_points) <= max_points:
+        return road_points
+    step = int(np.ceil(len(road_points) / max_points))
+    return road_points[::step]
+
+
+@lru_cache(maxsize=256)
 def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
     payload = load_overpass_roads(bbox)
     points: list[tuple[float, float]] = []
@@ -295,6 +306,7 @@ def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
     return arr
 
 
+@lru_cache(maxsize=256)
 def load_road_segments(bbox: tuple[float, float, float, float]) -> np.ndarray:
     payload = load_overpass_roads(bbox)
     segments: list[tuple[float, float, float, float, float]] = []
@@ -327,6 +339,7 @@ def sample_line(points: list[tuple[float, float]], spacing_m: float) -> list[tup
     return samples
 
 
+@lru_cache(maxsize=256)
 def load_overpass_roads(bbox: tuple[float, float, float, float]) -> dict[str, object]:
     west, south, east, north = bbox
     cache_path = overpass_cache_file(bbox)

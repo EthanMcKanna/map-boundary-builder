@@ -336,9 +336,10 @@ async function runClientOcr(file) {
     const result = await recognizeImageLabels(file, "Reading map labels in browser", 4, 20);
     labels.push(...labelsFromOcrResult(result));
 
+    let ocrCanvas = null;
     if (countUsefulLabels(labels) < 30) {
-      const canvas = await imageFileToCanvas(file);
-      const enhanced = makeOcrCanvas(canvas, "neutral-dark");
+      ocrCanvas = await imageFileToCanvas(file);
+      const enhanced = makeOcrCanvas(ocrCanvas, "neutral-dark");
       setStatus("Enhancing map labels", 26, "running", {
         step: "labels",
         note: "Trying a higher-contrast OCR pass for faint labels.",
@@ -348,8 +349,8 @@ async function runClientOcr(file) {
     }
 
     if (countUsefulLabels(labels) < 30) {
-      const canvas = await imageFileToCanvas(file);
-      const neutral = makeOcrCanvas(canvas, "neutral");
+      ocrCanvas ||= await imageFileToCanvas(file);
+      const neutral = makeOcrCanvas(ocrCanvas, "neutral");
       setStatus("Checking map labels again", 34, "running", {
         step: "labels",
         note: "One final pass helps sparse or low-contrast screenshots.",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import csv
 import json
@@ -136,8 +137,14 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
         (cv2.resize(dark_ink, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST), 2.0, 2.0),
     ]
     words: list[OcrLabel] = []
-    for variant, scale_x, scale_y in variants:
-        words.extend(run_tesseract_array(variant, scale_x=scale_x, scale_y=scale_y))
+    max_workers = max(1, min(4, len(variants), os.cpu_count() or 1))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(run_tesseract_array, variant, scale_x=scale_x, scale_y=scale_y)
+            for variant, scale_x, scale_y in variants
+        ]
+        for future in futures:
+            words.extend(future.result())
     return words
 
 

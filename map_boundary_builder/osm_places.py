@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -26,6 +27,7 @@ class PlacePoint:
         return lonlat_to_mercator(self.lon, self.lat)
 
 
+@lru_cache(maxsize=256)
 def load_place_points(bbox: tuple[float, float, float, float]) -> list[PlacePoint]:
     payload = load_overpass_places(bbox)
     places: list[PlacePoint] = []
@@ -53,6 +55,7 @@ def load_place_points(bbox: tuple[float, float, float, float]) -> list[PlacePoin
     return places
 
 
+@lru_cache(maxsize=256)
 def load_overpass_places(bbox: tuple[float, float, float, float]) -> dict[str, object]:
     west, south, east, north = bbox
     cache_path = overpass_places_cache_file(bbox)

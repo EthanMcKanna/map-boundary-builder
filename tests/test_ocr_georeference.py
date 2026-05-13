@@ -1,6 +1,6 @@
 import unittest
 
-from map_boundary_builder.georeference import candidate_place_labels
+from map_boundary_builder.georeference import candidate_place_labels, is_reliable_single_token_context, place_query_text
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.ocr import OcrLabel, group_stacked_labels
 from map_boundary_builder.runner import rank_road_context_queries
@@ -39,6 +39,33 @@ class PlaceCandidateTests(unittest.TestCase):
         candidates = candidate_place_labels([*noisy_labels, dallas])
 
         self.assertIn(dallas, candidates)
+
+    def test_place_query_text_removes_noise_and_repairs_aliases(self) -> None:
+        self.assertEqual(place_query_text("edwood City acy"), "Redwood City")
+        self.assertEqual(place_query_text("San Jos"), "San Jose")
+
+    def test_tiny_single_token_places_are_not_direct_contexts(self) -> None:
+        francisco = GeocodeResult(
+            label="Francisco",
+            lon=-87.445,
+            lat=38.334,
+            display_name="Francisco, Gibson County, Indiana, United States",
+            bbox=(-87.4578, 38.3279, -87.4407, 38.3380),
+            importance=0.30,
+            place_type="village",
+        )
+        dallas = GeocodeResult(
+            label="Dallas",
+            lon=-96.7970,
+            lat=32.7767,
+            display_name="Dallas, Dallas County, Texas, United States",
+            bbox=(-97.0000, 32.6000, -96.5500, 33.0500),
+            importance=0.72,
+            place_type="city",
+        )
+
+        self.assertFalse(is_reliable_single_token_context(francisco))
+        self.assertTrue(is_reliable_single_token_context(dallas))
 
 
 class RoadContextRankingTests(unittest.TestCase):

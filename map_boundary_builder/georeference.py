@@ -466,20 +466,32 @@ def georeference_from_label_context(
                     )
                     from .extract import load_rgb
 
-                    road_refinement = refine_transform_with_osm_roads(
-                        load_rgb(image_path),
-                        city_center,
-                        geo_transform,
-                        lock_scale=should_lock_road_refinement_scale(
-                            scale,
-                            len(inliers),
-                            residual_median,
-                            residual_p90,
-                            control_spread(pixel_positions(controls, inliers)),
-                            width,
-                            height,
-                        ),
-                    )
+                    spread = control_spread(pixel_positions(controls, inliers))
+                    road_refinement = None
+                    if should_try_road_refinement(
+                        city_context,
+                        scale,
+                        len(inliers),
+                        residual_median,
+                        residual_p90,
+                        spread,
+                        width,
+                        height,
+                    ):
+                        road_refinement = refine_transform_with_osm_roads(
+                            load_rgb(image_path),
+                            city_center,
+                            geo_transform,
+                            lock_scale=should_lock_road_refinement_scale(
+                                scale,
+                                len(inliers),
+                                residual_median,
+                                residual_p90,
+                                spread,
+                                width,
+                                height,
+                            ),
+                        )
                     if road_refinement is not None:
                         refined_residuals = control_residuals_for_transform(
                             road_refinement.transform,
@@ -522,8 +534,8 @@ def georeference_from_city_context(
     road_points = load_road_points(search_bbox)
     if len(road_points) < 1200:
         return None
-    if len(road_points) > 12000:
-        step = int(np.ceil(len(road_points) / 12000))
+    if len(road_points) > 7000:
+        step = int(np.ceil(len(road_points) / 7000))
         road_points = road_points[::step]
 
     feature_distance = city_context_feature_distance(rgb, pixel_geometry)
@@ -537,7 +549,7 @@ def georeference_from_city_context(
     city_x, city_y = city_center.mercator
 
     max_image_dim = max(rgb.shape[:2])
-    line_features = city_context_line_features(rgb, pixel_geometry) if max_image_dim <= 900 else None
+    line_features = city_context_line_features(rgb, pixel_geometry) if max_image_dim <= 520 else None
     if line_features is not None:
         line_best = search_city_context_line_candidates(
             rgb.shape[:2],
@@ -701,7 +713,7 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
             evidence=tuple(sorted({member.primary_name for member in members})[:8]),
         )
     )
-    return dedupe_city_contexts(contexts)[:MAX_CITY_CONTEXTS]
+    return rank_city_contexts_for_georeferencing(dedupe_city_contexts(contexts))[:MAX_CITY_CONTEXTS]
 
 
 def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
@@ -717,7 +729,8 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
     query_evidence: dict[str, set[str]] = {}
     used_positions: set[tuple[str, int, int]] = set()
     for label in labels[:MAX_CITY_INFERENCE_LABELS]:
-        tokens = place_tokens(label.text)
+        query = place_query_text(label.text)
+        tokens = place_tokens(query)
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if len(tokens) > 2:
@@ -729,7 +742,6 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             continue
         used_positions.add(position_key)
         score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
-        query = clean_query_text(label.text)
         query_scores[query] = query_scores.get(query, 0.0) + score
         query_evidence.setdefault(query, set()).add(label.text)
         if len(tokens) == 1:
@@ -743,6 +755,8 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             if not result.bbox:
                 continue
             if not primary_name_matches_label(result.display_name, query):
+                continue
+            if len(place_tokens(query)) == 1 and not is_reliable_single_token_context(result):
                 continue
             if result.place_type.lower() not in ADMIN_CONTEXT_TYPES and not is_broad_context_result(result):
                 continue
@@ -854,6 +868,22 @@ def clean_query_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def place_query_text(value: str) -> str:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for part in re.split(r"[^a-z0-9]+", value.lower()):
+        if len(part) < 3:
+            continue
+        token = OCR_PLACE_TOKEN_ALIASES.get(part, part)
+        if token in CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return " ".join(token.title() for token in tokens)
+
+
 def is_broad_context_result(result: GeocodeResult) -> bool:
     if result.place_type.lower() == "county":
         return False
@@ -865,6 +895,25 @@ def is_broad_context_result(result: GeocodeResult) -> bool:
     west_m, south_m = lonlat_to_mercator(west, south)
     east_m, north_m = lonlat_to_mercator(east, north)
     return max(abs(east_m - west_m), abs(north_m - south_m)) >= 12000.0
+
+
+def is_reliable_single_token_context(result: GeocodeResult) -> bool:
+    span_m = geocode_bbox_span_m(result)
+    place_type = result.place_type.lower()
+    if result.importance >= 0.58:
+        return True
+    if place_type in {"city", "municipality", "region"} and span_m >= 9000.0:
+        return True
+    return span_m >= 18000.0
+
+
+def geocode_bbox_span_m(result: GeocodeResult) -> float:
+    if result.bbox is None:
+        return 0.0
+    west, south, east, north = result.bbox
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
+    return float(max(abs(east_m - west_m), abs(north_m - south_m)))
 
 
 def contexts_from_parent_name(parent_name: str, members: list[LabelGeocodeCandidate]) -> list[CityContext]:
@@ -968,11 +1017,36 @@ def dedupe_city_contexts(contexts: list[CityContext]) -> list[CityContext]:
     return deduped
 
 
+def rank_city_contexts_for_georeferencing(contexts: list[CityContext]) -> list[CityContext]:
+    return sorted(contexts, key=city_context_georef_score, reverse=True)
+
+
+def city_context_georef_score(context: CityContext) -> float:
+    span_m = geocode_bbox_span_m(context.center)
+    place_type = context.center.place_type.lower()
+    display_name = context.center.display_name.lower()
+    score = context.center.importance
+    score += min(4.0, len(context.evidence) * 0.55)
+    score += min(3.5, span_m / 22000.0)
+    if place_type in {"region", "municipality", "borough"}:
+        score += 1.35
+    elif place_type in {"city", "town", "village"}:
+        score += 0.35
+    if span_m < 9000.0:
+        score -= 1.4
+    if any(token in display_name for token in ("school", "district", "campus", "college", "hospital")):
+        score -= 2.2
+    if context.query == "Inferred map area":
+        score += 0.45
+    return score
+
+
 def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandidate]:
     candidates: list[LabelGeocodeCandidate] = []
     used_text: set[str] = set()
     for label in rank_geocode_labels(labels)[:MAX_CITY_INFERENCE_LABELS]:
-        tokens = place_tokens(label.text)
+        query = place_query_text(label.text)
+        tokens = place_tokens(query)
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if len(tokens) > 4:
@@ -983,8 +1057,8 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
         if text_key in used_text:
             continue
         used_text.add(text_key)
-        for result in geocode(label.text, limit=2):
-            if primary_name_matches_label(result.display_name, label.text):
+        for result in geocode(query, limit=2):
+            if primary_name_matches_label(result.display_name, query):
                 candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
         if has_reliable_candidate_cluster(candidates):
             break
@@ -1075,8 +1149,8 @@ def city_context_feature_distance(rgb: np.ndarray, pixel_geometry) -> np.ndarray
 def city_context_feature_points(rgb: np.ndarray, pixel_geometry) -> np.ndarray:
     feature_mask = city_context_feature_mask(rgb, pixel_geometry)
     points = np.column_stack(np.where(feature_mask))
-    if len(points) > 1200:
-        step = int(np.ceil(len(points) / 1200))
+    if len(points) > 800:
+        step = int(np.ceil(len(points) / 800))
         points = points[::step]
     return points
 
@@ -1109,17 +1183,17 @@ def search_city_context_candidates(
     seed: tuple[float, GeoreferenceTransform] | None = None,
 ) -> tuple[float, GeoreferenceTransform] | None:
     if coarse:
-        offset_values = np.linspace(-0.65 * city_radius_m, 0.65 * city_radius_m, 9)
-        scale_values = base_scale * np.geomspace(0.18, 0.46, 9)
-        rotation_values = np.deg2rad(np.linspace(-8.0, 8.0, 5))
+        offset_values = np.linspace(-0.65 * city_radius_m, 0.65 * city_radius_m, 5)
+        scale_values = base_scale * np.geomspace(0.18, 0.46, 5)
+        rotation_values = np.deg2rad(np.linspace(-8.0, 8.0, 3))
         centers = [(city_x + dx, city_y + dy) for dx in offset_values for dy in offset_values]
     else:
         assert seed is not None
         _, seed_transform = seed
         seed_tx, seed_ty = projected_center_for_transform(seed_transform, center_pixel_x, center_pixel_y)
-        offset_values = np.linspace(-0.18 * city_radius_m, 0.18 * city_radius_m, 5)
-        scale_values = seed_transform.meters_per_pixel * np.linspace(0.92, 1.08, 5)
-        rotation_values = seed_transform.rotation_radians + np.deg2rad(np.linspace(-3.0, 3.0, 5))
+        offset_values = np.linspace(-0.18 * city_radius_m, 0.18 * city_radius_m, 3)
+        scale_values = seed_transform.meters_per_pixel * np.linspace(0.92, 1.08, 3)
+        rotation_values = seed_transform.rotation_radians + np.deg2rad(np.linspace(-3.0, 3.0, 3))
         centers = [(seed_tx + dx, seed_ty + dy) for dx in offset_values for dy in offset_values]
 
     best: tuple[float, GeoreferenceTransform] | None = None
@@ -1324,7 +1398,7 @@ def search_city_context_line_candidates(
         return None
 
     broad_scored = score_line_candidate_subset(
-        select_line_candidate_subset(broad_candidates, per_metric=180, cap=520, per_bucket=4),
+        select_line_candidate_subset(broad_candidates, per_metric=120, cap=320, per_bucket=3),
         road_segments,
         line_features,
         shape,
@@ -1341,7 +1415,7 @@ def search_city_context_line_candidates(
         base_scale,
     )
     fine_scored = score_line_candidate_subset(
-        select_line_candidate_subset(fine_candidates, per_metric=260, cap=560, per_bucket=6),
+        select_line_candidate_subset(fine_candidates, per_metric=140, cap=360, per_bucket=4),
         road_segments,
         line_features,
         shape,
@@ -1368,9 +1442,9 @@ def collect_city_context_candidates(
     center_pixel_y: float,
 ) -> list[CityContextCandidate]:
     candidates: list[CityContextCandidate] = []
-    offset_values = np.linspace(-0.65 * city_radius_m, 0.65 * city_radius_m, 9)
-    scale_values = base_scale * np.geomspace(0.18, 0.46, 9)
-    rotation_values = np.deg2rad(np.linspace(-8.0, 8.0, 5))
+    offset_values = np.linspace(-0.65 * city_radius_m, 0.65 * city_radius_m, 5)
+    scale_values = base_scale * np.geomspace(0.18, 0.46, 5)
+    rotation_values = np.deg2rad(np.linspace(-8.0, 8.0, 3))
     for scale in scale_values:
         if scale <= 0:
             continue
@@ -1416,11 +1490,11 @@ def collect_fine_line_candidates(
     for seed in seeds:
         seed_transform = seed.transform
         origin_x, origin_y = lonlat_to_mercator(seed_transform.lon, seed_transform.lat)
-        for scale_multiplier in np.linspace(0.86, 1.12, 7):
+        for scale_multiplier in np.linspace(0.86, 1.12, 3):
             scale = seed_transform.meters_per_pixel * float(scale_multiplier)
-            for rotation in seed_transform.rotation_radians + np.deg2rad(np.linspace(-3.0, 3.0, 7)):
-                for offset_x in np.linspace(-2400.0, 2400.0, 9):
-                    for offset_y in np.linspace(-2400.0, 2400.0, 9):
+            for rotation in seed_transform.rotation_radians + np.deg2rad(np.linspace(-3.0, 3.0, 3)):
+                for offset_x in np.linspace(-2400.0, 2400.0, 3):
+                    for offset_y in np.linspace(-2400.0, 2400.0, 3):
                         lon, lat = mercator_to_lonlat(origin_x + float(offset_x), origin_y + float(offset_y))
                         key = (
                             round((origin_x + float(offset_x)) / 200.0),
@@ -1647,17 +1721,35 @@ def directional_nearest_score(
 
 
 def build_control_points(labels: list[OcrLabel], city: str, city_center: GeocodeResult) -> list[ControlPoint]:
+    geocoded_controls = build_geocoded_control_points(labels, city, city_center, stop_after_controls=4)
+    if has_decisive_control_fit(geocoded_controls):
+        return geocoded_controls
+
     place_controls = build_osm_place_control_points(labels, city_center)
     if len(place_controls) >= 3:
         return place_controls
+    return geocoded_controls
 
+
+def build_geocoded_control_points(
+    labels: list[OcrLabel],
+    city: str,
+    city_center: GeocodeResult,
+    *,
+    stop_after_controls: int | None = None,
+) -> list[ControlPoint]:
     city_x, city_y = city_center.mercator
     max_distance_m = 70000.0
     controls: list[ControlPoint] = []
     used_text: set[tuple[str, ...]] = set()
     city_tokens = place_tokens(city)
     for label in rank_geocode_labels(labels)[:MAX_GEOCODED_LABELS]:
-        text_tokens = place_tokens(label.text)
+        query_text = place_query_text(label.text)
+        text_tokens = place_tokens(query_text)
+        if not text_tokens or text_tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if len(text_tokens) > 4:
+            continue
         text_key = tuple(sorted(text_tokens))
         if text_key in used_text:
             continue
@@ -1667,15 +1759,17 @@ def build_control_points(labels: list[OcrLabel], city: str, city_center: Geocode
             continue
         if len(text_tokens) == 1 and next(iter(text_tokens)) in GENERIC_SINGLE_TOKENS:
             continue
-        queries = [f"{label.text}, {context}" for context in geocode_contexts(city, city_center)]
-        queries.append(label.text)
-        if city.lower() in label.text.lower():
-            queries.append(label.text)
+        if not is_geocodeable_control_query(text_tokens, city_tokens):
+            continue
+        queries = [f"{query_text}, {context}" for context in geocode_contexts(city, city_center)]
+        queries.append(query_text)
+        if city.lower() in query_text.lower():
+            queries.append(query_text)
         best: GeocodeResult | None = None
         best_score = -1.0
         for query in [q for q in queries if q]:
             for candidate in geocode(query, limit=3):
-                if not primary_name_matches_label(candidate.display_name, label.text):
+                if not primary_name_matches_label(candidate.display_name, query_text):
                     continue
                 cand_x, cand_y = candidate.mercator
                 distance = sqrt((cand_x - city_x) ** 2 + (cand_y - city_y) ** 2)
@@ -1687,7 +1781,31 @@ def build_control_points(labels: list[OcrLabel], city: str, city_center: Geocode
                     best_score = score
         if best is not None:
             add_or_replace_control(controls, ControlPoint(label=label, geocode=best))
+            if stop_after_controls is not None and len(controls) >= stop_after_controls:
+                break
     return controls
+
+
+def has_decisive_control_fit(controls: list[ControlPoint]) -> bool:
+    if len(controls) < 5:
+        return False
+    fit = robust_similarity_fit(controls)
+    if fit is None:
+        return False
+    _scale, rotation, _tx, _ty, inliers, residuals = fit
+    if len(inliers) < 5 or abs(rotation) > 0.35:
+        return False
+    residual_values = np.array([residuals[i] for i in inliers], dtype=float)
+    if residual_values.size == 0:
+        return False
+    return float(np.median(residual_values)) <= 1200.0 and float(np.percentile(residual_values, 90)) <= 3000.0
+
+
+def is_geocodeable_control_query(tokens: set[str], city_tokens: set[str]) -> bool:
+    if tokens == city_tokens or bool(tokens & city_tokens):
+        return True
+    informative_tokens = tokens - GENERIC_SINGLE_TOKENS
+    return any(len(token) >= 5 for token in informative_tokens)
 
 
 def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeResult) -> list[ControlPoint]:
@@ -1700,10 +1818,15 @@ def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeR
 
     city_x, city_y = city_center.mercator
     max_distance_m = max_place_distance_m(search_bbox, city_center)
+    indexed_places = [
+        (place, place_tokens(place.name), place.mercator)
+        for place in places
+        if place_tokens(place.name)
+    ]
     best_by_place: dict[tuple[str, float, float], tuple[float, ControlPoint]] = {}
     used_label_keys: set[tuple[str, int, int]] = set()
     for label in candidate_place_labels(labels):
-        label_tokens = place_tokens(label.text)
+        label_tokens = place_tokens(place_query_text(label.text))
         if not label_tokens or len(label_tokens) > 3:
             continue
         if len(label_tokens) == 1 and next(iter(label_tokens)) in GENERIC_SINGLE_TOKENS:
@@ -1713,14 +1836,10 @@ def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeR
             continue
         used_label_keys.add(label_key)
 
-        for place in places:
-            place_tokens_set = place_tokens(place.name)
-            if not place_tokens_set:
-                continue
+        for place, place_tokens_set, (place_x, place_y) in indexed_places:
             match_score = place_match_score(label_tokens, place_tokens_set)
             if match_score <= 0:
                 continue
-            place_x, place_y = place.mercator
             distance_m = sqrt((place_x - city_x) ** 2 + (place_y - city_y) ** 2)
             if distance_m > max_distance_m:
                 continue
@@ -1759,7 +1878,7 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     seen: set[tuple[str, int, int]] = set()
 
     def add(label: OcrLabel) -> None:
-        tokens = place_tokens(label.text)
+        tokens = place_tokens(place_query_text(label.text))
         if not tokens:
             return
         key = (" ".join(sorted(tokens)), round(label.x / 12), round(label.y / 12))
@@ -1781,7 +1900,7 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
         reverse=True,
     )
     for label in concise_labels:
-        tokens = place_tokens(label.text)
+        tokens = place_tokens(place_query_text(label.text))
         if not tokens or len(tokens) > 2:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
@@ -1845,7 +1964,7 @@ def rank_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     return sorted(
         labels,
         key=lambda label: (
-            token_quality(place_tokens(label.text)),
+            token_quality(place_tokens(place_query_text(label.text))),
             label.confidence,
             -len(label.text),
         ),
@@ -1857,7 +1976,7 @@ def rank_geocode_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     return sorted(
         labels,
         key=lambda label: (
-            min(2, len(place_tokens(label.text))),
+            min(2, len(place_tokens(place_query_text(label.text)))),
             label.confidence,
             -len(label.text),
         ),
@@ -1901,7 +2020,7 @@ def add_or_replace_control(controls: list[ControlPoint], candidate: ControlPoint
 
 
 def control_quality(control: ControlPoint) -> tuple[int, float]:
-    return len(place_tokens(control.label.text)), control.label.confidence
+    return len(place_tokens(place_query_text(control.label.text))), control.label.confidence
 
 
 def geocode_contexts(city: str, city_center: GeocodeResult) -> list[str]:
@@ -2005,6 +2124,32 @@ def robust_similarity_fit(
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
     return best
+
+
+def should_try_road_refinement(
+    city_context: CityContext,
+    meters_per_pixel: float,
+    inlier_count: int,
+    residual_median_m: float,
+    residual_p90_m: float,
+    spread: float,
+    width: int,
+    height: int,
+) -> bool:
+    if city_context.query == "Inferred map area" or geocode_bbox_span_m(city_context.center) >= 85000.0:
+        return False
+    image_area = max(float(width * height), 1.0)
+    if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 2200.0:
+        return False
+    if (
+        meters_per_pixel >= 20.0
+        and inlier_count >= 8
+        and residual_median_m <= 1600.0
+        and residual_p90_m <= 3200.0
+        and spread >= image_area * 0.08
+    ):
+        return False
+    return True
 
 
 def should_lock_road_refinement_scale(

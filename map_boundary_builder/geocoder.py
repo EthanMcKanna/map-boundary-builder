@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -34,7 +35,13 @@ def geocode(query: str, *, limit: int = 3, country_codes: str = "us") -> list[Ge
     query = query.strip()
     if not query:
         return []
+    requested_limit = max(1, int(limit))
+    cache_limit = max(3, requested_limit)
+    return list(_geocode_cached(query, cache_limit, country_codes))[:requested_limit]
 
+
+@lru_cache(maxsize=4096)
+def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[GeocodeResult, ...]:
     cache_path = cache_file(query, limit, country_codes)
     if cache_path.exists():
         payload = json.loads(cache_path.read_text())
@@ -64,8 +71,8 @@ def geocode(query: str, *, limit: int = 3, country_codes: str = "us") -> list[Ge
 
     results = parse_nominatim_payload(payload, query)
     if results:
-        return results
-    return geocode_photon(query, limit=limit, country_codes=country_codes)
+        return tuple(results)
+    return tuple(geocode_photon(query, limit=limit, country_codes=country_codes))
 
 
 def parse_nominatim_payload(payload: object, query: str) -> list[GeocodeResult]:

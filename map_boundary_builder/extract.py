@@ -35,8 +35,18 @@ def load_rgb(path: str | Path) -> np.ndarray:
     return np.clip(composited, 0, 255).astype(np.uint8)
 
 
-def extract_service_area(image_path: str | Path, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
-    rgb = load_rgb(image_path)
+def extract_service_area(
+    image_path: str | Path,
+    simplify_px: float = DEFAULT_SIMPLIFY_PX,
+    *,
+    rgb: np.ndarray | None = None,
+) -> ExtractionResult:
+    if rgb is None:
+        rgb = load_rgb(image_path)
+    return extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
+
+
+def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
     style = classify_style(rgb)
     if style == "bright-blue":
         raw_mask = blue_service_mask(rgb)
@@ -348,9 +358,11 @@ def write_mask_png(mask: np.ndarray, path: str | Path) -> None:
     Image.fromarray((mask.astype(np.uint8) * 255), mode="L").save(path)
 
 
-def write_overlay_png(rgb_path: str | Path, mask: np.ndarray, path: str | Path) -> None:
+def write_overlay_png(rgb_path: str | Path, mask: np.ndarray, path: str | Path, *, rgb: np.ndarray | None = None) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    rgb = load_rgb(rgb_path).astype(np.float32)
+    if rgb is None:
+        rgb = load_rgb(rgb_path)
+    rgb = rgb.astype(np.float32)
     overlay_color = np.array([255, 60, 0], dtype=np.float32)
     alpha = 0.38
     out = rgb.copy()

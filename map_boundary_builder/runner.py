@@ -22,7 +22,7 @@ from .geojson import feature_collection, write_geojson
 from .ocr import extract_ocr_labels
 
 ProgressCallback = Callable[[dict[str, Any]], None]
-MAX_ROAD_CONTEXT_CANDIDATES = 3
+MAX_ROAD_CONTEXT_CANDIDATES = 1
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,8 @@ def build_boundary(
         percent=18,
         details={"width": width, "height": height},
     )
-    extraction = extract_service_area(image_path, simplify_px=opts.simplify_px)
+    rgb = load_rgb(image_path)
+    extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
     emit_progress(
         progress,
         stage="extract",
@@ -148,7 +149,7 @@ def build_boundary(
             min_control_points=opts.min_control_points,
         )
 
-    if georef is None:
+    if georef is None and not try_ranked_context_first:
         georef = georeference_from_labels(
             labels,
             str(image_path),
@@ -165,6 +166,7 @@ def build_boundary(
             image_path,
             extraction.pixel_geometry,
             road_context_candidates,
+            rgb=rgb,
             progress=progress,
         )
     if georef is None:
@@ -226,7 +228,7 @@ def build_boundary(
         mask_path = debug_path / f"{stem}.mask.png"
         overlay_path = debug_path / f"{stem}.overlay.png"
         write_mask_png(extraction.mask, mask_path)
-        write_overlay_png(image_path, extraction.mask, overlay_path)
+        write_overlay_png(image_path, extraction.mask, overlay_path, rgb=rgb)
 
     summary = build_summary(
         data,
@@ -262,6 +264,7 @@ def georeference_from_road_contexts(
     pixel_geometry,
     road_context_candidates: list[str],
     *,
+    rgb,
     progress: ProgressCallback | None,
 ):
     if road_context_candidates:
@@ -272,7 +275,6 @@ def georeference_from_road_contexts(
             percent=62,
             details={"candidates": road_context_candidates},
         )
-    rgb = load_rgb(image_path)
     for candidate in road_context_candidates:
         georef = georeference_from_city_context(rgb, candidate, pixel_geometry)
         if georef is not None:
@@ -320,12 +322,20 @@ def road_contexts_from_labels(city: str | None, labels: list[Any]) -> list[CityC
     if city is not None:
         return []
 
-    contexts = [context for context in infer_city_contexts(labels) if context.query != "Inferred map area"]
+    contexts = infer_city_contexts(labels)
     return rank_road_contexts(contexts)[:MAX_ROAD_CONTEXT_CANDIDATES]
 
 
 def road_context_queries(contexts: list[CityContext]) -> list[str]:
-    return [context.query for context in contexts if context.query.strip()]
+    queries: list[str] = []
+    seen: set[str] = set()
+    for context in contexts:
+        query = context.query.strip()
+        if not query or query == "Inferred map area" or query in seen:
+            continue
+        seen.add(query)
+        queries.append(query)
+    return queries
 
 
 def should_try_ranked_context_first(
@@ -343,21 +353,25 @@ def rank_road_context_queries(contexts: list[CityContext]) -> list[str]:
 
 
 def rank_road_contexts(contexts: list[CityContext]) -> list[CityContext]:
-    scored: list[tuple[float, str]] = []
-    for context in contexts:
+    scored: list[tuple[float, int, CityContext]] = []
+    for index, context in enumerate(contexts):
         query = context.query.strip()
         if not query:
             continue
-        scored.append((road_context_score(context), query))
+        scored.append((road_context_score(context), -index, context))
 
     ranked: list[CityContext] = []
-    seen: set[str] = set()
-    by_query = {context.query: context for context in contexts}
-    for _, query in sorted(scored, key=lambda item: item[0], reverse=True):
-        if query in seen:
+    seen: set[tuple[str, int, int]] = set()
+    for _, _, context in sorted(scored, key=lambda item: (item[0], item[1]), reverse=True):
+        key = (
+            context.center.display_name.lower(),
+            round(context.center.lon, 3),
+            round(context.center.lat, 3),
+        )
+        if key in seen:
             continue
-        seen.add(query)
-        ranked.append(by_query[query])
+        seen.add(key)
+        ranked.append(context)
     return ranked
 
 
