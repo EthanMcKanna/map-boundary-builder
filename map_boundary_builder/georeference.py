@@ -7,7 +7,6 @@ import re
 
 import cv2
 import numpy as np
-from scipy.spatial import cKDTree
 
 from .geocoder import GeocodeResult, geocode
 from .georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
@@ -236,7 +235,52 @@ class LineFeatureSet:
     midpoints: np.ndarray
     angles: np.ndarray
     weights: np.ndarray
-    tree: cKDTree
+    tree: NearestPointIndex
+
+
+@dataclass(frozen=True)
+class NearestPointIndex:
+    points: np.ndarray
+
+    def query(
+        self,
+        query_points: np.ndarray,
+        *,
+        k: int = 1,
+        distance_upper_bound: float = np.inf,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        query_array = np.asarray(query_points, dtype=float)
+        if query_array.ndim == 1:
+            query_array = query_array.reshape(1, -1)
+        target = np.asarray(self.points, dtype=float)
+        k = max(1, min(int(k), len(target))) if len(target) else 1
+        if len(query_array) == 0:
+            shape = (0,) if k == 1 else (0, k)
+            return np.full(shape, np.inf), np.full(shape, len(target), dtype=int)
+        if len(target) == 0:
+            shape = (len(query_array),) if k == 1 else (len(query_array), k)
+            return np.full(shape, np.inf), np.full(shape, 0, dtype=int)
+
+        distance_rows: list[np.ndarray] = []
+        index_rows: list[np.ndarray] = []
+        for start in range(0, len(query_array), 512):
+            chunk = query_array[start : start + 512]
+            squared = ((chunk[:, None, :] - target[None, :, :]) ** 2).sum(axis=2)
+            if k == 1:
+                indexes = np.argmin(squared, axis=1)
+                distances = np.sqrt(squared[np.arange(len(chunk)), indexes])
+            else:
+                nearest = np.argpartition(squared, kth=k - 1, axis=1)[:, :k]
+                nearest_distances = np.take_along_axis(squared, nearest, axis=1)
+                order = np.argsort(nearest_distances, axis=1)
+                indexes = np.take_along_axis(nearest, order, axis=1)
+                distances = np.sqrt(np.take_along_axis(nearest_distances, order, axis=1))
+            invalid = distances > distance_upper_bound
+            distances = np.where(invalid, np.inf, distances)
+            indexes = np.where(invalid, len(target), indexes)
+            distance_rows.append(distances)
+            index_rows.append(indexes)
+        return np.concatenate(distance_rows, axis=0), np.concatenate(index_rows, axis=0)
 
 
 @dataclass(frozen=True)
@@ -1435,7 +1479,7 @@ def city_context_line_features(rgb: np.ndarray, pixel_geometry) -> LineFeatureSe
         midpoints=midpoint_array,
         angles=np.array(angles, dtype=float),
         weights=np.array(weights, dtype=float),
-        tree=cKDTree(midpoint_array),
+        tree=NearestPointIndex(midpoint_array),
     )
 
 
@@ -1754,7 +1798,7 @@ def directional_line_score(
         line_features.angles,
         max_distance=12.0,
     )
-    road_tree = cKDTree(midpoints)
+    road_tree = NearestPointIndex(midpoints)
     image_to_road = directional_nearest_score(
         line_features.midpoints,
         line_features.angles,
@@ -1770,7 +1814,7 @@ def directional_nearest_score(
     query_midpoints: np.ndarray,
     query_angles: np.ndarray,
     query_weights: np.ndarray,
-    target_tree: cKDTree,
+    target_tree: NearestPointIndex,
     target_angles: np.ndarray,
     *,
     max_distance: float,

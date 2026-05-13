@@ -6,10 +6,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
-from scipy import ndimage
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
-from skimage import morphology
 
 DEFAULT_SIMPLIFY_PX = 6.0
 
@@ -144,7 +142,7 @@ def light_fill_service_mask(rgb: np.ndarray) -> np.ndarray:
 
 
 def remove_edge_connected_components(mask: np.ndarray) -> np.ndarray:
-    labels, count = ndimage.label(mask)
+    labels, count, _stats = connected_components(mask)
     if count == 0:
         return mask
     h, w = mask.shape
@@ -190,11 +188,11 @@ def green_service_fill_mask(
 ) -> np.ndarray | None:
     r, g, _b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     green = (hue >= 55) & (hue <= 90) & (sat >= 45) & (val >= 80) & (g.astype(np.int16) > r.astype(np.int16) + 25)
-    labels, count = ndimage.label(green)
+    labels, count, stats = connected_components(green)
     if count == 0:
         return None
 
-    areas = ndimage.sum(green, labels, index=np.arange(1, count + 1))
+    areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
     largest_label = int(np.argmax(areas) + 1)
     largest_area = float(areas[largest_label - 1])
     h, w = green.shape
@@ -228,7 +226,7 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
     mask = raw_mask.astype(bool)
 
     min_object = max(64, int(mask.size * (0.00001 if style == "bright-blue" else 0.00002)))
-    mask = morphology.remove_small_objects(mask, max_size=max(0, min_object - 1))
+    mask = remove_small_components(mask, min_area=min_object)
 
     close_px = max(7, int(round(min_dim * (0.010 if style == "bright-blue" else 0.006))))
     open_px = max(3, int(round(min_dim * (0.0025 if style == "bright-blue" else 0.0015))))
@@ -241,7 +239,7 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
     mask = mask_u8 > 0
 
     mask = keep_main_components(mask, max_components=4 if style == "bright-blue" else 8)
-    mask = ndimage.binary_fill_holes(mask)
+    mask = fill_binary_holes(mask)
 
     fill_kernel_size = max(9, int(round(min_dim * (0.018 if style == "bright-blue" else 0.012))))
     fill_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (fill_kernel_size | 1, fill_kernel_size | 1))
@@ -252,10 +250,10 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
 
 
 def keep_main_components(mask: np.ndarray, max_components: int) -> np.ndarray:
-    labels, count = ndimage.label(mask)
+    labels, count, stats = connected_components(mask)
     if count == 0:
         return mask
-    areas = ndimage.sum(mask, labels, index=np.arange(1, count + 1))
+    areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
     sorted_labels = np.argsort(areas)[::-1] + 1
     keep: list[int] = []
     max_area = float(areas.max())
@@ -269,23 +267,19 @@ def keep_main_components(mask: np.ndarray, max_components: int) -> np.ndarray:
 def remove_dark_teal_chrome(mask: np.ndarray, style: str) -> np.ndarray:
     if style != "dark-teal":
         return mask
-    labels, count = ndimage.label(mask)
+    labels, count, stats = connected_components(mask)
     if count == 0:
         return mask
 
-    areas = ndimage.sum(mask, labels, index=np.arange(1, count + 1))
+    areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
     max_area = float(areas.max())
     h, w = mask.shape
     cleaned = mask.copy()
 
     for label in range(1, count + 1):
         area = float(areas[label - 1])
-        ys, xs = np.where(labels == label)
-        if len(ys) == 0:
-            continue
-        component_h = int(ys.max() - ys.min() + 1)
-        component_w = int(xs.max() - xs.min() + 1)
-        touches_top = int(ys.min()) == 0
+        _left, top, component_w, component_h, _component_area = stats[label]
+        touches_top = int(top) == 0
         shallow_top_bar = touches_top and component_h <= max(28, int(h * 0.12)) and area <= max_area * 0.35
         tiny_island = area < max(max_area * 0.03, mask.size * 0.005) and (
             component_h <= max(18, int(h * 0.06)) or component_w <= max(18, int(w * 0.10))
@@ -293,6 +287,30 @@ def remove_dark_teal_chrome(mask: np.ndarray, style: str) -> np.ndarray:
         if shallow_top_bar or tiny_island:
             cleaned[labels == label] = False
     return cleaned
+
+
+def connected_components(mask: np.ndarray) -> tuple[np.ndarray, int, np.ndarray]:
+    count, labels, stats, _centroids = cv2.connectedComponentsWithStats(mask.astype(np.uint8), 8)
+    return labels, count - 1, stats
+
+
+def remove_small_components(mask: np.ndarray, *, min_area: int) -> np.ndarray:
+    labels, count, stats = connected_components(mask)
+    if count == 0:
+        return mask
+    keep = np.flatnonzero(stats[:, cv2.CC_STAT_AREA] >= max(1, int(min_area)))
+    keep = keep[keep != 0]
+    if len(keep) == 0:
+        return np.zeros_like(mask, dtype=bool)
+    return np.isin(labels, keep)
+
+
+def fill_binary_holes(mask: np.ndarray) -> np.ndarray:
+    padded = np.pad(mask.astype(bool), 1, mode="constant", constant_values=False)
+    background = (~padded).astype(np.uint8) * 255
+    cv2.floodFill(background, None, (0, 0), 0)
+    holes = background[1:-1, 1:-1] > 0
+    return mask | holes
 
 
 def mask_to_geometry(mask: np.ndarray, simplify_px: float) -> tuple[Polygon | MultiPolygon, int]:
