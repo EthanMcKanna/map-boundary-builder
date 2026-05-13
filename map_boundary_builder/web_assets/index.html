@@ -116,10 +116,12 @@
           <div class="pane active" id="inputPane" data-pane="input">
             <label id="dropZone" class="drop-zone primary-drop" data-drop-target for="imageInput">
               <input id="imageInput" name="image" type="file" accept="image/*" form="runForm" />
-              <span class="drop-mark" aria-hidden="true">+</span>
-              <span class="eyebrow">Image Upload</span>
-              <strong id="dropTitle">Drop map screenshot</strong>
-              <span id="dropMeta">PNG, JPG, WebP, TIFF, SVG</span>
+              <span class="drop-mark" aria-hidden="true"></span>
+              <span class="drop-copy">
+                <span class="eyebrow drop-eyebrow">Image Upload</span>
+                <strong id="dropTitle" class="drop-title">Drop map screenshot</strong>
+                <span id="dropMeta" class="drop-meta">PNG, JPG, WebP, TIFF, SVG</span>
+              </span>
             </label>
             <img id="inputPreview" alt="Uploaded map screenshot preview" />
           </div>

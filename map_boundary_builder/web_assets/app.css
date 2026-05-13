@@ -177,7 +177,7 @@ textarea,
 .drop-zone {
   position: relative;
   display: grid;
-  gap: 8px;
+  gap: 14px;
   min-height: 100%;
   align-content: center;
   justify-items: center;
@@ -210,25 +210,52 @@ textarea,
 .drop-zone strong {
   overflow-wrap: anywhere;
   font-size: 1.75rem;
-  line-height: 1.05;
+  line-height: 1.12;
+  text-wrap: balance;
 }
 
-.drop-zone span:last-child {
+.drop-copy {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  max-width: min(100%, 34rem);
+}
+
+.drop-eyebrow {
+  line-height: 1.1;
+}
+
+.drop-title {
+  display: block;
+  margin-top: 3px;
+}
+
+.drop-meta {
   color: var(--muted);
+  line-height: 1.25;
+  margin-top: 2px;
+  text-wrap: balance;
 }
 
 .drop-mark {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 64px;
+  height: 64px;
   place-items: center;
   border: 2px solid var(--ink);
+  border-radius: 8px;
   background: var(--gold);
   box-shadow: 5px 5px 0 var(--ink);
-  color: var(--ink);
-  font-size: 2rem;
-  font-weight: 900;
-  line-height: 1;
+  overflow: hidden;
+  padding: 7px;
+}
+
+.drop-mark::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url("/static/drop-map-screenshot-icon.png") center / contain no-repeat;
 }
 
 .eyebrow {
