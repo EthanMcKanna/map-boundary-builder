@@ -771,10 +771,15 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
     direct_contexts = direct_city_contexts_from_labels(inference_labels)
+    candidates = geocoded_label_candidates(inference_labels)
     if should_use_direct_city_contexts(direct_contexts):
+        expanded_contexts = expanded_contexts_from_label_cluster(candidates, direct_contexts)
+        if expanded_contexts:
+            return rank_city_contexts_for_georeferencing(
+                dedupe_city_contexts([*expanded_contexts, *direct_contexts])
+            )[:MAX_CITY_CONTEXTS]
         return direct_contexts
 
-    candidates = geocoded_label_candidates(inference_labels)
     if not candidates:
         return prominent_contexts_from_labels(inference_labels)
 
@@ -822,6 +827,60 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
         )
     )
     return rank_city_contexts_for_georeferencing(dedupe_city_contexts(contexts))[:MAX_CITY_CONTEXTS]
+
+
+def expanded_contexts_from_label_cluster(
+    candidates: list[LabelGeocodeCandidate],
+    direct_contexts: list[CityContext],
+) -> list[CityContext]:
+    if not candidates or not direct_contexts:
+        return []
+    direct_context = direct_contexts[0]
+    members = best_candidate_cluster(candidates)
+    if not members or not has_enough_context_members(members):
+        return []
+    if not label_cluster_extends_beyond_context(direct_context, members):
+        return []
+
+    contexts: list[CityContext] = []
+    parent_name = choose_parent_component(members)
+    if parent_name:
+        contexts.extend(contexts_from_parent_name(parent_name, members))
+    synthetic = synthetic_context_from_members(members, parent_name)
+    if synthetic is not None:
+        contexts.insert(0, synthetic)
+    return contexts
+
+
+def label_cluster_extends_beyond_context(
+    context: CityContext,
+    members: list[LabelGeocodeCandidate],
+) -> bool:
+    bbox = context.center.bbox
+    if bbox is None or len(members) < 4:
+        return False
+    unique_names = {member.primary_name.lower() for member in members}
+    if len(unique_names) < 3:
+        return False
+
+    west, south, east, north = bbox
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
+    min_x, max_x = sorted((west_m, east_m))
+    min_y, max_y = sorted((south_m, north_m))
+    context_span = max(max_x - min_x, max_y - min_y)
+    padding = max(1500.0, context_span * 0.06)
+
+    outside = 0
+    for member in members:
+        x, y = member.mercator
+        if x < min_x - padding or x > max_x + padding or y < min_y - padding or y > max_y + padding:
+            outside += 1
+    if outside == 0:
+        return False
+
+    member_span = cluster_spread_m(members)
+    return outside >= 2 or member_span >= max(14000.0, context_span * 1.22)
 
 
 def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:

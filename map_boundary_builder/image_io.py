@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PIL import Image
+
 
 RASTER_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 SVG_IMAGE_EXTENSIONS = {".svg", ".svgz"}
@@ -17,14 +19,20 @@ def safe_image_extension(filename: str) -> str:
 
 def normalize_image_for_processing(path: str | Path, *, output_dir: str | Path | None = None) -> Path:
     image_path = Path(path)
-    if not is_svg_image(image_path):
-        return image_path
-
     target_dir = Path(output_dir) if output_dir is not None else image_path.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / f"{image_path.stem}.raster.png"
-    rasterize_svg_to_png(image_path, target_path)
-    return target_path
+    if is_svg_image(image_path):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / f"{image_path.stem}.raster.png"
+        rasterize_svg_to_png(image_path, target_path)
+        return target_path
+
+    if raster_has_transparency(image_path):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / f"{image_path.stem}.opaque.png"
+        composite_raster_to_opaque(image_path, target_path)
+        return target_path
+
+    return image_path
 
 
 def is_svg_image(path: str | Path) -> bool:
@@ -36,6 +44,29 @@ def is_svg_image(path: str | Path) -> bool:
     except OSError:
         return False
     return (head.startswith(b"<?xml") and b"<svg" in head[:256]) or head.startswith(b"<svg")
+
+
+def raster_has_transparency(path: str | Path) -> bool:
+    image_path = Path(path)
+    if image_path.suffix.lower() not in RASTER_IMAGE_EXTENSIONS:
+        return False
+    try:
+        with Image.open(image_path) as image:
+            if image.mode in {"RGBA", "LA"}:
+                alpha = image.getchannel("A")
+                return alpha.getextrema()[0] < 255
+            if image.mode == "P" and "transparency" in image.info:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def composite_raster_to_opaque(source_path: Path, target_path: Path) -> None:
+    with Image.open(source_path).convert("RGBA") as image:
+        background = Image.new("RGBA", image.size, (255, 255, 255, 255))
+        background.alpha_composite(image)
+        background.convert("RGB").save(target_path)
 
 
 def rasterize_svg_to_png(source_path: Path, target_path: Path) -> None:

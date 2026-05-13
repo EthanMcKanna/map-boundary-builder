@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from map_boundary_builder.georeference import candidate_place_labels, is_reliable_single_token_context, place_query_text
+from map_boundary_builder.georeference import candidate_place_labels, infer_city_contexts, is_reliable_single_token_context, place_query_text
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.ocr import OcrLabel, group_stacked_labels, rapidocr_items_to_labels
 from map_boundary_builder.runner import rank_road_context_queries
@@ -88,6 +89,81 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertFalse(is_reliable_single_token_context(francisco))
         self.assertTrue(is_reliable_single_token_context(dallas))
+
+    def test_direct_city_context_expands_when_labels_span_adjacent_places(self) -> None:
+        labels = [
+            OcrLabel("Miami", x=1300, y=1500, width=160, height=50, confidence=98),
+            OcrLabel("Miami Gardens", x=1060, y=385, width=120, height=50, confidence=96),
+            OcrLabel("South Miami", x=800, y=1890, width=160, height=28, confidence=96),
+            OcrLabel("Coral Gables", x=930, y=1630, width=170, height=28, confidence=96),
+            OcrLabel("Coconut Grove", x=1080, y=1710, width=150, height=28, confidence=96),
+        ]
+
+        def fake_geocode(query: str, *, limit: int = 3, country_codes: str = "us"):
+            results = {
+                "Miami": [
+                    GeocodeResult(
+                        label=query,
+                        lon=-80.1936,
+                        lat=25.7742,
+                        display_name="Miami, Miami-Dade County, Florida, United States",
+                        bbox=(-80.31976, 25.7090517, -80.139157, 25.8557827),
+                        importance=0.73,
+                        place_type="city",
+                    )
+                ],
+                "Miami Gardens": [
+                    GeocodeResult(
+                        label=query,
+                        lon=-80.2456,
+                        lat=25.9420,
+                        display_name="Miami Gardens, Miami-Dade County, Florida, United States",
+                        bbox=(-80.31, 25.89, -80.18, 25.98),
+                        importance=0.55,
+                        place_type="city",
+                    )
+                ],
+                "South Miami": [
+                    GeocodeResult(
+                        label=query,
+                        lon=-80.2934,
+                        lat=25.7076,
+                        display_name="South Miami, Miami-Dade County, Florida, United States",
+                        bbox=(-80.32, 25.69, -80.27, 25.73),
+                        importance=0.55,
+                        place_type="city",
+                    )
+                ],
+                "Coral Gables": [
+                    GeocodeResult(
+                        label=query,
+                        lon=-80.2585,
+                        lat=25.7331,
+                        display_name="Coral Gables, Miami-Dade County, Florida, United States",
+                        bbox=(-80.32, 25.69, -80.22, 25.77),
+                        importance=0.55,
+                        place_type="city",
+                    )
+                ],
+                "Coconut Grove": [
+                    GeocodeResult(
+                        label=query,
+                        lon=-80.2570,
+                        lat=25.7126,
+                        display_name="Coconut Grove, Miami, Miami-Dade County, Florida, United States",
+                        bbox=(-80.28, 25.69, -80.23, 25.74),
+                        importance=0.45,
+                        place_type="neighbourhood",
+                    )
+                ],
+            }
+            return results.get(query, [])[:limit]
+
+        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+            contexts = infer_city_contexts(labels)
+
+        self.assertGreater(contexts[0].center.bbox[3], 25.94)
+        self.assertTrue(any(context.center.display_name.startswith("Miami,") for context in contexts[1:]))
 
 
 class RoadContextRankingTests(unittest.TestCase):

@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image
+
 from map_boundary_builder.extract import load_rgb
 from map_boundary_builder.image_io import normalize_image_for_processing, safe_image_extension
 
@@ -29,6 +31,21 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(image_path.suffix, ".png")
             self.assertEqual(rgb.shape, (8, 12, 3))
             self.assertGreater(int(rgb[:, :, 2].max()), 200)
+
+    def test_transparent_png_is_composited_before_processing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            png_path = workdir / "circle.png"
+            image = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+            image.putpixel((1, 1), (0, 128, 255, 255))
+            image.save(png_path)
+
+            image_path = normalize_image_for_processing(png_path, output_dir=workdir)
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(image_path.name, "circle.opaque.png")
+            self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
+            self.assertEqual(tuple(rgb[1, 1]), (0, 128, 255))
 
 
 if __name__ == "__main__":
