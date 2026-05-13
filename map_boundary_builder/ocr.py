@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 import csv
-import json
 import os
 import re
 import shutil
@@ -44,49 +43,6 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
 
 def tesseract_available() -> bool:
     return shutil.which("tesseract") is not None
-
-
-def parse_client_ocr_labels(raw: str | None) -> list[OcrLabel] | None:
-    if not raw:
-        return None
-    try:
-        payload = json.loads(raw)
-    except Exception:
-        return None
-    if not isinstance(payload, list):
-        return None
-
-    words: list[OcrLabel] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        text = clean_text(str(item.get("text", "")))
-        if not is_useful_text(text):
-            continue
-        try:
-            width = float(item.get("width", 0))
-            height = float(item.get("height", 0))
-            if width <= 0 or height <= 0:
-                continue
-            words.append(
-                OcrLabel(
-                    text=text,
-                    x=float(item["x"]),
-                    y=float(item["y"]),
-                    width=width,
-                    height=height,
-                    confidence=float(item.get("confidence", 50)),
-                )
-            )
-        except Exception:
-            continue
-    words = dedupe_labels(words)
-    if not words:
-        return None
-    labels = list(words)
-    labels.extend(group_line_labels(words))
-    labels.extend(group_stacked_labels(words))
-    return dedupe_labels(labels)
 
 
 def run_tesseract_words(image_path: str | Path) -> list[OcrLabel]:

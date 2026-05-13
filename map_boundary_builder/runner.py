@@ -72,7 +72,6 @@ def build_boundary(
     debug_dir: str | Path | None = None,
     options: BoundaryBuildOptions | None = None,
     progress: ProgressCallback | None = None,
-    ocr_labels: list[Any] | None = None,
 ) -> BoundaryBuildResult:
     opts = options or BoundaryBuildOptions()
     image_path = Path(image_path)
@@ -128,10 +127,10 @@ def build_boundary(
     emit_progress(
         progress,
         stage="ocr",
-        message="Reading map labels on server" if ocr_labels is None else "Using supplied map labels",
+        message="Reading map labels on server",
         percent=44,
     )
-    labels = list(ocr_labels) if ocr_labels is not None else extract_ocr_labels(str(image_path))
+    labels = extract_ocr_labels(str(image_path))
     georef = fit_georeference(
         labels,
         image_path,
@@ -146,30 +145,6 @@ def build_boundary(
         label_y_max=label_y_max,
         progress=progress,
     )
-    if georef is None and ocr_labels is not None:
-        emit_progress(
-            progress,
-            stage="ocr",
-            message="Retrying with server-side OCR",
-            percent=58,
-        )
-        server_labels = extract_ocr_labels(str(image_path))
-        if server_labels:
-            labels = merge_ocr_labels(server_labels, labels)
-            georef = fit_georeference(
-                labels,
-                image_path,
-                extraction.pixel_geometry,
-                rgb=rgb,
-                city_input=city_input,
-                width=width,
-                height=height,
-                coverage_ratio=extraction.coverage_ratio,
-                min_control_points=opts.min_control_points,
-                label_y_min=label_y_min,
-                label_y_max=label_y_max,
-                progress=progress,
-            )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
@@ -347,18 +322,6 @@ def fit_georeference(
             progress=progress,
         )
     return georef
-
-
-def merge_ocr_labels(*label_sets: list[Any]) -> list[Any]:
-    best: dict[tuple[str, int, int], Any] = {}
-    for labels in label_sets:
-        for label in labels:
-            text = str(getattr(label, "text", "")).lower()
-            key = (text, round(float(getattr(label, "x", 0.0)) / 20), round(float(getattr(label, "y", 0.0)) / 20))
-            old = best.get(key)
-            if old is None or float(getattr(label, "confidence", 0.0)) > float(getattr(old, "confidence", 0.0)):
-                best[key] = label
-    return sorted(best.values(), key=lambda label: float(getattr(label, "confidence", 0.0)), reverse=True)
 
 
 def georeference_from_ranked_label_contexts(

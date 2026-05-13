@@ -19,7 +19,6 @@ os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache
 from map_boundary_builder.extract import DEFAULT_SIMPLIFY_PX
 from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
 from map_boundary_builder.runner import BoundaryBuildOptions, build_boundary
-from map_boundary_builder.ocr import parse_client_ocr_labels
 from map_boundary_builder.web import RequestError, float_field, int_field, safe_extension
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -115,7 +114,6 @@ class handler(BaseHTTPRequestHandler):
             debug_dir=debug_dir,
             options=options,
             progress=progress,
-            ocr_labels=parse_client_ocr_labels(fields.get("ocr_labels")),
         )
         payload = {
             "id": run_id,
