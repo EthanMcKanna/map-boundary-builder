@@ -15,13 +15,16 @@ from .ocr import OcrLabel, extract_ocr_labels
 from .osm_places import PlacePoint, load_place_points
 from .osm_roads import (
     RoadMatchResult,
+    image_feature_distance,
     load_road_points,
     load_road_segments,
     refine_transform_with_osm_roads,
+    sample_road_points,
     score_georeference_transform,
 )
 
 MAX_GEOCODED_LABELS = 16
+MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
@@ -41,22 +44,32 @@ GENERIC_SINGLE_TOKENS = {
     "park",
     "san",
     "south",
+    "vista",
     "view",
     "west",
 }
 OCR_PLACE_TOKEN_ALIASES = {
+    "anor": "manor",
+    "carverdail": "carverdale",
+    "carverdaile": "carverdale",
+    "carverdaille": "carverdale",
     "dakland": "oakland",
     "daklanda": "oakland",
     "daklang": "oakland",
+    "dall": "dallas",
     "edwood": "redwood",
     "fran": "francisco",
     "frankisco": "francisco",
     "fransisco": "francisco",
+    "illowb": "willowbrook",
     "isco": "francisco",
     "jakland": "oakland",
     "jaklang": "oakland",
     "jos": "jose",
+    "lanor": "manor",
+    "ook": "willowbrook",
     "sco": "francisco",
+    "sey": "jersey",
     "uakland": "oakland",
     "vakland": "oakland",
 }
@@ -72,23 +85,45 @@ CITY_INFERENCE_STOP_TOKENS = {
     "acy",
     "are",
     "bearing",
+    "bam",
+    "bee",
+    "bnl",
     "bmw",
+    "boss",
     "briefly",
     "busy",
+    "carve",
     "complete",
+    "del",
+    "dnt",
     "edit",
     "fan",
+    "fas",
+    "fen",
     "for",
+    "gfa",
+    "hla",
+    "kel",
     "later",
     "lay",
+    "lix",
     "liv",
     "live",
+    "mms",
     "min",
+    "nis",
+    "noun",
+    "ont",
+    "oss",
     "other",
+    "pea",
     "pickup",
     "plate",
+    "pst",
+    "ral",
     "request",
     "requests",
+    "res",
     "ride",
     "rider",
     "riders",
@@ -100,7 +135,9 @@ CITY_INFERENCE_STOP_TOKENS = {
     "tile",
     "tiles",
     "try",
+    "tns",
     "unavailable",
+    "vta",
     "walk",
     "with",
 }
@@ -263,6 +300,9 @@ def georeference_from_labels(
         control_labels = [label for label in control_labels if label.y >= label_y_min]
     if label_y_max is not None:
         control_labels = [label for label in control_labels if label.y <= label_y_max]
+    allow_two_control_fit = label_y_min is not None
+    if allow_two_control_fit:
+        control_labels = [label for label in control_labels if not is_top_left_title_label(label, width, height)]
     control_labels = anchor_labels_to_marker_dots(control_labels, image_path)
     city_contexts = resolve_city_contexts(labels, city)
     regional_display_name = (
@@ -279,6 +319,7 @@ def georeference_from_labels(
             width,
             height,
             min_control_points=min_control_points,
+            allow_two_control_fit=allow_two_control_fit,
         )
         if result is not None:
             if regional_display_name is not None:
@@ -369,6 +410,15 @@ def nearest_label_marker(label: OcrLabel, markers: list[tuple[float, float]]) ->
     return best[1] if best is not None else None
 
 
+def is_top_left_title_label(label: OcrLabel, width: int, height: int) -> bool:
+    if label.x > width * 0.38 or label.y > height * 0.18:
+        return False
+    if label.width < 44.0:
+        return False
+    tokens = place_tokens(place_query_text(label.text))
+    return bool(tokens)
+
+
 def georeference_result_with_city(result: GeoreferenceResult, city: str) -> GeoreferenceResult:
     if result.transform.city == city:
         return result
@@ -439,14 +489,28 @@ def georeference_from_label_context(
     height: int,
     *,
     min_control_points: int,
+    allow_two_control_fit: bool = False,
 ) -> GeoreferenceResult | None:
     city_center = city_context.center
-    controls = build_control_points(labels, city_context.query, city_center)
-    if len(controls) >= min_control_points:
-        fit = robust_similarity_fit(controls)
+    controls = build_control_points(
+        labels,
+        city_context.query,
+        city_center,
+        max_geocoded_labels=MAX_SPARSE_GEOCODED_LABELS if allow_two_control_fit else MAX_GEOCODED_LABELS,
+        merge_control_sources=allow_two_control_fit,
+    )
+    required_available_controls = 2 if allow_two_control_fit else min_control_points
+    if len(controls) >= required_available_controls:
+        fit = choose_similarity_fit(
+            controls,
+            image_path,
+            city_center,
+            allow_two_control_fit=allow_two_control_fit,
+        )
         if fit is not None:
             scale, rotation, tx, ty, inliers, residuals = fit
-            if len(inliers) >= min_control_points:
+            min_required_controls = 2 if allow_two_control_fit and len(inliers) == 2 else min_control_points
+            if len(inliers) >= min_required_controls:
                 residual_values = np.array([residuals[i] for i in inliers], dtype=float)
                 residual_median = float(np.median(residual_values))
                 residual_p90 = float(np.percentile(residual_values, 90))
@@ -663,7 +727,7 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
     direct_contexts = direct_city_contexts_from_labels(inference_labels)
-    if direct_contexts:
+    if should_use_direct_city_contexts(direct_contexts):
         return direct_contexts
 
     candidates = geocoded_label_candidates(inference_labels)
@@ -782,6 +846,17 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
     if len(scored_contexts) > 1 and scored_contexts[1][0] >= top_score * 0.62:
         return []
     return [top_context]
+
+
+def should_use_direct_city_contexts(contexts: list[CityContext]) -> bool:
+    if not contexts:
+        return False
+    top = contexts[0]
+    tokens = place_tokens(top.query)
+    place_type = top.center.place_type.lower()
+    if len(tokens) == 1 and place_type not in ADMIN_CONTEXT_TYPES and geocode_bbox_span_m(top.center) < 30000.0:
+        return False
+    return True
 
 
 def is_plausible_context_label(label: OcrLabel) -> bool:
@@ -1720,12 +1795,40 @@ def directional_nearest_score(
     return float(np.average(best, weights=query_weights.astype(float)))
 
 
-def build_control_points(labels: list[OcrLabel], city: str, city_center: GeocodeResult) -> list[ControlPoint]:
-    geocoded_controls = build_geocoded_control_points(labels, city, city_center, stop_after_controls=4)
-    if has_decisive_control_fit(geocoded_controls):
+def build_control_points(
+    labels: list[OcrLabel],
+    city: str,
+    city_center: GeocodeResult,
+    *,
+    max_geocoded_labels: int = MAX_GEOCODED_LABELS,
+    merge_control_sources: bool = False,
+) -> list[ControlPoint]:
+    geocoded_controls = build_geocoded_control_points(
+        labels,
+        city,
+        city_center,
+        stop_after_controls=6 if merge_control_sources else 4,
+        max_labels=max_geocoded_labels,
+        prefer_large_text=merge_control_sources,
+    )
+    if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
         return geocoded_controls
 
-    place_controls = build_osm_place_control_points(labels, city_center)
+    place_controls = build_osm_place_control_points(
+        labels,
+        city_center,
+        prefer_large_text=merge_control_sources,
+    )
+    if not merge_control_sources:
+        if len(place_controls) >= 3:
+            return place_controls
+        return geocoded_controls
+
+    merged_controls = dedupe_control_points([*geocoded_controls, *place_controls])
+    if has_decisive_control_fit(merged_controls):
+        return merged_controls
+    if len(merged_controls) >= 2:
+        return merged_controls
     if len(place_controls) >= 3:
         return place_controls
     return geocoded_controls
@@ -1737,13 +1840,18 @@ def build_geocoded_control_points(
     city_center: GeocodeResult,
     *,
     stop_after_controls: int | None = None,
+    max_labels: int = MAX_GEOCODED_LABELS,
+    prefer_large_text: bool = False,
 ) -> list[ControlPoint]:
     city_x, city_y = city_center.mercator
     max_distance_m = 70000.0
     controls: list[ControlPoint] = []
     used_text: set[tuple[str, ...]] = set()
     city_tokens = place_tokens(city)
-    for label in rank_geocode_labels(labels)[:MAX_GEOCODED_LABELS]:
+    for label in rank_geocode_labels(labels, prefer_large_text=prefer_large_text)[:max_labels]:
+        raw_text_tokens = place_tokens(label.text)
+        if raw_text_tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
         query_text = place_query_text(label.text)
         text_tokens = place_tokens(query_text)
         if not text_tokens or text_tokens & CITY_INFERENCE_STOP_TOKENS:
@@ -1808,7 +1916,12 @@ def is_geocodeable_control_query(tokens: set[str], city_tokens: set[str]) -> boo
     return any(len(token) >= 5 for token in informative_tokens)
 
 
-def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeResult) -> list[ControlPoint]:
+def build_osm_place_control_points(
+    labels: list[OcrLabel],
+    city_center: GeocodeResult,
+    *,
+    prefer_large_text: bool = False,
+) -> list[ControlPoint]:
     search_bbox = city_center.bbox
     if search_bbox is None:
         return []
@@ -1847,6 +1960,7 @@ def build_osm_place_control_points(labels: list[OcrLabel], city_center: GeocodeR
                 match_score
                 + place_type_score(place.place_type)
                 + label.confidence / 300.0
+                + (min(0.24, label.width / 520.0) if prefer_large_text else 0.0)
                 - 0.12 * distance_m / max_distance_m
                 - 0.04 * abs(len(place_tokens_set) - len(label_tokens))
             )
@@ -1878,8 +1992,11 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     seen: set[tuple[str, int, int]] = set()
 
     def add(label: OcrLabel) -> None:
+        raw_tokens = place_tokens(label.text)
+        if raw_tokens & CITY_INFERENCE_STOP_TOKENS:
+            return
         tokens = place_tokens(place_query_text(label.text))
-        if not tokens:
+        if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             return
         key = (" ".join(sorted(tokens)), round(label.x / 12), round(label.y / 12))
         if key in seen:
@@ -1900,8 +2017,11 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
         reverse=True,
     )
     for label in concise_labels:
+        raw_tokens = place_tokens(label.text)
+        if raw_tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
         tokens = place_tokens(place_query_text(label.text))
-        if not tokens or len(tokens) > 2:
+        if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS or len(tokens) > 2:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
             continue
@@ -1972,7 +2092,18 @@ def rank_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     )
 
 
-def rank_geocode_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
+def rank_geocode_labels(labels: list[OcrLabel], *, prefer_large_text: bool = False) -> list[OcrLabel]:
+    if prefer_large_text:
+        return sorted(
+            labels,
+            key=lambda label: (
+                min(2, len(place_tokens(place_query_text(label.text)))),
+                min(35.0, (label.width * label.height) / 90.0),
+                label.confidence,
+                len(label.text),
+            ),
+            reverse=True,
+        )
     return sorted(
         labels,
         key=lambda label: (
@@ -2007,6 +2138,37 @@ def dedupe_place_controls(controls: list[ControlPoint]) -> list[ControlPoint]:
     return deduped
 
 
+def dedupe_control_points(controls: list[ControlPoint]) -> list[ControlPoint]:
+    selected: list[ControlPoint] = []
+    for control in sorted(controls, key=control_quality, reverse=True):
+        if any(is_duplicate_control(control, existing) for existing in selected):
+            continue
+        selected.append(control)
+    return sorted(selected, key=control_quality, reverse=True)
+
+
+def is_duplicate_control(candidate: ControlPoint, existing: ControlPoint) -> bool:
+    cand_name = candidate.geocode.display_name.split(",", 1)[0].lower()
+    existing_name = existing.geocode.display_name.split(",", 1)[0].lower()
+    cand_x, cand_y = candidate.geocode.mercator
+    existing_x, existing_y = existing.geocode.mercator
+    same_place = cand_name == existing_name or sqrt((cand_x - existing_x) ** 2 + (cand_y - existing_y) ** 2) <= 180.0
+    if same_place:
+        return True
+    cand_tokens = place_tokens(place_query_text(candidate.label.text))
+    existing_tokens = place_tokens(place_query_text(existing.label.text))
+    same_label = (
+        cand_tokens == existing_tokens
+        and abs(candidate.label.x - existing.label.x) <= 4.0
+        and abs(candidate.label.y - existing.label.y) <= 4.0
+    )
+    if same_label:
+        return True
+    same_line = abs(candidate.label.y - existing.label.y) <= max(candidate.label.height, existing.label.height, 12.0)
+    close_x = abs(candidate.label.x - existing.label.x) <= max(candidate.label.width, existing.label.width, 80.0)
+    return bool(cand_tokens and existing_tokens and (cand_tokens < existing_tokens or existing_tokens < cand_tokens) and same_line and close_x)
+
+
 def add_or_replace_control(controls: list[ControlPoint], candidate: ControlPoint) -> None:
     cand_x, cand_y = candidate.geocode.mercator
     for idx, existing in enumerate(controls):
@@ -2019,13 +2181,17 @@ def add_or_replace_control(controls: list[ControlPoint], candidate: ControlPoint
     controls.append(candidate)
 
 
-def control_quality(control: ControlPoint) -> tuple[int, float]:
-    return len(place_tokens(place_query_text(control.label.text))), control.label.confidence
+def control_quality(control: ControlPoint) -> tuple[int, float, float]:
+    return (
+        len(place_tokens(place_query_text(control.label.text))),
+        min(35.0, (control.label.width * control.label.height) / 90.0),
+        control.label.confidence,
+    )
 
 
 def geocode_contexts(city: str, city_center: GeocodeResult) -> list[str]:
     contexts: list[str] = []
-    for value in [city, *city_center.display_name.split(",")[:2]]:
+    for value in [city, *city_center.display_name.split(",")[:5]]:
         value = value.strip()
         lowered = value.lower()
         if not value or value.isdigit() or lowered == "united states" or "county" in lowered:
@@ -2050,6 +2216,117 @@ def place_tokens(value: str) -> set[str]:
             continue
         tokens.add(OCR_PLACE_TOKEN_ALIASES.get(part, part))
     return tokens
+
+
+def choose_similarity_fit(
+    controls: list[ControlPoint],
+    image_path: str,
+    city_center: GeocodeResult,
+    *,
+    allow_two_control_fit: bool,
+) -> tuple[float, float, float, float, list[int], list[float]] | None:
+    robust_fit = robust_similarity_fit(controls)
+    candidates: list[tuple[str, tuple[float, float, float, float, list[int], list[float]]]] = []
+    if robust_fit is not None:
+        candidates.append(("multi", robust_fit))
+
+    if allow_two_control_fit:
+        for i, j in combinations(range(len(controls)), 2):
+            pair_fit = two_control_similarity_fit(controls, i, j)
+            if pair_fit is not None:
+                candidates.append(("pair", pair_fit))
+
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0][1]
+
+    road_scorer = build_similarity_road_scorer(image_path, city_center)
+    best: tuple[float, tuple[float, float, float, float, list[int], list[float]]] | None = None
+    total_spread = control_spread(np.array([control.pixel for control in controls], dtype=float))
+    for kind, fit in candidates:
+        scale, rotation, tx, ty, inliers, residuals = fit
+        residual_values = [residuals[idx] for idx in inliers]
+        median = float(np.median(residual_values)) if residual_values else 0.0
+        p90 = float(np.percentile(residual_values, 90)) if residual_values else 0.0
+        spread = control_spread(pixel_positions(controls, inliers))
+        fit_score = fit_candidate_score(len(inliers), len(controls), spread, total_spread, median, p90, rotation)
+        road_score, road_count = road_scorer(scale, rotation, tx, ty) if road_scorer is not None else (0.0, 0)
+        pair_penalty = 0.08 if kind == "pair" and road_score < 0.48 else 0.0
+        pair_road_bonus = 0.24 if kind == "pair" and road_score >= 0.78 else 0.0
+        score = (
+            fit_score
+            + 1.25 * road_score
+            + min(0.16, road_count / 8000.0)
+            + (0.04 if len(inliers) >= 3 else 0.0)
+            + pair_road_bonus
+            - pair_penalty
+        )
+        if best is None or score > best[0]:
+            best = (score, fit)
+    return best[1] if best is not None else candidates[0][1]
+
+
+def two_control_similarity_fit(
+    controls: list[ControlPoint],
+    first_index: int,
+    second_index: int,
+) -> tuple[float, float, float, float, list[int], list[float]] | None:
+    first = controls[first_index]
+    second = controls[second_index]
+    p1 = np.array(first.pixel, dtype=float)
+    p2 = np.array(second.pixel, dtype=float)
+    m1 = np.array(first.mercator, dtype=float)
+    m2 = np.array(second.mercator, dtype=float)
+    pixel_vector = p2 - p1
+    mercator_vector = m2 - m1
+    pixel_distance = float(np.linalg.norm(pixel_vector))
+    mercator_distance = float(np.linalg.norm(mercator_vector))
+    if pixel_distance < 80.0 or mercator_distance < 1200.0:
+        return None
+    scale = mercator_distance / pixel_distance
+    if scale <= 0.0 or scale > 500.0:
+        return None
+    rotation = float(atan2(mercator_vector[1], mercator_vector[0]) - atan2(pixel_vector[1], pixel_vector[0]))
+    if abs(rotation) > 0.35:
+        return None
+    transformed = apply_similarity(np.array([first.pixel, second.pixel], dtype=float), scale, rotation, 0.0, 0.0)
+    tx, ty = (m1 - transformed[0]).tolist()
+    all_pixels = np.array([control.pixel for control in controls], dtype=float)
+    all_mercator = np.array([control.mercator for control in controls], dtype=float)
+    residuals = np.linalg.norm(apply_similarity(all_pixels, scale, rotation, tx, ty) - all_mercator, axis=1).tolist()
+    return scale, rotation, float(tx), float(ty), [first_index, second_index], residuals
+
+
+def build_similarity_road_scorer(
+    image_path: str,
+    city_center: GeocodeResult,
+):
+    if city_center.bbox is None:
+        return None
+    road_points = sample_road_points(load_road_points(city_center.bbox), max_points=12000)
+    if road_points.size == 0:
+        return None
+    from .extract import load_rgb
+
+    feature_distance = image_feature_distance(load_rgb(image_path))
+
+    def score(scale: float, rotation: float, tx: float, ty: float) -> tuple[float, int]:
+        lon, lat = mercator_to_lonlat(tx, ty)
+        transform = GeoreferenceTransform(
+            city=city_center.display_name.split(",", 1)[0],
+            lon=lon,
+            lat=lat,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=scale,
+            rotation_radians=rotation,
+            confidence=0.0,
+            source="control-fit-candidate",
+        )
+        return score_georeference_transform(road_points, feature_distance, transform)
+
+    return score
 
 
 def robust_similarity_fit(
@@ -2139,7 +2416,7 @@ def should_try_road_refinement(
     if city_context.query == "Inferred map area" or geocode_bbox_span_m(city_context.center) >= 85000.0:
         return False
     image_area = max(float(width * height), 1.0)
-    if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 2200.0:
+    if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 1200.0:
         return False
     if (
         meters_per_pixel >= 20.0

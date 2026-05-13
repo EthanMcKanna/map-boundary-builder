@@ -116,7 +116,7 @@ def build_boundary(
         else None
     )
     label_y_min = (
-        extraction.pixel_geometry.bounds[1] - max(6.0, height * 0.012)
+        extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
         if extraction.style == "gray-fill"
         else None
     )
@@ -149,7 +149,7 @@ def build_boundary(
             min_control_points=opts.min_control_points,
         )
 
-    if georef is None and not try_ranked_context_first:
+    if georef is None and (not try_ranked_context_first or label_y_min is not None):
         georef = georeference_from_labels(
             labels,
             str(image_path),
