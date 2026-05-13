@@ -2,9 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
-from map_boundary_builder.extract import load_rgb
+from map_boundary_builder.extract import load_rgb, write_overlay_png
 from map_boundary_builder.image_io import normalize_image_for_processing, safe_image_extension
 
 
@@ -46,6 +47,23 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(image_path.name, "circle.opaque.png")
             self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
             self.assertEqual(tuple(rgb[1, 1]), (0, 128, 255))
+
+
+class OverlayPreviewTests(unittest.TestCase):
+    def test_overlay_preview_draws_dark_mask_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "overlay.png"
+            rgb = np.full((20, 20, 3), 255, dtype=np.uint8)
+            mask = np.zeros((20, 20), dtype=bool)
+            mask[5:15, 5:15] = True
+
+            write_overlay_png("unused.png", mask, out_path, rgb=rgb)
+
+            overlay = np.asarray(Image.open(out_path).convert("RGB"))
+            self.assertTrue(np.all(overlay[5, 10] < 60))
+            self.assertGreater(int(overlay[10, 10][0]), 240)
+            self.assertLess(int(overlay[10, 10][1]), 240)
+            self.assertEqual(tuple(overlay[0, 0]), (255, 255, 255))
 
 
 if __name__ == "__main__":

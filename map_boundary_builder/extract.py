@@ -382,7 +382,12 @@ def write_overlay_png(rgb_path: str | Path, mask: np.ndarray, path: str | Path, 
         rgb = load_rgb(rgb_path)
     rgb = rgb.astype(np.float32)
     overlay_color = np.array([255, 60, 0], dtype=np.float32)
+    outline_color = (23, 33, 29)
     alpha = 0.38
     out = rgb.copy()
     out[mask] = out[mask] * (1.0 - alpha) + overlay_color * alpha
+    contours, _ = cv2.findContours(mask.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        outline_width = max(2, min(6, round(min(mask.shape) / 360)))
+        cv2.drawContours(out, contours, -1, outline_color, thickness=outline_width, lineType=cv2.LINE_AA)
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), mode="RGB").save(path)
