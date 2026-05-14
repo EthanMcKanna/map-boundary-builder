@@ -1,12 +1,9 @@
 const form = document.querySelector("#runForm");
 const imageInput = document.querySelector("#imageInput");
 const dropZone = document.querySelector("#dropZone");
-const compactDropZone = document.querySelector("#compactDropZone");
 const dropTargets = [...document.querySelectorAll("[data-drop-target]")];
 const dropTitle = document.querySelector("#dropTitle");
 const dropMeta = document.querySelector("#dropMeta");
-const fileName = document.querySelector("#fileName");
-const fileMeta = document.querySelector("#fileMeta");
 const brandButton = document.querySelector("#brandButton");
 const runButton = document.querySelector("#runButton");
 const progressPanel = document.querySelector("#progressPanel");
@@ -376,8 +373,6 @@ function setSelectedFile(file) {
   });
   renderProgressSteps();
   clearGeneratedArtifacts();
-  fileName.textContent = file.name;
-  fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
   dropTitle.textContent = file.name;
   dropMeta.textContent = `${formatBytes(file.size)} · ${file.type || "image"}`;
   inputPreview.src = URL.createObjectURL(file);
@@ -385,7 +380,6 @@ function setSelectedFile(file) {
   setImageMode("original");
   updateImagePane();
   dropZone.classList.add("has-file");
-  compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = file.name;
   updateRunButton();
   updateReportTrigger();
@@ -1062,7 +1056,6 @@ function renameHistoryEntry(id, title) {
   renamingHistoryId = null;
   persistHistoryEntries();
   if (activeHistoryId === id) {
-    fileName.textContent = nextTitle;
     workspaceTitle.textContent = nextTitle;
     if (!downloadLink.classList.contains("disabled")) {
       downloadLink.download = geojsonDownloadName(nextTitle);
@@ -1138,12 +1131,9 @@ function restoreHistoryEntry(entry) {
   setImageMode(entry.overlayImage ? "overlay" : "original");
   updateImagePane();
 
-  fileName.textContent = entry.title;
-  fileMeta.textContent = "Loaded from local history";
   dropTitle.textContent = "Drop map screenshot";
   dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
   dropZone.classList.remove("has-file");
-  compactDropZone.classList.add("has-file");
   workspaceTitle.textContent = entry.title;
   markAllProgressStepsDone();
   hideFailureReport();
@@ -1495,9 +1485,6 @@ function startNewRun() {
   inputPreview.classList.remove("ready");
   updateImagePane();
   dropZone.classList.remove("has-file");
-  compactDropZone.classList.remove("has-file");
-  fileName.textContent = "No image selected";
-  fileMeta.textContent = "Drop a screenshot in the workspace";
   dropTitle.textContent = "Drop map screenshot";
   dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
   workspaceTitle.textContent = "Ready for a screenshot";
@@ -1729,7 +1716,7 @@ function reportImageSource() {
 }
 
 function reportFilename() {
-  const base = selectedFile?.name || fileName.textContent || "generation";
+  const base = selectedFile?.name || workspaceTitle.textContent || "generation";
   const safe = String(base)
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\.+$/g, "")
@@ -1780,11 +1767,23 @@ function collectRunSettings() {
 
 function updateRunButton() {
   const isRunning = runButton.disabled && runButton.querySelector("span").textContent === "Running";
-  newRunButton.disabled = isRunning;
+  newRunButton.disabled = isRunning || !hasResettableWorkspaceState();
   brandButton.disabled = isRunning;
   if (isRunning) return;
   runButton.disabled = !selectedFile;
   runButton.querySelector("span").textContent = selectedFile ? "Run Boundary" : "Add image first";
+}
+
+function hasResettableWorkspaceState() {
+  return Boolean(
+    selectedFile ||
+    latestGeojson ||
+    activeHistoryId ||
+    latestRunId ||
+    latestRunStatus !== "idle" ||
+    inputPreview.classList.contains("ready") ||
+    overlayPreview.classList.contains("ready"),
+  );
 }
 
 async function fetchJson(url) {

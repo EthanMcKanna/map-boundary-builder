@@ -22,49 +22,9 @@
           </div>
         </header>
 
-        <form id="runForm" class="run-form">
-          <label id="compactDropZone" class="file-summary" data-drop-target for="imageInput">
-            <span class="eyebrow">Image</span>
-            <strong id="fileName">No image selected</strong>
-            <span id="fileMeta">Drop a screenshot in the workspace</span>
-          </label>
-
-          <div class="run-actions">
-            <button id="runButton" class="primary-action" type="submit">
-              <span>Run Boundary</span>
-              <span aria-hidden="true">-></span>
-            </button>
-
-            <details class="advanced">
-              <summary aria-label="Fit settings" title="Fit settings">
-                <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
-                <span class="sr-only">Fit Settings</span>
-              </summary>
-              <div class="advanced-fields">
-                <label class="field compact">
-                  <span>Confidence Floor</span>
-                  <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
-                </label>
-                <label class="field compact">
-                  <span>Control Points</span>
-                  <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
-                </label>
-                <label class="field compact">
-                  <span>Simplify PX</span>
-                  <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
-                </label>
-              </div>
-            </details>
-          </div>
-        </form>
-
         <section class="history-panel" aria-labelledby="historyTitle">
           <div class="history-head">
-            <div>
-              <span class="eyebrow">Local</span>
-              <h2 id="historyTitle">History</h2>
-            </div>
-            <button id="newRunButton" class="new-run-button" type="button">New Run</button>
+            <h2 id="historyTitle">History</h2>
           </div>
           <p id="historyEmpty" class="history-empty">No saved generations yet.</p>
           <ol id="historyList" class="history-list"></ol>
@@ -89,6 +49,40 @@
             <a id="reportLink" class="report-link" href="#" target="_blank" rel="noreferrer" hidden>Open issue</a>
           </div>
         </section>
+
+        <form id="runForm" class="run-form">
+          <div class="run-actions">
+            <button id="runButton" class="primary-action" type="submit">
+              <span>Run Boundary</span>
+              <span aria-hidden="true">-></span>
+            </button>
+
+            <button id="newRunButton" class="new-run-button" type="button" aria-label="Start a new run" title="Start a new run">
+              <span class="new-run-icon" aria-hidden="true"></span>
+            </button>
+
+            <details class="advanced">
+              <summary aria-label="Fit settings" title="Fit settings">
+                <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span class="sr-only">Fit Settings</span>
+              </summary>
+              <div class="advanced-fields">
+                <label class="field compact">
+                  <span>Confidence Floor</span>
+                  <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
+                </label>
+                <label class="field compact">
+                  <span>Control Points</span>
+                  <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
+                </label>
+                <label class="field compact">
+                  <span>Simplify PX</span>
+                  <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
+                </label>
+              </div>
+            </details>
+          </div>
+        </form>
       </aside>
 
       <main class="workspace">

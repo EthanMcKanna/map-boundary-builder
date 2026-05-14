@@ -143,35 +143,10 @@ textarea,
 
 .run-form {
   display: grid;
-  gap: 12px;
-}
-
-.file-summary {
-  display: grid;
-  gap: 4px;
-  min-height: 76px;
-  align-content: center;
-  border: 1px solid var(--line);
-  background: rgba(248, 246, 238, 0.72);
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: border-color 160ms ease, background-color 160ms ease;
-}
-
-.file-summary:hover,
-.file-summary.dragging,
-.file-summary.has-file {
-  border-color: var(--green);
-  background: rgba(47, 178, 143, 0.09);
-}
-
-.file-summary strong {
-  overflow-wrap: anywhere;
-}
-
-.file-summary span:last-child {
-  color: var(--muted);
-  font-size: 0.84rem;
+  flex: 0 0 auto;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 .drop-zone {
@@ -291,8 +266,8 @@ textarea,
 
 .run-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 40px 40px;
+  gap: 8px;
   align-items: start;
 }
 
@@ -369,7 +344,8 @@ textarea,
 
 .advanced-fields {
   position: absolute;
-  top: 0;
+  top: auto;
+  bottom: 0;
   left: calc(100% + 12px);
   z-index: 60;
   display: none;
@@ -418,6 +394,59 @@ textarea,
   box-shadow: none;
   cursor: not-allowed;
   opacity: 0.72;
+}
+
+.new-run-button {
+  position: relative;
+  display: grid;
+  min-height: 40px;
+  width: 40px;
+  place-items: center;
+  border-color: var(--line);
+  background: rgba(248, 246, 238, 0.78);
+  color: var(--ink);
+  padding: 0;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.new-run-button:hover {
+  border-color: var(--green);
+  background: rgba(47, 178, 143, 0.12);
+  box-shadow: 0 0 0 3px rgba(47, 178, 143, 0.1);
+}
+
+.new-run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.new-run-icon {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.new-run-icon::before,
+.new-run-icon::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.new-run-icon::before {
+  top: 8px;
+  left: 2px;
+  width: 14px;
+  height: 2px;
+}
+
+.new-run-icon::after {
+  top: 2px;
+  left: 8px;
+  width: 2px;
+  height: 14px;
 }
 
 .progress-panel {
@@ -705,37 +734,10 @@ textarea,
   padding: 14px 0 0;
 }
 
-.history-head {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .history-head h2 {
-  margin: 3px 0 0;
+  margin: 0;
   font-size: 1rem;
   line-height: 1.1;
-}
-
-.new-run-button {
-  min-height: 32px;
-  border-color: var(--line);
-  background: rgba(248, 246, 238, 0.78);
-  color: var(--ink);
-  padding: 0 10px;
-  font-size: 0.78rem;
-  font-weight: 850;
-}
-
-.new-run-button:hover {
-  border-color: var(--green);
-  background: rgba(47, 178, 143, 0.12);
-}
-
-.new-run-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
 }
 
 .history-empty {
@@ -1404,6 +1406,7 @@ textarea,
 
   .advanced-fields {
     top: calc(100% + 8px);
+    bottom: auto;
     right: 0;
     left: auto;
     width: min(320px, calc(100vw - 28px));
