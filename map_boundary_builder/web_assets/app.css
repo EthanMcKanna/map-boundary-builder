@@ -1839,42 +1839,75 @@ textarea,
   max-width: calc(100% - 18px);
 }
 
-.maplibregl-ctrl-attrib {
+.maplibregl-ctrl.maplibregl-ctrl-attrib {
   border: 1px solid var(--map-control-border);
   border-radius: 8px 0 0 0;
   background: var(--map-attrib-bg);
-  color: var(--map-attrib-ink);
+  background-color: var(--map-attrib-bg);
+  color: var(--map-attrib-ink) !important;
   box-shadow: var(--map-control-shadow);
   backdrop-filter: blur(12px);
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact {
-  min-height: 26px;
+  box-sizing: border-box;
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
   border-radius: 999px;
-  background: var(--map-attrib-bg);
-  padding: 2px 26px 2px 8px;
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
 }
 
 .maplibregl-ctrl-attrib.maplibregl-compact-show {
+  min-height: 30px;
+  border: 1px solid var(--map-control-border);
   border-radius: 8px;
+  background: var(--map-attrib-bg);
+  background-color: var(--map-attrib-bg);
+  box-shadow: var(--map-control-shadow);
+  padding: 5px 34px 5px 10px;
+  backdrop-filter: blur(12px);
 }
 
+.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner,
 .maplibregl-ctrl-attrib-inner {
-  color: inherit;
+  color: var(--map-attrib-ink) !important;
 }
 
+.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner a,
 .maplibregl-ctrl-attrib a {
-  color: var(--map-attrib-link);
+  color: var(--map-attrib-link) !important;
 }
 
+button.maplibregl-ctrl-attrib-button,
 .maplibregl-ctrl-attrib-button {
-  width: 22px;
-  height: 22px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
   border: 1px solid var(--map-control-border);
   border-radius: 999px;
   background: var(--map-attrib-button-bg);
-  background-image: none;
-  color: var(--map-attrib-ink);
+  background-color: var(--map-attrib-button-bg) !important;
+  background-image: none !important;
+  color: var(--map-attrib-ink) !important;
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button {
+  display: grid;
+  line-height: 1;
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button {
+  top: 50%;
+  right: 3px;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
 }
 
 .maplibregl-ctrl-attrib-button::before {
@@ -1889,9 +1922,14 @@ textarea,
   line-height: 1;
 }
 
+.maplibregl-ctrl-attrib-button::after {
+  display: none;
+}
+
 .maplibregl-ctrl-attrib-button:hover {
   background: var(--map-attrib-button-hover-bg);
-  color: var(--map-attrib-link);
+  background-color: var(--map-attrib-button-hover-bg) !important;
+  color: var(--map-attrib-link) !important;
 }
 
 .maplibregl-ctrl-group {
