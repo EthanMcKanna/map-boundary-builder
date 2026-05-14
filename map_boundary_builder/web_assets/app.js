@@ -88,6 +88,16 @@ const RUN_BUTTON_LABELS = {
   ready: "Build boundary",
   running: "Building",
 };
+const EMPTY_DROP_TITLE = "Drop or paste map screenshot";
+const EMPTY_DROP_META = "PNG, JPG, WebP, TIFF, SVG";
+const CLIPBOARD_IMAGE_EXTENSIONS = new Map([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+  ["image/tiff", "tiff"],
+  ["image/svg+xml", "svg"],
+]);
 const MAX_HISTORY_ENTRIES = 14;
 const MAX_HISTORY_BYTES = 4_400_000;
 const MAX_HISTORY_TITLE_LENGTH = 80;
@@ -229,6 +239,8 @@ imageInput.addEventListener("change", () => {
   setSelectedFile(file);
 });
 
+document.addEventListener("paste", handleClipboardPaste);
+
 runButton.addEventListener("click", (event) => {
   if (selectedFile || isRunButtonRunning()) return;
   event.preventDefault();
@@ -248,10 +260,7 @@ dropTargets.forEach((target) => {
     target.classList.remove("dragging");
     const [file] = event.dataTransfer.files;
     if (!file) return;
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    imageInput.files = transfer.files;
-    setSelectedFile(file);
+    selectImageFile(file);
   });
 });
 
@@ -493,6 +502,67 @@ function closeSettingsDialog() {
   } else {
     settingsDialog.removeAttribute("open");
     settingsButton.setAttribute("aria-expanded", "false");
+  }
+}
+
+function handleClipboardPaste(event) {
+  const file = clipboardImageFile(event.clipboardData);
+  if (!file) return;
+  if (isEditablePasteTarget(event.target) && event.clipboardData?.getData("text/plain")) return;
+
+  event.preventDefault();
+  if (isRunButtonRunning()) {
+    setStatus("Run in progress", progressValue, latestRunStatus, {
+      note: "Finish the active run before adding another screenshot.",
+    });
+    return;
+  }
+  selectImageFile(file);
+}
+
+function clipboardImageFile(clipboardData) {
+  const items = Array.from(clipboardData?.items || []);
+  const fileItem = items.find((item) => item.kind === "file" && isImageMime(item.type));
+  const pastedFile = fileItem?.getAsFile?.()
+    || Array.from(clipboardData?.files || []).find((file) => isImageMime(file.type));
+  if (!pastedFile) return null;
+
+  const type = pastedFile.type || fileItem?.type || "image/png";
+  const name = pastedFile.name || clipboardImageName(type);
+  return new File([pastedFile], name, {
+    type,
+    lastModified: pastedFile.lastModified || Date.now(),
+  });
+}
+
+function isImageMime(type) {
+  return typeof type === "string" && type.toLowerCase().startsWith("image/");
+}
+
+function clipboardImageName(type) {
+  const extension = CLIPBOARD_IMAGE_EXTENSIONS.get(type) || "png";
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[:.]/g, "-");
+  return `clipboard-map-${timestamp}.${extension}`;
+}
+
+function isEditablePasteTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"));
+}
+
+function selectImageFile(file) {
+  updateFileInput(file);
+  setSelectedFile(file);
+}
+
+function updateFileInput(file) {
+  if (!file || typeof DataTransfer === "undefined") return;
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    imageInput.files = transfer.files;
+  } catch (error) {
+    console.warn("Could not mirror selected image into file input", error);
   }
 }
 
@@ -1269,8 +1339,8 @@ function restoreHistoryEntry(entry) {
   setImageMode(entry.overlayImage ? "overlay" : "original");
   updateImagePane();
 
-  dropTitle.textContent = "Drop map screenshot";
-  dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
+  dropTitle.textContent = EMPTY_DROP_TITLE;
+  dropMeta.textContent = EMPTY_DROP_META;
   dropZone.classList.remove("has-file");
   workspaceTitle.textContent = entry.title;
   markAllProgressStepsDone();
@@ -1650,8 +1720,8 @@ function startNewRun() {
   inputPreview.classList.remove("ready");
   updateImagePane();
   dropZone.classList.remove("has-file");
-  dropTitle.textContent = "Drop map screenshot";
-  dropMeta.textContent = "PNG, JPG, WebP, TIFF, SVG";
+  dropTitle.textContent = EMPTY_DROP_TITLE;
+  dropMeta.textContent = EMPTY_DROP_META;
   workspaceTitle.textContent = "Ready for a screenshot";
   setCopyCommandCopied(false);
   hideFailureReport();
