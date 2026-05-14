@@ -917,7 +917,7 @@ textarea,
 }
 
 .report-link {
-  display: inline-block;
+  display: inline-grid;
   background: var(--panel);
   color: var(--coral);
 }
