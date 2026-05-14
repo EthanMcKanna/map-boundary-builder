@@ -3,7 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f6ee" />
     <title>Map Boundary Builder</title>
+    <script>
+      (() => {
+        try {
+          const mode = localStorage.getItem("mapBoundaryBuilder.theme.v1");
+          if (mode === "light" || mode === "dark" || mode === "system") {
+            document.documentElement.dataset.theme = mode;
+          }
+        } catch (error) {
+          document.documentElement.dataset.theme = "system";
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/static/boundary-builder-icon.png" />
     <link rel="apple-touch-icon" href="/static/boundary-builder-icon.png" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
@@ -16,19 +29,25 @@
           <button id="brandButton" class="brand-mark-button" type="button" aria-label="Start a new run" title="Start a new run">
             <img class="brand-mark" src="/static/boundary-builder-icon.png" alt="" width="48" height="48" aria-hidden="true" />
           </button>
-          <div>
+          <a id="brandHomeLink" class="brand-copy-link" href="/" title="Start a new run">
             <h1>Boundary Builder</h1>
             <p>Image to GeoJSON</p>
-          </div>
+          </a>
         </header>
 
-        <section class="history-panel" aria-labelledby="historyTitle">
-          <div class="history-head">
-            <h2 id="historyTitle">History</h2>
+        <form id="runForm" class="run-form">
+          <div class="run-actions">
+            <button id="runButton" class="primary-action" type="submit" data-state="empty" title="Choose a map screenshot">
+              <span class="primary-action-icon" aria-hidden="true"></span>
+              <span class="primary-action-label">Choose image</span>
+            </button>
+
+            <button id="settingsButton" class="settings-button" type="button" aria-haspopup="dialog" aria-controls="settingsDialog">
+              <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span>Settings</span>
+            </button>
           </div>
-          <p id="historyEmpty" class="history-empty">No saved generations yet.</p>
-          <ol id="historyList" class="history-list"></ol>
-        </section>
+        </form>
 
         <section id="progressPanel" class="progress-panel" aria-live="polite" hidden>
           <div class="progress-head">
@@ -50,39 +69,13 @@
           </div>
         </section>
 
-        <form id="runForm" class="run-form">
-          <div class="run-actions">
-            <button id="runButton" class="primary-action" type="submit">
-              <span>Run Boundary</span>
-              <span aria-hidden="true">-></span>
-            </button>
-
-            <button id="newRunButton" class="new-run-button" type="button" aria-label="Start a new run" title="Start a new run">
-              <span class="new-run-icon" aria-hidden="true"></span>
-            </button>
-
-            <details class="advanced">
-              <summary aria-label="Fit settings" title="Fit settings">
-                <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
-                <span class="sr-only">Fit Settings</span>
-              </summary>
-              <div class="advanced-fields">
-                <label class="field compact">
-                  <span>Confidence Floor</span>
-                  <input id="confidenceInput" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
-                </label>
-                <label class="field compact">
-                  <span>Control Points</span>
-                  <input id="controlInput" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
-                </label>
-                <label class="field compact">
-                  <span>Simplify PX</span>
-                  <input id="simplifyInput" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
-                </label>
-              </div>
-            </details>
+        <section class="history-panel" aria-labelledby="historyTitle">
+          <div class="history-head">
+            <h2 id="historyTitle">History</h2>
           </div>
-        </form>
+          <p id="historyEmpty" class="history-empty">No saved generations yet.</p>
+          <ol id="historyList" class="history-list"></ol>
+        </section>
       </aside>
 
       <main class="workspace">
@@ -147,6 +140,54 @@
         </section>
       </main>
     </div>
+
+    <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+      <div class="settings-sheet">
+        <div class="settings-head">
+          <div>
+            <span class="eyebrow">Settings</span>
+            <h2 id="settingsTitle">Run Settings</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-action" type="button" title="Close settings" aria-label="Close settings">x</button>
+        </div>
+
+        <section class="settings-section" aria-labelledby="fitSettingsTitle">
+          <h3 id="fitSettingsTitle">Fit</h3>
+          <div class="settings-grid">
+            <label class="field compact">
+              <span>Confidence Floor</span>
+              <input id="confidenceInput" form="runForm" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
+            </label>
+            <label class="field compact">
+              <span>Control Points</span>
+              <input id="controlInput" form="runForm" name="min_control_points" type="number" min="0" max="12" step="1" value="3" />
+            </label>
+            <label class="field compact">
+              <span>Simplify PX</span>
+              <input id="simplifyInput" form="runForm" name="simplify_px" type="number" min="0" max="10" step="0.05" value="6" />
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="themeSettingsTitle">
+          <h3 id="themeSettingsTitle">Theme</h3>
+          <div class="theme-switcher" role="group" aria-label="Color theme">
+            <button class="theme-mode" type="button" data-theme-mode="system" aria-pressed="true" title="Follow system color setting">
+              <span class="theme-icon theme-icon-system" aria-hidden="true"></span>
+              <span>System</span>
+            </button>
+            <button class="theme-mode" type="button" data-theme-mode="light" aria-pressed="false" title="Force light theme">
+              <span class="theme-icon theme-icon-light" aria-hidden="true"></span>
+              <span>Light</span>
+            </button>
+            <button class="theme-mode" type="button" data-theme-mode="dark" aria-pressed="false" title="Force dark theme">
+              <span class="theme-icon theme-icon-dark" aria-hidden="true"></span>
+              <span>Dark</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </dialog>
 
     <dialog id="reportDialog" class="report-dialog" aria-labelledby="reportDialogTitle">
       <form id="reportForm" class="report-form" method="dialog">

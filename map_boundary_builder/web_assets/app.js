@@ -5,7 +5,10 @@ const dropTargets = [...document.querySelectorAll("[data-drop-target]")];
 const dropTitle = document.querySelector("#dropTitle");
 const dropMeta = document.querySelector("#dropMeta");
 const brandButton = document.querySelector("#brandButton");
+const brandHomeLink = document.querySelector("#brandHomeLink");
+const brandMark = document.querySelector(".brand-mark");
 const runButton = document.querySelector("#runButton");
+const runButtonLabel = runButton.querySelector(".primary-action-label");
 const progressPanel = document.querySelector("#progressPanel");
 const statusText = document.querySelector("#statusText");
 const percentText = document.querySelector("#percentText");
@@ -42,15 +45,21 @@ const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
 const historyList = document.querySelector("#historyList");
 const historyEmpty = document.querySelector("#historyEmpty");
-const newRunButton = document.querySelector("#newRunButton");
+const settingsButton = document.querySelector("#settingsButton");
+const settingsDialog = document.querySelector("#settingsDialog");
+const settingsCloseButton = document.querySelector("#settingsCloseButton");
 const tabs = [...document.querySelectorAll(".tab")];
 const panes = [...document.querySelectorAll(".pane")];
+const themeModeButtons = [...document.querySelectorAll("[data-theme-mode]")];
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+const iconLinks = [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')];
 
 let selectedFile = null;
 let latestGeojson = null;
 let eventSource = null;
 let boundaryMap = null;
 let latestBoundaryBounds = null;
+let currentBoundaryMapStyle = null;
 let progressValue = 0;
 let estimatedProgressTimer = null;
 let estimatedProgressStartedAt = 0;
@@ -72,10 +81,23 @@ const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
 const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
+const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
+const THEME_MODES = new Set(["system", "light", "dark"]);
+const RUN_BUTTON_LABELS = {
+  empty: "Choose image",
+  ready: "Build boundary",
+  running: "Building",
+};
 const MAX_HISTORY_ENTRIES = 14;
 const MAX_HISTORY_BYTES = 4_400_000;
 const MAX_HISTORY_TITLE_LENGTH = 80;
 const COPY_BUTTON_IDLE_HTML = copyButton.innerHTML;
+const systemThemeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+const iconAssets = {
+  light: "/static/boundary-builder-icon.png",
+  dark: "/static/boundary-builder-icon-dark.png",
+};
+let activeThemeMode = loadThemeMode();
 
 const stageLabels = {
   queued: "Queued",
@@ -169,15 +191,48 @@ const estimatedProgressStages = [
   },
 ];
 
+applyThemeMode(activeThemeMode, { persist: false });
 resetProgressSteps();
 renderProgressSteps();
 historyEntries = loadHistoryEntries();
 renderHistory();
 updateRunButton();
 
+themeModeButtons.forEach((button) => {
+  button.addEventListener("click", () => applyThemeMode(button.dataset.themeMode));
+});
+
+settingsButton.addEventListener("click", () => {
+  if (settingsDialog.open) {
+    closeSettingsDialog();
+  } else {
+    openSettingsDialog();
+  }
+});
+
+settingsCloseButton.addEventListener("click", closeSettingsDialog);
+
+settingsDialog.addEventListener("click", (event) => {
+  if (event.target === settingsDialog) closeSettingsDialog();
+});
+
+settingsDialog.addEventListener("close", () => {
+  settingsButton.setAttribute("aria-expanded", "false");
+});
+
+systemThemeMedia?.addEventListener?.("change", () => {
+  if (activeThemeMode === "system") applyThemeMode("system", { persist: false });
+});
+
 imageInput.addEventListener("change", () => {
   const [file] = imageInput.files;
   setSelectedFile(file);
+});
+
+runButton.addEventListener("click", (event) => {
+  if (selectedFile || isRunButtonRunning()) return;
+  event.preventDefault();
+  imageInput.click();
 });
 
 dropTargets.forEach((target) => {
@@ -203,17 +258,13 @@ dropTargets.forEach((target) => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedFile) {
-    setStatus("Choose an image", 0, "error", {
-      note: "Drop a screenshot in the workspace first.",
-    });
+    imageInput.click();
     return;
   }
 
   resetRun();
   startEstimatedProgress();
-  runButton.disabled = true;
-  runButton.querySelector("span").textContent = "Running";
-  newRunButton.disabled = true;
+  setRunButtonState("running");
 
   try {
     const uploadFile = await prepareRunImage(selectedFile);
@@ -262,8 +313,11 @@ copyButton.addEventListener("click", async () => {
 });
 downloadLink.addEventListener("click", closeOutputMenu);
 
-newRunButton.addEventListener("click", startNewRun);
 brandButton.addEventListener("click", startNewRun);
+brandHomeLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  startNewRun();
+});
 reportButton.addEventListener("click", () => openReportDialog("failed"));
 reportTrigger.addEventListener("click", () => {
   closeOutputMenu();
@@ -353,6 +407,94 @@ document.addEventListener("click", (event) => {
   if (event.target.closest(".history-menu")) return;
   closeHistoryMenus();
 });
+
+function loadThemeMode() {
+  try {
+    const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
+    return THEME_MODES.has(storedMode) ? storedMode : "system";
+  } catch (error) {
+    return "system";
+  }
+}
+
+function applyThemeMode(mode, options = {}) {
+  const nextMode = THEME_MODES.has(mode) ? mode : "system";
+  const resolvedMode = resolvedThemeMode(nextMode);
+  activeThemeMode = nextMode;
+  document.documentElement.dataset.theme = nextMode;
+  document.documentElement.dataset.resolvedTheme = resolvedMode;
+  themeModeButtons.forEach((button) => {
+    const isActive = button.dataset.themeMode === nextMode;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  if (themeColorMeta) {
+    themeColorMeta.content = resolvedMode === "dark" ? "#101512" : "#f8f6ee";
+  }
+  syncThemeIcons(resolvedMode);
+  if (options.persist !== false) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+    } catch (error) {
+      console.warn("Could not save theme preference", error);
+    }
+  }
+  syncBoundaryMapTheme();
+}
+
+function syncThemeIcons(resolvedMode) {
+  const icon = iconAssets[resolvedMode] || iconAssets.light;
+  if (brandMark && brandMark.getAttribute("src") !== icon) {
+    brandMark.src = icon;
+  }
+  iconLinks.forEach((link) => {
+    if (link.getAttribute("href") !== icon) link.href = icon;
+  });
+}
+
+function resolvedThemeMode(mode = activeThemeMode) {
+  if (mode === "dark" || mode === "light") return mode;
+  return systemThemeMedia?.matches ? "dark" : "light";
+}
+
+function boundaryMapStyleUrl() {
+  return resolvedThemeMode() === "dark"
+    ? "/static/openfreemap-dark.json"
+    : "/static/openfreemap-boundary.json";
+}
+
+function syncBoundaryMapTheme() {
+  if (!boundaryMap) return;
+  const nextStyle = boundaryMapStyleUrl();
+  if (currentBoundaryMapStyle === nextStyle) {
+    updateBoundaryLayerPaint();
+    return;
+  }
+  currentBoundaryMapStyle = nextStyle;
+  const redraw = () => {
+    if (latestGeojson) renderBoundaryMap(latestGeojson);
+  };
+  boundaryMap.once("styledata", () => window.setTimeout(redraw, 0));
+  boundaryMap.setStyle(nextStyle);
+}
+
+function openSettingsDialog() {
+  settingsButton.setAttribute("aria-expanded", "true");
+  if (settingsDialog.showModal) {
+    settingsDialog.showModal();
+  } else {
+    settingsDialog.setAttribute("open", "");
+  }
+}
+
+function closeSettingsDialog() {
+  if (settingsDialog.open && settingsDialog.close) {
+    settingsDialog.close();
+  } else {
+    settingsDialog.removeAttribute("open");
+    settingsButton.setAttribute("aria-expanded", "false");
+  }
+}
 
 function setSelectedFile(file) {
   selectedFile = file;
@@ -485,8 +627,6 @@ function connectEvents(runId) {
         stopEstimatedProgress();
         await loadArtifacts(runId);
         markAllProgressStepsDone();
-        runButton.disabled = false;
-        runButton.querySelector("span").textContent = "Run Boundary";
         updateRunButton();
       }
     if (event.status === "error") {
@@ -543,8 +683,6 @@ function applyInlineRun(status) {
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay_data_url,
   });
-  runButton.disabled = false;
-  runButton.querySelector("span").textContent = "Run Boundary";
   updateRunButton();
   updateReportTrigger();
 }
@@ -1215,7 +1353,7 @@ function imageUrlToStoredDataUrl(src) {
         canvas.width = width;
         canvas.height = height;
         const context = canvas.getContext("2d");
-        context.fillStyle = "#f8f6ee";
+        context.fillStyle = cssVariable("--paper", "#f8f6ee");
         context.fillRect(0, 0, width, height);
         context.drawImage(image, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", 0.78));
@@ -1272,14 +1410,21 @@ function renderBoundaryMap(geojson) {
   boundaryEmpty.hidden = true;
 
   if (!boundaryMap) {
+    currentBoundaryMapStyle = boundaryMapStyleUrl();
     boundaryMap = new maplibregl.Map({
       container: boundaryMapEl,
-      style: "/static/openfreemap-boundary.json",
+      style: currentBoundaryMapStyle,
       center: [(bounds.minLon + bounds.maxLon) / 2, (bounds.minLat + bounds.maxLat) / 2],
       zoom: 11,
       attributionControl: { compact: true },
     });
     boundaryMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  } else if (currentBoundaryMapStyle !== boundaryMapStyleUrl()) {
+    currentBoundaryMapStyle = boundaryMapStyleUrl();
+    boundaryMap.once("styledata", () => {
+      if (latestGeojson) window.setTimeout(() => renderBoundaryMap(latestGeojson), 0);
+    });
+    boundaryMap.setStyle(currentBoundaryMapStyle);
   }
 
   const draw = () => {
@@ -1291,7 +1436,7 @@ function renderBoundaryMap(geojson) {
       fitBoundaryMap(bounds);
     } catch (error) {
       if (isBoundaryStyleLoadingError(error)) {
-        boundaryMap.once("load", draw);
+        boundaryMap.once("styledata", () => window.setTimeout(draw, 0));
         return;
       }
       throw error;
@@ -1304,6 +1449,25 @@ function renderBoundaryMap(geojson) {
 function isBoundaryStyleLoadingError(error) {
   const message = String(error?.message || error || "");
   return message.includes("Style is not done loading") || message.includes("style is not loaded");
+}
+
+function updateBoundaryLayerPaint() {
+  if (!boundaryMap) return;
+  try {
+    const color = cssVariable("--green", "#0e6f5c");
+    if (boundaryMap.getLayer(BOUNDARY_FILL_ID)) {
+      boundaryMap.setPaintProperty(BOUNDARY_FILL_ID, "fill-color", color);
+    }
+    if (boundaryMap.getLayer(BOUNDARY_LINE_ID)) {
+      boundaryMap.setPaintProperty(BOUNDARY_LINE_ID, "line-color", color);
+    }
+  } catch (error) {
+    if (!isBoundaryStyleLoadingError(error)) throw error;
+  }
+}
+
+function cssVariable(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
 function upsertBoundaryLayers(geojson) {
@@ -1323,7 +1487,7 @@ function upsertBoundaryLayers(geojson) {
       type: "fill",
       source: BOUNDARY_SOURCE_ID,
       paint: {
-        "fill-color": "#0e6f5c",
+        "fill-color": cssVariable("--green", "#0e6f5c"),
         "fill-opacity": 0.24,
       },
     });
@@ -1335,12 +1499,13 @@ function upsertBoundaryLayers(geojson) {
       type: "line",
       source: BOUNDARY_SOURCE_ID,
       paint: {
-        "line-color": "#0e6f5c",
+        "line-color": cssVariable("--green", "#0e6f5c"),
         "line-width": 4,
         "line-opacity": 0.96,
       },
     });
   }
+  updateBoundaryLayerPaint();
 }
 
 function fitBoundaryMap(bounds) {
@@ -1396,9 +1561,9 @@ function renderBoundarySvg(geojson) {
   boundarySvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   boundarySvg.innerHTML = `
     <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
-    <path d="${pathData}" fill="rgba(47, 178, 143, 0.22)" stroke="#0e6f5c" stroke-width="5" stroke-linejoin="round"></path>
-    <circle cx="${offsetX}" cy="${offsetY + usedHeight}" r="5" fill="#c88719"></circle>
-    <text x="${offsetX}" y="${offsetY + usedHeight + 28}" fill="#657069" font-size="20">${minLon.toFixed(4)}, ${minLat.toFixed(4)}</text>
+    <path d="${pathData}" fill="var(--svg-boundary-fill)" stroke="var(--green)" stroke-width="5" stroke-linejoin="round"></path>
+    <circle cx="${offsetX}" cy="${offsetY + usedHeight}" r="5" fill="var(--gold)"></circle>
+    <text x="${offsetX}" y="${offsetY + usedHeight + 28}" fill="var(--muted)" font-size="20">${minLon.toFixed(4)}, ${minLat.toFixed(4)}</text>
   `;
   boundarySvg.classList.add("ready");
   document.querySelector("#boundaryPane").classList.add("has-content");
@@ -1464,7 +1629,7 @@ function updateImagePane() {
 }
 
 function startNewRun() {
-  if (runButton.disabled && runButton.querySelector("span").textContent === "Running") return;
+  if (isRunButtonRunning()) return;
   if (eventSource) {
     eventSource.close();
     eventSource = null;
@@ -1544,8 +1709,6 @@ function finishWithError(message) {
     note: "The run stopped before a reliable boundary could be exported.",
   });
   showFailureReport();
-  runButton.disabled = false;
-  runButton.querySelector("span").textContent = "Run Boundary";
   updateRunButton();
 }
 
@@ -1766,12 +1929,32 @@ function collectRunSettings() {
 }
 
 function updateRunButton() {
-  const isRunning = runButton.disabled && runButton.querySelector("span").textContent === "Running";
-  newRunButton.disabled = isRunning || !hasResettableWorkspaceState();
+  const isRunning = isRunButtonRunning();
   brandButton.disabled = isRunning;
+  brandHomeLink.setAttribute("aria-disabled", String(isRunning));
+  if (isRunning) {
+    brandHomeLink.setAttribute("tabindex", "-1");
+  } else {
+    brandHomeLink.removeAttribute("tabindex");
+  }
   if (isRunning) return;
-  runButton.disabled = !selectedFile;
-  runButton.querySelector("span").textContent = selectedFile ? "Run Boundary" : "Add image first";
+  setRunButtonState(selectedFile ? "ready" : "empty");
+}
+
+function setRunButtonState(state) {
+  const nextState = Object.prototype.hasOwnProperty.call(RUN_BUTTON_LABELS, state) ? state : "empty";
+  runButton.dataset.state = nextState;
+  runButton.disabled = nextState === "running";
+  runButtonLabel.textContent = RUN_BUTTON_LABELS[nextState];
+  if (nextState === "empty") {
+    runButton.title = "Choose a map screenshot";
+  } else {
+    runButton.removeAttribute("title");
+  }
+}
+
+function isRunButtonRunning() {
+  return runButton.dataset.state === "running" && (latestRunStatus === "running" || latestRunStatus === "queued");
 }
 
 function hasResettableWorkspaceState() {
