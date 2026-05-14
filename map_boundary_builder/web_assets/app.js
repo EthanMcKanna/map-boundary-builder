@@ -734,7 +734,7 @@ function applyInlineRun(status) {
         type: "application/geo+json",
       }),
     );
-    downloadLink.download = "boundary.geojson";
+    setGeojsonDownloadName(downloadLink, historyTitle(status));
     downloadLink.classList.remove("disabled");
     downloadLink.removeAttribute("aria-disabled");
     copyButton.disabled = false;
@@ -1001,6 +1001,7 @@ async function loadArtifacts(runId) {
     latestGeojson = await fetchJson(artifacts.geojson);
     geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
     downloadLink.href = artifacts.geojson;
+    setGeojsonDownloadName(downloadLink, historyTitle(status));
     downloadLink.classList.remove("disabled");
     downloadLink.removeAttribute("aria-disabled");
     copyButton.disabled = false;
@@ -1266,7 +1267,7 @@ function renameHistoryEntry(id, title) {
   if (activeHistoryId === id) {
     workspaceTitle.textContent = nextTitle;
     if (!downloadLink.classList.contains("disabled")) {
-      downloadLink.download = geojsonDownloadName(nextTitle);
+      setGeojsonDownloadName(downloadLink, nextTitle);
     }
   }
   renderHistory();
@@ -1282,7 +1283,7 @@ function downloadHistoryGeojson(id) {
   );
   const link = document.createElement("a");
   link.href = url;
-  link.download = geojsonDownloadName(entry.title);
+  setGeojsonDownloadName(link, entry.title);
   link.style.display = "none";
   document.body.append(link);
   link.click();
@@ -1318,7 +1319,7 @@ function restoreHistoryEntry(entry) {
       type: "application/geo+json",
     }),
   );
-  downloadLink.download = geojsonDownloadName(entry.title);
+  setGeojsonDownloadName(downloadLink, entry.title);
   downloadLink.classList.remove("disabled");
   downloadLink.removeAttribute("aria-disabled");
   copyButton.disabled = false;
@@ -1403,6 +1404,10 @@ function geojsonDownloadName(title) {
     .replace(/\.+$/g, "")
     .trim();
   return `${safeTitle || "boundary"}.geojson`;
+}
+
+function setGeojsonDownloadName(link, title) {
+  link.download = geojsonDownloadName(title);
 }
 
 function imageUrlToStoredDataUrl(src) {
