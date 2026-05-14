@@ -791,12 +791,15 @@ textarea,
 .primary-action[data-state="ready"] .primary-action-icon::before {
   content: "";
   position: absolute;
-  top: 4px;
-  left: 6px;
-  width: 7px;
-  height: 9px;
-  background: currentColor;
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  top: 50%;
+  left: 6.5px;
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  border-left: 7px solid currentColor;
+  transform: translateY(-50%);
 }
 
 .primary-action[data-state="running"] .primary-action-icon {
@@ -1197,6 +1200,36 @@ textarea,
   overflow: auto;
   padding: 0 2px 2px;
   list-style: none;
+}
+
+.project-credit {
+  margin: 0;
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  opacity: 0.58;
+}
+
+.project-credit a {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  transition: color 150ms ease, opacity 150ms ease;
+}
+
+.project-credit a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  opacity: 1;
+}
+
+.project-credit a:focus-visible {
+  outline: 2px solid var(--focus-green);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .history-item {
