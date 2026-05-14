@@ -301,7 +301,7 @@ def fit_georeference(
             min_control_points=min_control_points,
         )
 
-    if georef is None and (not try_ranked_context_first or label_y_min is not None):
+    if georef is None:
         georef = georeference_from_labels(
             labels,
             str(image_path),

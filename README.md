@@ -16,7 +16,7 @@ maps. Bring your own crop from a map view you have permission to use.
 ## Quick Start
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 .venv/bin/python -m pip install -e .
 
 .venv/bin/map-boundary \
@@ -32,7 +32,7 @@ georeference fit, pixel coverage, and confidence.
 
 ## Requirements
 
-- Python 3.11 or newer
+- Python 3.12
 - Internet access for OpenStreetMap/Nominatim lookups during georeferencing
 - The hosted and local web apps run OCR on the server so uploaded screenshots follow the same backend georeferencing path.
 - The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then falls back to RapidOCR/ONNX before failing closed if it cannot infer enough map evidence.

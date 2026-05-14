@@ -349,11 +349,6 @@ def georeference_from_labels(
         control_labels = [label for label in control_labels if not is_top_left_title_label(label, width, height)]
     control_labels = anchor_labels_to_marker_dots(control_labels, image_path)
     city_contexts = resolve_city_contexts(labels, city)
-    regional_display_name = (
-        city_contexts[0].center.display_name
-        if city is None and city_contexts and city_contexts[0].query == "Inferred map area"
-        else None
-    )
     best: tuple[float, GeoreferenceResult] | None = None
     for city_context in city_contexts:
         result = georeference_from_label_context(
@@ -366,8 +361,8 @@ def georeference_from_labels(
             allow_two_control_fit=allow_two_control_fit,
         )
         if result is not None:
-            if regional_display_name is not None:
-                result = georeference_result_with_city(result, regional_display_name)
+            if city is None and city_context.query == "Inferred map area":
+                result = georeference_result_with_city(result, city_context.center.display_name)
             score = georeference_result_score(result)
             if best is None or score > best[0]:
                 best = (score, result)

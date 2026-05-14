@@ -1,10 +1,20 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from map_boundary_builder.georeference import candidate_place_labels, infer_city_contexts, is_reliable_single_token_context, place_query_text
+from map_boundary_builder.georeference import (
+    CityContext,
+    GeoreferenceResult,
+    candidate_place_labels,
+    georeference_from_labels,
+    infer_city_contexts,
+    is_reliable_single_token_context,
+    place_query_text,
+)
 from map_boundary_builder.geocoder import GeocodeResult
+from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.ocr import OcrLabel, group_stacked_labels, rapidocr_items_to_labels
-from map_boundary_builder.runner import rank_road_context_queries
+from map_boundary_builder.runner import fit_georeference, rank_road_context_queries
 
 
 class OcrGroupingTests(unittest.TestCase):
@@ -217,6 +227,91 @@ class RoadContextRankingTests(unittest.TestCase):
 
         self.assertEqual("Santa Clara", ranked[0])
         self.assertEqual("Mountain View Los Altos Union High School District", ranked[-1])
+
+
+class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
+        labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
+        fallback_result = object()
+
+        with (
+            patch("map_boundary_builder.runner.road_contexts_from_labels", return_value=[object()]),
+            patch("map_boundary_builder.runner.road_context_queries", return_value=[]),
+            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=True),
+            patch("map_boundary_builder.runner.georeference_from_ranked_label_contexts", return_value=None),
+            patch("map_boundary_builder.runner.georeference_from_labels", return_value=fallback_result) as label_fit,
+        ):
+            result = fit_georeference(
+                labels,
+                Path("input.png"),
+                pixel_geometry=object(),
+                rgb=None,
+                city_input=None,
+                width=1920,
+                height=1080,
+                coverage_ratio=0.22,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=None,
+                progress=None,
+            )
+
+        self.assertIs(result, fallback_result)
+        label_fit.assert_called_once()
+
+    def test_specific_city_fit_keeps_city_after_synthetic_context_failure(self) -> None:
+        labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
+        synthetic_context = CityContext(
+            query="Inferred map area",
+            center=GeocodeResult(
+                label="Inferred map area",
+                lon=-77.1,
+                lat=39.0,
+                display_name="Inferred map area",
+                bbox=(-77.4, 38.7, -76.8, 39.3),
+                importance=0.5,
+                place_type="region",
+            ),
+            inferred=True,
+        )
+        nashville_context = CityContext(
+            query="Nashville",
+            center=GeocodeResult(
+                label="Nashville",
+                lon=-86.7816,
+                lat=36.1627,
+                display_name="Nashville, Davidson County, Tennessee, United States",
+                bbox=(-87.05, 35.96, -86.51, 36.4),
+                importance=0.7,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+        nashville_result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Nashville",
+                lon=-86.94,
+                lat=36.25,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=20.8,
+                rotation_radians=0.0,
+                confidence=0.76,
+                source="test",
+            ),
+            control_points=[],
+            residual_median_m=1000.0,
+            residual_p90_m=1100.0,
+        )
+
+        with (
+            patch("map_boundary_builder.georeference.anchor_labels_to_marker_dots", return_value=labels),
+            patch("map_boundary_builder.georeference.resolve_city_contexts", return_value=[synthetic_context, nashville_context]),
+            patch("map_boundary_builder.georeference.georeference_from_label_context", side_effect=[None, nashville_result]),
+        ):
+            result = georeference_from_labels(labels, "input.png", None, width=1920, height=1080)
+
+        self.assertEqual(result.transform.city, "Nashville")
 
 
 if __name__ == "__main__":
