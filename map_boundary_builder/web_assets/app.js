@@ -36,9 +36,11 @@ const imageToggle = document.querySelector("#imageToggle");
 const imageModeButtons = [...document.querySelectorAll("[data-image-mode]")];
 const inputPreview = document.querySelector("#inputPreview");
 const overlayPreview = document.querySelector("#overlayPreview");
+const boundaryPane = document.querySelector("#boundaryPane");
 const boundaryMapEl = document.querySelector("#boundaryMap");
 const boundarySvg = document.querySelector("#boundarySvg");
 const boundaryEmpty = document.querySelector("#boundaryEmpty");
+const geojsonPaneWrapper = document.querySelector("#geojsonPaneWrapper");
 const geojsonPane = document.querySelector("#geojsonPane");
 const outputActions = document.querySelector("#outputActions");
 const downloadLink = document.querySelector("#downloadLink");
@@ -717,7 +719,7 @@ function applyInlineRun(status) {
   }
   if (artifacts.geojson_inline) {
     latestGeojson = artifacts.geojson_inline;
-    geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
+    updateGeojsonPane(latestGeojson);
     downloadLink.href = URL.createObjectURL(
       new Blob([JSON.stringify(latestGeojson, null, 2)], {
         type: "application/geo+json",
@@ -988,7 +990,7 @@ async function loadArtifacts(runId) {
   }
   if (artifacts.geojson) {
     latestGeojson = await fetchJson(artifacts.geojson);
-    geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
+    updateGeojsonPane(latestGeojson);
     downloadLink.href = artifacts.geojson;
     setGeojsonDownloadName(downloadLink, historyTitle(status));
     downloadLink.classList.remove("disabled");
@@ -1302,7 +1304,7 @@ function restoreHistoryEntry(entry) {
   imageInput.value = "";
   clearGeneratedArtifacts();
   latestGeojson = entry.geojson;
-  geojsonPane.textContent = JSON.stringify(latestGeojson, null, 2);
+  updateGeojsonPane(latestGeojson);
   downloadLink.href = URL.createObjectURL(
     new Blob([JSON.stringify(latestGeojson, null, 2)], {
       type: "application/geo+json",
@@ -1432,12 +1434,12 @@ function imageUrlToStoredDataUrl(src) {
 }
 
 function renderBoundary(geojson) {
-  document.querySelector("#boundaryPane").classList.add("has-content");
+  boundaryPane.classList.add("has-content");
   if (window.maplibregl && boundaryMapEl) {
     boundarySvg.classList.remove("ready");
     boundarySvg.innerHTML = "";
     boundaryMapEl.classList.add("ready");
-    if (document.querySelector("#boundaryPane").classList.contains("active")) {
+    if (boundaryPane.classList.contains("active")) {
       renderBoundaryMapWhenVisible(geojson);
     }
     return;
@@ -1630,7 +1632,7 @@ function renderBoundarySvg(geojson) {
     <text x="${offsetX}" y="${offsetY + usedHeight + 28}" fill="var(--muted)" font-size="20">${minLon.toFixed(4)}, ${minLat.toFixed(4)}</text>
   `;
   boundarySvg.classList.add("ready");
-  document.querySelector("#boundaryPane").classList.add("has-content");
+  boundaryPane.classList.add("has-content");
 }
 
 function geojsonBounds(geojson) {
@@ -1752,6 +1754,7 @@ function clearGeneratedArtifacts() {
   overlayPreview.classList.remove("ready");
   setImageMode("original");
   updateImagePane();
+  boundaryPane.classList.remove("has-content");
   boundaryMapEl.classList.remove("ready");
   boundarySvg.innerHTML = "";
   boundarySvg.classList.remove("ready");
@@ -1760,8 +1763,13 @@ function clearGeneratedArtifacts() {
   if (boundaryMap?.getSource(BOUNDARY_SOURCE_ID)) {
     boundaryMap.getSource(BOUNDARY_SOURCE_ID).setData({ type: "FeatureCollection", features: [] });
   }
-  geojsonPane.textContent = "{}";
+  updateGeojsonPane(null);
   hideOutputActions();
+}
+
+function updateGeojsonPane(geojson) {
+  geojsonPane.textContent = geojson ? JSON.stringify(geojson, null, 2) : "";
+  geojsonPaneWrapper.classList.toggle("has-content", Boolean(geojson));
 }
 
 function finishWithError(message) {

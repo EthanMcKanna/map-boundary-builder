@@ -141,10 +141,50 @@
           <div class="pane boundary-pane" id="boundaryPane" data-pane="boundary">
             <div id="boundaryMap" class="boundary-map" role="img" aria-label="Generated GeoJSON boundary on OpenFreeMap"></div>
             <svg id="boundarySvg" class="boundary-fallback" role="img" aria-label="Generated GeoJSON boundary preview"></svg>
-            <div id="boundaryEmpty" class="empty-state">Boundary appears after export</div>
+            <div id="boundaryEmpty" class="preview-placeholder boundary-placeholder" aria-label="Boundary preview placeholder">
+              <div class="boundary-preview-art" aria-hidden="true">
+                <img class="boundary-preview-image boundary-preview-image-light" src="/static/boundary-preview-placeholder.jpg" alt="" loading="lazy" decoding="async" />
+                <img class="boundary-preview-image boundary-preview-image-dark" src="/static/boundary-preview-placeholder-dark.jpg" alt="" loading="lazy" decoding="async" />
+              </div>
+              <div class="placeholder-copy">
+                <span class="eyebrow">Boundary</span>
+                <strong>Polygon on map</strong>
+                <span>Exported area with fit, fill, and outline.</span>
+              </div>
+            </div>
           </div>
 
-          <pre class="pane code-pane" id="geojsonPane" data-pane="geojson">{}</pre>
+          <div class="pane geojson-pane" id="geojsonPaneWrapper" data-pane="geojson">
+            <div id="geojsonEmpty" class="preview-placeholder geojson-placeholder" aria-label="GeoJSON preview placeholder">
+              <div class="geojson-preview-art" aria-hidden="true">
+                <div class="preview-code-bar">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <pre>{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [...]
+      },
+      "properties": {
+        "source": "map screenshot"
+      }
+    }
+  ]
+}</pre>
+              </div>
+              <div class="placeholder-copy">
+                <span class="eyebrow">GeoJSON</span>
+                <strong>FeatureCollection</strong>
+                <span>Coordinates and source properties.</span>
+              </div>
+            </div>
+            <pre class="code-pane" id="geojsonPane" aria-label="Generated GeoJSON output"></pre>
+          </div>
         </section>
       </main>
     </div>
