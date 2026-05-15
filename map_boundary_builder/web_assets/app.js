@@ -40,7 +40,7 @@ const boundaryMapEl = document.querySelector("#boundaryMap");
 const boundarySvg = document.querySelector("#boundarySvg");
 const boundaryEmpty = document.querySelector("#boundaryEmpty");
 const geojsonPane = document.querySelector("#geojsonPane");
-const outputMenu = document.querySelector("#outputMenu");
+const outputActions = document.querySelector("#outputActions");
 const downloadLink = document.querySelector("#downloadLink");
 const copyButton = document.querySelector("#copyButton");
 const historyList = document.querySelector("#historyList");
@@ -314,13 +314,11 @@ imageModeButtons.forEach((button) => {
 copyButton.addEventListener("click", async () => {
   if (!latestGeojson) return;
   await navigator.clipboard.writeText(JSON.stringify(latestGeojson, null, 2));
-  closeOutputMenu();
   setCopyCommandCopied(true);
   copyFeedbackTimeout = setTimeout(() => {
     setCopyCommandCopied(false);
   }, 1000);
 });
-downloadLink.addEventListener("click", closeOutputMenu);
 
 brandButton.addEventListener("click", startNewRun);
 brandHomeLink.addEventListener("click", (event) => {
@@ -329,20 +327,11 @@ brandHomeLink.addEventListener("click", (event) => {
 });
 reportButton.addEventListener("click", () => openReportDialog("failed"));
 reportTrigger.addEventListener("click", () => {
-  closeOutputMenu();
   openReportDialog("completed");
 });
 reportForm.addEventListener("submit", submitGenerationReport);
 reportCloseButton.addEventListener("click", closeReportDialog);
 reportCancelButton.addEventListener("click", closeReportDialog);
-
-document.addEventListener("click", (event) => {
-  if (outputMenu?.open && !outputMenu.contains(event.target)) closeOutputMenu();
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeOutputMenu();
-});
 
 historyList.addEventListener("click", (event) => {
   const menuSummary = event.target.closest(".history-menu summary");
@@ -1901,7 +1890,7 @@ function showOutputActions() {
     hideOutputActions();
     return;
   }
-  outputMenu.hidden = false;
+  outputActions.hidden = false;
   downloadLink.classList.remove("disabled");
   downloadLink.removeAttribute("aria-disabled");
   copyButton.disabled = false;
@@ -1910,8 +1899,7 @@ function showOutputActions() {
 }
 
 function hideOutputActions() {
-  closeOutputMenu();
-  outputMenu.hidden = true;
+  outputActions.hidden = true;
   downloadLink.href = "#";
   downloadLink.classList.add("disabled");
   downloadLink.setAttribute("aria-disabled", "true");
@@ -1920,17 +1908,18 @@ function hideOutputActions() {
   updateReportTrigger();
 }
 
-function closeOutputMenu() {
-  if (outputMenu) outputMenu.open = false;
-}
-
 function setCopyCommandCopied(copied) {
   if (copyFeedbackTimeout) {
     clearTimeout(copyFeedbackTimeout);
     copyFeedbackTimeout = null;
   }
   copyButton.innerHTML = copied
-    ? "<span>Copied</span><small>Ready to paste</small>"
+    ? `
+      <svg class="output-action-icon output-action-icon-check" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m5 12.5 4.2 4.2L19 6.8"></path>
+      </svg>
+      <span class="output-action-label">Copied</span>
+    `
     : COPY_BUTTON_IDLE_HTML;
 }
 

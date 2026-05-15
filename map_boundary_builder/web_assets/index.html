@@ -92,26 +92,30 @@
               <button class="tab" type="button" data-tab="boundary">Boundary</button>
               <button class="tab" type="button" data-tab="geojson">GeoJSON</button>
             </nav>
-            <details id="outputMenu" class="output-menu" aria-label="Output actions" hidden>
-              <summary>
-                <span>Output</span>
-                <span class="output-menu-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-              </summary>
-              <div class="output-menu-panel">
-                <a id="downloadLink" class="output-menu-item disabled" href="#" aria-disabled="true">
-                  <span>Download GeoJSON</span>
-                  <small>Boundary file</small>
-                </a>
-                <button id="copyButton" class="output-menu-item" type="button" disabled>
-                  <span>Copy GeoJSON</span>
-                  <small>Formatted to clipboard</small>
-                </button>
-                <button id="reportTrigger" class="output-menu-item report-trigger" type="button" disabled>
-                  <span>Report issue</span>
-                  <small>Attach this generation</small>
-                </button>
-              </div>
-            </details>
+            <div id="outputActions" class="output-actions" aria-label="Output actions" hidden>
+              <a id="downloadLink" class="output-action disabled" href="#" aria-disabled="true" title="Download GeoJSON">
+                <svg class="output-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v10"></path>
+                  <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
+                  <path d="M5 20h14"></path>
+                </svg>
+                <span class="output-action-label">Download</span>
+              </a>
+              <button id="copyButton" class="output-action" type="button" title="Copy GeoJSON" disabled>
+                <svg class="output-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="8" y="8" width="11" height="11" rx="2.5"></rect>
+                  <path d="M5 15.5v-9A1.5 1.5 0 0 1 6.5 5h9"></path>
+                </svg>
+                <span class="output-action-label">Copy</span>
+              </button>
+              <button id="reportTrigger" class="output-action output-action-report" type="button" title="Report issue" disabled>
+                <svg class="output-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 21V5.5"></path>
+                  <path d="M7 5.5h10.5l-2 4 2 4H7"></path>
+                </svg>
+                <span class="output-action-label">Report</span>
+              </button>
+            </div>
           </div>
 
           <div class="pane active" id="inputPane" data-pane="input">
