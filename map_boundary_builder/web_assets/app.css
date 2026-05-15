@@ -426,7 +426,6 @@ textarea,
 }
 
 .theme-mode {
-  --theme-icon-cutout: var(--soft-surface);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -450,68 +449,20 @@ textarea,
 
 .theme-mode.active,
 .theme-mode[aria-pressed="true"] {
-  --theme-icon-cutout: var(--solid-bg);
   background: var(--solid-bg);
   color: var(--solid-ink);
 }
 
 .theme-icon {
-  position: relative;
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-}
-
-.theme-icon-system {
-  border: 1.6px solid currentColor;
-  border-radius: 3px;
-}
-
-.theme-icon-system::before {
-  content: "";
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  left: 2px;
-  height: 1.6px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.theme-icon-light {
-  border: 1.8px solid currentColor;
-  border-radius: 50%;
-  transform: scale(0.72);
-  box-shadow:
-    0 -8px 0 -5px currentColor,
-    0 8px 0 -5px currentColor,
-    8px 0 0 -5px currentColor,
-    -8px 0 0 -5px currentColor,
-    5.6px 5.6px 0 -5px currentColor,
-    -5.6px -5.6px 0 -5px currentColor,
-    5.6px -5.6px 0 -5px currentColor,
-    -5.6px 5.6px 0 -5px currentColor;
-}
-
-.theme-icon-dark::before,
-.theme-icon-dark::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-}
-
-.theme-icon-dark::before {
-  inset: 1px;
-  background: currentColor;
-}
-
-.theme-icon-dark::after {
-  top: -1px;
-  right: -1px;
-  width: 12px;
-  height: 12px;
-  background: var(--theme-icon-cutout);
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .run-form {
@@ -645,42 +596,15 @@ textarea,
 }
 
 .settings-icon {
-  display: grid;
-  width: 18px;
-  gap: 3px;
-}
-
-.settings-icon span {
-  position: relative;
   display: block;
-  width: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.settings-icon span::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  background: var(--panel);
-  transform: translate(-50%, -50%);
-}
-
-.settings-icon span:nth-child(1)::after {
-  left: 5px;
-}
-
-.settings-icon span:nth-child(2)::after {
-  left: 13px;
-}
-
-.settings-icon span:nth-child(3)::after {
-  left: 8px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .compact input {
@@ -757,67 +681,35 @@ textarea,
 }
 
 .primary-action-icon {
-  position: relative;
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
 }
 
-.primary-action[data-state="empty"] .primary-action-icon {
-  border: 1.7px solid currentColor;
-  border-radius: 6px;
+.primary-action-icon-state {
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
-.primary-action[data-state="empty"] .primary-action-icon::before,
-.primary-action[data-state="empty"] .primary-action-icon::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  background: currentColor;
-  transform: translateX(-50%);
+.primary-action-icon-fill {
+  fill: currentColor;
+  stroke: none;
 }
 
-.primary-action[data-state="empty"] .primary-action-icon::before {
-  top: 4px;
-  width: 8px;
-  height: 8px;
-  background: transparent;
-  border-top: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.primary-action[data-state="empty"] .primary-action-icon::after {
-  top: 7px;
-  width: 2px;
-  height: 7px;
-  border-radius: 999px;
-}
-
-.primary-action[data-state="ready"] .primary-action-icon {
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
-}
-
-.primary-action[data-state="ready"] .primary-action-icon::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 6.5px;
-  width: 0;
-  height: 0;
-  background: transparent;
-  border-top: 4.5px solid transparent;
-  border-bottom: 4.5px solid transparent;
-  border-left: 7px solid currentColor;
-  transform: translateY(-50%);
+.primary-action[data-state="empty"] .primary-action-icon-empty,
+.primary-action[data-state="ready"] .primary-action-icon-ready,
+.primary-action[data-state="running"] .primary-action-icon-running {
+  opacity: 1;
 }
 
 .primary-action[data-state="running"] .primary-action-icon {
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 999px;
   animation: action-spin 720ms linear infinite;
 }
 

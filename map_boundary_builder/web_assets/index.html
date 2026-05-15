@@ -38,12 +38,34 @@
         <form id="runForm" class="run-form">
           <div class="run-actions">
             <button id="runButton" class="primary-action" type="submit" data-state="empty" title="Choose a map screenshot">
-              <span class="primary-action-icon" aria-hidden="true"></span>
+              <svg class="primary-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <g class="primary-action-icon-state primary-action-icon-empty">
+                  <path d="M12 16V5.5"></path>
+                  <path d="m7.75 9.75 4.25-4.25 4.25 4.25"></path>
+                  <path d="M5 19.5h14"></path>
+                </g>
+                <g class="primary-action-icon-state primary-action-icon-ready">
+                  <path class="primary-action-icon-fill" d="M8 5.85c0-.88.98-1.41 1.72-.93l9.18 6.05c.66.44.66 1.42 0 1.86l-9.18 6.05C8.98 19.37 8 18.84 8 17.96Z"></path>
+                </g>
+                <g class="primary-action-icon-state primary-action-icon-running">
+                  <path d="M20.4 12a8.4 8.4 0 1 1-2.45-5.94"></path>
+                </g>
+              </svg>
               <span class="primary-action-label">Choose image</span>
             </button>
 
             <button id="settingsButton" class="settings-button" type="button" aria-haspopup="dialog" aria-controls="settingsDialog">
-              <span class="settings-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+              <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h4"></path>
+                <circle cx="10.5" cy="7" r="2.25"></circle>
+                <path d="M13 7h7"></path>
+                <path d="M4 12h9"></path>
+                <circle cx="15.5" cy="12" r="2.25"></circle>
+                <path d="M18 12h2"></path>
+                <path d="M4 17h6"></path>
+                <circle cx="12.5" cy="17" r="2.25"></circle>
+                <path d="M15 17h5"></path>
+              </svg>
               <span>Settings</span>
             </button>
           </div>
@@ -221,15 +243,31 @@
           <h3 id="themeSettingsTitle">Theme</h3>
           <div class="theme-switcher" role="group" aria-label="Color theme">
             <button class="theme-mode" type="button" data-theme-mode="system" aria-pressed="true" title="Follow system color setting">
-              <span class="theme-icon theme-icon-system" aria-hidden="true"></span>
+              <svg class="theme-icon theme-icon-system" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5.75 5.5h12.5c1.1 0 2 .9 2 2v7c0 1.1-.9 2-2 2H5.75c-1.1 0-2-.9-2-2v-7c0-1.1.9-2 2-2Z"></path>
+                <path d="M9 20h6"></path>
+                <path d="M12 16.5V20"></path>
+              </svg>
               <span>System</span>
             </button>
             <button class="theme-mode" type="button" data-theme-mode="light" aria-pressed="false" title="Force light theme">
-              <span class="theme-icon theme-icon-light" aria-hidden="true"></span>
+              <svg class="theme-icon theme-icon-light" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.75"></circle>
+                <path d="M12 3.75v2.1"></path>
+                <path d="M12 18.15v2.1"></path>
+                <path d="m6.15 6.15 1.5 1.5"></path>
+                <path d="m16.35 16.35 1.5 1.5"></path>
+                <path d="M3.75 12h2.1"></path>
+                <path d="M18.15 12h2.1"></path>
+                <path d="m6.15 17.85 1.5-1.5"></path>
+                <path d="m16.35 7.65 1.5-1.5"></path>
+              </svg>
               <span>Light</span>
             </button>
             <button class="theme-mode" type="button" data-theme-mode="dark" aria-pressed="false" title="Force dark theme">
-              <span class="theme-icon theme-icon-dark" aria-hidden="true"></span>
+              <svg class="theme-icon theme-icon-dark" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18.7 15.45A7.15 7.15 0 0 1 8.55 5.3a7.75 7.75 0 1 0 10.15 10.15Z"></path>
+              </svg>
               <span>Dark</span>
             </button>
           </div>
