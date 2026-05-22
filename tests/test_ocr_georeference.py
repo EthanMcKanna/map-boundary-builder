@@ -5,8 +5,10 @@ from unittest.mock import patch
 from map_boundary_builder.georeference import (
     CityContext,
     GeoreferenceResult,
+    LabelGeocodeCandidate,
     candidate_place_labels,
     georeference_from_labels,
+    has_reliable_candidate_cluster,
     infer_city_contexts,
     is_reliable_single_token_context,
     place_query_text,
@@ -174,6 +176,40 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertGreater(contexts[0].center.bbox[3], 25.94)
         self.assertTrue(any(context.center.display_name.startswith("Miami,") for context in contexts[1:]))
+
+    def test_early_context_cluster_requires_regional_breadth(self) -> None:
+        def candidate(name: str, lon: float, lat: float, x: float, y: float) -> LabelGeocodeCandidate:
+            return LabelGeocodeCandidate(
+                label=OcrLabel(name, x=x, y=y, width=90, height=20, confidence=94),
+                geocode=GeocodeResult(
+                    label=name,
+                    lon=lon,
+                    lat=lat,
+                    display_name=f"{name}, California, United States",
+                    bbox=(lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01),
+                    importance=0.5,
+                    place_type="city",
+                ),
+            )
+
+        local_cluster = [
+            candidate("Atherton", -122.2058, 37.4538, 10, 10),
+            candidate("Menlo Park", -122.1780, 37.4520, 20, 20),
+            candidate("Redwood City", -122.2325, 37.4863, 30, 30),
+            candidate("Foster City", -122.2689, 37.5600, 40, 40),
+            candidate("San Mateo", -122.3253, 37.5630, 50, 50),
+            candidate("Belmont", -122.2942, 37.5165, 60, 60),
+            candidate("Burlingame", -122.3473, 37.5781, 70, 70),
+            candidate("San Bruno", -122.4111, 37.6305, 80, 80),
+        ]
+        regional_cluster = [
+            *local_cluster,
+            candidate("San Francisco", -122.4194, 37.7749, 90, 90),
+            candidate("Palo Alto", -122.1598, 37.4443, 100, 100),
+        ]
+
+        self.assertFalse(has_reliable_candidate_cluster(local_cluster))
+        self.assertTrue(has_reliable_candidate_cluster(regional_cluster))
 
 
 class RoadContextRankingTests(unittest.TestCase):

@@ -27,6 +27,10 @@ MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
+EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
+EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
+EARLY_CONTEXT_MIN_CANDIDATES = 24
+EARLY_CONTEXT_MIN_NAMES = 8
 GENERIC_SINGLE_TOKENS = {
     "area",
     "bay",
@@ -1245,7 +1249,10 @@ def has_reliable_candidate_cluster(candidates: list[LabelGeocodeCandidate]) -> b
     unique_names = {member.primary_name.lower() for member in members}
     if len(unique_names) < 4:
         return False
-    return choose_parent_component(members) is not None or cluster_spread_m(members) >= 12000.0
+    spread_m = cluster_spread_m(members)
+    if spread_m >= EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M and len(unique_names) >= EARLY_CONTEXT_MIN_REGIONAL_NAMES:
+        return True
+    return len(candidates) >= EARLY_CONTEXT_MIN_CANDIDATES and len(unique_names) >= EARLY_CONTEXT_MIN_NAMES
 
 
 def has_enough_context_members(members: list[LabelGeocodeCandidate]) -> bool:
