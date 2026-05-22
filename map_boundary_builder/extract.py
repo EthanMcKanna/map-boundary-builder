@@ -227,9 +227,11 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
 
     min_object = max(64, int(mask.size * (0.00001 if style == "bright-blue" else 0.00002)))
     mask = remove_small_components(mask, min_area=min_object)
+    if style == "bright-blue":
+        return repair_bright_blue_mask(mask)
 
-    close_px = max(7, int(round(min_dim * (0.010 if style == "bright-blue" else 0.006))))
-    open_px = max(3, int(round(min_dim * (0.0025 if style == "bright-blue" else 0.0015))))
+    close_px = max(7, int(round(min_dim * 0.006)))
+    open_px = max(3, int(round(min_dim * 0.0015)))
     close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_px | 1, close_px | 1))
     open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_px | 1, open_px | 1))
 
@@ -241,12 +243,25 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
     mask = keep_main_components(mask, max_components=4 if style == "bright-blue" else 8)
     mask = fill_binary_holes(mask)
 
-    fill_kernel_size = max(9, int(round(min_dim * (0.018 if style == "bright-blue" else 0.012))))
+    fill_kernel_size = max(9, int(round(min_dim * 0.012)))
     fill_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (fill_kernel_size | 1, fill_kernel_size | 1))
     mask_u8 = cv2.morphologyEx(mask.astype(np.uint8) * 255, cv2.MORPH_CLOSE, fill_kernel)
     mask = mask_u8 > 0
-    mask = keep_main_components(mask, max_components=4 if style == "bright-blue" else 8)
+    mask = keep_main_components(mask, max_components=8)
     return mask
+
+
+def repair_bright_blue_mask(seed_mask: np.ndarray) -> np.ndarray:
+    h, w = seed_mask.shape
+    min_dim = min(h, w)
+    mask = fill_binary_holes(seed_mask)
+
+    crack_px = max(7, min(11, int(round(min_dim * 0.003))))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (crack_px | 1, crack_px | 1))
+    mask_u8 = cv2.morphologyEx(mask.astype(np.uint8) * 255, cv2.MORPH_CLOSE, kernel)
+    mask = mask_u8 > 0
+    mask = remove_exterior_repair_bleeds(mask, seed_mask)
+    return keep_main_components(mask, max_components=4)
 
 
 def keep_main_components(mask: np.ndarray, max_components: int) -> np.ndarray:
@@ -311,6 +326,35 @@ def fill_binary_holes(mask: np.ndarray) -> np.ndarray:
     cv2.floodFill(background, None, (0, 0), 0)
     holes = background[1:-1, 1:-1] > 0
     return mask | holes
+
+
+def edge_connected_background(mask: np.ndarray) -> np.ndarray:
+    padded = np.pad(mask.astype(bool), 1, mode="constant", constant_values=False)
+    background = (~padded).astype(np.uint8) * 255
+    cv2.floodFill(background, None, (0, 0), 128)
+    return background[1:-1, 1:-1] == 128
+
+
+def remove_exterior_repair_bleeds(mask: np.ndarray, seed_mask: np.ndarray) -> np.ndarray:
+    h, w = mask.shape
+    min_dim = min(h, w)
+    outside = edge_connected_background(seed_mask)
+    added_outside = mask & outside
+    labels, count, stats = connected_components(added_outside)
+    if count == 0:
+        return mask
+
+    min_area = max(500, int(round(mask.size * 0.00018)))
+    min_long_span = max(48, int(round(min_dim * 0.028)))
+    min_short_span = max(18, int(round(min_dim * 0.010)))
+    remove = np.zeros_like(mask, dtype=bool)
+    for label in range(1, count + 1):
+        _left, _top, component_w, component_h, area = stats[label]
+        long_span = max(int(component_w), int(component_h))
+        short_span = min(int(component_w), int(component_h))
+        if int(area) >= min_area and long_span >= min_long_span and short_span >= min_short_span:
+            remove[labels == label] = True
+    return (mask & ~remove) | seed_mask
 
 
 def mask_to_geometry(mask: np.ndarray, simplify_px: float) -> tuple[Polygon | MultiPolygon, int]:
