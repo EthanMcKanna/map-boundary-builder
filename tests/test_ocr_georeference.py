@@ -7,6 +7,7 @@ from map_boundary_builder.georeference import (
     GeoreferenceResult,
     LabelGeocodeCandidate,
     candidate_place_labels,
+    geocode_many,
     georeference_from_labels,
     has_reliable_candidate_cluster,
     infer_city_contexts,
@@ -64,6 +65,29 @@ class OcrGroupingTests(unittest.TestCase):
 
 
 class PlaceCandidateTests(unittest.TestCase):
+    def test_geocode_many_preserves_request_order_and_dedupes(self) -> None:
+        calls: list[tuple[str, int, str]] = []
+
+        def fake_geocode(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append((query, limit, country_codes))
+            return [
+                GeocodeResult(
+                    label=query,
+                    lon=-80.0,
+                    lat=25.0,
+                    display_name=f"{query}, Florida, United States",
+                    bbox=(-80.1, 24.9, -79.9, 25.1),
+                    importance=0.5,
+                    place_type="city",
+                )
+            ][:limit]
+
+        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+            results = geocode_many([("Miami", 2), ("Orlando", 1), ("Miami", 2)])
+
+        self.assertEqual([items[0].label for items in results], ["Miami", "Orlando", "Miami"])
+        self.assertEqual(set(calls), {("Miami", 2, "us"), ("Orlando", 1, "us")})
+
     def test_concise_high_confidence_labels_are_preserved(self) -> None:
         noisy_labels = [
             OcrLabel(f"NOISY LABEL {index}", x=index, y=index, width=90, height=20, confidence=70)

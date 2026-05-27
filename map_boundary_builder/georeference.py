@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
+import os
 import re
 
 import cv2
@@ -27,6 +29,8 @@ MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
+GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "8")))
+GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "8")))
 EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
 EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
 EARLY_CONTEXT_MIN_CANDIDATES = 24
@@ -307,6 +311,39 @@ class CityContext:
     center: GeocodeResult
     inferred: bool
     evidence: tuple[str, ...] = ()
+
+
+def geocode_many(
+    requests: list[tuple[str, int]] | list[tuple[str, int, str]],
+) -> list[list[GeocodeResult]]:
+    if not requests:
+        return []
+
+    normalized: list[tuple[str, int, str]] = []
+    for request in requests:
+        if len(request) == 2:
+            query, limit = request
+            country_codes = "us"
+        else:
+            query, limit, country_codes = request
+        normalized.append((query, limit, country_codes))
+
+    unique_requests = list(dict.fromkeys(normalized))
+    if len(unique_requests) == 1 or GEOCODE_WORKERS == 1:
+        results_by_request = {
+            request: geocode(request[0], limit=request[1], country_codes=request[2])
+            for request in unique_requests
+        }
+    else:
+        max_workers = min(GEOCODE_WORKERS, len(unique_requests))
+
+        def run(request: tuple[str, int, str]) -> tuple[tuple[str, int, str], list[GeocodeResult]]:
+            return request, geocode(request[0], limit=request[1], country_codes=request[2])
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results_by_request = dict(executor.map(run, unique_requests))
+
+    return [results_by_request[request] for request in normalized]
 
 
 def georeference_from_ocr(
@@ -916,8 +953,12 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             query_evidence.setdefault(token_query, set()).add(label.text)
 
     scored_contexts: list[tuple[float, CityContext]] = []
-    for query, score in sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:6]:
-        for result in geocode(query, limit=2):
+    ranked_queries = sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:6]
+    for (query, score), results in zip(
+        ranked_queries,
+        geocode_many([(query, 2) for query, _score in ranked_queries]),
+    ):
+        for result in results:
             if not result.bbox:
                 continue
             if not primary_name_matches_label(result.display_name, query):
@@ -983,8 +1024,9 @@ def context_label_score(label: OcrLabel) -> tuple[float, float, int]:
 
 def prominent_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
     scored_contexts: list[tuple[float, CityContext]] = []
-    for query in prominent_context_queries(labels):
-        for result in geocode(query, limit=3):
+    queries = prominent_context_queries(labels)
+    for query, results in zip(queries, geocode_many([(query, 3) for query in queries])):
+        for result in results:
             if not result.bbox:
                 continue
             if not primary_name_matches_label(result.display_name, query):
@@ -1221,6 +1263,7 @@ def city_context_georef_score(context: CityContext) -> float:
 def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandidate]:
     candidates: list[LabelGeocodeCandidate] = []
     used_text: set[str] = set()
+    query_labels: list[tuple[OcrLabel, str]] = []
     for label in rank_geocode_labels(labels)[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
@@ -1234,11 +1277,16 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
         if text_key in used_text:
             continue
         used_text.add(text_key)
-        for result in geocode(query, limit=2):
-            if primary_name_matches_label(result.display_name, query):
-                candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
-        if has_reliable_candidate_cluster(candidates):
-            break
+        query_labels.append((label, query))
+
+    for start in range(0, len(query_labels), GEOCODE_BATCH_SIZE):
+        batch = query_labels[start : start + GEOCODE_BATCH_SIZE]
+        for (label, query), results in zip(batch, geocode_many([(query, 2) for _label, query in batch])):
+            for result in results:
+                if primary_name_matches_label(result.display_name, query):
+                    candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
+            if has_reliable_candidate_cluster(candidates):
+                return candidates
     return candidates
 
 
@@ -1980,8 +2028,9 @@ def build_geocoded_control_points(
             queries.append(query_text)
         best: GeocodeResult | None = None
         best_score = -1.0
-        for query in [q for q in queries if q]:
-            for candidate in geocode(query, limit=3):
+        query_batch = [query for query in queries if query]
+        for query, results in zip(query_batch, geocode_many([(query, 3) for query in query_batch])):
+            for candidate in results:
                 if not primary_name_matches_label(candidate.display_name, query_text):
                     continue
                 cand_x, cand_y = candidate.mercator
