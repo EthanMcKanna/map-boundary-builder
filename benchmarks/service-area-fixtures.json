@@ -1,8 +1,20 @@
 {
   "fixtures": {
+    "bay-area-waymo": {
+      "status": "reference_mismatch",
+      "note": "The Bay Area service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+    },
+    "houston-waymo": {
+      "status": "reference_mismatch",
+      "note": "The Houston service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+    },
     "las-vegas-zoox": {
       "status": "reference_mismatch",
       "note": "The local Zoox Las Vegas screenshot boundary and av-coverage-checker reference polygon are different shapes, so this pair is tracked as data debt instead of scored as model accuracy."
+    },
+    "miami-waymo": {
+      "status": "reference_mismatch",
+      "note": "The Miami service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
     }
   }
 }
