@@ -512,6 +512,18 @@ regressions, during latency experiments.
     `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`;
     and the full drift-aware benchmark stayed clean at 8/8 scored fixtures, 7
     `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931.
+  - Production deployment `dpl_Hqwdhxrs16ZeQRorKTzTBE8FDt39` is Ready and
+    aliased to `https://mapboundary.app`. The production page injects
+    `pipeline-782cc2ab7d027532`, serves the hidden `include_overlay=0` field,
+    and the deployed JS uses `image-to-geojson-v2`. A production Playwright
+    proof with mocked `/api/runs` saw one run request and zero `/api/health`
+    requests before output activation.
+  - Real production POSTs after deployment preserved bbox, confidence, source,
+    GeoJSON-only response shape, and no overlay payload. First post-deploy
+    Phoenix was cold at 18.731s wall / 15.192s event span, then a cache-busted
+    Phoenix warmed call returned in 3.220s wall / 0.862s event span. Miami's
+    first post-deploy call was cold at 11.092s wall / 9.070s event span, then a
+    warmed cache-busted call returned in 2.922s wall / 0.846s event span.
 
 ## Failed Or Rejected Experiments
 
