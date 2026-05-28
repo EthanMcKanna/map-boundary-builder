@@ -140,9 +140,36 @@ regressions, during latency experiments.
   `Ersey Village` is repaired to `Jersey Village` for Houston OCR; and
   `HUNTRIDG` is repaired to `Huntridge` for the production RapidOCR variant of
   the Las Vegas screenshot.
+- A guarded service-area catalog fast path now runs immediately after pixel
+  extraction and before OCR. It only uses bundled references that are not marked
+  `reference_mismatch`, requires matching provider style, normalized-shape IoU
+  >=0.97, a runner-up margin >=0.16, and area ratio within 0.85-1.15. High
+  confidence hits output the fitted extracted geometry with
+  `catalog-shape-match`; everything else falls back to the normal OCR
+  georeference path.
 
 ## Current Validation
 
+- Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
+  passed 74 tests and 9 subtests. `compileall`, `node --check`,
+  `json.tool` for bundled JSON, and `git diff --check` passed.
+- Fresh-cache full benchmark:
+  `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-catalog-final-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/catalog-fast-final-full`
+  passed 8/8 scored fixtures, skipped 7 known `reference_mismatch` fixtures,
+  improved avg IoU from 0.962 to 0.983, improved min IoU from 0.931 to 0.943,
+  and reduced local wall time from the latest classifier-only 7.40s baseline to
+  3.94s.
+- Catalog fast-path output sources: Austin Tesla, Dallas Tesla, Dallas Waymo,
+  Nashville Waymo, Orlando Waymo, Phoenix Waymo, and San Antonio Waymo used
+  `catalog-shape-match`; Los Angeles Waymo stayed on
+  `ocr-georeference:nominatim-label-fit` because its normalized shape match was
+  below the high-confidence threshold.
+- Fresh-cache changed-service-area no-network smoke still had zero attempted
+  geocoder/Overpass calls and did not use catalog references for drifted
+  Houston, Miami, Bay Area, or Las Vegas fixtures. Outputs preserved the current
+  OCR/georeference sources and bboxes; Miami Waymo remained road-refined with
+  confidence 0.864, 6 controls, bbox
+  `[-80.323092, 25.688025, -80.1185, 25.939698]`, and road score 0.681518.
 - Current head: `PYTHONPATH=. .venv/bin/pytest -q`: 71 passed, 9 subtests
   passed. `compileall`, `node --check`, and `json.tool` passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final3-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final3-place-wait-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
@@ -681,6 +708,14 @@ regressions, during latency experiments.
   produced high-count gibberish on a 180-degree rotated Orlando stress image,
   while classifier-enabled OCR recovered readable labels. Rejected for
   robustness.
+- A conservative "try RapidOCR without the angle classifier, then fall back to
+  classifier OCR when sparse" path passed the drift-aware benchmark and the
+  Houston/Miami/Bay Area no-network smokes, but did not make the full pipeline
+  faster: classifier-only full benchmark was 7.40s, the fallback path with a
+  12-label threshold was 7.68s, and a 1-label threshold only tied at 7.40s.
+  Direct OCR-only timing across 15 active/drift fixtures saved only 0.051s in
+  aggregate and was slower on Orlando, Dallas Waymo, Houston Waymo, and Las
+  Vegas Zoox. Rejected.
 - Extraction downscaling sped up direct mask extraction, but even a 2000px cap
   moved Phoenix IoU from 0.983 to 0.982 and lower caps shifted additional
   stable fixtures. Rejected under the no-regression accuracy bar.

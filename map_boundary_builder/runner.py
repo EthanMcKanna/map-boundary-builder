@@ -10,6 +10,7 @@ from typing import Any, Callable
 from PIL import Image
 from shapely.geometry import shape
 
+from .catalog_match import catalog_feature_collection, match_service_area_catalog
 from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
 from .georeference import (
     CityContext,
@@ -96,41 +97,86 @@ def build_boundary(
     with Image.open(image_path) as img:
         width, height = img.size
 
+    emit_progress(
+        progress,
+        stage="extract",
+        message="Extracting service-area pixels",
+        percent=18,
+        details={"width": width, "height": height},
+    )
+    rgb = load_rgb(image_path)
+    extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
+    emit_progress(
+        progress,
+        stage="extract",
+        message="Pixel polygon extracted",
+        percent=36,
+        details={
+            "style": extraction.style,
+            "coverage_ratio": round(extraction.coverage_ratio, 6),
+            "contour_count": extraction.contour_count,
+            "confidence": extraction.confidence,
+        },
+    )
+
+    if city_input is None:
+        catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
+        if catalog_match is not None:
+            data = catalog_feature_collection(
+                extraction,
+                catalog_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input="Auto",
+            )
+            combined_confidence = data["features"][0]["properties"]["combined_confidence"]
+            emit_progress(
+                progress,
+                stage="georeference",
+                message="Matched known service-area shape",
+                percent=78,
+                details={
+                    "source": "catalog-shape-match",
+                    "catalog_slug": catalog_match.entry.slug,
+                    "shape_iou": round(catalog_match.iou, 3),
+                    "combined_confidence": combined_confidence,
+                    "control_points": 0,
+                    "median_residual_m": 0.0,
+                    "p90_residual_m": 0.0,
+                },
+            )
+            if combined_confidence < opts.min_confidence:
+                raise ValueError(
+                    f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
+                    f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
+                )
+            return finish_boundary_result(
+                data,
+                extraction,
+                image_path,
+                output_path,
+                debug_path,
+                opts,
+                width,
+                height,
+                city_input="Auto",
+                rgb=rgb,
+                progress=progress,
+            )
+
+    label_y_max = (
+        extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
+        if extraction.style == "dark-teal"
+        else None
+    )
+    label_y_min = (
+        extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
+        if extraction.style == "gray-fill"
+        else None
+    )
     with ThreadPoolExecutor(max_workers=1) as ocr_executor:
         labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
-
-        emit_progress(
-            progress,
-            stage="extract",
-            message="Extracting service-area pixels",
-            percent=18,
-            details={"width": width, "height": height},
-        )
-        rgb = load_rgb(image_path)
-        extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
-        emit_progress(
-            progress,
-            stage="extract",
-            message="Pixel polygon extracted",
-            percent=36,
-            details={
-                "style": extraction.style,
-                "coverage_ratio": round(extraction.coverage_ratio, 6),
-                "contour_count": extraction.contour_count,
-                "confidence": extraction.confidence,
-            },
-        )
-
-        label_y_max = (
-            extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
-            if extraction.style == "dark-teal"
-            else None
-        )
-        label_y_min = (
-            extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
-            if extraction.style == "gray-fill"
-            else None
-        )
         emit_progress(
             progress,
             stage="ocr",
@@ -207,6 +253,35 @@ def build_boundary(
             f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
         )
 
+    return finish_boundary_result(
+        data,
+        extraction,
+        image_path,
+        output_path,
+        debug_path,
+        opts,
+        width,
+        height,
+        city_input=city_input or "Auto",
+        rgb=rgb,
+        progress=progress,
+    )
+
+
+def finish_boundary_result(
+    data: dict[str, Any],
+    extraction,
+    image_path: Path,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    width: int,
+    height: int,
+    *,
+    city_input: str,
+    rgb,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult:
     emit_progress(
         progress,
         stage="export",
@@ -233,7 +308,7 @@ def build_boundary(
     summary = build_summary(
         data,
         output_path=output_path,
-        city=city_input or "Auto",
+        city=city_input,
         width=width,
         height=height,
         mask_path=mask_path,
