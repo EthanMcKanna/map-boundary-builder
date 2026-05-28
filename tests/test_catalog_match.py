@@ -1,3 +1,5 @@
+from math import cos, radians, sin
+
 import numpy as np
 from shapely.affinity import rotate
 from shapely.geometry import shape
@@ -127,6 +129,19 @@ def test_current_verified_catalog_entry_can_declare_tight_min_shape_iou() -> Non
     assert match.confidence == 0.877
 
 
+def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
+    pixel_geometry = mercator_geometry_to_similarity_pixel(entry.mercator_geometry, rotation_degrees=10.0)
+
+    match = match_service_area_catalog(pixel_geometry, style="light-fill")
+
+    assert match is not None
+    assert match.entry.slug == "las-vegas-zoox"
+    assert match.iou >= 0.985
+    assert abs(match.rotation_degrees) > 2.0
+    assert match.confidence == 0.767
+
+
 def mercator_geometry_to_pixel(geometry):
     min_x, min_y, max_x, max_y = geometry.bounds
     width = max_x - min_x
@@ -134,5 +149,21 @@ def mercator_geometry_to_pixel(geometry):
 
     def to_pixel(x: float, y: float, z: float | None = None) -> tuple[float, float]:
         return (x - min_x) / width * 1000.0, (max_y - y) / height * 1000.0
+
+    return transform(to_pixel, geometry)
+
+
+def mercator_geometry_to_similarity_pixel(geometry, *, rotation_degrees: float):
+    center_x, center_y = geometry.centroid.coords[0]
+    angle = radians(rotation_degrees)
+    cos_r = cos(angle)
+    sin_r = sin(angle)
+
+    def to_pixel(x: float, y: float, z: float | None = None) -> tuple[float, float]:
+        dx = (x - center_x) / 1000.0
+        dy = (y - center_y) / 1000.0
+        pixel_x = dx * cos_r + dy * sin_r + 500.0
+        pixel_y = -(-dx * sin_r + dy * cos_r) + 500.0
+        return pixel_x, pixel_y
 
     return transform(to_pixel, geometry)

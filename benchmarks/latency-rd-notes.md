@@ -170,8 +170,19 @@ regressions, during latency experiments.
 - Bay Area Waymo now has a current-verified OCR catalog entry with a declared
   0.965 minimum shape IoU. It clears that guard at 0.969 shape IoU with 0.748
   runner-up margin, keeps its confidence cap at 0.877 from the 15-control OCR
-  fit, and returns the exact OCR-derived geometry. Las Vegas still does not
-  catalog-match.
+  fit, and returns the exact OCR-derived geometry.
+- Current-verified OCR catalog entries now have a stricter exact ordered-contour
+  similarity fallback. It only runs when the extracted polygon and catalog
+  polygon have the same exterior vertex count and at least 10 points, rejects
+  anything below 0.985 IoU, and still goes through the provider-style, margin,
+  and area-ratio guards. This handles rotated exact current screenshots without
+  lowering the global catalog threshold or accepting weak bounds-only matches.
+- Las Vegas Zoox now has a low-confidence current-verified OCR catalog entry
+  that uses the exact ordered-contour strategy. The old bounds/rotation fit only
+  reached 0.747 IoU with area ratio 1.222, so it was not safe; the ordered
+  contour fit recovers the same similarity transform as OCR, clears 0.999999
+  shape IoU with 0.464 margin, keeps the OCR confidence cap at 0.767 from its
+  3-control fit, and returns the exact OCR-derived geometry.
 
 ## Current Validation
 
@@ -244,6 +255,19 @@ regressions, during latency experiments.
   generation spans dropped from the previous OCR-path guard check at 5.807s to
   0.655s, 0.485s, 0.520s, and 0.501s. A cache-busted Las Vegas Zoox guard check
   stayed on `ocr-georeference:nominatim-label-fit`.
+- Current exact ordered-contour head: the full pytest suite passed 79 tests and
+  9 subtests. `compileall`, `node --check
+  map_boundary_builder/web_assets/app.js`, bundled catalog `json.tool`, and
+  `git diff --check` passed.
+- Fresh-cache full benchmark after the exact ordered-contour catalog change
+  passed 8/8 scored fixtures, skipped 7 known `reference_mismatch` fixtures,
+  avg IoU 0.983, min IoU 0.943, and completed in 3.22s wall.
+- Fresh-cache changed-service-area no-network smoke had zero attempted network
+  calls. Las Vegas Zoox moved from OCR to `catalog-shape-match` in 0.017s with
+  confidence 0.767, catalog shape IoU 0.999999, margin 0.464159, rotation
+  -9.799 degrees, and exact bbox
+  `[-115.3550119, 36.0353866, -115.1830059, 36.187696]`; the catalog output had
+  IoU 1.0 against the current OCR baseline.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.

@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import json
+from math import atan2, degrees
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.affinity import rotate
 from shapely.ops import transform
@@ -21,6 +23,8 @@ CATALOG_MAX_AREA_RATIO = 1.15
 CATALOG_ROTATION_MIN_IOU = 0.94
 CATALOG_ROTATION_MAX_DEGREES = 2.0
 CATALOG_ROTATION_STEP_DEGREES = 0.25
+CATALOG_EXACT_MIN_POINTS = 10
+CATALOG_EXACT_MIN_IOU = 0.985
 PROVIDER_STYLES = {
     "tesla": {"gray-fill"},
     "waymo": {"bright-blue"},
@@ -287,6 +291,9 @@ def score_catalog_entry(
     best_rotation = 0.0
 
     if best_iou >= min_iou or best_iou < CATALOG_ROTATION_MIN_IOU:
+        exact = score_exact_ordered_catalog_entry(pixel_geometry, entry)
+        if exact is not None and exact[0] > best_iou:
+            return exact
         return best_iou, best_area_ratio, entry, best_fitted, best_rotation
 
     for rotation_degrees in catalog_rotation_offsets():
@@ -298,7 +305,75 @@ def score_catalog_entry(
             best_fitted = rotated
             best_rotation = rotation_degrees
 
+    exact = score_exact_ordered_catalog_entry(pixel_geometry, entry)
+    if exact is not None and exact[0] > best_iou:
+        return exact
     return best_iou, best_area_ratio, entry, best_fitted, best_rotation
+
+
+def score_exact_ordered_catalog_entry(
+    pixel_geometry: Polygon | MultiPolygon,
+    entry: ServiceAreaCatalogEntry,
+) -> tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon, float] | None:
+    if not entry.use_exact_geometry:
+        return None
+    pixel_points = exterior_points(pixel_geometry)
+    reference_points = exterior_points(entry.mercator_geometry)
+    if pixel_points is None or reference_points is None:
+        return None
+    if len(pixel_points) != len(reference_points) or len(pixel_points) < CATALOG_EXACT_MIN_POINTS:
+        return None
+
+    source_points = pixel_points.copy()
+    source_points[:, 1] *= -1.0
+    fitted, rotation_degrees = fit_ordered_similarity(
+        pixel_geometry,
+        source_points,
+        reference_points,
+    )
+    metrics = compare_geometries(fitted, entry.mercator_geometry)
+    if metrics["iou"] < CATALOG_EXACT_MIN_IOU:
+        return None
+    return metrics["iou"], metrics["area_ratio"], entry, fitted, rotation_degrees
+
+
+def exterior_points(geometry: Polygon | MultiPolygon) -> np.ndarray | None:
+    if not isinstance(geometry, Polygon) or geometry.interiors:
+        return None
+    coords = list(geometry.exterior.coords)
+    if len(coords) > 1 and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    if not coords:
+        return None
+    return np.asarray(coords, dtype=np.float64)
+
+
+def fit_ordered_similarity(
+    pixel_geometry: Polygon | MultiPolygon,
+    source_points: np.ndarray,
+    reference_points: np.ndarray,
+) -> tuple[Polygon | MultiPolygon, float]:
+    source_mean = source_points.mean(axis=0)
+    reference_mean = reference_points.mean(axis=0)
+    source_centered = source_points - source_mean
+    reference_centered = reference_points - reference_mean
+    covariance = (reference_centered.T @ source_centered) / len(source_points)
+    u, singular_values, vt = np.linalg.svd(covariance)
+    correction = np.eye(2)
+    if np.linalg.det(u @ vt) < 0:
+        correction[-1, -1] = -1.0
+    rotation = u @ correction @ vt
+    variance = float((source_centered**2).sum() / len(source_points))
+    scale = float(np.trace(np.diag(singular_values) @ correction) / variance)
+    offset = reference_mean - scale * (rotation @ source_mean)
+
+    def fit(x: float, y: float, z: float | None = None) -> tuple[float, float]:
+        point = np.asarray((x, -y), dtype=np.float64)
+        fitted = scale * (rotation @ point) + offset
+        return float(fitted[0]), float(fitted[1])
+
+    rotation_degrees = degrees(atan2(rotation[1, 0], rotation[0, 0]))
+    return transform(fit, pixel_geometry), rotation_degrees
 
 
 def catalog_rotation_offsets() -> tuple[float, ...]:
