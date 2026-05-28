@@ -21,10 +21,14 @@ from api.index import (
     write_run_result_cache,
 )
 from map_boundary_builder.asset_response import web_asset_response
-from map_boundary_builder.runner import BoundaryBuildOptions
+from map_boundary_builder.runner import BoundaryBuildOptions, catalog_matching_enabled
 
 
 class ApiRunCacheTests(unittest.TestCase):
+    def test_catalog_matching_defaults_on_for_api_options_namespace(self) -> None:
+        self.assertTrue(catalog_matching_enabled(SimpleNamespace()))
+        self.assertFalse(catalog_matching_enabled(SimpleNamespace(allow_catalog=False)))
+
     def test_run_cache_key_depends_on_image_and_options(self) -> None:
         base = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
         changed_image = run_result_cache_key(b"image-b", None, BoundaryBuildOptions())

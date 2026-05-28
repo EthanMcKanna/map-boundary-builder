@@ -208,6 +208,15 @@ regressions, during latency experiments.
   each passed 8/8 active fixtures, skipped 7 known `reference_mismatch`
   fixtures, avg IoU 0.962, min IoU 0.931. The reports show OCR/georeference
   sources and `catalog_slug: null`, confirming the catalog path was bypassed.
+- Post-deploy API compatibility fix: the API passes a `SimpleNamespace` options
+  object instead of `BoundaryBuildOptions`, so `allow_catalog` now defaults to
+  true when absent and has a focused regression test. After the fix,
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` passed 82 tests and 9 subtests;
+  default full benchmark `out/benchmark-post-namespace-fix-20260528-154617/full-report.json`
+  passed 8/8 active fixtures with avg IoU 0.983, min IoU 0.943; and
+  `out/benchmark-no-catalog-post-fix-20260528-154617/full-report.json` passed
+  the OCR/georeference-only gate at 8/8 active fixtures, avg IoU 0.962, min IoU
+  0.931.
 - Rejected mask-bounds OCR cropping as a default optimization. It reduced OCR
   time on representative city-forced cases, but Phoenix dropped from confidence
   0.908 with 6 controls to 0.873 with 5 controls, and Miami's road score moved

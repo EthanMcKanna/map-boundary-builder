@@ -86,6 +86,7 @@ def build_boundary(
     output_path = Path(output_path)
     debug_path = Path(debug_dir) if debug_dir else None
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
+    allow_catalog = catalog_matching_enabled(opts)
 
     emit_progress(
         progress,
@@ -123,7 +124,7 @@ def build_boundary(
         },
     )
 
-    if city_input is None and opts.allow_catalog:
+    if city_input is None and allow_catalog:
         catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
         if catalog_match is not None:
             data = catalog_feature_collection(
@@ -198,7 +199,7 @@ def build_boundary(
                 "top_labels": [label.text for label in labels[:8]],
             },
         )
-        if city_input is None and opts.allow_catalog and should_try_label_hinted_catalog(width, height, labels):
+        if city_input is None and allow_catalog and should_try_label_hinted_catalog(width, height, labels):
             label_hints = high_confidence_label_texts(labels)
             catalog_match = match_service_area_catalog(
                 extraction.pixel_geometry,
@@ -332,6 +333,10 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
     if len(labels) <= CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT:
         return True
     return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
+
+
+def catalog_matching_enabled(options: Any) -> bool:
+    return bool(getattr(options, "allow_catalog", True))
 
 
 def high_confidence_label_texts(labels: list[Any]) -> list[str]:
