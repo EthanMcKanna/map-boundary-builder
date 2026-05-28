@@ -452,6 +452,14 @@ regressions, during latency experiments.
   a 297.34 MB remote bundle while keeping the function at 92.74 MB.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
+- A separate `/api/health?warm=generation` prewarm request initialized OCR on
+  one production function instance, but a following cache-busted `/api/runs`
+  request could still land on a cold instance: after deployment
+  `dpl_CD6QdbdAnHgbekhxHNLxf3emSuqc`, explicit warmup returned
+  `generation: true`, `ocr: true`, and `warm_elapsed_ms: 1302.6`, yet later
+  warmed health calls reported `warm_elapsed_ms: 0.0` while the next Bay/Miami
+  POSTs still took 7.154s and 7.892s event spans. Rejected and reverted because
+  it added a client request without reliable same-instance latency improvement.
 
 ## Remaining Bottlenecks
 
