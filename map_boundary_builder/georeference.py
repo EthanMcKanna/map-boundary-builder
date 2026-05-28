@@ -57,6 +57,7 @@ GENERIC_SINGLE_TOKENS = {
 }
 OCR_PLACE_TOKEN_ALIASES = {
     "anor": "manor",
+    "arverdale": "carverdale",
     "carverdail": "carverdale",
     "carverdaile": "carverdale",
     "carverdaille": "carverdale",
@@ -79,6 +80,7 @@ OCR_PLACE_TOKEN_ALIASES = {
     "sey": "jersey",
     "uakland": "oakland",
     "vakland": "oakland",
+    "villowbrook": "willowbrook",
 }
 ADMIN_CONTEXT_TYPES = {
     "borough",
@@ -807,6 +809,9 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
     direct_contexts = direct_city_contexts_from_labels(inference_labels)
+    if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
+        return direct_contexts
+
     candidates = geocoded_label_candidates(inference_labels)
     if should_use_direct_city_contexts(direct_contexts):
         expanded_contexts = expanded_contexts_from_label_cluster(candidates, direct_contexts)

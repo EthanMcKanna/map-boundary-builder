@@ -129,6 +129,8 @@ class PlaceCandidateTests(unittest.TestCase):
     def test_place_query_text_removes_noise_and_repairs_aliases(self) -> None:
         self.assertEqual(place_query_text("edwood City acy"), "Redwood City")
         self.assertEqual(place_query_text("San Jos"), "San Jose")
+        self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
+        self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")
 
     def test_tiny_single_token_places_are_not_direct_contexts(self) -> None:
         francisco = GeocodeResult(
