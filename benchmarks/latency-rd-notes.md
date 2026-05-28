@@ -153,9 +153,29 @@ regressions, during latency experiments.
   their original OCR-derived confidence caps, and the matcher still rejects Bay
   Area Waymo, Houston Tesla, and Las Vegas because they did not clear the same
   shape-fit threshold.
+- Los Angeles Waymo now uses a verified current-shape catalog entry generated
+  from the same OCR output that already passed the active benchmark. The entry
+  keeps the OCR-derived confidence cap at 0.859 and its benchmark IoU against
+  the saved reference is 0.943, while its normalized shape fit clears the
+  catalog guard with 0.994 self-shape IoU.
 
 ## Current Validation
 
+- Current Los Angeles catalog head: the full pytest suite passed 75 tests and 9
+  subtests. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
+  bundled catalog `json.tool`, and `git diff --check` passed. The mistaken
+  old-path syntax check against `public/app.js` is ignored because that file is
+  not present in this repo state.
+- Fresh-cache full benchmark after the Los Angeles current-shape catalog entry:
+  `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-current-catalog-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/la-current-catalog-full`
+  passed 8/8 scored fixtures, skipped 7 known `reference_mismatch` fixtures,
+  avg IoU 0.983, min IoU 0.942, and completed in 3.25s wall. Output sources
+  showed Los Angeles Waymo moved from OCR to `catalog-shape-match` with
+  confidence 0.859, while Houston, Miami, and Bay Area drifted fixtures remain
+  treated as stale-ground-truth data debt rather than scored regressions.
+- Focused fresh-cache Los Angeles full benchmark:
+  `MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-current-single-XXXXXX) ... --mode full --only los-angeles`
+  passed with IoU 0.942 and completed in 0.50s wall.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.
@@ -780,6 +800,13 @@ regressions, during latency experiments.
   with lower avg IoU (0.960 versus 0.962) and slower end-to-end local timing in
   the Vercel-like RapidOCR-only path, while a 1200px cap failed Nashville
   georeference outright. Rejected.
+- Lowering RapidOCR max dimension to 1200 remained unsafe even after the catalog
+  path existed: the active full benchmark still passed thresholds only because
+  several hard fixtures were catalog-masked, while Los Angeles dropped to 0.846
+  IoU and confidence/residuals did not catch the regression. A 1400px cap
+  preserved the current catalog-heavy benchmark, but that does not generalize
+  enough for arbitrary non-catalog uploads. Rejected; do not ship a lower global
+  OCR cap without a stronger fallback or validator.
 
 ## Remaining Bottlenecks
 
