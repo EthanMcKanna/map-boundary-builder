@@ -85,6 +85,10 @@ screenshots are refreshed.
   runtime wheel. A Python 3.12 throwaway venv kept NumPy 2.4.6 and OpenCV
   4.13.0 behavior, passed all unit tests, and preserved the drift-aware full
   benchmark at 8/8 scored fixtures with avg IoU 0.962 and min IoU 0.931.
+- Vercel/uv dependency metadata for ONNX Runtime now excludes optional SymPy,
+  coloredlogs, and humanfriendly installs from the production resolver. Manual
+  no-SymPy inference validation passed, and the remote Vercel bundle dropped to
+  297.34 MB while keeping the inspected function at 92.74 MB.
 - Georeference marker detection and road refinement now reuse the already-loaded
   RGB image from the runner instead of rereading the same normalized upload from
   disk. This removed the georeference-side duplicate read, keeps extraction and
@@ -100,6 +104,10 @@ screenshots are refreshed.
 - `PYTHONPATH=. .venv/bin/pytest -q`: 54 passed after RGB reuse.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rgbreuse-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/rgb-reuse-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rgbreuse-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rgb-reuse-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
+- Manual ONNX Runtime 1.19.2 no-SymPy stack:
+  `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-nosympy-py312-venv-*/bin/python -m pytest tests/test_ocr_georeference.py tests/test_osm_roads.py tests/test_image_io.py -q`: 39 passed.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-nosympy-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-nosympy-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-nosympy-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-nosympy-full-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-nosympy-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/ort119-nosympy-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused hybrid road-refinement A/B against `34cdeed`:
   - baseline Phoenix 1.761s / 0.731s georef / 0.983 IoU / road score 0.698507;
     hybrid Phoenix 1.559s / 0.602s georef / 0.985 IoU / road score 0.718119.
@@ -283,6 +291,15 @@ screenshots are refreshed.
   `[-112.1167239, 33.2306602, -111.8157216, 33.689586]`, confidence 0.917,
   6 controls, and road score 0.718119. Exact repeat returned the same geometry
   and confidence in 2.28s wall via run-result cache.
+- Skip-domain deployment `dpl_CLtAipnPnTZbqPXzJcbTuBNW5tus` tested the
+  no-SymPy ONNX Runtime metadata override. Build output reported a 297.34 MB
+  Python bundle before runtime dependency installation, down from 325.22 MB on
+  the current RGB-reuse production build and 311.23 MB on the ONNX Runtime
+  1.26.0 candidate. `vercel inspect` kept `api/index.py` at 92.74 MB.
+- Protected Orlando smoke on `dpl_CLtAipnPnTZbqPXzJcbTuBNW5tus` with
+  `simplify_px=6.42`: status complete, 14.60s wall through `vercel curl`,
+  10.189s event span, confidence 0.909, 6 controls, bbox
+  `[-81.5090796, 28.3588616, -81.3625383, 28.5554773]`.
 
 ## Failed Or Rejected Experiments
 
@@ -320,6 +337,11 @@ screenshots are refreshed.
   Phoenix to 0.895 IoU. Rejected; the 2000px OCR input cap remains necessary.
 - Pinning ONNX Runtime threads was slower locally: 1x1 and 2x1 were much slower
   than default, and 4x1 hurt Phoenix. Rejected.
+- Pinning ONNX Runtime to 1.26.0 removed SymPy from normal pip installs and
+  reduced the remote Vercel bundle from 325.22 MB to 311.23 MB, but it pushed
+  `api/index.py` back to 101.17 MB. Rejected in favor of ONNX Runtime 1.19.2
+  plus Vercel/uv metadata that omits optional SymPy dependencies, which reached
+  a 297.34 MB remote bundle while keeping the function at 92.74 MB.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 
@@ -327,7 +349,7 @@ screenshots are refreshed.
 
 - Production function size is improved after the ONNX Runtime pin, with Vercel
   reporting `api/index.py` at 92.74 MB on the current deployment. The remote
-  Python build still reports a 325.22 MB pre-runtime-installation bundle, so
+  Python build now reports a 297.34 MB pre-runtime-installation bundle, so
   cold starts and OCR model initialization remain production-only latency risks.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full

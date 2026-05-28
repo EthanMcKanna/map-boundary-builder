@@ -55,6 +55,15 @@ requires-dist = [
   "tqdm",
 ]
 
+[[tool.uv.dependency-metadata]]
+name = "onnxruntime"
+requires-dist = [
+  "flatbuffers",
+  "numpy>=1.21.6",
+  "packaging",
+  "protobuf",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["map_boundary_builder*"]
