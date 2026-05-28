@@ -418,6 +418,15 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   0.993, min IoU 0.943, total 2.92s; the no-catalog benchmark
   `out/summary-metadata-no-catalog-full-20260528-continue2/full-report.json`
   passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.36s.
+- Production summary-metadata deployment `dpl_4FdkLbXRXwP6nJTN3FCf4uZBgJM8`
+  was aliased to `https://mapboundary.app` and reported
+  `pipeline-dd206b786b8b45aa`. Cache-busted Phoenix with `city=Phoenix`
+  reported `catalog_slug: phoenix-waymo`, shape IoU 0.984044, margin 0.358165,
+  no OCR event, and a 0.614s server event span. Cache-busted Miami with
+  `city=Miami` reported null catalog fields, stayed on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864,
+  road score 0.681518, and the same bbox; the warm cache-busted follow-up
+  preserved that output with a 0.900s server event span.
 - Rejected RapidOCR detector-side reduction as a default after a fresh-cache
   full no-catalog gate. `MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN=544` and
   `512` preserved pass/fail but slowed the total benchmark and reduced gray-fill
