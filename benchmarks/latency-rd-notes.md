@@ -183,9 +183,39 @@ regressions, during latency experiments.
   contour fit recovers the same similarity transform as OCR, clears 0.999999
   shape IoU with 0.464 margin, keeps the OCR confidence cap at 0.767 from its
   3-control fit, and returns the exact OCR-derived geometry.
+- Sparse low-resolution screenshots now get a guarded label-aided catalog
+  fallback after OCR but before geocoding. The strict pre-OCR catalog threshold
+  remains unchanged; the lower 0.94 IoU path only runs when a high-confidence
+  OCR label names the candidate catalog area and the image is small or has very
+  few labels. This recovered the issue #5 420px Nashville screenshot from a
+  slow georeference failure into a 0.305s current catalog result.
 
 ## Current Validation
 
+- Current label-aided catalog head: `PATH=/usr/bin:/bin PYTHONPATH=.
+  .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests. `compileall`
+  over `map_boundary_builder`, `api`, and `tests`, `node --check
+  map_boundary_builder/web_assets/app.js`, and the full drift-aware benchmark
+  passed.
+- Fresh-cache full benchmark after the label-aided catalog change passed 8/8
+  scored fixtures, skipped 7 known `reference_mismatch` fixtures, avg IoU
+  0.983, min IoU 0.943, report
+  `out/benchmark-label-hint-tight-20260528-153327/full-report.json`.
+- Issue #5 Nashville debug artifact:
+  `/tmp/mbb-issue5-input.png` is a 420x236 image with only one OCR label,
+  `Nashville`. Before the change it failed after 18.503s with "Could not infer
+  a reliable map location"; after the change it used
+  `catalog-shape-match:ocr-label-hint`, confidence 0.949, catalog IoU 0.949070,
+  runner-up margin 0.275103, bbox
+  `[-86.8461084, 36.1089989, -86.6904545, 36.242681]`, and completed in 0.305s
+  on the first post-change probe. The full-resolution companion still uses the
+  strict pre-OCR `catalog-shape-match` path in 0.105s.
+- Fresh-cache changed-service-area smoke for the user-confirmed drifted markets
+  kept Bay Area, Houston, and Miami out of the hard reference score while still
+  covering current outputs: Bay Area Tesla 0.027s, Bay Area Waymo 0.130s, Bay
+  Area Zoox 0.094s, Houston Tesla 0.013s, Houston Waymo 0.116s, and Miami Waymo
+  0.111s, all through `catalog-shape-match` with current-shape confidence caps
+  and exact catalog bboxes.
 - Current Los Angeles catalog head: the full pytest suite passed 75 tests and 9
   subtests. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
   bundled catalog `json.tool`, and `git diff --check` passed. The mistaken

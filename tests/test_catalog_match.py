@@ -6,6 +6,7 @@ from shapely.geometry import shape
 from shapely.ops import transform
 
 from map_boundary_builder.catalog_match import (
+    CATALOG_LABEL_HINT_MIN_IOU,
     catalog_feature_collection,
     load_catalog_entries,
     match_service_area_catalog,
@@ -140,6 +141,40 @@ def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None
     assert match.iou >= 0.985
     assert abs(match.rotation_degrees) > 2.0
     assert match.confidence == 0.767
+
+
+def test_label_hint_accepts_sparse_low_resolution_shape_match() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    simplified_reference = entry.mercator_geometry.simplify(500, preserve_topology=True)
+    pixel_geometry = mercator_geometry_to_pixel(simplified_reference)
+
+    strict_match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+    hinted_match = match_service_area_catalog(
+        pixel_geometry,
+        style="bright-blue",
+        min_iou=CATALOG_LABEL_HINT_MIN_IOU,
+        area_hint_texts=["Nashville"],
+    )
+
+    assert strict_match is None
+    assert hinted_match is not None
+    assert hinted_match.entry.slug == "nashville-waymo"
+    assert CATALOG_LABEL_HINT_MIN_IOU <= hinted_match.iou < 0.97
+
+
+def test_label_hint_rejects_wrong_area_match() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    simplified_reference = entry.mercator_geometry.simplify(500, preserve_topology=True)
+    pixel_geometry = mercator_geometry_to_pixel(simplified_reference)
+
+    match = match_service_area_catalog(
+        pixel_geometry,
+        style="bright-blue",
+        min_iou=CATALOG_LABEL_HINT_MIN_IOU,
+        area_hint_texts=["Phoenix"],
+    )
+
+    assert match is None
 
 
 def mercator_geometry_to_pixel(geometry):

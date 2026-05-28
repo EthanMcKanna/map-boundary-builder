@@ -10,7 +10,7 @@ from typing import Any, Callable
 from PIL import Image
 from shapely.geometry import shape
 
-from .catalog_match import catalog_feature_collection, match_service_area_catalog
+from .catalog_match import CATALOG_LABEL_HINT_MIN_IOU, catalog_feature_collection, match_service_area_catalog
 from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
 from .georeference import (
     CityContext,
@@ -26,6 +26,9 @@ from .ocr import extract_ocr_labels
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
+CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
+CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
+CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
 
 
 @dataclass(frozen=True)
@@ -194,6 +197,60 @@ def build_boundary(
                 "top_labels": [label.text for label in labels[:8]],
             },
         )
+        if city_input is None and should_try_label_hinted_catalog(width, height, labels):
+            label_hints = high_confidence_label_texts(labels)
+            catalog_match = match_service_area_catalog(
+                extraction.pixel_geometry,
+                style=extraction.style,
+                min_iou=CATALOG_LABEL_HINT_MIN_IOU,
+                area_hint_texts=label_hints,
+            )
+            if catalog_match is not None:
+                data = catalog_feature_collection(
+                    extraction,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input="Auto",
+                )
+                properties = data["features"][0]["properties"]
+                properties["georeference_source"] = "catalog-shape-match:ocr-label-hint"
+                properties["catalog_label_hints"] = label_hints[:5]
+                combined_confidence = properties["combined_confidence"]
+                emit_progress(
+                    progress,
+                    stage="georeference",
+                    message="Matched known service-area shape from labels",
+                    percent=78,
+                    details={
+                        "source": "catalog-shape-match:ocr-label-hint",
+                        "catalog_slug": catalog_match.entry.slug,
+                        "shape_iou": round(catalog_match.iou, 3),
+                        "combined_confidence": combined_confidence,
+                        "control_points": 0,
+                        "median_residual_m": 0.0,
+                        "p90_residual_m": 0.0,
+                    },
+                )
+                if combined_confidence < opts.min_confidence:
+                    raise ValueError(
+                        f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
+                        f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
+                    )
+                return finish_boundary_result(
+                    data,
+                    extraction,
+                    image_path,
+                    output_path,
+                    debug_path,
+                    opts,
+                    width,
+                    height,
+                    city_input="Auto",
+                    rgb=rgb,
+                    progress=progress,
+                )
         georef = fit_georeference(
             labels,
             image_path,
@@ -266,6 +323,22 @@ def build_boundary(
         rgb=rgb,
         progress=progress,
     )
+
+
+def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) -> bool:
+    if not high_confidence_label_texts(labels):
+        return False
+    if len(labels) <= CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT:
+        return True
+    return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
+
+
+def high_confidence_label_texts(labels: list[Any]) -> list[str]:
+    return [
+        label.text
+        for label in labels
+        if label.text.strip() and label.confidence >= CATALOG_LABEL_HINT_MIN_CONFIDENCE
+    ]
 
 
 def finish_boundary_result(

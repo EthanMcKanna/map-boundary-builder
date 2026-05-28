@@ -6,6 +6,7 @@ import json
 from math import atan2, degrees
 from importlib import resources
 from pathlib import Path
+import re
 from typing import Any
 
 import numpy as np
@@ -25,6 +26,7 @@ CATALOG_ROTATION_MAX_DEGREES = 2.0
 CATALOG_ROTATION_STEP_DEGREES = 0.25
 CATALOG_EXACT_MIN_POINTS = 10
 CATALOG_EXACT_MIN_IOU = 0.985
+CATALOG_LABEL_HINT_MIN_IOU = 0.94
 PROVIDER_STYLES = {
     "tesla": {"gray-fill"},
     "waymo": {"bright-blue"},
@@ -71,7 +73,9 @@ def match_service_area_catalog(
     style: str,
     min_iou: float = CATALOG_MIN_IOU,
     min_margin: float = CATALOG_MIN_MARGIN,
+    area_hint_texts: tuple[str, ...] | list[str] | None = None,
 ) -> ServiceAreaCatalogMatch | None:
+    area_hints = tuple(text for text in (area_hint_texts or ()) if text.strip())
     candidates = [
         entry
         for entry in load_catalog_entries()
@@ -87,6 +91,8 @@ def match_service_area_catalog(
     best_iou, best_area_ratio, best_entry, best_fitted, rotation_degrees = scored[0]
     runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
     margin = best_iou - runner_up_iou
+    if area_hints and not any(catalog_area_matches_text(best_entry.area, hint) for hint in area_hints):
+        return None
     required_iou = min_iou if min_iou != CATALOG_MIN_IOU else best_entry.min_iou
     if best_iou < required_iou or margin < min_margin:
         return None
@@ -255,6 +261,16 @@ def provider_from_slug(slug: str) -> str | None:
 def area_from_slug(slug: str, provider: str) -> str:
     area_slug = slug.removesuffix(f"-{provider}")
     return " ".join(part.capitalize() for part in area_slug.split("-"))
+
+
+def catalog_area_matches_text(area: str, text: str) -> bool:
+    area_tokens = normalize_catalog_area_tokens(area)
+    text_tokens = set(normalize_catalog_area_tokens(text))
+    return bool(area_tokens) and all(token in text_tokens for token in area_tokens)
+
+
+def normalize_catalog_area_tokens(value: str) -> tuple[str, ...]:
+    return tuple(re.findall(r"[a-z0-9]+", value.lower()))
 
 
 def fit_pixel_geometry_to_reference_bounds(
