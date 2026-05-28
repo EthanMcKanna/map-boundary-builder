@@ -443,6 +443,13 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   existing `promo-video/`, cache, output, and virtualenv exclusions. Focused
   pipeline/API cache tests passed 11 tests. Full pytest passed 90 tests and 9
   subtests; `compileall`, `node --check`, and `git diff --check` passed.
+- Production packaging deployment `dpl_Bq9quUCwQygtoXFQFDzvLXk5CDhF` was
+  aliased to `https://mapboundary.app` and kept health on
+  `pipeline-dd206b786b8b45aa`. Vercel upload size for the config-only deploy
+  dropped to 582B, deployment files dropped to 67 from the previous 78-file
+  source surface, and the reported bundle size nudged from 298.10 MB to
+  297.92 MB. The bundle still exceeds Vercel's inline limit because OpenCV/ONNX
+  dominate the package; this is a hygiene win, not the cold-start breakthrough.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
