@@ -1,4 +1,5 @@
 import unittest
+import base64
 import gzip
 from io import BytesIO
 from pathlib import Path
@@ -90,7 +91,7 @@ class ApiRunCacheTests(unittest.TestCase):
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_large_previews(self) -> None:
         with NamedTemporaryFile(suffix=".png") as handle:
-            image = Image.effect_noise((900, 900), 64).convert("RGB")
+            image = Image.effect_noise((1400, 1400), 64).convert("RGB")
             image.save(handle.name, format="PNG")
 
             data_url = inline_overlay(Path(handle.name))
@@ -98,6 +99,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIsNotNone(data_url)
         assert data_url is not None
         self.assertTrue(data_url.startswith("data:image/webp;base64,"))
+        decoded = base64.b64decode(data_url.split(",", 1)[1])
+        with Image.open(BytesIO(decoded)) as preview:
+            self.assertLessEqual(max(preview.size), 1200)
 
 
 if __name__ == "__main__":

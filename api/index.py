@@ -27,6 +27,7 @@ DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 250_000
+INLINE_OVERLAY_MAX_DIMENSION = 1200
 RUN_RESULT_CACHE_VERSION = "run-result-v2"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
@@ -326,6 +327,14 @@ def optimized_overlay_bytes(path: Path, *, original_size: int) -> tuple[str, byt
 
         with Image.open(path) as image:
             rgb = image.convert("RGB")
+            max_dimension = max(rgb.size)
+            if max_dimension > INLINE_OVERLAY_MAX_DIMENSION:
+                scale = max_dimension / INLINE_OVERLAY_MAX_DIMENSION
+                size = (
+                    max(1, int(round(rgb.width / scale))),
+                    max(1, int(round(rgb.height / scale))),
+                )
+                rgb = rgb.resize(size, Image.Resampling.LANCZOS)
             webp = BytesIO()
             rgb.save(webp, format="WEBP", quality=90, method=4)
             webp_data = webp.getvalue()
