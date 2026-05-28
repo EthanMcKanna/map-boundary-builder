@@ -395,6 +395,19 @@ regressions, during latency experiments.
     geometry/source/confidence: Miami build 0.201s plus 0.067s WebP overlay,
     gzip response 58.9 KB; Bay Area build 0.165s plus 0.052s WebP overlay,
     gzip response 67.9 KB.
+  - Deployment `dpl_G9STqzbqzv3XH1ysQqDfRWgAWk8N` deployed the fast bright-blue
+    classifier and WebP overlay threshold to `https://mapboundary.app`; health
+    reported `pipeline-ca7a20cc387d92f1` and Vercel reported
+    `api/index.py` at 92.86 MB.
+  - Production gzip-aware cache-busted warm smokes preserved the same outputs
+    while returning WebP overlays: Miami Waymo 3.006s wall / 0.868s event span,
+    58.8 KB wire response, confidence 0.864, 6 controls, bbox
+    `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`; Bay Area Waymo
+    3.324s wall / 0.704s event span, 67.8 KB wire response, confidence 0.877,
+    15 controls, bbox `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`.
+  - Production cached Bay Area repeats returned WebP overlays in 2.05-2.41s wall
+    with a 67.9 KB gzip wire response, down from the earlier same-image cached
+    gzip check around 2.315s and 254 KB wire response.
 
 ## Failed Or Rejected Experiments
 
