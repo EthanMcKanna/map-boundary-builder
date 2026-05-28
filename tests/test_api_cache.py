@@ -6,6 +6,7 @@ from PIL import Image
 from api.index import (
     cached_run_payload,
     normalized_image_sha256,
+    raw_run_result_cache_key,
     read_run_result_cache,
     run_result_cache_key,
     write_run_result_cache,
@@ -43,6 +44,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(
             run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
             run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            raw_run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
         )
 
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:

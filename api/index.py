@@ -112,9 +112,19 @@ class handler(BaseHTTPRequestHandler):
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
+        raw_cache_key = raw_run_result_cache_key(image_bytes, city, options)
+        cached = read_run_result_cache(raw_cache_key)
+        if cached is not None:
+            self.send_json(
+                cached_run_payload(cached, run_id, original_filename, events),
+                status=HTTPStatus.CREATED,
+            )
+            return
+
         cache_key = run_result_cache_key(image_bytes, city, options)
         cached = read_run_result_cache(cache_key)
         if cached is not None:
+            write_run_result_cache(raw_cache_key, cached)
             self.send_json(
                 cached_run_payload(cached, run_id, original_filename, events),
                 status=HTTPStatus.CREATED,
@@ -156,6 +166,7 @@ class handler(BaseHTTPRequestHandler):
             },
         }
         write_run_result_cache(cache_key, payload)
+        write_run_result_cache(raw_cache_key, payload)
         self.send_json(payload, status=HTTPStatus.CREATED)
 
     def handle_create_report(self) -> None:
@@ -320,9 +331,22 @@ def int_field(fields: dict[str, str], name: str, default: int, minimum: int, max
 
 
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
+    return run_result_cache_key_for_hash("image_pixel_sha256", normalized_image_sha256(image_bytes), city, options)
+
+
+def raw_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
+    return run_result_cache_key_for_hash("image_raw_sha256", hashlib.sha256(image_bytes).hexdigest(), city, options)
+
+
+def run_result_cache_key_for_hash(
+    image_hash_name: str,
+    image_hash: str,
+    city: str | None,
+    options: Any,
+) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
-        "image_pixel_sha256": normalized_image_sha256(image_bytes),
+        image_hash_name: image_hash,
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),
         "min_confidence": round(float(options.min_confidence), 4),
