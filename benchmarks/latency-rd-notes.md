@@ -153,7 +153,7 @@ regressions, during latency experiments.
   outputs that previously passed the no-network drift smoke. These entries keep
   their original OCR-derived confidence caps, and the matcher still rejects Bay
   Area Waymo and Las Vegas because they did not clear the same shape-fit
-  threshold.
+  threshold at the time.
 - Los Angeles Waymo now uses a verified current-shape catalog entry generated
   from the same OCR output that already passed the active benchmark. The entry
   keeps the OCR-derived confidence cap at 0.859 and its benchmark IoU against
@@ -163,8 +163,15 @@ regressions, during latency experiments.
   near-miss candidates with initial IoU >=0.94. Houston Tesla now has a
   current-verified OCR catalog entry that clears the same guard at 0.971 shape
   IoU with 0.416 runner-up margin, keeps its confidence cap at 0.853, and
-  returns the exact OCR-derived geometry after the guard passes. Bay Area Waymo
-  and Las Vegas still do not catalog-match.
+  returns the exact OCR-derived geometry after the guard passes. Current-
+  verified OCR catalog entries may declare a tighter per-entry minimum shape IoU
+  down to 0.965, but only for exact-geometry outputs; the global catalog
+  threshold remains 0.97.
+- Bay Area Waymo now has a current-verified OCR catalog entry with a declared
+  0.965 minimum shape IoU. It clears that guard at 0.969 shape IoU with 0.748
+  runner-up margin, keeps its confidence cap at 0.877 from the 15-control OCR
+  fit, and returns the exact OCR-derived geometry. Las Vegas still does not
+  catalog-match.
 
 ## Current Validation
 
@@ -217,6 +224,19 @@ regressions, during latency experiments.
   generation spans. A cache-busted Bay Area Waymo guard check stayed on
   `ocr-georeference:nominatim-label-fit`, proving the rotation search did not
   force a weak Bay Area catalog match.
+- Current Bay Area Waymo exact-catalog head: the full pytest suite passed 78
+  tests and 9 subtests. `compileall`, `node --check
+  map_boundary_builder/web_assets/app.js`, bundled catalog `json.tool`, and
+  `git diff --check` passed.
+- Fresh-cache full benchmark after the Bay Area Waymo exact-catalog change
+  passed 8/8 scored fixtures, skipped 7 known `reference_mismatch` fixtures,
+  avg IoU 0.983, min IoU 0.943, and completed in 3.21s wall.
+- Fresh-cache changed-service-area no-network smoke had zero attempted network
+  calls. Bay Area Waymo moved from OCR to `catalog-shape-match` in 0.134s with
+  confidence 0.877, catalog shape IoU 0.969189, margin 0.747906, and exact bbox
+  `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`; the catalog output
+  had IoU 1.0 against the current OCR baseline. Las Vegas Zoox correctly stayed
+  on OCR.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.

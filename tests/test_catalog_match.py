@@ -113,6 +113,20 @@ def test_current_verified_catalog_entry_outputs_exact_geometry_after_match() -> 
     assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
 
 
+def test_current_verified_catalog_entry_can_declare_tight_min_shape_iou() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
+    near_miss_reference = rotate(entry.mercator_geometry, 1.0, origin="centroid", use_radians=False)
+    pixel_geometry = mercator_geometry_to_pixel(near_miss_reference)
+
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+
+    assert entry.min_iou == 0.965
+    assert match is not None
+    assert match.entry.slug == "bay-area-waymo"
+    assert 0.965 <= match.iou < 0.97
+    assert match.confidence == 0.877
+
+
 def mercator_geometry_to_pixel(geometry):
     min_x, min_y, max_x, max_y = geometry.bounds
     width = max_x - min_x

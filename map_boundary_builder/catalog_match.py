@@ -36,6 +36,7 @@ class ServiceAreaCatalogEntry:
     geometry: Polygon | MultiPolygon
     mercator_geometry: Polygon | MultiPolygon
     max_confidence: float | None = None
+    min_iou: float = CATALOG_MIN_IOU
     use_exact_geometry: bool = False
 
 
@@ -82,7 +83,8 @@ def match_service_area_catalog(
     best_iou, best_area_ratio, best_entry, best_fitted, rotation_degrees = scored[0]
     runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
     margin = best_iou - runner_up_iou
-    if best_iou < min_iou or margin < min_margin:
+    required_iou = min_iou if min_iou != CATALOG_MIN_IOU else best_entry.min_iou
+    if best_iou < required_iou or margin < min_margin:
         return None
     if not (CATALOG_MIN_AREA_RATIO <= best_area_ratio <= CATALOG_MAX_AREA_RATIO):
         return None
@@ -182,6 +184,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
         payload = json.loads(item.read_text())
         geometry = load_geometry_payload(payload)
         properties = catalog_properties(payload)
+        use_exact_geometry = properties.get("catalog_source") == "current-verified-ocr-output"
         entries.append(
             ServiceAreaCatalogEntry(
                 slug=slug,
@@ -190,7 +193,8 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
-                use_exact_geometry=properties.get("catalog_source") == "current-verified-ocr-output",
+                min_iou=parse_catalog_min_iou(properties.get("catalog_min_shape_iou"), use_exact_geometry),
+                use_exact_geometry=use_exact_geometry,
             )
         )
     return tuple(entries)
@@ -224,6 +228,16 @@ def parse_optional_confidence(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return max(0.0, min(0.99, confidence))
+
+
+def parse_catalog_min_iou(value: Any, use_exact_geometry: bool) -> float:
+    if not use_exact_geometry or value is None:
+        return CATALOG_MIN_IOU
+    try:
+        min_iou = float(value)
+    except (TypeError, ValueError):
+        return CATALOG_MIN_IOU
+    return max(0.965, min(CATALOG_MIN_IOU, min_iou))
 
 
 def provider_from_slug(slug: str) -> str | None:
