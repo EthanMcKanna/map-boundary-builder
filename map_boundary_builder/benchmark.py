@@ -194,6 +194,7 @@ def run_benchmark(
             "fixtures": len(scores),
             "scored_fixtures": len(scored),
             "skipped_fixtures": len(skipped),
+            "skipped_by_status": summarize_statuses(skipped),
             "passed_fixtures": passed_count,
             "failed_fixtures": failed_count,
             "average_iou": round(average_iou, 6),
@@ -386,11 +387,11 @@ def failed_full_score(fixture: BenchmarkFixture, error: str) -> BenchmarkScore:
         area_ratio=None,
         centroid_distance_m=None,
         vertices=None,
-            style=None,
-            error=error,
-            status=fixture.status,
-            note=fixture.note,
-        )
+        style=None,
+        error=error,
+        status=fixture.status,
+        note=fixture.note,
+    )
 
 
 def skipped_fixture_score(fixture: BenchmarkFixture, *, mode: str) -> BenchmarkScore:
@@ -475,13 +476,30 @@ def score_sort_key(score: BenchmarkScore) -> tuple[int, bool, float]:
     return (0 if score.status == "active" else 1, score.passed, score.iou or -1.0)
 
 
+def summarize_statuses(scores: list[BenchmarkScore]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for score in scores:
+        counts[score.status] = counts.get(score.status, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def print_table(report: dict[str, Any], report_path: Path) -> None:
     summary = report["summary"]
-    status = "PASS" if summary["passed"] else "FAIL"
+    if summary["passed"]:
+        status = "PASS"
+    elif summary["scored_fixtures"] == 0 and summary["skipped_fixtures"] > 0:
+        status = "SKIP"
+    else:
+        status = "FAIL"
+    skipped_text = f"{summary['skipped_fixtures']} skipped"
+    skipped_by_status = summary.get("skipped_by_status", {})
+    if skipped_by_status:
+        skipped_reasons = ", ".join(f"{reason}={count}" for reason, count in skipped_by_status.items())
+        skipped_text = f"{skipped_text} ({skipped_reasons})"
     print(
         f"{status} {report['mode']} benchmark: "
         f"{summary['passed_fixtures']}/{summary['scored_fixtures']} scored fixtures, "
-        f"{summary['skipped_fixtures']} skipped, "
+        f"{skipped_text}, "
         f"avg IoU {summary['average_iou']:.3f}, min IoU {summary['min_iou']:.3f}"
     )
     print(f"report: {report_path}")

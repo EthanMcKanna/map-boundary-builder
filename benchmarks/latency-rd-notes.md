@@ -12,6 +12,11 @@ screenshot/reference pairing is known to have drifted. They remain visible in
 reports but are not scored as model regressions until the reference polygons and
 screenshots are refreshed.
 
+May 28 user confirmation: Houston, Miami, and Bay Area have changed from the
+saved ground truth. The affected local variants are Bay Area Tesla/Waymo/Zoox,
+Houston Tesla/Waymo, and Miami Waymo. Treat them as data debt, not model
+regressions, during latency experiments.
+
 ## Shipped Changes
 
 - `5c69590`: cache-only exploratory geocoder fanout, decisive OSM-place fast
