@@ -23,7 +23,7 @@ CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "256")))
 ROAD_MATCH_MAX_POINTS = max(500, int(os.environ.get("MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS", "6000")))
-ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
+ROAD_REFINE_CACHE_VERSION = "road-refine-v2"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
 _ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
@@ -55,7 +55,7 @@ def refine_transform_with_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
-    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS)
+    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
     feature_distance = image_feature_distance(rgb)
     base_score, base_count = score_georeference_transform(road_points, feature_distance, initial)
     if base_count < 1000:
@@ -280,7 +280,7 @@ def georeference_from_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
-    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS)
+    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
     feature_distance = image_feature_distance(rgb)
 
     west, south, east, north = city_center.bbox
@@ -394,7 +394,7 @@ def score_transform_batch(
     if not transforms:
         return []
     h, w = feature_distance.shape
-    params = np.asarray(transforms, dtype=float)
+    params = np.asarray(transforms, dtype=np.float32)
     scales = params[:, 0][:, np.newaxis]
     rotations = params[:, 1][:, np.newaxis]
     txs = params[:, 2][:, np.newaxis]
@@ -418,7 +418,7 @@ def score_transform_batch(
     clipped_x = np.clip(ix, 0, max(w - 1, 0))
     clipped_y = np.clip(iy, 0, max(h - 1, 0))
     distances = feature_distance[clipped_y, clipped_x]
-    scores = np.exp(-((distances / 6.0) ** 2))
+    scores = np.exp(-np.square(distances / np.float32(6.0))).astype(np.float32, copy=False)
     sums = np.where(keep, scores, 0.0).sum(axis=1)
     means = np.divide(sums, counts, out=np.zeros_like(sums, dtype=float), where=counts > 0)
     return [(float(score), int(count)) for score, count in zip(means, counts)]

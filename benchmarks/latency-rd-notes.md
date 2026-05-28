@@ -35,6 +35,8 @@ polygons and screenshots are refreshed.
 - The Vercel API path also skips writing the full-size mask PNG because the
   synchronous response only returns inline GeoJSON and overlay preview. The
   local async worker still writes downloadable mask artifacts.
+- Road-refinement batch scoring now uses float32 arrays and bumped the
+  road-refine cache version to avoid stale float64-scored cache hits.
 
 ## Current Validation
 
@@ -44,6 +46,7 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-max-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-nomask-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-nomask-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-f32-cachev2-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-f32-cachev2-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
@@ -59,6 +62,9 @@ polygons and screenshots are refreshed.
   0.133s to 0.056s on Orlando and 0.107s to 0.060s on Phoenix.
 - Warm local API artifact A/B on Orlando: full overlay+mask export took 0.146s,
   bounded overlay+mask took 0.052s, and bounded overlay without mask took 0.042s.
+- Local Phoenix cProfile for road refinement dropped from 0.728s cumulative
+  in `refine_transform_with_osm_roads` before float32 scoring to 0.689s after,
+  with the same Phoenix/Nashville focused IoUs.
 
 ## Production Smoke Evidence
 
