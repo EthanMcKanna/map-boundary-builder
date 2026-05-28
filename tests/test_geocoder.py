@@ -124,6 +124,38 @@ class GeocoderSeedTests(unittest.TestCase):
         self.assertEqual(results[0].display_name, "Miami, Miami-Dade County, Florida, United States")
         self.assertEqual(results[0].bbox, (-80.31976, 25.7090517, -80.139157, 25.8557827))
 
+    def test_bundled_miami_label_seeds_serve_without_network(self) -> None:
+        queries = [
+            "Coral Gables, Miami",
+            "Coral Gables, Florida",
+            "Coral Gables",
+            "Downtown Miami, Miami",
+            "Downtown Miami, Florida",
+            "Downtown Miami",
+            "Downtown Brickell, Miami",
+            "Downtown Brickell, Florida",
+            "Downtown Brickell",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                for query in queries:
+                    with self.subTest(query=query):
+                        results = geocoder.geocode(query, limit=3)
+                        self.assertTrue(results)
+                        self.assertTrue(any("Miami" in result.display_name for result in results))
+                        for result in results:
+                            self.assertGreaterEqual(result.lon, -80.35)
+                            self.assertLessEqual(result.lon, -80.10)
+                            self.assertGreaterEqual(result.lat, 25.60)
+                            self.assertLessEqual(result.lat, 25.90)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,9 +106,40 @@ regressions, during latency experiments.
   disk. This removed the georeference-side duplicate read, keeps extraction and
   road scoring on identical pixels, and reduced the Phoenix georeference profile
   from 0.645s to 0.591s without changing geometry.
+- Miami Waymo's OCR label geocoder path now has bundled Nominatim seeds for
+  Coral Gables, Downtown Miami, and Downtown Brickell variants that were forcing
+  nine live cold-path geocoder calls. Bay Area Zoox's noisy OCR misses
+  (`Ncisco`, `Telegrarh`) are also bundled as explicit Nominatim/Photon misses,
+  so changed-service-area smokes no longer depend on external geocoder latency.
 
 ## Current Validation
 
+- After confirming Houston, Miami, and Bay Area are changed-service-area data
+  debt, `PYTHONPATH=. .venv/bin/pytest -q`: 65 passed, 9 subtests passed.
+- `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`,
+  `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`: pass.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-miami-label-seed-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/miami-label-seed-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- Fresh-cache changed-service-area no-network smoke with geocoder, OSM road, and
+  OSM place `urlopen` patched to record and fail showed zero attempted network
+  calls:
+  - Bay Area Waymo 0.640s, confidence 0.877, 15 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Bay Area Tesla 0.473s, confidence 0.840, 4 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Bay Area Zoox 0.373s, confidence 0.930, 6 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Houston Waymo 0.519s, confidence 0.865, 7 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Houston Tesla 0.436s, confidence 0.845, 3 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Miami Waymo 1.344s, confidence 0.864, 6 controls,
+    `ocr-georeference:nominatim-label-fit+osm-road-refine`.
+- Rejected replacing the Downtown Brickell live-result seed with either empty
+  misses or a cleaner Brickell-neighborhood payload. Both preserved the same
+  final Miami bbox/confidence, but they caused dozens of fallback geocoder
+  attempts for lower-quality Miami label combinations, so the literal seeded
+  current-result payload is the lower-latency and lower-variance option.
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.

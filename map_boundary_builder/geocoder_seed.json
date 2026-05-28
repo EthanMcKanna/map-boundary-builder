@@ -7718,7 +7718,342 @@
     "9fb4d53d3c915e27c06d6e22": [],
     "48da9dfd235165da398d5d6a": [],
     "2e18780167d4897507df0278": [],
-    "d64fe00c48c40729d07b3401": []
+    "d64fe00c48c40729d07b3401": [],
+    "02d96f08f15e7437c42302c0": [
+      {
+        "place_id": 302380377,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 18035880,
+        "lat": "25.7172725",
+        "lon": "-80.2787069",
+        "category": "amenity",
+        "type": "university",
+        "place_rank": 30,
+        "importance": 0.6056893905798099,
+        "addresstype": "amenity",
+        "name": "University of Miami",
+        "display_name": "University of Miami, Campo Sano Court, Florida Pioneer Village, Coral Gables, Miami-Dade County, Florida, 33124, United States",
+        "boundingbox": [
+          "25.7097065",
+          "25.7247938",
+          "-80.2856648",
+          "-80.2721918"
+        ]
+      },
+      {
+        "place_id": 305796418,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 1216645,
+        "lat": "25.7331105",
+        "lon": "-80.2585107",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.5546565352648046,
+        "addresstype": "city",
+        "name": "Coral Gables",
+        "display_name": "Coral Gables, Miami-Dade County, Florida, United States",
+        "boundingbox": [
+          "25.6099880",
+          "25.7717717",
+          "-80.3013000",
+          "-80.1956260"
+        ]
+      }
+    ],
+    "df92bad5e8b68e933c6c4bd4": [
+      {
+        "place_id": 305542171,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 1216645,
+        "lat": "25.7331105",
+        "lon": "-80.2585107",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.5546565352648046,
+        "addresstype": "city",
+        "name": "Coral Gables",
+        "display_name": "Coral Gables, Miami-Dade County, Florida, United States",
+        "boundingbox": [
+          "25.6099880",
+          "25.7717717",
+          "-80.3013000",
+          "-80.1956260"
+        ]
+      }
+    ],
+    "47bdc7200b76b705b63b6c97": [
+      {
+        "place_id": 303730529,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 1216645,
+        "lat": "25.7331105",
+        "lon": "-80.2585107",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.5546565352648046,
+        "addresstype": "city",
+        "name": "Coral Gables",
+        "display_name": "Coral Gables, Miami-Dade County, Florida, United States",
+        "boundingbox": [
+          "25.6099880",
+          "25.7717717",
+          "-80.3013000",
+          "-80.1956260"
+        ]
+      }
+    ],
+    "7cf9ea8dc12e4ac89a48ddbe": [
+      {
+        "place_id": 306166577,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "node",
+        "osm_id": 13765005355,
+        "lat": "25.7744981",
+        "lon": "-80.1919950",
+        "category": "place",
+        "type": "neighbourhood",
+        "place_rank": 24,
+        "importance": 0.4253784106722686,
+        "addresstype": "neighbourhood",
+        "name": "Downtown Miami",
+        "display_name": "Downtown Miami, Torch of Friendship, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7644981",
+          "25.7844981",
+          "-80.2019950",
+          "-80.1819950"
+        ]
+      }
+    ],
+    "dc7cff3716e18cf688ecf3dd": [
+      {
+        "place_id": 381780904,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "node",
+        "osm_id": 13765005355,
+        "lat": "25.7744981",
+        "lon": "-80.1919950",
+        "category": "place",
+        "type": "neighbourhood",
+        "place_rank": 24,
+        "importance": 0.4253784106722686,
+        "addresstype": "neighbourhood",
+        "name": "Downtown Miami",
+        "display_name": "Downtown Miami, Torch of Friendship, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7644981",
+          "25.7844981",
+          "-80.2019950",
+          "-80.1819950"
+        ]
+      }
+    ],
+    "4e341a75a935579ae1992454": [
+      {
+        "place_id": 306166577,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "node",
+        "osm_id": 13765005355,
+        "lat": "25.7744981",
+        "lon": "-80.1919950",
+        "category": "place",
+        "type": "neighbourhood",
+        "place_rank": 24,
+        "importance": 0.4253784106722686,
+        "addresstype": "neighbourhood",
+        "name": "Downtown Miami",
+        "display_name": "Downtown Miami, Torch of Friendship, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7644981",
+          "25.7844981",
+          "-80.2019950",
+          "-80.1819950"
+        ]
+      }
+    ],
+    "d25c93044569720e6b2f2c6c": [
+      {
+        "place_id": 303430854,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 435847740,
+        "lat": "25.7723389",
+        "lon": "-80.1906261",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Courtyard Miami Downtown/Brickell Area",
+        "display_name": "Courtyard Miami Downtown/Brickell Area, 200, Southeast 2nd Avenue, Torch of Friendship, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7719530",
+          "25.7725401",
+          "-80.1909816",
+          "-80.1902706"
+        ]
+      },
+      {
+        "place_id": 305756850,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 435237341,
+        "lat": "25.7622409",
+        "lon": "-80.1942204",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown",
+        "display_name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown, 30, Southwest 12th Street, Brickell, The Roads, Miami, Miami-Dade County, Florida, 33130, United States",
+        "boundingbox": [
+          "25.7620615",
+          "25.7624213",
+          "-80.1945644",
+          "-80.1938622"
+        ]
+      },
+      {
+        "place_id": 304888718,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 637613167,
+        "lat": "25.7584643",
+        "lon": "-80.1987649",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Homewood Suites by Hilton Miami Downtown/Brickell",
+        "display_name": "Homewood Suites by Hilton Miami Downtown/Brickell, 1750, Southwest 1st Avenue, The Roads, Miami, Miami-Dade County, Florida, 33129, United States",
+        "boundingbox": [
+          "25.7582430",
+          "25.7587107",
+          "-80.1990103",
+          "-80.1985413"
+        ]
+      }
+    ],
+    "6fcf43a9aa4bf644e787c0ab": [
+      {
+        "place_id": 303430854,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 435847740,
+        "lat": "25.7723389",
+        "lon": "-80.1906261",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Courtyard Miami Downtown/Brickell Area",
+        "display_name": "Courtyard Miami Downtown/Brickell Area, 200, Southeast 2nd Avenue, Torch of Friendship, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7719530",
+          "25.7725401",
+          "-80.1909816",
+          "-80.1902706"
+        ]
+      },
+      {
+        "place_id": 305756850,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 435237341,
+        "lat": "25.7622409",
+        "lon": "-80.1942204",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown",
+        "display_name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown, 30, Southwest 12th Street, Brickell, The Roads, Miami, Miami-Dade County, Florida, 33130, United States",
+        "boundingbox": [
+          "25.7620615",
+          "25.7624213",
+          "-80.1945644",
+          "-80.1938622"
+        ]
+      },
+      {
+        "place_id": 304888718,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 637613167,
+        "lat": "25.7584643",
+        "lon": "-80.1987649",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Homewood Suites by Hilton Miami Downtown/Brickell",
+        "display_name": "Homewood Suites by Hilton Miami Downtown/Brickell, 1750, Southwest 1st Avenue, The Roads, Miami, Miami-Dade County, Florida, 33129, United States",
+        "boundingbox": [
+          "25.7582430",
+          "25.7587107",
+          "-80.1990103",
+          "-80.1985413"
+        ]
+      }
+    ],
+    "4e9498cab26e7b8251600232": [
+      {
+        "place_id": 305272917,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "way",
+        "osm_id": 435237341,
+        "lat": "25.7622409",
+        "lon": "-80.1942204",
+        "category": "tourism",
+        "type": "hotel",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "tourism",
+        "name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown",
+        "display_name": "Hampton Inn & Suites by Hilton - Miami/Brickell-Downtown, 30, Southwest 12th Street, Brickell, The Roads, Miami, Miami-Dade County, Florida, 33130, United States",
+        "boundingbox": [
+          "25.7620615",
+          "25.7624213",
+          "-80.1945644",
+          "-80.1938622"
+        ]
+      },
+      {
+        "place_id": 304981957,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "node",
+        "osm_id": 10075871651,
+        "lat": "25.7631458",
+        "lon": "-80.1910655",
+        "category": "amenity",
+        "type": "university",
+        "place_rank": 30,
+        "importance": 7.754558632787088e-05,
+        "addresstype": "amenity",
+        "name": "FIU Downtown on Brickell",
+        "display_name": "FIU Downtown on Brickell, 1101, Brickell Avenue, Brickell, Miami, Miami-Dade County, Florida, 33131, United States",
+        "boundingbox": [
+          "25.7630958",
+          "25.7631958",
+          "-80.1911155",
+          "-80.1910155"
+        ]
+      }
+    ],
+    "702923cf9bf0b5c623ab2642": [],
+    "4c7d6b0e24139f2f957ea736": []
   },
   "photon": {
     "0001b559564746d55e587cbe": {
@@ -36420,6 +36755,12 @@
           }
         }
       ]
+    },
+    "d08a045160d003fdd116af14": {
+      "features": []
+    },
+    "29002f17ced33aff79065706": {
+      "features": []
     }
   },
   "version": 1
