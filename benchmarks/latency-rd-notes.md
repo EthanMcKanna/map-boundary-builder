@@ -6,10 +6,11 @@ commands as the authoritative artifacts.
 
 ## Ground Truth Caveat
 
-Houston Waymo, Miami Waymo, Bay Area Waymo, and Las Vegas Zoox are tracked as
-`reference_mismatch` in `benchmarks/service-area-fixtures.json`. They remain
-visible in reports but are not scored as model regressions until the reference
-polygons and screenshots are refreshed.
+Houston, Miami, Bay Area, and Las Vegas Zoox fixtures are tracked as
+`reference_mismatch` in `benchmarks/service-area-fixtures.json` when the saved
+screenshot/reference pairing is known to have drifted. They remain visible in
+reports but are not scored as model regressions until the reference polygons and
+screenshots are refreshed.
 
 ## Shipped Changes
 
@@ -60,6 +61,9 @@ polygons and screenshots are refreshed.
 ## Current Validation
 
 - `PYTHONPATH=. .venv/bin/pytest`: 48 passed.
+- After expanding the drift-aware fixture metadata for Houston/Bay Area provider
+  variants, `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-drift-aware-extract-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode extraction --out-dir out/drift-aware-extraction`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.981, min IoU 0.925.
+- After the same fixture metadata update, `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-drift-aware-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/drift-aware-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
