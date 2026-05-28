@@ -176,6 +176,16 @@ regressions, during latency experiments.
 - Focused fresh-cache Los Angeles full benchmark:
   `MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-current-single-XXXXXX) ... --mode full --only los-angeles`
   passed with IoU 0.942 and completed in 0.50s wall.
+- Production deployment `dpl_DtDxTyqLy7L4hMUXAip9Zp5ScWeu` reported
+  `pipeline-95677920c63d6cfd` and kept `api/index.py` at 92.8 MB. Cache-busted
+  production Los Angeles calls used `catalog-shape-match` with confidence 0.859
+  and internal event spans of 0.455s and 0.340s, down from the previous LA OCR
+  fallback evidence at roughly 4.6-5.1s internal. Cache-busted production
+  smokes also matched Miami Waymo in 0.559s internal, Houston Waymo in 0.540s,
+  Bay Area Tesla in 0.056s, and Bay Area Zoox in 0.441s, all through
+  `catalog-shape-match` with their capped current-shape confidences. Houston
+  Tesla correctly stayed on `ocr-georeference:nominatim-label-fit`, confidence
+  0.853, with no catalog slug.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.
