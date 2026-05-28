@@ -21,13 +21,18 @@ from api.index import (
     write_run_result_cache,
 )
 from map_boundary_builder.asset_response import web_asset_response
-from map_boundary_builder.runner import BoundaryBuildOptions, catalog_matching_enabled
+from map_boundary_builder.runner import BoundaryBuildOptions, catalog_matching_enabled, should_overlap_ocr_with_extraction
 
 
 class ApiRunCacheTests(unittest.TestCase):
     def test_catalog_matching_defaults_on_for_api_options_namespace(self) -> None:
         self.assertTrue(catalog_matching_enabled(SimpleNamespace()))
         self.assertFalse(catalog_matching_enabled(SimpleNamespace(allow_catalog=False)))
+
+    def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
+        self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
 
     def test_run_cache_key_depends_on_image_and_options(self) -> None:
         base = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())

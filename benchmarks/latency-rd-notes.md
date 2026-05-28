@@ -207,6 +207,11 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   cache-bust variant where RapidOCR read `Nashville` as `Naslville`, while
   still requiring the same strong shape IoU, runner-up margin, provider style,
   and area-ratio guards before a catalog result can be returned.
+- OCR now overlaps with pixel extraction when the request cannot return from
+  the strict pre-OCR catalog path, namely no-catalog and city-forced runs. This
+  keeps catalog-first production fast paths from doing speculative OCR, while
+  reducing cold OCR/georeference latency for the general inference path without
+  changing the fitted geometry.
 
 ## Current Validation
 
@@ -253,6 +258,23 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   variant succeeded through the same source in 0.906s wall and 0.474s internal
   event span. Miami remained uncached on OCR/georeference with `catalog_slug:
   null`, preserving the stale-market guard.
+- Current OCR/extraction overlap head: focused API-cache tests passed 10 tests.
+  Fresh-cache in-process no-catalog profile moved the active OCR/georeference
+  path to sub-second for 7/8 active fixtures, with Phoenix at 1.003s while
+  preserving `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence
+  0.908, and road score 0.706233. The subprocess benchmark still includes
+  interpreter startup but improved its no-catalog total from the prior 8.291s
+  report to 7.63s in
+  `out/benchmark-ocr-overlap-no-catalog-20260528-160757/full-report.json`,
+  with 8/8 active fixtures passed, avg IoU 0.962, min IoU 0.931. The city-forced
+  no-catalog benchmark
+  `out/benchmark-ocr-overlap-no-catalog-city-20260528-160815/full-report.json`
+  passed 8/8 active fixtures at avg IoU 0.962, min IoU 0.931, total 7.36s.
+  Default catalog benchmark
+  `out/benchmark-ocr-overlap-default-20260528-160757/full-report.json` stayed
+  green at 8/8 active fixtures, avg IoU 0.983, min IoU 0.943. Full pytest
+  passed 85 tests and 9 subtests, and `compileall`, `node --check`, and
+  `git diff --check` passed.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

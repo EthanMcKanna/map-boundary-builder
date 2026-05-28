@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import json
 from dataclasses import dataclass
 from math import hypot
@@ -102,111 +102,37 @@ def build_boundary(
     with Image.open(image_path) as img:
         width, height = img.size
 
-    emit_progress(
-        progress,
-        stage="extract",
-        message="Extracting service-area pixels",
-        percent=18,
-        details={"width": width, "height": height},
-    )
-    rgb = load_rgb(image_path)
-    extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
-    emit_progress(
-        progress,
-        stage="extract",
-        message="Pixel polygon extracted",
-        percent=36,
-        details={
-            "style": extraction.style,
-            "coverage_ratio": round(extraction.coverage_ratio, 6),
-            "contour_count": extraction.contour_count,
-            "confidence": extraction.confidence,
-        },
-    )
-
-    if city_input is None and allow_catalog:
-        catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
-        if catalog_match is not None:
-            data = catalog_feature_collection(
-                extraction,
-                catalog_match,
-                width=width,
-                height=height,
-                image_path=image_path,
-                city_input="Auto",
-            )
-            combined_confidence = data["features"][0]["properties"]["combined_confidence"]
-            emit_progress(
-                progress,
-                stage="georeference",
-                message="Matched known service-area shape",
-                percent=78,
-                details={
-                    "source": "catalog-shape-match",
-                    "catalog_slug": catalog_match.entry.slug,
-                    "shape_iou": round(catalog_match.iou, 3),
-                    "combined_confidence": combined_confidence,
-                    "control_points": 0,
-                    "median_residual_m": 0.0,
-                    "p90_residual_m": 0.0,
-                },
-            )
-            if combined_confidence < opts.min_confidence:
-                raise ValueError(
-                    f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
-                    f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
-                )
-            return finish_boundary_result(
-                data,
-                extraction,
-                image_path,
-                output_path,
-                debug_path,
-                opts,
-                width,
-                height,
-                city_input="Auto",
-                rgb=rgb,
-                progress=progress,
-            )
-
-    label_y_max = (
-        extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
-        if extraction.style == "dark-teal"
-        else None
-    )
-    label_y_min = (
-        extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
-        if extraction.style == "gray-fill"
-        else None
-    )
-    with ThreadPoolExecutor(max_workers=1) as ocr_executor:
+    labels_future: Future[list[Any]] | None = None
+    ocr_executor: ThreadPoolExecutor | None = None
+    if should_overlap_ocr_with_extraction(city_input=city_input, allow_catalog=allow_catalog):
+        ocr_executor = ThreadPoolExecutor(max_workers=1)
         labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+
+    try:
         emit_progress(
             progress,
-            stage="ocr",
-            message="Reading map labels on server",
-            percent=44,
+            stage="extract",
+            message="Extracting service-area pixels",
+            percent=18,
+            details={"width": width, "height": height},
         )
-        labels = labels_future.result()
+        rgb = load_rgb(image_path)
+        extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
         emit_progress(
             progress,
-            stage="ocr",
-            message="Map labels read",
-            percent=47,
+            stage="extract",
+            message="Pixel polygon extracted",
+            percent=36,
             details={
-                "label_count": len(labels),
-                "top_labels": [label.text for label in labels[:8]],
+                "style": extraction.style,
+                "coverage_ratio": round(extraction.coverage_ratio, 6),
+                "contour_count": extraction.contour_count,
+                "confidence": extraction.confidence,
             },
         )
-        if city_input is None and allow_catalog and should_try_label_hinted_catalog(width, height, labels):
-            label_hints = high_confidence_label_texts(labels)
-            catalog_match = match_service_area_catalog(
-                extraction.pixel_geometry,
-                style=extraction.style,
-                min_iou=CATALOG_LABEL_HINT_MIN_IOU,
-                area_hint_texts=label_hints,
-            )
+
+        if city_input is None and allow_catalog:
+            catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
             if catalog_match is not None:
                 data = catalog_feature_collection(
                     extraction,
@@ -216,17 +142,14 @@ def build_boundary(
                     image_path=image_path,
                     city_input="Auto",
                 )
-                properties = data["features"][0]["properties"]
-                properties["georeference_source"] = "catalog-shape-match:ocr-label-hint"
-                properties["catalog_label_hints"] = label_hints[:5]
-                combined_confidence = properties["combined_confidence"]
+                combined_confidence = data["features"][0]["properties"]["combined_confidence"]
                 emit_progress(
                     progress,
                     stage="georeference",
-                    message="Matched known service-area shape from labels",
+                    message="Matched known service-area shape",
                     percent=78,
                     details={
-                        "source": "catalog-shape-match:ocr-label-hint",
+                        "source": "catalog-shape-match",
                         "catalog_slug": catalog_match.entry.slug,
                         "shape_iou": round(catalog_match.iou, 3),
                         "combined_confidence": combined_confidence,
@@ -253,20 +176,108 @@ def build_boundary(
                     rgb=rgb,
                     progress=progress,
                 )
-        georef = fit_georeference(
-            labels,
-            image_path,
-            extraction.pixel_geometry,
-            rgb=rgb,
-            city_input=city_input,
-            width=width,
-            height=height,
-            coverage_ratio=extraction.coverage_ratio,
-            min_control_points=opts.min_control_points,
-            label_y_min=label_y_min,
-            label_y_max=label_y_max,
-            progress=progress,
+
+        label_y_max = (
+            extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
+            if extraction.style == "dark-teal"
+            else None
         )
+        label_y_min = (
+            extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
+            if extraction.style == "gray-fill"
+            else None
+        )
+        if labels_future is None:
+            ocr_executor = ThreadPoolExecutor(max_workers=1)
+            labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Reading map labels on server",
+            percent=44,
+        )
+        labels = labels_future.result()
+    finally:
+        if ocr_executor is not None:
+            ocr_executor.shutdown(wait=False, cancel_futures=True)
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="Map labels read",
+        percent=47,
+        details={
+            "label_count": len(labels),
+            "top_labels": [label.text for label in labels[:8]],
+        },
+    )
+    if city_input is None and allow_catalog and should_try_label_hinted_catalog(width, height, labels):
+        label_hints = high_confidence_label_texts(labels)
+        catalog_match = match_service_area_catalog(
+            extraction.pixel_geometry,
+            style=extraction.style,
+            min_iou=CATALOG_LABEL_HINT_MIN_IOU,
+            area_hint_texts=label_hints,
+        )
+        if catalog_match is not None:
+            data = catalog_feature_collection(
+                extraction,
+                catalog_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input="Auto",
+            )
+            properties = data["features"][0]["properties"]
+            properties["georeference_source"] = "catalog-shape-match:ocr-label-hint"
+            properties["catalog_label_hints"] = label_hints[:5]
+            combined_confidence = properties["combined_confidence"]
+            emit_progress(
+                progress,
+                stage="georeference",
+                message="Matched known service-area shape from labels",
+                percent=78,
+                details={
+                    "source": "catalog-shape-match:ocr-label-hint",
+                    "catalog_slug": catalog_match.entry.slug,
+                    "shape_iou": round(catalog_match.iou, 3),
+                    "combined_confidence": combined_confidence,
+                    "control_points": 0,
+                    "median_residual_m": 0.0,
+                    "p90_residual_m": 0.0,
+                },
+            )
+            if combined_confidence < opts.min_confidence:
+                raise ValueError(
+                    f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
+                    f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
+                )
+            return finish_boundary_result(
+                data,
+                extraction,
+                image_path,
+                output_path,
+                debug_path,
+                opts,
+                width,
+                height,
+                city_input="Auto",
+                rgb=rgb,
+                progress=progress,
+            )
+    georef = fit_georeference(
+        labels,
+        image_path,
+        extraction.pixel_geometry,
+        rgb=rgb,
+        city_input=city_input,
+        width=width,
+        height=height,
+        coverage_ratio=extraction.coverage_ratio,
+        min_control_points=opts.min_control_points,
+        label_y_min=label_y_min,
+        label_y_max=label_y_max,
+        progress=progress,
+    )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
@@ -333,6 +344,10 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
     if len(labels) <= CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT:
         return True
     return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
+
+
+def should_overlap_ocr_with_extraction(*, city_input: str | None, allow_catalog: bool) -> bool:
+    return city_input is not None or not allow_catalog
 
 
 def catalog_matching_enabled(options: Any) -> bool:
