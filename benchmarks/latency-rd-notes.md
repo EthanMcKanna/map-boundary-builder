@@ -493,6 +493,25 @@ regressions, during latency experiments.
     without overlay versus 0.846s with overlay. Exact cached repeats were equal
     wall-time noise at 1.758s, but the GeoJSON-first cached response stayed
     2.163 KB versus 59.094 KB with overlay.
+- Browser pre-submit cache validation:
+  - The web asset server now injects the current `pipeline_version` into
+    `index.html`, so `buildRunCacheKey` does not need a blocking `/api/health`
+    round trip before a first upload. The browser run-cache version moved to
+    `image-to-geojson-v2`.
+  - The browser cache key now hashes raw upload bytes instead of decoding the
+    screenshot to a full RGBA canvas before submit. Server-side normalized-image
+    result caching is unchanged, so exact-file browser cache hits stay local and
+    cross-encoding cache reuse remains available on the backend.
+  - Local browser proof with the Playwright CLI on `waymo phoenix.png` saw one
+    mocked `/api/runs` POST, zero `/api/health` requests, and the injected
+    `pipeline-782cc2ab7d027532` value. Browser microbench on the same 1.176 MB
+    2400x2400 PNG: raw byte hash min 1 ms versus the previous pixel/canvas hash
+    min 39 ms, about 33x faster for the pre-submit hash step.
+  - Validation passed: `node --check map_boundary_builder/web_assets/app.js`;
+    `PYTHONPATH=. .venv/bin/pytest -q`, 64 tests;
+    `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`;
+    and the full drift-aware benchmark stayed clean at 8/8 scored fixtures, 7
+    `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931.
 
 ## Failed Or Rejected Experiments
 
@@ -545,6 +564,12 @@ regressions, during latency experiments.
   warmed health calls reported `warm_elapsed_ms: 0.0` while the next Bay/Miami
   POSTs still took 7.154s and 7.892s event spans. Rejected and reverted because
   it added a client request without reliable same-instance latency improvement.
+- Processing-resolution caps remain unsafe as a default production shortcut.
+  Extraction-only probes still passed at 1800, 1600, 1400, and 1200px caps, but
+  full georeference is the real gate: a 1600px cap passed the active fixtures
+  with lower avg IoU (0.960 versus 0.962) and slower end-to-end local timing in
+  the Vercel-like RapidOCR-only path, while a 1200px cap failed Nashville
+  georeference outright. Rejected.
 
 ## Remaining Bottlenecks
 

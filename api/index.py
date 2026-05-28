@@ -4,7 +4,6 @@ import base64
 import gzip
 import hashlib
 import json
-import mimetypes
 import os
 import re
 import shutil
@@ -13,7 +12,6 @@ import time
 from io import BytesIO
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
-from importlib import resources
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -21,6 +19,7 @@ from urllib.parse import unquote, urlparse
 
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
+from map_boundary_builder.asset_response import web_asset_response
 from map_boundary_builder.pipeline_version import get_pipeline_version
 
 DEFAULT_SIMPLIFY_PX = 6.0
@@ -265,21 +264,11 @@ class handler(BaseHTTPRequestHandler):
         return fields, files
 
     def send_asset(self, name: str) -> None:
-        if "/" in name or "\\" in name or name.startswith("."):
+        try:
+            data, mime = web_asset_response(name)
+        except (FileNotFoundError, ValueError):
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
-        asset = resources.files("map_boundary_builder").joinpath("web_assets", name)
-        if not asset.is_file():
-            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-            return
-        data = asset.read_bytes()
-        mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
-        if name.endswith(".js"):
-            mime = "text/javascript; charset=utf-8"
-        elif name.endswith(".css"):
-            mime = "text/css; charset=utf-8"
-        elif name.endswith(".html"):
-            mime = "text/html; charset=utf-8"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", mime)
         self.send_header("Cache-Control", "public, max-age=0, must-revalidate")

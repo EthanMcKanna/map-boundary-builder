@@ -11,11 +11,11 @@ import time
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from importlib import resources
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from .asset_response import web_asset_response
 from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
@@ -310,21 +310,11 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             self.wfile.write(handle.read())
 
     def send_asset(self, name: str) -> None:
-        if "/" in name or "\\" in name or name.startswith("."):
+        try:
+            data, mime = web_asset_response(name)
+        except (FileNotFoundError, ValueError):
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
-        asset = resources.files("map_boundary_builder").joinpath("web_assets", name)
-        if not asset.is_file():
-            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-            return
-        data = asset.read_bytes()
-        mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
-        if name.endswith(".js"):
-            mime = "text/javascript; charset=utf-8"
-        elif name.endswith(".css"):
-            mime = "text/css; charset=utf-8"
-        elif name.endswith(".html"):
-            mime = "text/html; charset=utf-8"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(data)))

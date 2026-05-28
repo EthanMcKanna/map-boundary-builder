@@ -86,7 +86,7 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_VERSION = "image-to-geojson-v1";
+const RUN_CACHE_VERSION = "image-to-geojson-v2";
 const RUN_CACHE_SETTING_FIELDS = ["include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
@@ -113,6 +113,7 @@ const iconAssets = {
   dark: "/static/boundary-builder-icon-dark.png",
 };
 let activeThemeMode = loadThemeMode();
+let cachedRunCachePipelineVersion = embeddedRunCachePipelineVersion();
 
 const stageLabels = {
   queued: "Queued",
@@ -657,40 +658,27 @@ async function buildRunCacheKey(file, formData) {
 }
 
 async function imageContentHash(file) {
-  const pixelHash = await imagePixelHash(file);
-  if (pixelHash) return pixelHash;
   return `bytes:${await sha256Hex(await file.arrayBuffer())}`;
 }
 
-async function imagePixelHash(file) {
-  if (typeof createImageBitmap !== "function") return null;
-  let bitmap = null;
-  try {
-    bitmap = await createImageBitmap(file);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) return null;
-    context.drawImage(bitmap, 0, 0);
-    const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
-    return `pixels:${bitmap.width}x${bitmap.height}:${await sha256Hex(pixels)}`;
-  } catch (error) {
-    console.warn("Could not build pixel hash for local run cache", error);
+function embeddedRunCachePipelineVersion() {
+  const version = window.__MAP_BOUNDARY_PIPELINE_VERSION__;
+  if (typeof version !== "string" || !version || version === "__MAP_BOUNDARY_PIPELINE_VERSION__") {
     return null;
-  } finally {
-    bitmap?.close?.();
   }
+  return version;
 }
 
 async function fetchRunCachePipelineVersion() {
+  if (cachedRunCachePipelineVersion) return cachedRunCachePipelineVersion;
   try {
     const response = await fetch("/api/health", { cache: "no-store" });
     if (!response.ok) return null;
     const payload = await response.json();
-    return typeof payload.pipeline_version === "string" && payload.pipeline_version
+    cachedRunCachePipelineVersion = typeof payload.pipeline_version === "string" && payload.pipeline_version
       ? payload.pipeline_version
       : null;
+    return cachedRunCachePipelineVersion;
   } catch (error) {
     console.warn("Could not verify pipeline version for local run cache", error);
     return null;

@@ -20,6 +20,7 @@ from api.index import (
     run_result_cache_key,
     write_run_result_cache,
 )
+from map_boundary_builder.asset_response import web_asset_response
 from map_boundary_builder.runner import BoundaryBuildOptions
 
 
@@ -123,6 +124,13 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
+
+    def test_index_asset_embeds_pipeline_version_for_local_cache(self) -> None:
+        html, mime = web_asset_response("index.html")
+
+        self.assertEqual(mime, "text/html; charset=utf-8")
+        self.assertIn(b"window.__MAP_BOUNDARY_PIPELINE_VERSION__ = \"pipeline-", html)
+        self.assertNotIn(b'= "__MAP_BOUNDARY_PIPELINE_VERSION__";', html)
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:
