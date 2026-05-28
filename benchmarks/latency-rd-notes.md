@@ -390,6 +390,18 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   0.993, min IoU 0.943, total 3.00s; city-overrides
   `out/stale-city-overlap-city-full-20260528-continue/full-report.json` passed
   8/8 active, avg IoU 0.993, min IoU 0.943, total 2.91s.
+- Production stale-city overlap deployment `dpl_ETkWceqgwERMGWXN9x5715vpZDk9`
+  was aliased to `https://mapboundary.app` and reported
+  `pipeline-b8d2af4019507275`. Phoenix with `city=Phoenix` stayed on
+  `catalog-shape-match`, reported `phoenix-waymo`, had no OCR event, and
+  completed with a 0.616s server event span. Cache-busted Miami with
+  `city=Miami` stayed uncached on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` with `catalog_slug:
+  null`, confidence 0.864, road score 0.681518, and the same bbox. The first
+  cold-ish stale run had a 7.085s span; the warm cache-busted follow-up had a
+  0.893s server event span, down from the prior comparable warm-busted 3.894s
+  road-batch production smoke, because OCR labels were ready immediately after
+  full extraction.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
