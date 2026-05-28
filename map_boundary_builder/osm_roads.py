@@ -23,7 +23,7 @@ CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "256")))
 ROAD_MATCH_MAX_POINTS = max(500, int(os.environ.get("MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS", "6000")))
-ROAD_REFINE_CACHE_VERSION = "road-refine-v2"
+ROAD_REFINE_CACHE_VERSION = "road-refine-v3"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
 _ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
@@ -47,7 +47,8 @@ def refine_transform_with_osm_roads(
 ) -> RoadMatchResult | None:
     if city_center.bbox is None:
         return None
-    cache_key = road_refine_cache_key(rgb, city_center, initial, lock_scale=lock_scale)
+    feature_distance = image_feature_distance(rgb)
+    cache_key = road_refine_cache_key(feature_distance, city_center, initial, lock_scale=lock_scale)
     cached = read_road_refine_cache(cache_key)
     if cached is not None:
         return cached
@@ -56,7 +57,6 @@ def refine_transform_with_osm_roads(
     if road_points.size == 0:
         return None
     road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
-    feature_distance = image_feature_distance(rgb)
     base_score, base_count = score_georeference_transform(road_points, feature_distance, initial)
     if base_count < 1000:
         return None
@@ -134,17 +134,17 @@ def refine_transform_with_osm_roads(
 
 
 def road_refine_cache_key(
-    rgb: np.ndarray,
+    feature_distance: np.ndarray,
     city_center: GeocodeResult,
     initial: GeoreferenceTransform,
     *,
     lock_scale: bool,
 ) -> str:
-    image_digest = hashlib.sha256(np.ascontiguousarray(rgb).data).hexdigest()
+    feature_digest = hashlib.sha256(np.ascontiguousarray(feature_distance).data).hexdigest()
     bbox = tuple(round(value, 5) for value in (city_center.bbox or ()))
     parts = [
         ROAD_REFINE_CACHE_VERSION,
-        image_digest,
+        feature_digest,
         json.dumps(bbox, separators=(",", ":")),
         initial.source,
         f"{initial.lon:.8f}",

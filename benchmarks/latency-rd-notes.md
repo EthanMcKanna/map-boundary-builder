@@ -43,10 +43,14 @@ polygons and screenshots are refreshed.
 - RapidOCR detector `limit_side_len` now defaults to 640 instead of the upstream
   736. The setting is included in OCR cache keys through
   `MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN`.
+- Road-refinement cache keys now hash the derived road-feature distance field
+  instead of raw RGB bytes. Harmless pixel changes that do not affect road
+  features can reuse the expensive OSM road alignment result, while the cache
+  version bump prevents mixing old raw-image keyed entries with new results.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 43 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 45 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
@@ -55,6 +59,8 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-f32-cachev2-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-f32-cachev2-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-dedupe-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-dedupe-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-det640-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-det640-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/road-feature-cache-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981; Phoenix stayed 0.983 and Nashville stayed 0.981.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-feature-cache-full`: PASS 11/11 active, 4 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
@@ -82,6 +88,11 @@ polygons and screenshots are refreshed.
   0.472s versus 0.451s; Phoenix was effectively flat in the repeated run. A
   focused full-pipeline A/B had equal IoUs but noisy wall time, so this is
   treated as a CPU reduction rather than a guaranteed wall-clock breakthrough.
+- Feature-distance road-refine cache proof: a synthetic near-duplicate whose
+  raw RGB changed but whose road-feature distance field stayed identical reused
+  the cached result. With an intentionally slow patched road search, the first
+  call took 0.1708s, the second took 0.0005s, returned the same result, and
+  produced one shared cache file.
 
 ## Production Smoke Evidence
 
@@ -128,6 +139,9 @@ polygons and screenshots are refreshed.
 - Extraction downscaling sped up direct mask extraction, but even a 2000px cap
   moved Phoenix IoU from 0.983 to 0.982 and lower caps shifted additional
   stable fixtures. Rejected under the no-regression accuracy bar.
+- Skipping road refinement is not safe: Nashville without road refinement fell
+  to 0.796 IoU, and Phoenix without road refinement fell to 0.903 IoU. Rejected
+  because the road stage is still carrying important georeference accuracy.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 
