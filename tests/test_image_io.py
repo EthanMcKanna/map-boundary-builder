@@ -48,6 +48,20 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
             self.assertEqual(tuple(rgb[1, 1]), (0, 128, 255))
 
+    def test_opaque_rgba_png_loads_as_rgb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            png_path = Path(tmp) / "opaque.png"
+            image = Image.new("RGBA", (2, 1), (0, 0, 0, 255))
+            image.putpixel((0, 0), (12, 34, 56, 255))
+            image.putpixel((1, 0), (98, 76, 54, 255))
+            image.save(png_path)
+
+            rgb = load_rgb(png_path)
+
+            self.assertEqual(rgb.shape, (1, 2, 3))
+            self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))
+            self.assertEqual(tuple(rgb[0, 1]), (98, 76, 54))
+
 
 class OverlayPreviewTests(unittest.TestCase):
     def test_overlay_preview_draws_dark_mask_edge(self) -> None:

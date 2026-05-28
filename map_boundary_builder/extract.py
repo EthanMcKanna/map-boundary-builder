@@ -23,8 +23,16 @@ class ExtractionResult:
 
 
 def load_rgb(path: str | Path) -> np.ndarray:
-    image = Image.open(path).convert("RGBA")
-    rgba = np.asarray(image)
+    with Image.open(path) as image:
+        if image.mode == "RGB":
+            return np.array(image, dtype=np.uint8, copy=True)
+        if "A" not in image.getbands():
+            return np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
+
+        rgba = np.array(image.convert("RGBA"), dtype=np.uint8, copy=True)
+    alpha_channel = rgba[:, :, 3]
+    if np.all(alpha_channel == 255):
+        return np.array(rgba[:, :, :3], dtype=np.uint8, copy=True)
     alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
     rgb = rgba[:, :, :3].astype(np.float32)
     # Composite transparent screenshots over white. Most provided app-map PNGs
