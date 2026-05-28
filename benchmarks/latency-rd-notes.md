@@ -76,6 +76,9 @@ regressions, during latency experiments.
   payloads, and the OSM place payload needed by the place-control matcher.
   Fresh-cache warm local LA dropped from roughly 17s to 0.939s while preserving
   the same bbox, confidence, 20 controls, and 0.943 full-benchmark IoU.
+- Miami road-refinement points and the Bay Area synthetic regional place bbox
+  are now bundled as OSM seeds. These remove cold Overpass dependency for two
+  changed-service-area cases while preserving the same fitting path and outputs.
 - Nashville now has bundled Photon seed payloads and Nominatim miss markers for
   common screenshot labels. Fresh-cache warm local Nashville dropped from
   roughly 3.55s to 1.39s while preserving the same bbox, confidence, residuals,
@@ -195,6 +198,18 @@ regressions, during latency experiments.
     / 6.859s event span with confidence 0.926 and 7 controls, versus the
     prior no-SymPy production evidence of 14.60s wall / 10.189s event span.
     Exact repeat hit the run cache in 2.22s wall.
+- Fresh-cache Overpass-seed smoke with Overpass network forcibly blocked:
+  - Miami Waymo completed in 2.472s with the same bbox, 0.864 confidence,
+    6 controls, and `ocr-georeference:nominatim-label-fit+osm-road-refine`.
+    The comparable cProfile run before seeding was 7.15s, including 4.676s in
+    `load_road_points`.
+  - Bay Area Waymo completed in 1.437s with the same bbox, 0.877 confidence,
+    15 controls, and `ocr-georeference:nominatim-label-fit`. The comparable
+    cProfile run before seeding was 12.60s, including 11.229s in
+    `load_place_points`; a later Overpass call hit the 50s timeout and fell to
+    a weaker 3-control fit, so the seed is also a reliability improvement.
+  - After adding the seeds, `PYTHONPATH=. .venv/bin/pytest -q`: 57 passed, and
+    `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/seeded-overpass-full`: PASS 8/8 active, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931, real 8.28s.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,

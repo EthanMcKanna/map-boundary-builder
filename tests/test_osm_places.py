@@ -62,6 +62,23 @@ class OsmPlacesSeedTests(unittest.TestCase):
         self.assertIn("Los Angeles", place_names)
         self.assertIn("Hollywood", place_names)
 
+    def test_bundled_bay_area_regional_places_seed_serves_without_network(self) -> None:
+        bbox = (-122.6639845, 37.1319772, -121.6341266, 37.9903379)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_places, "CACHE_DIR", Path(tmpdir) / "overpass-places"),
+                patch.object(osm_places, "_OSM_PLACES_SEED", None),
+                patch.object(osm_places, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                osm_places.load_overpass_places.cache_clear()
+                osm_places.load_place_points.cache_clear()
+                places = osm_places.load_place_points(bbox)
+
+        place_names = {place.name for place in places}
+        self.assertIn("Menlo Park", place_names)
+        self.assertIn("Sunnyvale", place_names)
+
 
 if __name__ == "__main__":
     unittest.main()
