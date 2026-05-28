@@ -76,9 +76,9 @@ polygons and screenshots are refreshed.
 
 ## Production Smoke Evidence
 
-- Deployment `dpl_7StXiJah1q1xG9te7KP2yUsCLAmH` is live on
+- Deployment `dpl_Hf5wNBTgDpc3oeqUSPmX6LGrDifQ` is live on
   `https://mapboundary.app`.
-- Health after deploy: `pipeline-45949565d8541032`, runtime `vercel-python`,
+- Health after deploy: `pipeline-d486cece321d655d`, runtime `vercel-python`,
   `tesseract: null`.
 - Production unique-image smoke after bounded previews and no API mask artifact:
   - Orlando Waymo: HTTP 201, 12.12s wall, 8.63s event span, confidence 0.909,
@@ -94,6 +94,9 @@ polygons and screenshots are refreshed.
     export 0.191s, summary mask `null`, returned overlay `image/webp` at
     1200x1200. Production timing was noisy and not a breakthrough; local
     profiling is the cleaner evidence for this micro-optimization.
+  - Tesla Bay Area after RapidOCR fallback reuse: HTTP 201, 4.33s wall, 2.35s
+    event span, confidence 0.955, 5 controls, OCR 0.987s, export 0.105s,
+    summary mask `null`.
 
 ## Failed Or Rejected Experiments
 
