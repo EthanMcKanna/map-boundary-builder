@@ -189,6 +189,12 @@ regressions, during latency experiments.
     0.95s, Miami Waymo 14.99s, Bay Area Waymo 25.46s, Houston Tesla 0.92s,
     Bay Area Tesla 0.74s, and Zoox SF 1.79s. The long Miami/Bay Area Waymo
     cases remain geocode-heavy rather than OCR-heavy.
+  - Production deploy `dpl_3Xyop7frohTrUzDT278UvjVC86KC` is live at
+    `mapboundary.app` with pipeline hash `pipeline-8d6f91ae02852866`.
+    Orlando Waymo (`simplify_px=6.42`) returned HTTP complete in 10.57s wall
+    / 6.859s event span with confidence 0.926 and 7 controls, versus the
+    prior no-SymPy production evidence of 14.60s wall / 10.189s event span.
+    Exact repeat hit the run cache in 2.22s wall.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
