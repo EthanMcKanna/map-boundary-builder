@@ -118,6 +118,18 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_640, key_736)
 
+    def test_ocr_cache_key_depends_on_rapidocr_classifier_batch(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_CLS_BATCH_NUM", 6):
+                key_6 = ocr_cache_key(image_path, use_tesseract=False)
+            with patch.object(ocr_module, "RAPIDOCR_CLS_BATCH_NUM", 24):
+                key_24 = ocr_cache_key(image_path, use_tesseract=False)
+
+        self.assertNotEqual(key_6, key_24)
+
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
         rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
 

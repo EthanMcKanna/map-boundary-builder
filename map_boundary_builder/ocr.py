@@ -32,6 +32,7 @@ OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v2"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "2000")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
+RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -73,7 +74,8 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
     return hashlib.sha256(
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
-            f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:{digest}"
+            f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
+            f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:{digest}"
         ).encode("utf-8")
     ).hexdigest()
 
@@ -235,7 +237,9 @@ def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
 def rapidocr_engine():
     from rapidocr_onnxruntime import RapidOCR
 
-    kwargs = {"det_limit_side_len": RAPIDOCR_DET_LIMIT_SIDE_LEN} if RAPIDOCR_DET_LIMIT_SIDE_LEN > 0 else {}
+    kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM}
+    if RAPIDOCR_DET_LIMIT_SIDE_LEN > 0:
+        kwargs["det_limit_side_len"] = RAPIDOCR_DET_LIMIT_SIDE_LEN
     return RapidOCR(**kwargs)
 
 
