@@ -237,6 +237,13 @@ regressions, during latency experiments.
   `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`; the catalog output
   had IoU 1.0 against the current OCR baseline. Las Vegas Zoox correctly stayed
   on OCR.
+- Production deployment `dpl_AfSoK7X3k5xYzREkP2YdCXnrTrp9` reported
+  `pipeline-e1892727b126c384` and `api/index.py` at 92.84 MB. Cache-busted
+  Bay Area Waymo now uses `catalog-shape-match` with confidence 0.877, catalog
+  IoU 0.969189, margin 0.747906, and the exact current OCR bbox. Live internal
+  generation spans dropped from the previous OCR-path guard check at 5.807s to
+  0.655s, 0.485s, 0.520s, and 0.501s. A cache-busted Las Vegas Zoox guard check
+  stayed on `ocr-georeference:nominatim-label-fit`.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.
