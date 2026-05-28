@@ -14,6 +14,7 @@ from .georef_transform import lonlat_to_mercator
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "geocoder"
 PHOTON_CACHE_DIR = _CACHE_ROOT / "geocoder-photon"
+NOMINATIM_TIMEOUT_SECONDS = float(os.environ.get("MAP_BOUNDARY_NOMINATIM_TIMEOUT_SECONDS", "4.0"))
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,7 @@ def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[Geocode
             },
         )
         try:
-            with urlopen(request, timeout=4) as response:
+            with urlopen(request, timeout=NOMINATIM_TIMEOUT_SECONDS) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except Exception:
             payload = []
