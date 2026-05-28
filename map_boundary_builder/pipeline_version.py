@@ -18,6 +18,7 @@ PIPELINE_VERSION_FILES = (
     "ocr.py",
     "osm_places.py",
     "osm_places_seed.json.gz",
+    "osm_road_points_seed.npz",
     "osm_roads.py",
     "pipeline_version.py",
     "runner.py",

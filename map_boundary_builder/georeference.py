@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass, replace
 from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
@@ -10,7 +10,7 @@ import re
 import cv2
 import numpy as np
 
-from .geocoder import GeocodeResult, geocode
+from .geocoder import GeocodeResult, geocode, geocode_cached_only
 from .georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
 from .ocr import OcrLabel, extract_ocr_labels
 from .osm_places import PlacePoint, load_place_points
@@ -32,6 +32,7 @@ MAX_CITY_CONTEXTS = 6
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "6")))
 GEOCODE_LABEL_LOOKAHEAD = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD", "3")))
+PLACE_FAST_PATH_TIMEOUT_SECONDS = max(0.0, float(os.environ.get("MAP_BOUNDARY_PLACE_FAST_PATH_TIMEOUT_SECONDS", "0.08")))
 EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
 EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
 EARLY_CONTEXT_MIN_CANDIDATES = 24
@@ -356,6 +357,8 @@ class CityContext:
 
 def geocode_many(
     requests: list[tuple[str, int]] | list[tuple[str, int, str]],
+    *,
+    allow_network: bool = True,
 ) -> list[list[GeocodeResult]]:
     if not requests:
         return []
@@ -370,16 +373,17 @@ def geocode_many(
         normalized.append((query, limit, country_codes))
 
     unique_requests = list(dict.fromkeys(normalized))
+    geocode_backend = geocode if allow_network else geocode_cached_only
     if len(unique_requests) == 1 or GEOCODE_WORKERS == 1:
         results_by_request = {
-            request: geocode(request[0], limit=request[1], country_codes=request[2])
+            request: geocode_backend(request[0], limit=request[1], country_codes=request[2])
             for request in unique_requests
         }
     else:
         max_workers = min(GEOCODE_WORKERS, len(unique_requests))
 
         def run(request: tuple[str, int, str]) -> tuple[tuple[str, int, str], list[GeocodeResult]]:
-            return request, geocode(request[0], limit=request[1], country_codes=request[2])
+            return request, geocode_backend(request[0], limit=request[1], country_codes=request[2])
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results_by_request = dict(executor.map(run, unique_requests))
@@ -689,7 +693,7 @@ def georeference_from_label_context(
                         spread,
                         width,
                         height,
-                    ):
+                    ) and not allow_two_control_fit:
                         road_refinement = refine_transform_with_osm_roads(
                             load_rgb(image_path),
                             city_center,
@@ -877,7 +881,7 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     direct_contexts = direct_city_contexts_from_labels(inference_labels)
     if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
         return direct_contexts
-    if should_use_direct_city_contexts(direct_contexts) and is_decisive_broad_direct_context(direct_contexts[0]):
+    if should_use_direct_city_contexts(direct_contexts) and is_decisive_direct_context(direct_contexts[0]):
         return direct_contexts
 
     candidates = geocoded_label_candidates(inference_labels)
@@ -1057,12 +1061,39 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             query_scores[token_query] = query_scores.get(token_query, 0.0) + score * token_bonus
             query_evidence.setdefault(token_query, set()).add(label.text)
 
-    scored_contexts: list[tuple[float, CityContext]] = []
     ranked_queries = sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:6]
-    for (query, score), results in zip(
+    scored_contexts = score_direct_city_context_queries(
         ranked_queries,
-        geocode_many([(query, 2) for query, _score in ranked_queries]),
-    ):
+        geocode_many([(query, 2) for query, _score in ranked_queries], allow_network=False),
+        query_evidence,
+    )
+    if not scored_contexts:
+        live_ranked_queries = ranked_queries[:3]
+        scored_contexts = score_direct_city_context_queries(
+            live_ranked_queries,
+            geocode_many([(query, 2) for query, _score in live_ranked_queries]),
+            query_evidence,
+        )
+
+    if not scored_contexts:
+        return []
+    scored_contexts.sort(key=lambda item: item[0], reverse=True)
+    top_score, top_context = scored_contexts[0]
+    if top_score < 160.0:
+        return []
+    close_competitors = [context for score, context in scored_contexts[1:] if score >= top_score * 0.62]
+    if close_competitors and not all(context_covers_context(top_context, competitor) for competitor in close_competitors):
+        return []
+    return [top_context]
+
+
+def score_direct_city_context_queries(
+    ranked_queries: list[tuple[str, float]],
+    results_by_query: list[list[GeocodeResult]],
+    query_evidence: dict[str, set[str]],
+) -> list[tuple[float, CityContext]]:
+    scored_contexts: list[tuple[float, CityContext]] = []
+    for (query, score), results in zip(ranked_queries, results_by_query):
         for result in results:
             if not result.bbox:
                 continue
@@ -1085,17 +1116,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
                 )
             )
             break
-
-    if not scored_contexts:
-        return []
-    scored_contexts.sort(key=lambda item: item[0], reverse=True)
-    top_score, top_context = scored_contexts[0]
-    if top_score < 160.0:
-        return []
-    close_competitors = [context for score, context in scored_contexts[1:] if score >= top_score * 0.62]
-    if close_competitors and not all(context_covers_context(top_context, competitor) for competitor in close_competitors):
-        return []
-    return [top_context]
+    return scored_contexts
 
 
 def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | None:
@@ -1111,7 +1132,10 @@ def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | No
         score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
         if score < 100.0:
             continue
-        for result in geocode(query, limit=2):
+        results = geocode_cached_only(query, limit=2)
+        if not results and should_live_geocode_broad_context(tokens, score):
+            results = geocode(query, limit=2)
+        for result in results:
             if not result.bbox or not primary_name_matches_label(result.display_name, query):
                 continue
             if not is_broad_context_result(result):
@@ -1126,6 +1150,10 @@ def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | No
                 evidence=(label.text,),
             )
     return None
+
+
+def should_live_geocode_broad_context(tokens: set[str], score: float) -> bool:
+    return score >= 130.0 and bool(tokens & {"area", "region"})
 
 
 def context_covers_context(parent: CityContext, child: CityContext) -> bool:
@@ -1152,8 +1180,12 @@ def should_use_direct_city_contexts(contexts: list[CityContext]) -> bool:
     return True
 
 
-def is_decisive_broad_direct_context(context: CityContext) -> bool:
-    return context.center.place_type.lower() == "region" and geocode_bbox_span_m(context.center) >= 85000.0
+def is_decisive_direct_context(context: CityContext) -> bool:
+    place_type = context.center.place_type.lower()
+    span_m = geocode_bbox_span_m(context.center)
+    if place_type == "region" and span_m >= 85000.0:
+        return True
+    return place_type in ADMIN_CONTEXT_TYPES and span_m >= 30000.0 and len(context.evidence) >= 1
 
 
 def is_plausible_context_label(label: OcrLabel) -> bool:
@@ -1179,7 +1211,7 @@ def context_label_score(label: OcrLabel) -> tuple[float, float, int]:
 def prominent_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
     scored_contexts: list[tuple[float, CityContext]] = []
     queries = prominent_context_queries(labels)
-    for query, results in zip(queries, geocode_many([(query, 3) for query in queries])):
+    for query, results in zip(queries, geocode_many([(query, 3) for query in queries], allow_network=False)):
         for result in results:
             if not result.bbox:
                 continue
@@ -1440,7 +1472,10 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
 
     for start in range(0, len(query_labels), GEOCODE_BATCH_SIZE):
         batch = query_labels[start : start + GEOCODE_BATCH_SIZE]
-        for (label, query), results in zip(batch, geocode_many([(query, 2) for _label, query in batch])):
+        for (label, query), results in zip(
+            batch,
+            geocode_many([(query, 2) for _label, query in batch], allow_network=False),
+        ):
             for result in results:
                 if primary_name_matches_label(result.display_name, query):
                     candidates.append(LabelGeocodeCandidate(label=label, geocode=result))
@@ -2115,8 +2150,8 @@ def build_control_points(
     max_geocoded_labels: int = MAX_GEOCODED_LABELS,
     merge_control_sources: bool = False,
 ) -> list[ControlPoint]:
-    # The geocoded and OSM-place paths are independent network-bound lookups; keep
-    # the existing selection order, but overlap their latency.
+    # The geocoded and OSM-place paths are independent lookups; overlap them, and
+    # accept a fast OSM-place fit only when it is already decisive.
     place_executor = ThreadPoolExecutor(max_workers=1)
     place_future = place_executor.submit(
         build_osm_place_control_points,
@@ -2125,6 +2160,16 @@ def build_control_points(
         prefer_large_text=merge_control_sources,
     )
     try:
+        place_controls: list[ControlPoint] | None = None
+        if not merge_control_sources and PLACE_FAST_PATH_TIMEOUT_SECONDS > 0:
+            try:
+                place_controls = place_future.result(timeout=PLACE_FAST_PATH_TIMEOUT_SECONDS)
+            except TimeoutError:
+                place_controls = None
+            else:
+                if has_decisive_control_fit(place_controls):
+                    return place_controls
+
         geocoded_controls = build_geocoded_control_points(
             labels,
             city,
@@ -2137,7 +2182,8 @@ def build_control_points(
             place_future.cancel()
             return geocoded_controls
 
-        place_controls = place_future.result()
+        if place_controls is None:
+            place_controls = place_future.result()
         if not merge_control_sources:
             if len(place_controls) >= 3:
                 return place_controls
@@ -2641,7 +2687,7 @@ def choose_similarity_fit(
     if len(candidates) == 1:
         return candidates[0][1]
 
-    road_scorer = build_similarity_road_scorer(image_path, city_center)
+    road_scorer = None if allow_two_control_fit else build_similarity_road_scorer(image_path, city_center)
     best: tuple[float, tuple[float, float, float, float, list[int], list[float]]] | None = None
     total_spread = control_spread(np.array([control.pixel for control in controls], dtype=float))
     for kind, fit in candidates:
@@ -2819,6 +2865,8 @@ def should_try_road_refinement(
     width: int,
     height: int,
 ) -> bool:
+    if inlier_count <= 2:
+        return False
     if city_context.query == "Inferred map area" or geocode_bbox_span_m(city_context.center) >= 85000.0:
         return False
     image_area = max(float(width * height), 1.0)

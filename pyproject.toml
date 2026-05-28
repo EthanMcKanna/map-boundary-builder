@@ -60,4 +60,4 @@ where = ["."]
 include = ["map_boundary_builder*"]
 
 [tool.setuptools.package-data]
-map_boundary_builder = ["web_assets/*", "geocoder_seed.json", "osm_places_seed.json.gz"]
+map_boundary_builder = ["web_assets/*", "geocoder_seed.json", "osm_places_seed.json.gz", "osm_road_points_seed.npz"]

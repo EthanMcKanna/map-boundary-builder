@@ -5,9 +5,11 @@ import numpy as np
 from map_boundary_builder.georef_transform import GeoreferenceTransform, mercator_to_lonlat
 from map_boundary_builder.osm_roads import (
     RoadMatchResult,
+    load_road_points_seed,
     read_road_refine_cache,
     score_georeference_transform,
     score_transform_batch,
+    seed_road_points,
     write_road_refine_cache,
 )
 
@@ -69,6 +71,14 @@ class RoadScoringTests(unittest.TestCase):
         write_road_refine_cache("unit-test-road-cache", result)
 
         self.assertEqual(read_road_refine_cache("unit-test-road-cache"), result)
+
+    def test_road_point_seed_contains_refinement_contexts(self) -> None:
+        seed = load_road_points_seed()
+
+        self.assertIn("4d5722451b742341f86a6928", seed)
+        self.assertIn("c7c13d1754292efb8db6bb0f", seed)
+        self.assertGreater(len(seed_road_points("4d5722451b742341f86a6928")), 5000)
+        self.assertEqual(seed_road_points("missing-road-seed"), None)
 
 
 if __name__ == "__main__":

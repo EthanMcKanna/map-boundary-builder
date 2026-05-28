@@ -38,16 +38,30 @@ class GeocodeResult:
 
 
 def geocode(query: str, *, limit: int = 3, country_codes: str = "us") -> list[GeocodeResult]:
+    return geocode_with_network(query, limit=limit, country_codes=country_codes, allow_network=True)
+
+
+def geocode_cached_only(query: str, *, limit: int = 3, country_codes: str = "us") -> list[GeocodeResult]:
+    return geocode_with_network(query, limit=limit, country_codes=country_codes, allow_network=False)
+
+
+def geocode_with_network(
+    query: str,
+    *,
+    limit: int = 3,
+    country_codes: str = "us",
+    allow_network: bool,
+) -> list[GeocodeResult]:
     query = query.strip()
     if not query:
         return []
     requested_limit = max(1, int(limit))
     cache_limit = max(3, requested_limit)
-    return list(_geocode_cached(query, cache_limit, country_codes))[:requested_limit]
+    return list(_geocode_cached(query, cache_limit, country_codes, allow_network))[:requested_limit]
 
 
 @lru_cache(maxsize=4096)
-def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[GeocodeResult, ...]:
+def _geocode_cached(query: str, limit: int, country_codes: str, allow_network: bool = True) -> tuple[GeocodeResult, ...]:
     cache_path = cache_file(query, limit, country_codes)
     if cache_path.exists():
         payload = json.loads(cache_path.read_text())
@@ -55,6 +69,8 @@ def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[Geocode
         seeded = seed_cache_payload("nominatim", cache_path.stem)
         if seeded is not _NO_SEED:
             payload = seeded
+        elif not allow_network:
+            payload = []
         else:
             params = {
                 "q": query,
@@ -82,7 +98,7 @@ def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[Geocode
     results = parse_nominatim_payload(payload, query)
     if results:
         return tuple(results)
-    return tuple(geocode_photon(query, limit=limit, country_codes=country_codes))
+    return tuple(geocode_photon(query, limit=limit, country_codes=country_codes, allow_network=allow_network))
 
 
 def parse_nominatim_payload(payload: object, query: str) -> list[GeocodeResult]:
@@ -112,7 +128,7 @@ def parse_nominatim_payload(payload: object, query: str) -> list[GeocodeResult]:
     return results
 
 
-def geocode_photon(query: str, *, limit: int, country_codes: str) -> list[GeocodeResult]:
+def geocode_photon(query: str, *, limit: int, country_codes: str, allow_network: bool = True) -> list[GeocodeResult]:
     cache_path = photon_cache_file(query, limit, country_codes)
     if cache_path.exists():
         payload = json.loads(cache_path.read_text())
@@ -120,6 +136,8 @@ def geocode_photon(query: str, *, limit: int, country_codes: str) -> list[Geocod
         seeded = seed_cache_payload("photon", cache_path.stem)
         if seeded is not _NO_SEED:
             payload = seeded
+        elif not allow_network:
+            return []
         else:
             params = {
                 "q": query,

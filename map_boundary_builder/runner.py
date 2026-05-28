@@ -295,7 +295,11 @@ def fit_georeference(
     )
     road_contexts = road_contexts_from_labels(city_input, labels)
     road_context_candidates = [city_input] if city_input is not None else road_context_queries(road_contexts)
-    try_ranked_context_first = should_try_ranked_context_first(city_input, coverage_ratio, road_contexts)
+    try_ranked_context_first = label_y_min is None and should_try_ranked_context_first(
+        city_input,
+        coverage_ratio,
+        road_contexts,
+    )
 
     georef = None
     if try_ranked_context_first:

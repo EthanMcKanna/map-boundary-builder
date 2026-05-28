@@ -195,7 +195,10 @@ class PlaceCandidateTests(unittest.TestCase):
                 ]
             return []
 
-        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_geocode),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode),
+        ):
             contexts = direct_city_contexts_from_labels(labels)
 
         self.assertEqual(contexts[0].query, "Orlando")
@@ -237,7 +240,10 @@ class PlaceCandidateTests(unittest.TestCase):
                 ]
             return []
 
-        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_geocode),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode),
+        ):
             contexts = direct_city_contexts_from_labels(labels)
 
         self.assertEqual(contexts[0].query, "San Francisco Bay Area")
@@ -346,7 +352,10 @@ class PlaceCandidateTests(unittest.TestCase):
             }
             return results.get(query, [])[:limit]
 
-        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_geocode),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode),
+        ):
             contexts = infer_city_contexts(labels)
 
         self.assertGreater(contexts[0].center.bbox[3], 25.94)

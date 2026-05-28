@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
+import io
 import json
 import os
+from importlib import resources
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -23,7 +25,9 @@ ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 _TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "64")))
 ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
+OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
+_ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
 
 
 @dataclass(frozen=True)
@@ -429,6 +433,9 @@ def sample_road_points(road_points: np.ndarray, *, max_points: int) -> np.ndarra
 
 @lru_cache(maxsize=256)
 def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
+    seeded = seed_road_points(overpass_cache_file(bbox).stem)
+    if seeded is not None:
+        return seeded
     payload = load_overpass_roads(bbox)
     points: list[tuple[float, float]] = []
     for element in payload.get("elements", []):
@@ -442,6 +449,25 @@ def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
         step = int(np.ceil(len(arr) / 45000))
         arr = arr[::step]
     return arr
+
+
+def seed_road_points(key: str) -> np.ndarray | None:
+    seed = load_road_points_seed()
+    return seed.get(key)
+
+
+def load_road_points_seed() -> dict[str, np.ndarray]:
+    global _ROAD_POINTS_SEED
+    if _ROAD_POINTS_SEED is not None:
+        return _ROAD_POINTS_SEED
+    try:
+        seed_file = resources.files("map_boundary_builder").joinpath(OSM_ROAD_POINTS_SEED_FILE)
+        with np.load(io.BytesIO(seed_file.read_bytes())) as archive:
+            payload = {key: np.asarray(archive[key], dtype=float) for key in archive.files}
+    except Exception:
+        payload = {}
+    _ROAD_POINTS_SEED = payload
+    return _ROAD_POINTS_SEED
 
 
 @lru_cache(maxsize=256)
