@@ -35,7 +35,7 @@ DIRECT_CONTEXT_QUERY_LIMIT = 6
 DIRECT_CONTEXT_MAX_QUERIES = 10
 DIRECT_CONTEXT_LIVE_QUERY_LIMIT = 3
 DIRECT_CONTEXT_MAX_LIVE_QUERIES = 5
-PROMOTED_DIRECT_CONTEXT_LABEL_SCORE = 100.0
+PROMOTED_DIRECT_CONTEXT_LABEL_SCORE = 95.0
 STRONG_DIRECT_CONTEXT_MIN_SCORE = 115.0
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "6")))
@@ -125,6 +125,7 @@ OCR_PLACE_TOKEN_ALIASES = {
     "fran": "francisco",
     "frankisco": "francisco",
     "fransisco": "francisco",
+    "huntridg": "huntridge",
     "illowb": "willowbrook",
     "isco": "francisco",
     "jakland": "oakland",

@@ -259,6 +259,7 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(place_query_text("edwood City acy"), "Redwood City")
         self.assertEqual(place_query_text("San Jos"), "San Jose")
         self.assertEqual(place_query_text("Ersey Village"), "Jersey Village")
+        self.assertEqual(place_query_text("HUNTRIDG"), "Huntridge")
         self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")
 
@@ -336,7 +337,7 @@ class PlaceCandidateTests(unittest.TestCase):
             OcrLabel("WRussell Rd Patrick Ln", x=150, y=182, width=190, height=82, confidence=97),
             OcrLabel("Badura Ave", x=140, y=220, width=115, height=55, confidence=99),
             OcrLabel("FFALO", x=215, y=255, width=95, height=26, confidence=99),
-            OcrLabel("Las Vegas", x=387, y=267, width=102, height=23, confidence=99),
+            OcrLabel("Las Vegas", x=387, y=267, width=102, height=23, confidence=95),
         ]
         calls: list[str] = []
 
