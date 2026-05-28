@@ -120,6 +120,10 @@ regressions, during latency experiments.
   Waymo had a tight 5-control fit but still spent roughly 9-11s on a live
   Overpass-backed road refinement that was rejected by the label-fit preservation
   check.
+- Road refinement now samples up to 4000 road points by default instead of
+  6000. Focused Phoenix/Nashville/Miami probes preserved bbox, confidence, and
+  road-refined source while cutting road-refine time; a 3000-point probe was
+  rejected because it shifted Nashville's bbox.
 
 ## Current Validation
 
@@ -185,6 +189,27 @@ regressions, during latency experiments.
   down to 900, but cold local wall time only moved from 1.714s at 1600 to 1.536s
   at 1000, and prior full-suite cap probes found lower global caps can regress
   other screenshots.
+- Road-point cap sweep after the tight-label road skip:
+  - Default 6000 cap: Phoenix refine 0.477s / score 0.714768, Nashville refine
+    0.440s / score 0.770404, Miami refine 0.446s / score 0.673348.
+  - 4000 cap: Phoenix refine 0.328s / score 0.706233, Nashville refine 0.340s
+    / score 0.772836, Miami refine 0.368s / score 0.681518; all preserved bbox,
+    confidence, controls, and road-refined source.
+  - 3000 cap: faster, but Nashville bbox shifted, so rejected for accuracy
+    preservation.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-points4000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=4000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points4000-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- With 4000 as the code default, `PYTHONPATH=. .venv/bin/pytest -q`: 67
+  passed, 9 subtests passed. `PYTHONPATH=. .venv/bin/python -m compileall -q
+  api map_boundary_builder`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`: pass.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-points4000-default-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points4000-default-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- Fresh-cache changed-service-area no-network smoke with the 4000-point default:
+  Bay Area Waymo 0.584s, Bay Area Tesla 0.435s, Bay Area Zoox 0.395s, Houston
+  Waymo 0.488s, Houston Tesla 0.449s, Miami Waymo 0.785s; all had zero attempted
+  geocoder/Overpass `urlopen` calls. Miami kept bbox
+  `[-80.3230924,25.6880246,-80.1184998,25.9396977]`, confidence 0.864,
+  6 controls, `ocr-georeference:nominatim-label-fit+osm-road-refine`, and road
+  score 0.681518.
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
