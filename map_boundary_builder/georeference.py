@@ -421,6 +421,7 @@ def georeference_from_labels(
     width: int,
     height: int,
     *,
+    rgb: np.ndarray | None = None,
     min_control_points: int = 3,
     label_y_min: float | None = None,
     label_y_max: float | None = None,
@@ -433,7 +434,7 @@ def georeference_from_labels(
     allow_two_control_fit = label_y_min is not None
     if allow_two_control_fit:
         control_labels = [label for label in control_labels if not is_top_left_title_label(label, width, height)]
-    control_labels = anchor_labels_to_marker_dots(control_labels, image_path)
+    control_labels = anchor_labels_to_marker_dots(control_labels, image_path, rgb=rgb)
     city_contexts = resolve_city_contexts(labels, city)
     best: tuple[float, GeoreferenceResult, CityContext] | None = None
     for city_context in city_contexts:
@@ -443,6 +444,7 @@ def georeference_from_labels(
             city_context,
             width,
             height,
+            rgb=rgb,
             min_control_points=min_control_points,
             allow_two_control_fit=allow_two_control_fit,
         )
@@ -484,8 +486,13 @@ def should_prefer_named_context_result(
     return len(result.control_points) >= len(best_result.control_points)
 
 
-def anchor_labels_to_marker_dots(labels: list[OcrLabel], image_path: str) -> list[OcrLabel]:
-    markers = detect_label_marker_dots(image_path)
+def anchor_labels_to_marker_dots(
+    labels: list[OcrLabel],
+    image_path: str,
+    *,
+    rgb: np.ndarray | None = None,
+) -> list[OcrLabel]:
+    markers = detect_label_marker_dots(image_path, rgb=rgb)
     if not markers:
         return labels
 
@@ -508,11 +515,12 @@ def anchor_labels_to_marker_dots(labels: list[OcrLabel], image_path: str) -> lis
     return anchored
 
 
-def detect_label_marker_dots(image_path: str) -> list[tuple[float, float]]:
+def detect_label_marker_dots(image_path: str, *, rgb: np.ndarray | None = None) -> list[tuple[float, float]]:
     try:
-        from .extract import load_rgb
+        if rgb is None:
+            from .extract import load_rgb
 
-        rgb = load_rgb(image_path)
+            rgb = load_rgb(image_path)
     except Exception:
         return []
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
@@ -643,6 +651,7 @@ def georeference_from_label_context(
     width: int,
     height: int,
     *,
+    rgb: np.ndarray | None = None,
     min_control_points: int,
     allow_two_control_fit: bool = False,
 ) -> GeoreferenceResult | None:
@@ -683,8 +692,6 @@ def georeference_from_label_context(
                         confidence=confidence,
                         source="ocr-georeference:nominatim-label-fit",
                     )
-                    from .extract import load_rgb
-
                     spread = control_spread(pixel_positions(controls, inliers))
                     road_refinement = None
                     if should_try_road_refinement(
@@ -697,8 +704,14 @@ def georeference_from_label_context(
                         width,
                         height,
                     ) and not allow_two_control_fit:
+                        if rgb is None:
+                            from .extract import load_rgb
+
+                            road_rgb = load_rgb(image_path)
+                        else:
+                            road_rgb = rgb
                         road_refinement = refine_transform_with_osm_roads(
-                            load_rgb(image_path),
+                            road_rgb,
                             city_center,
                             geo_transform,
                             lock_scale=should_lock_road_refinement_scale(

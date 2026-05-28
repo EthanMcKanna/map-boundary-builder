@@ -85,6 +85,11 @@ screenshots are refreshed.
   runtime wheel. A Python 3.12 throwaway venv kept NumPy 2.4.6 and OpenCV
   4.13.0 behavior, passed all unit tests, and preserved the drift-aware full
   benchmark at 8/8 scored fixtures with avg IoU 0.962 and min IoU 0.931.
+- Georeference marker detection and road refinement now reuse the already-loaded
+  RGB image from the runner instead of rereading the same normalized upload from
+  disk. This removed the georeference-side duplicate read, keeps extraction and
+  road scoring on identical pixels, and reduced the Phoenix georeference profile
+  from 0.645s to 0.591s without changing geometry.
 
 ## Current Validation
 
@@ -92,6 +97,9 @@ screenshots are refreshed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-full-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/ort119-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
+- `PYTHONPATH=. .venv/bin/pytest -q`: 54 passed after RGB reuse.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rgbreuse-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/rgb-reuse-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rgbreuse-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rgb-reuse-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused hybrid road-refinement A/B against `34cdeed`:
   - baseline Phoenix 1.761s / 0.731s georef / 0.983 IoU / road score 0.698507;
     hybrid Phoenix 1.559s / 0.602s georef / 0.985 IoU / road score 0.718119.
@@ -306,9 +314,9 @@ screenshots are refreshed.
 
 ## Remaining Bottlenecks
 
-- Production still exceeds Vercel's Python bundle threshold at about 310.69 MB,
-  so runtime dependency installation and cold starts remain the biggest
-  production-only latency problem.
-- The largest dependency weights are OpenCV and ONNX Runtime. Removing either
+- Production package size is improved after the ONNX Runtime pin, with Vercel
+  reporting `api/index.py` at 92.74 MB on the promoted deployment. Cold starts
+  and OCR model initialization remain production-only latency risks.
+- OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full
   active fixture suite before production.

@@ -326,6 +326,7 @@ def fit_georeference(
             road_contexts,
             width,
             height,
+            rgb=rgb,
             min_control_points=min_control_points,
         )
 
@@ -336,6 +337,7 @@ def fit_georeference(
             city_input,
             width,
             height,
+            rgb=rgb,
             min_control_points=min_control_points,
             label_y_min=label_y_min,
             label_y_max=label_y_max,
@@ -359,6 +361,7 @@ def georeference_from_ranked_label_contexts(
     width: int,
     height: int,
     *,
+    rgb: Any,
     min_control_points: int,
 ):
     best = None
@@ -370,6 +373,7 @@ def georeference_from_ranked_label_contexts(
             context,
             width,
             height,
+            rgb=rgb,
             min_control_points=min_control_points,
         )
         if result is None:

@@ -13,6 +13,7 @@ from map_boundary_builder.georeference import (
     LabelGeocodeCandidate,
     candidate_place_labels,
     direct_city_contexts_from_labels,
+    detect_label_marker_dots,
     geocode_many,
     geocode_contexts,
     georeference_from_labels,
@@ -641,6 +642,14 @@ class GeoreferenceFallbackTests(unittest.TestCase):
             result = georeference_from_labels(labels, "input.png", None, width=1920, height=1080)
 
         self.assertEqual(result.transform.city, "Nashville")
+
+    def test_detect_label_marker_dots_reuses_supplied_rgb(self) -> None:
+        rgb = np.full((20, 20, 3), 255, dtype=np.uint8)
+
+        with patch("map_boundary_builder.extract.load_rgb", side_effect=AssertionError("should not reload")):
+            markers = detect_label_marker_dots("missing.png", rgb=rgb)
+
+        self.assertEqual(markers, [])
 
 
 if __name__ == "__main__":
