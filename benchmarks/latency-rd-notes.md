@@ -52,10 +52,14 @@ polygons and screenshots are refreshed.
   version bump prevents mixing old raw-image keyed entries with new results.
 - Opaque RGBA screenshots now load through a direct RGB slice instead of the
   float alpha-composite path. Transparent uploads still composite over white.
+- RapidOCR resized inputs now go to the model as in-memory BGR arrays instead
+  of being written to temporary PNGs and read back. Small non-resized images
+  stay on RapidOCR's original path because gray-fill fixtures regressed when
+  forced through OpenCV-loaded arrays.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 47 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 48 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
@@ -68,6 +72,7 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-det608-default-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-det608-default-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931 with detector 608 as the code default.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-cls24-default-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-cls24-default-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931 with detector 608 and classifier batch 24 as code defaults.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-opaque-fast-full-2-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/opaque-rgba-fast-full-2`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-array-resized-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-array-resized-input-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/road-feature-cache-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981; Phoenix stayed 0.983 and Nashville stayed 0.981.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-feature-cache-full`: PASS 11/11 active, 4 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
@@ -107,6 +112,10 @@ polygons and screenshots are refreshed.
 - Opaque-RGBA image loading probe on Orlando preserved identical RGB pixels and
   reduced local `load_rgb` average time from 0.0775s to 0.0538s by skipping
   unnecessary float alpha compositing.
+- RapidOCR in-memory resized input probes preserved sampled label counts/texts
+  on Orlando and Phoenix while avoiding temp PNG write/read. Orlando averaged
+  0.439s through the temp-file path versus 0.412s through the resized-array
+  path; Phoenix averaged 0.737s versus 0.694s.
 - Feature-distance road-refine cache proof: a synthetic near-duplicate whose
   raw RGB changed but whose road-feature distance field stayed identical reused
   the cached result. With an intentionally slow patched road search, the first
@@ -181,6 +190,13 @@ polygons and screenshots are refreshed.
 - Raising RapidOCR recognition batch size changed a sampled Phoenix label from
   `TPC Scottsdale` to `TPCScottsdale` and did not improve Phoenix timing.
   Rejected; only classifier batching was kept.
+- Forcing every RapidOCR input through an OpenCV-loaded array broke small
+  gray-fill fixtures: Houston Tesla fell to 0.000 IoU and Bay Area Tesla to
+  0.859. Rejected; the array shortcut is limited to resized inputs only.
+- RapidOCR max dimension 1800 dropped Orlando to 0.853 IoU, and 1900 dropped
+  Phoenix to 0.895 IoU. Rejected; the 2000px OCR input cap remains necessary.
+- Pinning ONNX Runtime threads was slower locally: 1x1 and 2x1 were much slower
+  than default, and 4x1 hurt Phoenix. Rejected.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 

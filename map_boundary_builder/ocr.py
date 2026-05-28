@@ -177,18 +177,12 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
 
 
 def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
-    ocr_path, scale_x, scale_y = rapidocr_input_image(image_path)
+    ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
     try:
         engine = rapidocr_engine()
-        result, _elapsed = engine(str(ocr_path))
+        result, _elapsed = engine(ocr_input)
     except Exception:
         return []
-    finally:
-        if ocr_path != Path(image_path):
-            try:
-                ocr_path.unlink()
-            except OSError:
-                pass
     labels = rapidocr_items_to_labels(result)
     if scale_x == 1.0 and scale_y == 1.0:
         return labels
@@ -203,6 +197,26 @@ def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
         )
         for label in labels
     ]
+
+
+def rapidocr_input_array(image_path: str | Path) -> tuple[Path | np.ndarray, float, float]:
+    source_path = Path(image_path)
+    if RAPIDOCR_MAX_DIMENSION <= 0:
+        return source_path, 1.0, 1.0
+    bgr = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    if bgr is None:
+        return source_path, 1.0, 1.0
+    height, width = bgr.shape[:2]
+    max_dimension = max(width, height)
+    if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+        return source_path, 1.0, 1.0
+    scale = RAPIDOCR_MAX_DIMENSION / float(max_dimension)
+    resized = cv2.resize(
+        bgr,
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
+    return resized, scale, scale
 
 
 def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:

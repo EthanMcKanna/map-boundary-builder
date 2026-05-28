@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import numpy as np
 from PIL import Image
 
 import map_boundary_builder.ocr as ocr_module
@@ -31,6 +32,7 @@ from map_boundary_builder.ocr import (
     extract_ocr_labels,
     group_stacked_labels,
     ocr_cache_key,
+    rapidocr_input_array,
     rapidocr_input_image,
     rapidocr_items_to_labels,
     read_ocr_cache,
@@ -105,6 +107,19 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertAlmostEqual(scale_y, 0.5)
             finally:
                 ocr_path.unlink(missing_ok=True)
+
+    def test_rapidocr_input_array_downscales_without_temp_file(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 10):
+                ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
+
+            self.assertIsInstance(ocr_input, np.ndarray)
+            self.assertEqual(ocr_input.shape[:2], (5, 10))
+            self.assertAlmostEqual(scale_x, 0.5)
+            self.assertAlmostEqual(scale_y, 0.5)
 
     def test_ocr_cache_key_depends_on_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:
