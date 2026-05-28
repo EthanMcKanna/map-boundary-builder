@@ -122,14 +122,18 @@ class handler(BaseHTTPRequestHandler):
         output_path = run_dir / "boundary.geojson"
         image_path.write_bytes(image_bytes)
 
-        result = build_boundary(
-            image_path,
-            city,
-            output_path,
-            debug_dir=debug_dir,
-            options=options,
-            progress=progress,
-        )
+        try:
+            result = build_boundary(
+                image_path,
+                city,
+                output_path,
+                debug_dir=debug_dir,
+                options=options,
+                progress=progress,
+            )
+        except Exception as exc:
+            self.send_json({"error": str(exc), "events": events[-20:]}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
         payload = {
             "id": run_id,
             "city": result.summary["city"],

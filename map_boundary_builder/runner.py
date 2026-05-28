@@ -135,6 +135,16 @@ def build_boundary(
             percent=44,
         )
         labels = labels_future.result()
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Map labels read",
+            percent=47,
+            details={
+                "label_count": len(labels),
+                "top_labels": [label.text for label in labels[:8]],
+            },
+        )
         georef = fit_georeference(
             labels,
             image_path,
