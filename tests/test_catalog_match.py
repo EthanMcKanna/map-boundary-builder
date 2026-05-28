@@ -48,6 +48,18 @@ def test_catalog_shape_match_rejects_wrong_style() -> None:
     assert match_service_area_catalog(pixel_geometry, style="gray-fill") is None
 
 
+def test_catalog_shape_match_respects_area_hints() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "phoenix-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue", area_hint_texts=["Phoenix"])
+    wrong_city_match = match_service_area_catalog(pixel_geometry, style="bright-blue", area_hint_texts=["Dallas"])
+
+    assert match is not None
+    assert match.entry.slug == "phoenix-waymo"
+    assert wrong_city_match is None
+
+
 def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)

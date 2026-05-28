@@ -131,8 +131,12 @@ def build_boundary(
             },
         )
 
-        if city_input is None and allow_catalog:
-            catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
+        if allow_catalog:
+            catalog_match = match_service_area_catalog(
+                extraction.pixel_geometry,
+                style=extraction.style,
+                area_hint_texts=[city_input] if city_input is not None else None,
+            )
             if catalog_match is not None:
                 data = catalog_feature_collection(
                     extraction,
@@ -140,7 +144,7 @@ def build_boundary(
                     width=width,
                     height=height,
                     image_path=image_path,
-                    city_input="Auto",
+                    city_input=city_input or "Auto",
                 )
                 combined_confidence = data["features"][0]["properties"]["combined_confidence"]
                 emit_progress(
@@ -172,7 +176,7 @@ def build_boundary(
                     opts,
                     width,
                     height,
-                    city_input="Auto",
+                    city_input=city_input or "Auto",
                     rgb=rgb,
                     progress=progress,
                 )
@@ -347,7 +351,7 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
 
 
 def should_overlap_ocr_with_extraction(*, city_input: str | None, allow_catalog: bool) -> bool:
-    return city_input is not None or not allow_catalog
+    return not allow_catalog
 
 
 def catalog_matching_enabled(options: Any) -> bool:

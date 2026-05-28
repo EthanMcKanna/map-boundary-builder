@@ -212,6 +212,11 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   keeps catalog-first production fast paths from doing speculative OCR, while
   reducing cold OCR/georeference latency for the general inference path without
   changing the fitted geometry.
+- City-provided requests now run the same strict pre-OCR catalog guard before
+  reading labels, using the supplied city as an area hint. This lets known
+  current shapes return through `catalog-shape-match` even when the user typed a
+  city, while still ignoring stale Houston, Miami, and Bay Area catalog entries
+  and falling back to OCR/georeference when the city hint does not match.
 
 ## Current Validation
 
@@ -287,6 +292,28 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   6.937s internal on a warmed uncached variant, so this is a local/server-path
   latency win rather than a production sub-second breakthrough for the
   OCR-heavy Phoenix city-forced path.
+- Current city-provided catalog head: focused API/cache and catalog tests passed
+  23 tests, full pytest passed 86 tests and 9 subtests, `compileall`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`
+  passed. Fresh-cache city-overrides benchmark
+  `out/benchmark-city-catalog-fastpath-20260528-continue/full-report.json`
+  passed 8/8 active fixtures, skipped 7 known `reference_mismatch` fixtures,
+  avg IoU 0.983, min IoU 0.943, total 3.04s, with every scored fixture using
+  `catalog-shape-match`; Phoenix city-provided local time was 0.44s. The
+  explicit OCR/georeference gate
+  `out/benchmark-city-fastpath-no-catalog-gate-20260528-continue/full-report.json`
+  stayed green at 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.47s. The
+  default auto benchmark
+  `out/benchmark-city-fastpath-default-gate-20260528-continue/full-report.json`
+  stayed green at 8/8 active, avg IoU 0.983, min IoU 0.943, total 3.09s.
+- Rejected city-context road-only early return. A downscaled probe still spent
+  1.7-23.3s per active fixture and produced poor IoU on returned matches
+  (Phoenix 0.225, Nashville 0.362, Los Angeles 0.257, Austin 0.539), so it is
+  neither fast enough nor reliable enough for production.
+- Rejected RapidOCR detector `limit_side_len=576` as a new default. It preserved
+  the active no-catalog benchmark but took 7.82s total versus the matched 608
+  baseline at 7.46s, and slightly reduced some gray-fill IoUs, so the current
+  608 default remains better.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

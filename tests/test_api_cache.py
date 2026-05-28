@@ -32,7 +32,8 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
-        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
+        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
 
     def test_run_cache_key_depends_on_image_and_options(self) -> None:
         base = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
