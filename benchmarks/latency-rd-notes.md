@@ -85,9 +85,9 @@ polygons and screenshots are refreshed.
 
 ## Production Smoke Evidence
 
-- Deployment `dpl_Hf5wNBTgDpc3oeqUSPmX6LGrDifQ` is live on
+- Deployment `dpl_7wU7ijL47rESEbkGT7LaLFpEzL35` is live on
   `https://mapboundary.app`.
-- Health after deploy: `pipeline-d486cece321d655d`, runtime `vercel-python`,
+- Health after deploy: `pipeline-8fd0c71ed10e3b96`, runtime `vercel-python`,
   `tesseract: null`.
 - Production unique-image smoke after bounded previews and no API mask artifact:
   - Orlando Waymo: HTTP 201, 12.12s wall, 8.63s event span, confidence 0.909,
@@ -106,6 +106,11 @@ polygons and screenshots are refreshed.
   - Tesla Bay Area after RapidOCR fallback reuse: HTTP 201, 4.33s wall, 2.35s
     event span, confidence 0.955, 5 controls, OCR 0.987s, export 0.105s,
     summary mask `null`.
+  - Orlando Waymo after detector limit 640: HTTP 201, 12.63s wall, 9.01s event
+    span, confidence 0.909, 6 controls, OCR 5.797s, export 0.172s, summary mask
+    `null`, returned overlay `image/webp` at 1200x1200. Production OCR timing
+    remained noisy on a single call; local repeated OCR and full-suite accuracy
+    are the stronger evidence for this change.
 
 ## Failed Or Rejected Experiments
 
