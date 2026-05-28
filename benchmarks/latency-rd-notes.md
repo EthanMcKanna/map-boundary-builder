@@ -468,6 +468,23 @@ regressions, during latency experiments.
     new cache-busted calls hit sub-second server-side generation spans: Miami
     4.722s wall / 0.788s event span and Phoenix 3.427s wall / 0.791s event
     span. Exact repeats returned from the result cache in 2.293s and 2.217s.
+- GeoJSON-first response validation:
+  - Added an `include_overlay` API flag, defaulting to the previous overlay
+    behavior for compatibility. The web app now requests `include_overlay=0`,
+    so the first response returns GeoJSON, summary, and the rendered boundary
+    without writing/encoding an inline overlay preview.
+  - Local Miami no-network validation preserved the exact bbox, confidence,
+    source, and GeoJSON path while cutting the gzip response from about 58.5 KB
+    with inline overlay to about 2.1 KB without overlay. Result-cache keys now
+    include `include_overlay` and `RUN_RESULT_CACHE_VERSION` moved to
+    `run-result-v4`, so fast GeoJSON responses cannot overwrite full-overlay
+    API responses.
+  - Validation passed: `PYTHONPATH=. .venv/bin/pytest -q`, 63 tests;
+    `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`;
+    `node --check map_boundary_builder/web_assets/app.js`; and the full
+    drift-aware benchmark stayed clean at 8/8 scored fixtures, 7
+    `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931, in
+    7.80s wall time.
 
 ## Failed Or Rejected Experiments
 

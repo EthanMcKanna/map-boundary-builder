@@ -28,7 +28,7 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
-RUN_RESULT_CACHE_VERSION = "run-result-v3"
+RUN_RESULT_CACHE_VERSION = "run-result-v4"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 
@@ -109,11 +109,13 @@ class handler(BaseHTTPRequestHandler):
         def progress(event: dict[str, Any]) -> None:
             events.append({"timestamp": time.time(), **event})
 
+        include_overlay = bool_field(fields, "include_overlay", default=True)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
-            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
+            include_overlay=include_overlay,
+            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
             write_mask_artifact=False,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
@@ -137,7 +139,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
-        debug_dir = run_dir / "debug"
+        debug_dir = run_dir / "debug" if options.include_overlay else None
         run_dir.mkdir(parents=True, exist_ok=True)
         image_path = run_dir / f"input{safe_extension(original_filename)}"
         output_path = run_dir / "boundary.geojson"
@@ -157,6 +159,11 @@ class handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.send_json({"error": str(exc), "events": events[-20:]}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        artifacts = {
+            "geojson_inline": result.geojson,
+        }
+        if options.include_overlay:
+            artifacts["overlay_data_url"] = inline_overlay(result.overlay_path)
         payload = {
             "id": run_id,
             "city": result.summary["city"],
@@ -165,10 +172,7 @@ class handler(BaseHTTPRequestHandler):
             "percent": 100,
             "summary": result.summary,
             "events": events[-20:],
-            "artifacts": {
-                "geojson_inline": result.geojson,
-                "overlay_data_url": inline_overlay(result.overlay_path),
-            },
+            "artifacts": artifacts,
         }
         write_run_result_cache(cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
@@ -368,6 +372,13 @@ def int_field(fields: dict[str, str], name: str, default: int, minimum: int, max
     return max(minimum, min(maximum, value))
 
 
+def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
+    value = fields.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
 def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") -> tuple[bytes, dict[str, str]]:
     data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     if len(data) < 1024 or "gzip" not in accept_encoding.lower():
@@ -400,6 +411,7 @@ def run_result_cache_key_for_hash(
         "simplify_px": round(float(options.simplify_px), 4),
         "min_confidence": round(float(options.min_confidence), 4),
         "min_control_points": int(options.min_control_points),
+        "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
     }

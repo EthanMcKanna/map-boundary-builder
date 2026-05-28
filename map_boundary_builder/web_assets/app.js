@@ -87,7 +87,7 @@ const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
 const RUN_CACHE_VERSION = "image-to-geojson-v1";
-const RUN_CACHE_SETTING_FIELDS = ["min_confidence", "min_control_points", "simplify_px"];
+const RUN_CACHE_SETTING_FIELDS = ["include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
   ready: "Build boundary",

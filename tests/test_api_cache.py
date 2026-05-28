@@ -4,6 +4,7 @@ import gzip
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from PIL import Image, features
@@ -42,12 +43,25 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(write_mask_artifact=False),
         )
+        changed_overlay_mode = run_result_cache_key(
+            b"image-a",
+            None,
+            SimpleNamespace(
+                simplify_px=BoundaryBuildOptions().simplify_px,
+                min_confidence=BoundaryBuildOptions().min_confidence,
+                min_control_points=BoundaryBuildOptions().min_control_points,
+                include_overlay=False,
+                preview_max_dimension=None,
+                write_mask_artifact=False,
+            ),
+        )
 
         self.assertNotEqual(base, changed_image)
         self.assertNotEqual(base, changed_city)
         self.assertNotEqual(base, changed_options)
         self.assertNotEqual(base, changed_preview_options)
         self.assertNotEqual(base, changed_mask_options)
+        self.assertNotEqual(base, changed_overlay_mode)
 
     def test_run_cache_key_depends_on_pipeline_version(self) -> None:
         with patch("api.index.get_pipeline_version", return_value="pipeline-a"):
