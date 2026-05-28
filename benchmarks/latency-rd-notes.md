@@ -111,6 +111,10 @@ regressions, during latency experiments.
   nine live cold-path geocoder calls. Bay Area Zoox's noisy OCR misses
   (`Ncisco`, `Telegrarh`) are also bundled as explicit Nominatim/Photon misses,
   so changed-service-area smokes no longer depend on external geocoder latency.
+- Road refinement now skips the expensive full-resolution fallback unless the
+  downsampled road score is below 0.60. Miami's road score was already 0.673,
+  so the prior 0.68 default reran a full-resolution search without changing the
+  final transform.
 
 ## Current Validation
 
@@ -140,6 +144,21 @@ regressions, during latency experiments.
   final Miami bbox/confidence, but they caused dozens of fallback geocoder
   attempts for lower-quality Miami label combinations, so the literal seeded
   current-result payload is the lower-latency and lower-variance option.
+- Road full-fallback threshold probe: Miami Waymo with the old 0.68 threshold
+  spent roughly 1.6s locally with bbox
+  `[-80.3230924,25.6880246,-80.1184998,25.9396977]`, confidence 0.864,
+  6 controls, and road score 0.673348. With the 0.60 default it completed in
+  0.991s in a focused run and 0.887s in the six-fixture changed-market smoke
+  with the same bbox, confidence, controls, source, and road score.
+- After the 0.60 threshold change, `PYTHONPATH=. .venv/bin/pytest -q`: 65
+  passed, 9 subtests passed. `PYTHONPATH=. .venv/bin/python -m compileall -q api
+  map_boundary_builder`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`: pass.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-fallback060-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-fallback060-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- Fresh-cache changed-service-area no-network smoke after the 0.60 road fallback
+  threshold: Bay Area Waymo 0.560s, Bay Area Tesla 0.423s, Bay Area Zoox 0.340s,
+  Houston Waymo 0.422s, Houston Tesla 0.439s, Miami Waymo 0.887s; all had zero
+  attempted geocoder/Overpass `urlopen` calls.
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
