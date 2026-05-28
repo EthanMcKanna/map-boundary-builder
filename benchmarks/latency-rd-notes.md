@@ -210,6 +210,13 @@ regressions, during latency experiments.
     a weaker 3-control fit, so the seed is also a reliability improvement.
   - After adding the seeds, `PYTHONPATH=. .venv/bin/pytest -q`: 57 passed, and
     `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/seeded-overpass-full`: PASS 8/8 active, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931, real 8.28s.
+  - Production deploy `dpl_oj1p2Lk8PD2BHtoKdtNNBM3qVz9m` is live with pipeline
+    hash `pipeline-f04bcdf3e7178726`. First post-deploy Miami Waymo completed
+    in 16.61s wall / 13.098s event span, and first Bay Area Waymo completed in
+    8.43s wall / 5.630s event span. A non-cached warm-instance pass using
+    `simplify_px=6.01` completed Miami in 3.39s wall / 1.120s event span and
+    Bay Area in 3.80s wall / 1.146s event span, preserving the same confidence,
+    control count, source, and bbox for both images.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
