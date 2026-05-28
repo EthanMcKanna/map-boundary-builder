@@ -1994,35 +1994,44 @@ def build_control_points(
     max_geocoded_labels: int = MAX_GEOCODED_LABELS,
     merge_control_sources: bool = False,
 ) -> list[ControlPoint]:
-    geocoded_controls = build_geocoded_control_points(
+    # The geocoded and OSM-place paths are independent network-bound lookups; keep
+    # the existing selection order, but overlap their latency.
+    place_executor = ThreadPoolExecutor(max_workers=1)
+    place_future = place_executor.submit(
+        build_osm_place_control_points,
         labels,
-        city,
         city_center,
-        stop_after_controls=6 if merge_control_sources else 4,
-        max_labels=max_geocoded_labels,
         prefer_large_text=merge_control_sources,
     )
-    if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
-        return geocoded_controls
+    try:
+        geocoded_controls = build_geocoded_control_points(
+            labels,
+            city,
+            city_center,
+            stop_after_controls=6 if merge_control_sources else 4,
+            max_labels=max_geocoded_labels,
+            prefer_large_text=merge_control_sources,
+        )
+        if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
+            place_future.cancel()
+            return geocoded_controls
 
-    place_controls = build_osm_place_control_points(
-        labels,
-        city_center,
-        prefer_large_text=merge_control_sources,
-    )
-    if not merge_control_sources:
+        place_controls = place_future.result()
+        if not merge_control_sources:
+            if len(place_controls) >= 3:
+                return place_controls
+            return geocoded_controls
+
+        merged_controls = dedupe_control_points([*geocoded_controls, *place_controls])
+        if has_decisive_control_fit(merged_controls):
+            return merged_controls
+        if len(merged_controls) >= 2:
+            return merged_controls
         if len(place_controls) >= 3:
             return place_controls
         return geocoded_controls
-
-    merged_controls = dedupe_control_points([*geocoded_controls, *place_controls])
-    if has_decisive_control_fit(merged_controls):
-        return merged_controls
-    if len(merged_controls) >= 2:
-        return merged_controls
-    if len(place_controls) >= 3:
-        return place_controls
-    return geocoded_controls
+    finally:
+        place_executor.shutdown(wait=False, cancel_futures=True)
 
 
 def build_geocoded_control_points(
