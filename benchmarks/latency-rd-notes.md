@@ -61,10 +61,23 @@ screenshots are refreshed.
   payloads, and the OSM place payload needed by the place-control matcher.
   Fresh-cache warm local LA dropped from roughly 17s to 0.939s while preserving
   the same bbox, confidence, 20 controls, and 0.943 full-benchmark IoU.
+- Nashville now has bundled Photon seed payloads and Nominatim miss markers for
+  common screenshot labels. Fresh-cache warm local Nashville dropped from
+  roughly 3.55s to 1.39s while preserving the same bbox, confidence, residuals,
+  and road-match score.
+- Road-refinement search batching now defaults to 512 candidates per vectorized
+  scoring batch. Focused Nashville/Phoenix probes preserved road scores and
+  confidence while reducing the two-fixture local timing from 2.97s at batch
+  256 to 2.85s at batch 512.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 50 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 51 passed.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-nash-seed-road512-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only nashville --only phoenix --out-dir out/nash-seed-road512-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-nash-seed-road512-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/nash-seed-road512-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
+- Fresh-cache warm active-suite profile after Nashville seeds and road batch 512:
+  avg 0.662s, max 1.495s; Nashville 1.181s, Phoenix 1.495s, Los Angeles
+  0.832s, all other active fixtures below 0.57s.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only los-angeles --out-dir out/la-places-seeded-focused-full`: PASS 1/1 active, IoU 0.943.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/la-places-seeded-drift-aware-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - Production LA smoke on `dpl_ECWk6JTkvBc49hLgZkCyxijhVGQN`

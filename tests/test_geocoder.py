@@ -95,6 +95,20 @@ class GeocoderSeedTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertIn("Playa Vista", results[0].display_name)
 
+    def test_bundled_nashville_seed_serves_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("North Nashville, Nashville", limit=1)
+
+        self.assertEqual(len(results), 1)
+        self.assertIn("North Nashville", results[0].display_name)
+
 
 if __name__ == "__main__":
     unittest.main()
