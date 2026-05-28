@@ -11,7 +11,12 @@ from typing import Any, Callable
 from PIL import Image
 from shapely.geometry import shape
 
-from .catalog_match import CATALOG_LABEL_HINT_MIN_IOU, catalog_feature_collection, match_service_area_catalog
+from .catalog_match import (
+    CATALOG_LABEL_HINT_MIN_IOU,
+    catalog_feature_collection,
+    has_active_catalog_area_hint,
+    match_service_area_catalog,
+)
 from .extract import (
     DEFAULT_SIMPLIFY_PX,
     extract_service_area,
@@ -389,7 +394,11 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
 
 
 def should_overlap_ocr_with_extraction(*, city_input: str | None, allow_catalog: bool) -> bool:
-    return not allow_catalog
+    if not allow_catalog:
+        return True
+    if city_input is None:
+        return False
+    return not has_active_catalog_area_hint(city_input)
 
 
 def catalog_matching_enabled(options: Any) -> bool:

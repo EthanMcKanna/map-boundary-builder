@@ -131,6 +131,15 @@ def match_service_area_catalog(
     )
 
 
+def has_active_catalog_area_hint(text: str | None) -> bool:
+    if text is None or not text.strip():
+        return False
+    return any(
+        entry.is_active and catalog_area_matches_text(entry.area, text)
+        for entry in load_catalog_entries()
+    )
+
+
 def catalog_feature_collection(
     extraction: ExtractionResult,
     match: ServiceAreaCatalogMatch,

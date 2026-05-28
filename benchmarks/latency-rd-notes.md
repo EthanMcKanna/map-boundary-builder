@@ -374,6 +374,22 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   request after deploy had a 7.235s event span; the warm-busted follow-up
   dropped to 3.894s, preserving output while exercising the road-refinement
   path in production.
+- City-hinted requests now overlap OCR with extraction when the hint has no
+  active catalog candidate, which covers the user-confirmed stale Houston,
+  Miami, and Bay Area catalog entries plus unsupported cities. Active catalog
+  hints still avoid OCR so the exact-shape fast path remains cheap. Local fresh
+  Miami Waymo A/B with identical output improved from 1.253s when simulating
+  the old no-overlap behavior to 0.921s with the new stale-city overlap,
+  preserving source `ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  confidence 0.864, road score 0.681518, and bbox. Phoenix with `city=Phoenix`
+  stayed on `catalog-shape-match` in 0.107s with no OCR event. Focused stale
+  fixture/catalog tests passed 26 tests; full pytest passed 88 tests and 9
+  subtests; `compileall`, `node --check`, and `git diff --check` passed. The
+  default benchmark `out/stale-city-overlap-default-full-20260528-continue/full-report.json`
+  passed 8/8 active, skipped 7 known `reference_mismatch` fixtures, avg IoU
+  0.993, min IoU 0.943, total 3.00s; city-overrides
+  `out/stale-city-overlap-city-full-20260528-continue/full-report.json` passed
+  8/8 active, avg IoU 0.993, min IoU 0.943, total 2.91s.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

@@ -33,6 +33,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Miami", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Atlantis", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
 
     def test_run_cache_key_depends_on_image_and_options(self) -> None:
