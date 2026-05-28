@@ -68,9 +68,9 @@ polygons and screenshots are refreshed.
 
 ## Production Smoke Evidence
 
-- Deployment `dpl_5uVw26njB7WjfvSXCRGN27zMwWQC` is live on
+- Deployment `dpl_7StXiJah1q1xG9te7KP2yUsCLAmH` is live on
   `https://mapboundary.app`.
-- Health after deploy: `pipeline-b6ebb384e6fcd380`, runtime `vercel-python`,
+- Health after deploy: `pipeline-45949565d8541032`, runtime `vercel-python`,
   `tesseract: null`.
 - Production unique-image smoke after bounded previews and no API mask artifact:
   - Orlando Waymo: HTTP 201, 12.12s wall, 8.63s event span, confidence 0.909,
@@ -81,6 +81,11 @@ polygons and screenshots are refreshed.
   - Phoenix Waymo: HTTP 201, 16.13s wall, 13.35s event span, confidence 0.917,
     6 controls, road score 0.69856, export 0.254s, returned overlay
     `image/webp` at 1200x1200.
+  - Phoenix Waymo after float32 scoring: HTTP 201, 20.75s wall, 16.83s event
+    span, confidence 0.917, 6 controls, road score 0.698507, georef 3.693s,
+    export 0.191s, summary mask `null`, returned overlay `image/webp` at
+    1200x1200. Production timing was noisy and not a breakthrough; local
+    profiling is the cleaner evidence for this micro-optimization.
 
 ## Failed Or Rejected Experiments
 
