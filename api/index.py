@@ -392,6 +392,7 @@ def run_result_cache_key_for_hash(
 ) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
+        "pipeline_version": get_pipeline_version(),
         image_hash_name: image_hash,
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),

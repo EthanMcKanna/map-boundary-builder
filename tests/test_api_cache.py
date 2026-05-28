@@ -4,6 +4,7 @@ import gzip
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from unittest.mock import patch
 
 from PIL import Image, features
 
@@ -34,6 +35,14 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_image)
         self.assertNotEqual(base, changed_city)
         self.assertNotEqual(base, changed_options)
+
+    def test_run_cache_key_depends_on_pipeline_version(self) -> None:
+        with patch("api.index.get_pipeline_version", return_value="pipeline-a"):
+            first = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+        with patch("api.index.get_pipeline_version", return_value="pipeline-b"):
+            second = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+
+        self.assertNotEqual(first, second)
 
     def test_run_cache_key_uses_decoded_pixels(self) -> None:
         first = BytesIO()
