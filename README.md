@@ -73,10 +73,11 @@ labels, queries public OpenStreetMap-backed geocoders with a cached fallback,
 clusters geocoded label candidates to infer the map city or region, matches
 labels against cached OpenStreetMap place names near that inferred location, and
 fits a rotation-aware Web Mercator transform only when there are enough control
-points with low residual error. A small read-only geocoder seed cache, derived
-from OpenStreetMap-backed responses and preserving their attribution metadata,
-avoids common cold-start lookup stalls; live geocoders remain the fallback for
-new places. When multiple inferred contexts fit, the builder scores them by
+points with low residual error. Small read-only geocoder and OSM-place seed
+caches, derived from OpenStreetMap-backed responses and preserving their
+attribution metadata, avoid common cold-start lookup stalls; live public map
+services remain the fallback for new places. When multiple inferred contexts fit,
+the builder scores them by
 residuals, control-point support, and visible-road alignment so large regional
 screenshots are not forced into a single city scale. The CLI still accepts
 `--city` as an optional override for unusually sparse screenshots.

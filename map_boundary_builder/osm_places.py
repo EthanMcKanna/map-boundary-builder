@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import gzip
 import hashlib
 import json
 import os
+from importlib import resources
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -13,6 +15,10 @@ from .georef_transform import lonlat_to_mercator
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass-places"
+OSM_PLACES_SEED_FILE = "osm_places_seed.json.gz"
+
+_NO_SEED = object()
+_OSM_PLACES_SEED: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,9 @@ def load_overpass_places(bbox: tuple[float, float, float, float]) -> dict[str, o
     cache_path = overpass_places_cache_file(bbox)
     if cache_path.exists():
         return json.loads(cache_path.read_text())
+    seeded = seed_overpass_places_payload(cache_path.stem)
+    if seeded is not _NO_SEED:
+        return seeded if isinstance(seeded, dict) else {"elements": []}
     query = f"""
 [out:json][timeout:35];
 (
@@ -89,3 +98,24 @@ def overpass_places_cache_file(bbox: tuple[float, float, float, float]) -> Path:
     rounded = ",".join(f"{value:.4f}" for value in bbox)
     key = hashlib.sha256(rounded.encode("utf-8")).hexdigest()[:24]
     return CACHE_DIR / f"{key}.json"
+
+
+def seed_overpass_places_payload(key: str) -> object:
+    seed = load_osm_places_seed()
+    place_payloads = seed.get("overpass_places")
+    if not isinstance(place_payloads, dict) or key not in place_payloads:
+        return _NO_SEED
+    return place_payloads[key]
+
+
+def load_osm_places_seed() -> dict[str, object]:
+    global _OSM_PLACES_SEED
+    if _OSM_PLACES_SEED is not None:
+        return _OSM_PLACES_SEED
+    try:
+        seed_file = resources.files("map_boundary_builder").joinpath(OSM_PLACES_SEED_FILE)
+        payload = json.loads(gzip.decompress(seed_file.read_bytes()).decode("utf-8"))
+    except Exception:
+        payload = {}
+    _OSM_PLACES_SEED = payload if isinstance(payload, dict) else {}
+    return _OSM_PLACES_SEED
