@@ -28,6 +28,7 @@ from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.ocr import (
     OcrLabel,
+    extract_ocr_labels,
     group_stacked_labels,
     rapidocr_input_image,
     rapidocr_items_to_labels,
@@ -103,6 +104,34 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertAlmostEqual(scale_y, 0.5)
             finally:
                 ocr_path.unlink(missing_ok=True)
+
+    def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
+        rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
+
+        with (
+            patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "tesseract_available", return_value=False),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]) as rapidocr,
+        ):
+            labels = extract_ocr_labels("unused.png")
+
+        self.assertEqual(rapidocr.call_count, 1)
+        self.assertIn("Bay Area CA", {label.text for label in labels})
+
+    def test_extract_ocr_labels_reuses_rapidocr_words_after_tesseract_fallback(self) -> None:
+        rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
+
+        with (
+            patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "tesseract_available", return_value=True),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]) as rapidocr,
+            patch.object(ocr_module, "run_tesseract_words", return_value=[]),
+            patch.object(ocr_module, "run_preprocessed_tesseract_words", return_value=[]),
+        ):
+            labels = extract_ocr_labels("unused.png")
+
+        self.assertEqual(rapidocr.call_count, 1)
+        self.assertIn("Bay Area CA", {label.text for label in labels})
 
 
 class PlaceCandidateTests(unittest.TestCase):

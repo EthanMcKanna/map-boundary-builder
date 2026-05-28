@@ -37,16 +37,20 @@ polygons and screenshots are refreshed.
   local async worker still writes downloadable mask artifacts.
 - Road-refinement batch scoring now uses float32 arrays and bumped the
   road-refine cache version to avoid stale float64-scored cache hits.
+- OCR fallback now reuses the initial RapidOCR words instead of rerunning the
+  same RapidOCR pass when Tesseract is unavailable or when Tesseract fallback
+  still produces too few labels.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 39 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 42 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-max-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-nomask-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-nomask-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-f32-cachev2-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-f32-cachev2-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-dedupe-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-dedupe-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
@@ -65,6 +69,10 @@ polygons and screenshots are refreshed.
 - Local Phoenix cProfile for road refinement dropped from 0.728s cumulative
   in `refine_transform_with_osm_roads` before float32 scoring to 0.689s after,
   with the same Phoenix/Nashville focused IoUs.
+- Low-label Tesla Bay Area OCR measurement with Tesseract absent: the first
+  RapidOCR pass took 0.244s, the duplicate warm pass cost another 0.111s, and
+  dedupe found no additional unique OCR words. The fallback reuse change removes
+  that duplicate model pass.
 
 ## Production Smoke Evidence
 

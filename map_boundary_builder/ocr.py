@@ -42,14 +42,17 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         if cached is not None:
             return list(cached)
 
-    words: list[OcrLabel] = run_rapidocr_words(image_path)
+    rapid_words: list[OcrLabel] = run_rapidocr_words(image_path)
+    words: list[OcrLabel] = list(rapid_words)
+    used_tesseract_fallback = False
     if count_useful_labels(words) < 12 and use_tesseract:
         words = run_tesseract_words(image_path)
         words = [word for word in words if is_useful_text(word.text)]
         if len(words) < 80:
             words.extend(word for word in run_preprocessed_tesseract_words(image_path) if is_useful_text(word.text))
-    if count_useful_labels(words) < 12:
-        words.extend(run_rapidocr_words(image_path))
+        used_tesseract_fallback = True
+    if used_tesseract_fallback and count_useful_labels(words) < 12:
+        words.extend(rapid_words)
     words = dedupe_labels(words)
     labels = list(words)
     labels.extend(group_line_labels(words))
