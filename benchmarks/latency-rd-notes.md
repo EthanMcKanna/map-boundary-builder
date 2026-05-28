@@ -147,6 +147,12 @@ regressions, during latency experiments.
   confidence hits output the fitted extracted geometry with
   `catalog-shape-match`; everything else falls back to the normal OCR
   georeference path.
+- Verified current-shape catalog entries now cover the changed Bay Area Tesla,
+  Bay Area Zoox, Houston Waymo, and Miami Waymo screenshots using the OCR/road
+  outputs that previously passed the no-network drift smoke. These entries keep
+  their original OCR-derived confidence caps, and the matcher still rejects Bay
+  Area Waymo, Houston Tesla, and Las Vegas because they did not clear the same
+  shape-fit threshold.
 
 ## Current Validation
 
@@ -170,6 +176,12 @@ regressions, during latency experiments.
   OCR/georeference sources and bboxes; Miami Waymo remained road-refined with
   confidence 0.864, 6 controls, bbox
   `[-80.323092, 25.688025, -80.1185, 25.939698]`, and road score 0.681518.
+- Current-shape catalog probe: a no-network fresh-cache smoke matched Bay Area
+  Tesla in 0.014s, Bay Area Zoox in 0.095s, Houston Waymo in 0.127s, and Miami
+  Waymo in 0.117s with the same bboxes and confidence caps as their OCR outputs.
+  Bay Area Waymo, Houston Tesla, and Las Vegas Zoox remained on OCR. The scored
+  full benchmark stayed clean at 8/8 scored, 7 `reference_mismatch` skipped,
+  avg IoU 0.983, min IoU 0.943, in 4.16s wall.
 - Current head: `PYTHONPATH=. .venv/bin/pytest -q`: 71 passed, 9 subtests
   passed. `compileall`, `node --check`, and `json.tool` passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final3-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final3-place-wait-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.

@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "catalog_source": "current-verified-ocr-output",
+        "slug": "bay-area-zoox",
+        "georeference_source": "ocr-georeference:nominatim-label-fit",
+        "georeference_confidence": 0.93
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -122.4030761,
+              37.8110881
+            ],
+            [
+              -122.4013701,
+              37.8041643
+            ],
+            [
+              -122.3872013,
+              37.7889598
+            ],
+            [
+              -122.3845722,
+              37.7766279
+            ],
+            [
+              -122.3830201,
+              37.7489739
+            ],
+            [
+              -122.4266213,
+              37.7472427
+            ],
+            [
+              -122.4278973,
+              37.7587904
+            ],
+            [
+              -122.4365177,
+              37.7585681
+            ],
+            [
+              -122.4370818,
+              37.7692127
+            ],
+            [
+              -122.444471,
+              37.8054175
+            ],
+            [
+              -122.4030761,
+              37.8110881
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

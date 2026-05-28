@@ -31,6 +31,7 @@ class ServiceAreaCatalogEntry:
     area: str
     geometry: Polygon | MultiPolygon
     mercator_geometry: Polygon | MultiPolygon
+    max_confidence: float | None = None
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,8 @@ class ServiceAreaCatalogMatch:
 
     @property
     def confidence(self) -> float:
-        return min(0.99, max(0.0, self.iou))
+        max_confidence = self.entry.max_confidence if self.entry.max_confidence is not None else 0.99
+        return min(0.99, max_confidence, max(0.0, self.iou))
 
 
 def match_service_area_catalog(
@@ -174,6 +176,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
             continue
         payload = json.loads(item.read_text())
         geometry = load_geometry_payload(payload)
+        properties = catalog_properties(payload)
         entries.append(
             ServiceAreaCatalogEntry(
                 slug=slug,
@@ -181,6 +184,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 area=area_from_slug(slug, provider),
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
+                max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
             )
         )
     return tuple(entries)
@@ -193,6 +197,27 @@ def load_geometry_payload(payload: dict[str, Any]) -> Polygon | MultiPolygon:
     if coordinates[0] != coordinates[-1]:
         coordinates = [*coordinates, coordinates[0]]
     return Polygon(coordinates)
+
+
+def catalog_properties(payload: dict[str, Any]) -> dict[str, Any]:
+    features = payload.get("features")
+    if not isinstance(features, list) or not features:
+        return {}
+    first = features[0]
+    if not isinstance(first, dict):
+        return {}
+    properties = first.get("properties")
+    return properties if isinstance(properties, dict) else {}
+
+
+def parse_optional_confidence(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(0.99, confidence))
 
 
 def provider_from_slug(slug: str) -> str | None:

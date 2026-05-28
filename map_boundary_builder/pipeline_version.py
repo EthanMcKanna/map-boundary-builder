@@ -23,14 +23,6 @@ PIPELINE_VERSION_FILES = (
     "osm_roads.py",
     "pipeline_version.py",
     "runner.py",
-    "service_area_catalog/austin-tesla.json",
-    "service_area_catalog/dallas-tesla.json",
-    "service_area_catalog/dallas-waymo.json",
-    "service_area_catalog/los-angeles-waymo.json",
-    "service_area_catalog/nashville-waymo.json",
-    "service_area_catalog/orlando-waymo.json",
-    "service_area_catalog/phoenix-waymo.json",
-    "service_area_catalog/san-antonio-waymo.json",
 )
 
 _PIPELINE_VERSION: str | None = None
@@ -47,9 +39,18 @@ def get_pipeline_version() -> str:
 
     digest = hashlib.sha256()
     digest.update(__version__.encode("utf-8"))
-    for filename in PIPELINE_VERSION_FILES:
-        source = resources.files("map_boundary_builder").joinpath(*filename.split("/"))
+    for filename, source in pipeline_version_sources():
         digest.update(filename.encode("utf-8"))
         digest.update(source.read_bytes())
     _PIPELINE_VERSION = f"pipeline-{digest.hexdigest()[:16]}"
     return _PIPELINE_VERSION
+
+
+def pipeline_version_sources():
+    package_root = resources.files("map_boundary_builder")
+    for filename in PIPELINE_VERSION_FILES:
+        yield filename, package_root.joinpath(filename)
+    catalog_dir = package_root.joinpath("service_area_catalog")
+    for source in sorted(catalog_dir.iterdir(), key=lambda item: item.name):
+        if source.name.endswith(".json"):
+            yield f"service_area_catalog/{source.name}", source

@@ -27,6 +27,18 @@ def test_catalog_shape_match_rejects_wrong_style() -> None:
     assert match_service_area_catalog(pixel_geometry, style="gray-fill") is None
 
 
+def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "miami-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+
+    assert match is not None
+    assert match.entry.slug == "miami-waymo"
+    assert match.confidence == entry.max_confidence
+    assert match.confidence == 0.864
+
+
 def test_catalog_feature_collection_has_summary_properties() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "phoenix-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
