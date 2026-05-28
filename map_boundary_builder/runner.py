@@ -33,6 +33,7 @@ class BoundaryBuildOptions:
     min_confidence: float = 0.55
     min_control_points: int = 3
     preview_max_dimension: int | None = None
+    write_mask_artifact: bool = True
 
 
 @dataclass(frozen=True)
@@ -216,9 +217,10 @@ def build_boundary(
     overlay_path: Path | None = None
     if debug_path:
         stem = output_path.stem
-        mask_path = debug_path / f"{stem}.mask.png"
         overlay_path = debug_path / f"{stem}.overlay.png"
-        write_mask_png(extraction.mask, mask_path)
+        if opts.write_mask_artifact:
+            mask_path = debug_path / f"{stem}.mask.png"
+            write_mask_png(extraction.mask, mask_path)
         write_overlay_png(
             image_path,
             extraction.mask,

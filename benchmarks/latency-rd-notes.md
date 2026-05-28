@@ -32,6 +32,9 @@ polygons and screenshots are refreshed.
 - The Vercel API path now caps generated overlay previews at 1200px before
   encoding the inline artifact, while CLI/debug outputs keep full-size overlays.
   GeoJSON/extraction/georeferencing stay unchanged.
+- The Vercel API path also skips writing the full-size mask PNG because the
+  synchronous response only returns inline GeoJSON and overlay preview. The
+  local async worker still writes downloadable mask artifacts.
 
 ## Current Validation
 
@@ -40,6 +43,7 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-max-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-nomask-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-nomask-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
@@ -53,6 +57,8 @@ polygons and screenshots are refreshed.
   stage dropped from 0.150s/full-size overlay to 0.047s/1200px overlay; Phoenix
   export dropped from 0.153s to 0.055s. Inline overlay encoding dropped from
   0.133s to 0.056s on Orlando and 0.107s to 0.060s on Phoenix.
+- Warm local API artifact A/B on Orlando: full overlay+mask export took 0.146s,
+  bounded overlay+mask took 0.052s, and bounded overlay without mask took 0.042s.
 
 ## Production Smoke Evidence
 

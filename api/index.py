@@ -114,6 +114,7 @@ class handler(BaseHTTPRequestHandler):
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
+            write_mask_artifact=False,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_key = raw_run_result_cache_key(image_bytes, city, options)
@@ -400,6 +401,7 @@ def run_result_cache_key_for_hash(
         "min_confidence": round(float(options.min_confidence), 4),
         "min_control_points": int(options.min_control_points),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
+        "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
