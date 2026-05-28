@@ -43,6 +43,7 @@ GENERIC_SINGLE_TOKENS = {
     "center",
     "city",
     "district",
+    "downtown",
     "east",
     "heights",
     "hill",
@@ -55,6 +56,43 @@ GENERIC_SINGLE_TOKENS = {
     "vista",
     "view",
     "west",
+}
+POI_DESCRIPTOR_TOKENS = {
+    "airport",
+    "arts",
+    "asu",
+    "botanical",
+    "campus",
+    "center",
+    "college",
+    "community",
+    "course",
+    "desert",
+    "fashion",
+    "garden",
+    "golf",
+    "harbor",
+    "indian",
+    "international",
+    "kiwanis",
+    "library",
+    "mountain",
+    "museum",
+    "preserve",
+    "public",
+    "quarter",
+    "ranch",
+    "recreation",
+    "resort",
+    "ridge",
+    "school",
+    "shops",
+    "sky",
+    "snedigar",
+    "steele",
+    "stores",
+    "sunset",
+    "tpc",
 }
 OCR_PLACE_TOKEN_ALIASES = {
     "anor": "manor",
@@ -839,6 +877,8 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     direct_contexts = direct_city_contexts_from_labels(inference_labels)
     if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
         return direct_contexts
+    if should_use_direct_city_contexts(direct_contexts) and is_decisive_broad_direct_context(direct_contexts[0]):
+        return direct_contexts
 
     candidates = geocoded_label_candidates(inference_labels)
     if should_use_direct_city_contexts(direct_contexts):
@@ -961,6 +1001,10 @@ def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
 
 
 def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
+    decisive_broad_context = broad_direct_context_from_labels(labels)
+    if decisive_broad_context is not None:
+        return [decisive_broad_context]
+
     query_scores: dict[str, float] = {}
     query_evidence: dict[str, set[str]] = {}
     used_positions: set[tuple[str, int, int]] = set()
@@ -983,7 +1027,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         tokens = place_tokens(query)
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
-        if len(tokens) > 2:
+        if len(tokens) > 4:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
             continue
@@ -994,16 +1038,21 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             continue
         used_positions.add(position_key)
         score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
-        query_scores[query] = query_scores.get(query, 0.0) + score
-        query_evidence.setdefault(query, set()).add(label.text)
+        noisy_poi_query = is_noisy_poi_query(tokens)
+        if len(tokens) <= 2 and not noisy_poi_query:
+            query_scores[query] = query_scores.get(query, 0.0) + score
+            query_evidence.setdefault(query, set()).add(label.text)
         token_bonus = 1.0 if len(tokens) == 1 else 0.64
         for token in tokens:
-            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
+            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS or token in POI_DESCRIPTOR_TOKENS:
                 continue
             if len(token) < 5:
                 continue
             token_query = token.title()
-            if len(tokens) > 1 and token_query not in standalone_queries:
+            allow_context_cue_token = "downtown" in tokens
+            if noisy_poi_query and not allow_context_cue_token:
+                continue
+            if len(tokens) > 1 and token_query not in standalone_queries and not allow_context_cue_token:
                 continue
             query_scores[token_query] = query_scores.get(token_query, 0.0) + score * token_bonus
             query_evidence.setdefault(token_query, set()).add(label.text)
@@ -1023,9 +1072,10 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
                 continue
             if result.place_type.lower() not in ADMIN_CONTEXT_TYPES and not is_broad_context_result(result):
                 continue
+            regional_bonus = min(65.0, geocode_bbox_span_m(result) / 3500.0) if len(place_tokens(query)) > 1 else 0.0
             scored_contexts.append(
                 (
-                    score + result.importance * 10.0,
+                    score + result.importance * 10.0 + regional_bonus,
                     CityContext(
                         query=result.display_name.split(",", 1)[0],
                         center=result,
@@ -1042,9 +1092,53 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
     top_score, top_context = scored_contexts[0]
     if top_score < 160.0:
         return []
-    if len(scored_contexts) > 1 and scored_contexts[1][0] >= top_score * 0.62:
+    close_competitors = [context for score, context in scored_contexts[1:] if score >= top_score * 0.62]
+    if close_competitors and not all(context_covers_context(top_context, competitor) for competitor in close_competitors):
         return []
     return [top_context]
+
+
+def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | None:
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        query = place_query_text(label.text)
+        tokens = place_tokens(query)
+        if len(tokens) != 2 or tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if is_noisy_poi_query(tokens):
+            continue
+        if tokens <= GENERIC_SINGLE_TOKENS and not ({"bay", "area"} <= tokens):
+            continue
+        score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
+        if score < 100.0:
+            continue
+        for result in geocode(query, limit=2):
+            if not result.bbox or not primary_name_matches_label(result.display_name, query):
+                continue
+            if not is_broad_context_result(result):
+                continue
+            regional_bonus = min(65.0, geocode_bbox_span_m(result) / 3500.0)
+            if score + result.importance * 10.0 + regional_bonus < 170.0:
+                continue
+            return CityContext(
+                query=result.display_name.split(",", 1)[0],
+                center=result,
+                inferred=True,
+                evidence=(label.text,),
+            )
+    return None
+
+
+def context_covers_context(parent: CityContext, child: CityContext) -> bool:
+    parent_span = geocode_bbox_span_m(parent.center)
+    child_span = geocode_bbox_span_m(child.center)
+    if parent.center.bbox is None or parent_span < max(30000.0, child_span * 2.0):
+        return False
+    west, south, east, north = parent.center.bbox
+    padding = max(0.01, (east - west) * 0.03, (north - south) * 0.03)
+    return (
+        west - padding <= child.center.lon <= east + padding
+        and south - padding <= child.center.lat <= north + padding
+    )
 
 
 def should_use_direct_city_contexts(contexts: list[CityContext]) -> bool:
@@ -1056,6 +1150,10 @@ def should_use_direct_city_contexts(contexts: list[CityContext]) -> bool:
     if len(tokens) == 1 and place_type not in ADMIN_CONTEXT_TYPES and geocode_bbox_span_m(top.center) < 30000.0:
         return False
     return True
+
+
+def is_decisive_broad_direct_context(context: CityContext) -> bool:
+    return context.center.place_type.lower() == "region" and geocode_bbox_span_m(context.center) >= 85000.0
 
 
 def is_plausible_context_label(label: OcrLabel) -> bool:
@@ -1102,7 +1200,7 @@ def prominent_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
             )
             break
     contexts = [context for _, context in sorted(scored_contexts, key=lambda item: item[0], reverse=True)]
-    return dedupe_city_contexts(contexts)[:3]
+    return dedupe_city_contexts(contexts)[:5]
 
 
 def prominent_context_score(result: GeocodeResult, query: str, labels: list[OcrLabel]) -> float:
@@ -1129,10 +1227,10 @@ def prominent_context_queries(labels: list[OcrLabel]) -> list[str]:
         if not tokens:
             continue
         label_score = context_label_score(label)[0]
-        if 1 <= len(tokens) <= 3:
+        if 1 <= len(tokens) <= 3 and not is_noisy_poi_query(tokens):
             scores[clean_query_text(label.text)] = max(scores.get(clean_query_text(label.text), 0.0), label_score)
         for token in tokens:
-            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
+            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS or token in POI_DESCRIPTOR_TOKENS:
                 continue
             token_score = label_score + (label.width * label.height) / 20000.0
             scores[token.title()] = max(scores.get(token.title(), 0.0), token_score)
@@ -1327,6 +1425,8 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if len(tokens) > 4:
+            continue
+        if is_noisy_poi_query(tokens):
             continue
         if len(tokens) == 1 and tokens <= single_token_fragments:
             continue
@@ -2081,6 +2181,8 @@ def build_geocoded_control_points(
             continue
         if len(text_tokens) > 4:
             continue
+        if is_noisy_poi_query(text_tokens):
+            continue
         text_key = tuple(sorted(text_tokens))
         if text_key in used_text:
             continue
@@ -2091,6 +2193,8 @@ def build_geocoded_control_points(
         if len(text_tokens) == 1 and text_tokens <= single_token_fragments:
             continue
         if len(text_tokens) == 1 and next(iter(text_tokens)) in GENERIC_SINGLE_TOKENS:
+            continue
+        if is_noisy_regional_control_query(text_tokens, city_tokens, city_center):
             continue
         if not is_geocodeable_control_query(text_tokens, city_tokens):
             continue
@@ -2165,6 +2269,38 @@ def is_geocodeable_control_query(tokens: set[str], city_tokens: set[str]) -> boo
     return any(len(token) >= 5 for token in informative_tokens)
 
 
+def is_noisy_poi_query(tokens: set[str]) -> bool:
+    if not tokens:
+        return False
+    if tokens == {"bay", "area"}:
+        return False
+    if tokens <= POI_DESCRIPTOR_TOKENS | GENERIC_SINGLE_TOKENS:
+        return True
+    if len(tokens) >= 2 and tokens & POI_DESCRIPTOR_TOKENS:
+        return True
+    return False
+
+
+def is_noisy_regional_control_query(
+    tokens: set[str],
+    city_tokens: set[str],
+    city_center: GeocodeResult,
+) -> bool:
+    if geocode_bbox_span_m(city_center) < 85000.0 or not tokens:
+        return False
+    if tokens == city_tokens:
+        return False
+    informative_city_tokens = city_tokens - GENERIC_SINGLE_TOKENS
+    if informative_city_tokens and tokens & informative_city_tokens and not tokens <= city_tokens:
+        return True
+    if {"bay", "area"} <= city_tokens and {"bay", "area"} <= tokens and not tokens <= city_tokens:
+        return True
+    informative_tokens = tokens - GENERIC_SINGLE_TOKENS
+    if "city" in tokens and len(informative_tokens) >= 2:
+        return True
+    return False
+
+
 def build_osm_place_control_points(
     labels: list[OcrLabel],
     city_center: GeocodeResult,
@@ -2199,6 +2335,12 @@ def build_osm_place_control_points(
         used_label_keys.add(label_key)
 
         for place, place_tokens_set, (place_x, place_y) in indexed_places:
+            if (
+                place_tokens_set < label_tokens
+                and (label_tokens - place_tokens_set) & POI_DESCRIPTOR_TOKENS
+                and place.place_type in {"city", "town", "village", "suburb", "quarter", "neighbourhood"}
+            ):
+                continue
             match_score = place_match_score(label_tokens, place_tokens_set)
             if match_score <= 0:
                 continue
@@ -2247,6 +2389,8 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
         tokens = place_tokens(place_query_text(label.text))
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             return
+        if len(tokens) == 1 and next(iter(tokens)) in POI_DESCRIPTOR_TOKENS:
+            return
         key = (" ".join(sorted(tokens)), round(label.x / 12), round(label.y / 12))
         if key in seen:
             return
@@ -2271,6 +2415,8 @@ def candidate_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
             continue
         tokens = place_tokens(place_query_text(label.text))
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS or len(tokens) > 2:
+            continue
+        if len(tokens) == 1 and next(iter(tokens)) in POI_DESCRIPTOR_TOKENS:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
             continue
@@ -2558,6 +2704,8 @@ def build_similarity_road_scorer(
 ):
     if city_center.bbox is None:
         return None
+    if geocode_bbox_span_m(city_center) >= 85000.0:
+        return None
     road_points = sample_road_points(load_road_points(city_center.bbox), max_points=12000)
     if road_points.size == 0:
         return None
@@ -2629,6 +2777,8 @@ def robust_similarity_fit(
         residual_values = [r_residuals[idx] for idx in r_inliers]
         median = float(np.median(residual_values)) if residual_values else float("inf")
         p90 = float(np.percentile(residual_values, 90)) if residual_values else float("inf")
+        if median > 2500.0 or p90 > 6500.0:
+            continue
         score = fit_candidate_score(len(r_inliers), len(controls), spread, total_spread, median, p90, r_rotation)
         if best_score is None or score > best_score:
             best_score = score
@@ -2650,6 +2800,8 @@ def robust_similarity_fit(
         residual_values = [r_residuals[idx] for idx in r_inliers]
         median = float(np.median(residual_values))
         p90 = float(np.percentile(residual_values, 90))
+        if median > 2500.0 or p90 > 6500.0:
+            continue
         score = fit_candidate_score(len(r_inliers), len(controls), spread, total_spread, median, p90, r_rotation)
         if best_score is None or score > best_score:
             best_score = score
@@ -2763,7 +2915,10 @@ def fit_candidate_score(
     rotation_score = max(0.0, 1.0 - abs(rotation) / 0.35)
     spread_score = min(1.0, spread / max(total_spread, 1.0))
     inlier_score = min(1.0, inlier_count / max(total_count, 3))
-    return 0.35 * residual_score + 0.35 * rotation_score + 0.2 * spread_score + 0.1 * inlier_score
+    score = 0.25 * residual_score + 0.2 * rotation_score + 0.3 * spread_score + 0.25 * inlier_score
+    if abs(rotation) > 0.05:
+        score -= min(0.25, (abs(rotation) - 0.05) / 0.2)
+    return score
 
 
 def fit_similarity(pixel: np.ndarray, merc: np.ndarray) -> tuple[float, float, float, float] | None:

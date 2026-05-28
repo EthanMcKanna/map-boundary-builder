@@ -13,8 +13,11 @@ from map_boundary_builder.georeference import (
     georeference_from_labels,
     has_reliable_candidate_cluster,
     infer_city_contexts,
+    is_noisy_regional_control_query,
+    is_noisy_poi_query,
     is_reliable_single_token_context,
     place_query_text,
+    place_tokens,
     single_tokens_supported_by_fuller_labels,
 )
 from map_boundary_builder.geocoder import GeocodeResult
@@ -197,6 +200,82 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertEqual(contexts[0].query, "Orlando")
         self.assertIn("Orlando", calls)
+
+    def test_broad_region_label_can_be_direct_context(self) -> None:
+        labels = [
+            OcrLabel("Bay Area CA", x=114, y=54, width=155, height=30, confidence=98),
+            OcrLabel("Redwood City", x=248, y=301, width=127, height=28, confidence=96),
+            OcrLabel("San Jose", x=396, y=375, width=115, height=31, confidence=95),
+        ]
+        calls: list[str] = []
+
+        def fake_geocode(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append(query)
+            if query == "Bay Area":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-122.35,
+                        lat=37.78,
+                        display_name="San Francisco Bay Area, San Francisco, California, United States",
+                        bbox=(-123.35, 36.78, -121.35, 38.78),
+                        importance=0.63,
+                        place_type="region",
+                    )
+                ]
+            if query == "San Jose":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-121.8863,
+                        lat=37.3382,
+                        display_name="San Jose, Santa Clara County, California, United States",
+                        bbox=(-122.04, 37.12, -121.58, 37.47),
+                        importance=0.68,
+                        place_type="city",
+                    )
+                ]
+            return []
+
+        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+            contexts = direct_city_contexts_from_labels(labels)
+
+        self.assertEqual(contexts[0].query, "San Francisco Bay Area")
+        self.assertEqual(contexts[0].evidence, ("Bay Area CA",))
+        self.assertEqual(calls, ["Bay Area"])
+
+    def test_broad_region_control_filter_skips_merged_ocr_labels(self) -> None:
+        bay_area = GeocodeResult(
+            label="Bay Area",
+            lon=-122.35,
+            lat=37.78,
+            display_name="San Francisco Bay Area, San Francisco, California, United States",
+            bbox=(-123.35, 36.78, -121.35, 38.78),
+            importance=0.63,
+            place_type="region",
+        )
+        city_tokens = place_tokens("San Francisco Bay Area")
+
+        self.assertTrue(
+            is_noisy_regional_control_query(place_tokens("Francisco Daly City"), city_tokens, bay_area)
+        )
+        self.assertTrue(
+            is_noisy_regional_control_query(place_tokens("Oakland Daly City"), city_tokens, bay_area)
+        )
+        self.assertTrue(
+            is_noisy_regional_control_query(place_tokens("Bay Area Oakland"), city_tokens, bay_area)
+        )
+        self.assertFalse(is_noisy_regional_control_query(place_tokens("Redwood City"), city_tokens, bay_area))
+        self.assertFalse(is_noisy_regional_control_query(place_tokens("San Jose"), city_tokens, bay_area))
+
+    def test_poi_descriptor_filter_keeps_city_labels(self) -> None:
+        self.assertTrue(is_noisy_poi_query(place_tokens("Recreation Center")))
+        self.assertTrue(is_noisy_poi_query(place_tokens("Airport International")))
+        self.assertTrue(is_noisy_poi_query(place_tokens("Tempe Campus")))
+        self.assertTrue(is_noisy_poi_query(place_tokens("Scottsdale Quarter")))
+        self.assertFalse(is_noisy_poi_query(place_tokens("Redwood City")))
+        self.assertFalse(is_noisy_poi_query(place_tokens("San Jose")))
+        self.assertFalse(is_noisy_poi_query(place_tokens("Downtown Phoenix")))
 
     def test_direct_city_context_expands_when_labels_span_adjacent_places(self) -> None:
         labels = [

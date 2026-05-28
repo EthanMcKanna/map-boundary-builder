@@ -437,7 +437,7 @@ def road_context_score(context: CityContext) -> float:
     display_name = context.center.display_name.lower()
 
     score = context.center.importance
-    score += min(3.0, span_m / 18000.0)
+    score += min(4.0, span_m / 18000.0)
     score += min(1.5, len(context.evidence) * 0.25)
     if place_type in {"region", "municipality", "borough"}:
         score += 1.35

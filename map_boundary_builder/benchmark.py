@@ -162,6 +162,9 @@ def run_benchmark(
         inventory["only_filters"] = filters
     scores: list[BenchmarkScore] = []
     for fixture in fixtures:
+        if fixture.status != "active":
+            scores.append(skipped_fixture_score(fixture, mode=mode))
+            continue
         if mode == "full":
             scores.append(
                 score_full_fixture(
@@ -391,6 +394,22 @@ def failed_full_score(fixture: BenchmarkFixture, error: str) -> BenchmarkScore:
             status=fixture.status,
             note=fixture.note,
         )
+
+
+def skipped_fixture_score(fixture: BenchmarkFixture, *, mode: str) -> BenchmarkScore:
+    return BenchmarkScore(
+        slug=fixture.slug,
+        image=fixture.image_path.name,
+        mode=mode,
+        passed=False,
+        iou=None,
+        area_ratio=None,
+        centroid_distance_m=None,
+        vertices=None,
+        style=None,
+        status=fixture.status,
+        note=fixture.note,
+    )
 
 
 def load_reference_geometry(path: Path) -> Polygon | MultiPolygon:

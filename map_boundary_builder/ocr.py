@@ -29,7 +29,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v1"
+OCR_CACHE_VERSION = "ocr-labels-v2"
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -41,8 +41,8 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         if cached is not None:
             return list(cached)
 
-    words: list[OcrLabel] = []
-    if use_tesseract:
+    words: list[OcrLabel] = run_rapidocr_words(image_path)
+    if count_useful_labels(words) < 12 and use_tesseract:
         words = run_tesseract_words(image_path)
         words = [word for word in words if is_useful_text(word.text)]
         if len(words) < 80:
