@@ -1,0 +1,17 @@
+.DS_Store
+.git/
+.venv/
+venv/
+.cache/
+.playwright-cli/
+out/
+output/
+input/
+promo-video/
+*.log
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.env.*
+.vercel/

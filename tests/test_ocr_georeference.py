@@ -1,7 +1,11 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from PIL import Image
+
+import map_boundary_builder.ocr as ocr_module
 from map_boundary_builder.georeference import (
     CityContext,
     GeoreferenceResult,
@@ -25,6 +29,7 @@ from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.ocr import (
     OcrLabel,
     group_stacked_labels,
+    rapidocr_input_image,
     rapidocr_items_to_labels,
     read_ocr_cache,
     write_ocr_cache,
@@ -81,6 +86,23 @@ class OcrGroupingTests(unittest.TestCase):
         write_ocr_cache("unit-test-ocr-cache", [label])
 
         self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
+
+    def test_rapidocr_input_image_downscales_when_configured(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 10):
+                ocr_path, scale_x, scale_y = rapidocr_input_image(image_path)
+
+            try:
+                self.assertNotEqual(ocr_path, image_path)
+                with Image.open(ocr_path) as resized:
+                    self.assertEqual(resized.size, (10, 5))
+                self.assertAlmostEqual(scale_x, 0.5)
+                self.assertAlmostEqual(scale_y, 0.5)
+            finally:
+                ocr_path.unlink(missing_ok=True)
 
 
 class PlaceCandidateTests(unittest.TestCase):

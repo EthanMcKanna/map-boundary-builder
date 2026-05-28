@@ -30,6 +30,7 @@ class OcrLabel:
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v2"
+RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "2000")))
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -65,7 +66,9 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
     except OSError:
         return None
     engine = "tesseract" if use_tesseract else "rapidocr"
-    return hashlib.sha256(f"{OCR_CACHE_VERSION}:{engine}:{digest}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:{digest}".encode("utf-8")
+    ).hexdigest()
 
 
 def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
@@ -165,12 +168,60 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
 
 
 def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
+    ocr_path, scale_x, scale_y = rapidocr_input_image(image_path)
     try:
         engine = rapidocr_engine()
-        result, _elapsed = engine(str(image_path))
+        result, _elapsed = engine(str(ocr_path))
     except Exception:
         return []
-    return rapidocr_items_to_labels(result)
+    finally:
+        if ocr_path != Path(image_path):
+            try:
+                ocr_path.unlink()
+            except OSError:
+                pass
+    labels = rapidocr_items_to_labels(result)
+    if scale_x == 1.0 and scale_y == 1.0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x / scale_x,
+            y=label.y / scale_y,
+            width=label.width / scale_x,
+            height=label.height / scale_y,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
+
+
+def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
+    source_path = Path(image_path)
+    if RAPIDOCR_MAX_DIMENSION <= 0:
+        return source_path, 1.0, 1.0
+    bgr = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    if bgr is None:
+        return source_path, 1.0, 1.0
+    height, width = bgr.shape[:2]
+    max_dimension = max(width, height)
+    if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+        return source_path, 1.0, 1.0
+    scale = RAPIDOCR_MAX_DIMENSION / float(max_dimension)
+    resized = cv2.resize(
+        bgr,
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
+    fd, tmp_path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    if not cv2.imwrite(tmp_path, resized):
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        return source_path, 1.0, 1.0
+    return Path(tmp_path), scale, scale
 
 
 @lru_cache(maxsize=1)
