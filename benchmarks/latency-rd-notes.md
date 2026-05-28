@@ -30,7 +30,7 @@ regressions, during latency experiments.
   to 256. Controlled local probes preserved Phoenix/Nashville road scores while
   reducing road-refinement-heavy CLI runs.
 - Conservative RapidOCR input downscaling caps the OCR image's longest side at
-  2000px by default, with coordinates scaled back to the original image. This
+  1600px by default, with coordinates scaled back to the original image. This
   keeps an env override through `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION`.
 - Road refinement now samples up to 6000 road points by default instead of
   12000, preserving the full active suite while reducing Phoenix/Nashville
@@ -62,6 +62,10 @@ regressions, during latency experiments.
   of being written to temporary PNGs and read back. Small non-resized images
   stay on RapidOCR's original path because gray-fill fixtures regressed when
   forced through OpenCV-loaded arrays.
+- RapidOCR max dimension now defaults to 1600 after a fresh-cache A/B preserved
+  the full drift-aware benchmark while trimming local OCR-heavy benchmark time.
+  The lower cap is intentionally not extrapolated further: 1400 failed and 1800
+  had a non-monotonic Orlando georeference regression in the same probe.
 - Transparent raster uploads now skip writing an opaque temp PNG. Extraction,
   marker detection, and RapidOCR still see the same white-composited pixels as
   the old temp-file path, but partial-alpha screenshots avoid the extra file
@@ -172,6 +176,19 @@ regressions, during latency experiments.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-array-resized-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-array-resized-input-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/road-feature-cache-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981; Phoenix stayed 0.983 and Nashville stayed 0.981.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-feature-cache-full`: PASS 11/11 active, 4 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
+- Fresh-cache RapidOCR max-dimension probe after drift accounting:
+  - `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=2000 ... --mode full --out-dir out/rapid-maxdim-2000-full-check`: PASS 8/8 active, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931, real 9.20s.
+  - `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1600 ... --mode full --out-dir out/rapid-maxdim-1600-full-check`: PASS 8/8 active, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931, real 8.21s.
+  - With 1600 as the code default, `PYTHONPATH=. .venv/bin/pytest -q`: 56
+    passed, and `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-maxdim1600-default-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-maxdim1600-default-full`: PASS 8/8 active, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931, real 8.22s.
+  - Fresh-cache cProfile smoke: Phoenix Waymo moved from 2.85s real at the
+    2000px cap to 2.20s at 1600px with the same 6 controls and road-refined
+    source; Orlando Waymo moved from 2.10s to 1.40s and improved from 6 to 7
+    controls.
+  - Drifted-service-area smoke with the new default completed Houston Waymo
+    0.95s, Miami Waymo 14.99s, Bay Area Waymo 25.46s, Houston Tesla 0.92s,
+    Bay Area Tesla 0.74s, and Zoox SF 1.79s. The long Miami/Bay Area Waymo
+    cases remain geocode-heavy rather than OCR-heavy.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
