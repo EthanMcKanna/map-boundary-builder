@@ -41,6 +41,10 @@ GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE"
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "6")))
 GEOCODE_LABEL_LOOKAHEAD = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD", "3")))
 PLACE_FAST_PATH_TIMEOUT_SECONDS = max(0.0, float(os.environ.get("MAP_BOUNDARY_PLACE_FAST_PATH_TIMEOUT_SECONDS", "0.08")))
+PLACE_BEFORE_LIVE_TIMEOUT_SECONDS = max(
+    0.0,
+    float(os.environ.get("MAP_BOUNDARY_PLACE_BEFORE_LIVE_TIMEOUT_SECONDS", "1.0")),
+)
 EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
 EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
 EARLY_CONTEXT_MIN_CANDIDATES = 24
@@ -2290,6 +2294,12 @@ def build_control_points(
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
             place_future.cancel()
             return geocoded_controls
+
+        if place_controls is None and PLACE_BEFORE_LIVE_TIMEOUT_SECONDS > 0:
+            try:
+                place_controls = place_future.result(timeout=PLACE_BEFORE_LIVE_TIMEOUT_SECONDS)
+            except TimeoutError:
+                place_controls = None
 
         if place_controls is not None and not merge_control_sources and len(place_controls) >= 3:
             return place_controls

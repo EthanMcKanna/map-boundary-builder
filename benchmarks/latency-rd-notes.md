@@ -129,10 +129,12 @@ regressions, during latency experiments.
   threshold for those promoted labels. This fixes Zoox Las Vegas selecting no
   context despite a readable `Las Vegas` label.
 - Ready cached OSM-place controls now win before live geocoded control lookup,
-  and sparse good label fits skip optional road refinement when no local road
-  points are bundled or cached. This keeps useful seeded road refinement for
-  Phoenix/Nashville/Miami while avoiding live geocoder/Overpass latency on
-  already-good sparse label fits such as Las Vegas.
+  with a short grace period for cold production instances to finish loading the
+  bundled place seed before falling through to live geocoders. Sparse good label
+  fits also skip optional road refinement when no local road points are bundled
+  or cached. This keeps useful seeded road refinement for Phoenix/Nashville/Miami
+  while avoiding live geocoder/Overpass latency on already-good sparse label fits
+  such as Las Vegas.
 - Las Vegas now has a bundled Nominatim city seed; Bay Area Zoox combined OCR
   misses (`Colevalley Castro`, `Castro Mission`) are explicit geocoder misses;
   `Ersey Village` is repaired to `Jersey Village` for Houston OCR; and
@@ -143,23 +145,23 @@ regressions, during latency experiments.
 
 - Current head: `PYTHONPATH=. .venv/bin/pytest -q`: 71 passed, 9 subtests
   passed. `compileall`, `node --check`, and `json.tool` passed.
-- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final2-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final2-las-vegas-context-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final3-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final3-place-wait-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
 - Fresh-cache changed-service-area no-network smoke after the Las Vegas/context
   changes had zero attempted geocoder/Overpass `urlopen` calls:
-  - Bay Area Waymo 0.570s, confidence 0.877, 15 controls,
+  - Bay Area Waymo 0.576s, confidence 0.877, 15 controls,
     `ocr-georeference:nominatim-label-fit`.
-  - Bay Area Tesla 0.082s, confidence 0.916, 5 controls,
+  - Bay Area Tesla 0.108s, confidence 0.916, 5 controls,
     `ocr-georeference:nominatim-label-fit`.
-  - Bay Area Zoox 0.328s, confidence 0.930, 6 controls,
+  - Bay Area Zoox 0.313s, confidence 0.930, 6 controls,
     `ocr-georeference:nominatim-label-fit`.
-  - Houston Waymo 0.396s, confidence 0.865, 7 controls,
+  - Houston Waymo 0.424s, confidence 0.865, 7 controls,
     `ocr-georeference:nominatim-label-fit`.
-  - Houston Tesla 0.069s, confidence 0.853, 3 controls,
+  - Houston Tesla 0.073s, confidence 0.853, 3 controls,
     `ocr-georeference:nominatim-label-fit`.
-  - Miami Waymo 0.684s, confidence 0.864, 6 controls,
+  - Miami Waymo 0.708s, confidence 0.864, 6 controls,
     `ocr-georeference:nominatim-label-fit+osm-road-refine`, road score
     0.681518.
-  - Las Vegas Zoox 0.159s, confidence 0.767, 3 controls,
+  - Las Vegas Zoox 0.164s, confidence 0.767, 3 controls,
     `ocr-georeference:nominatim-label-fit`.
 - After confirming Houston, Miami, and Bay Area are changed-service-area data
   debt, `PYTHONPATH=. .venv/bin/pytest -q`: 65 passed, 9 subtests passed.
