@@ -56,14 +56,16 @@ polygons and screenshots are refreshed.
 
 ## Production Smoke Evidence
 
-- Deployment `dpl_4xEKd4JZtjXhFgLHPLzkpkNTtv4q` is aliased to
+- Deployment `dpl_D4bY7N2MhTcHqQAGKWmVAjM5R5X2` is live on
   `https://mapboundary.app`.
-- Health after deploy: `pipeline-fc5242d6c41d7742`, runtime `vercel-python`,
+- Health after deploy: `pipeline-47330c90d8ab7fd6`, runtime `vercel-python`,
   `tesseract: null`.
-- Warm production uncached examples after the latest deploy:
-  - Phoenix Waymo: 5.506s, road score 0.715203.
-  - Nashville Waymo: 4.850s, road score 0.764464.
-  - Tesla Bay Area: 1.424s, confidence 0.955.
+- Production unique-image smoke after bounded previews:
+  - Orlando Waymo: HTTP 201, 13.55s wall, 9.69s event span, confidence 0.909,
+    6 controls, export 0.250s, returned overlay `image/webp` at 1200x1200.
+  - Phoenix Waymo: HTTP 201, 16.13s wall, 13.35s event span, confidence 0.917,
+    6 controls, road score 0.69856, export 0.254s, returned overlay
+    `image/webp` at 1200x1200.
 
 ## Failed Or Rejected Experiments
 
@@ -86,7 +88,7 @@ polygons and screenshots are refreshed.
 
 ## Remaining Bottlenecks
 
-- Production still exceeds Vercel's Python bundle threshold at about 329.51 MB,
+- Production still exceeds Vercel's Python bundle threshold at about 310.69 MB,
   so runtime dependency installation and cold starts remain the biggest
   production-only latency problem.
 - The largest dependency weights are OpenCV and ONNX Runtime. Removing either
