@@ -14,6 +14,22 @@ from map_boundary_builder.catalog_match import (
 from map_boundary_builder.extract import ExtractionResult
 
 
+KNOWN_STALE_CATALOG_SLUGS = {
+    "bay-area-tesla",
+    "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
+    "houston-waymo",
+    "miami-waymo",
+}
+
+STYLE_BY_PROVIDER = {
+    "tesla": "gray-fill",
+    "waymo": "bright-blue",
+    "zoox": "dark-teal",
+}
+
+
 def test_catalog_shape_match_accepts_current_high_confidence_shape() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "phoenix-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
@@ -33,29 +49,29 @@ def test_catalog_shape_match_rejects_wrong_style() -> None:
 
 
 def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
-    entry = next(item for item in load_catalog_entries() if item.slug == "miami-waymo")
+    entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
 
     match = match_service_area_catalog(pixel_geometry, style="bright-blue")
 
     assert match is not None
-    assert match.entry.slug == "miami-waymo"
+    assert match.entry.slug == "los-angeles-waymo"
     assert match.confidence == entry.max_confidence
-    assert match.confidence == 0.864
+    assert match.confidence == 0.859
 
 
 def test_catalog_shape_match_accepts_near_miss_after_small_rotation() -> None:
-    entry = next(item for item in load_catalog_entries() if item.slug == "houston-tesla")
+    entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
     unrotated_reference = rotate(entry.mercator_geometry, 1.4, origin="centroid", use_radians=False)
     pixel_geometry = mercator_geometry_to_pixel(unrotated_reference)
 
-    match = match_service_area_catalog(pixel_geometry, style="gray-fill")
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
 
     assert match is not None
-    assert match.entry.slug == "houston-tesla"
+    assert match.entry.slug == "los-angeles-waymo"
     assert match.iou >= 0.97
     assert abs(match.rotation_degrees) > 0.0
-    assert match.confidence == 0.853
+    assert match.confidence == 0.859
 
 
 def test_catalog_feature_collection_has_summary_properties() -> None:
@@ -90,7 +106,7 @@ def test_catalog_feature_collection_has_summary_properties() -> None:
 
 
 def test_current_verified_catalog_entry_outputs_exact_geometry_after_match() -> None:
-    entry = next(item for item in load_catalog_entries() if item.slug == "miami-waymo")
+    entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
     match = match_service_area_catalog(pixel_geometry, style="bright-blue")
     assert match is not None
@@ -116,18 +132,27 @@ def test_current_verified_catalog_entry_outputs_exact_geometry_after_match() -> 
     assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
 
 
-def test_current_verified_catalog_entry_can_declare_tight_min_shape_iou() -> None:
+def test_stale_current_verified_catalog_entry_can_keep_audit_threshold() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
-    near_miss_reference = rotate(entry.mercator_geometry, 1.0, origin="centroid", use_radians=False)
-    pixel_geometry = mercator_geometry_to_pixel(near_miss_reference)
 
-    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
-
+    assert not entry.is_active
+    assert entry.status == "stale"
     assert entry.min_iou == 0.965
-    assert match is not None
-    assert match.entry.slug == "bay-area-waymo"
-    assert 0.965 <= match.iou < 0.97
-    assert match.confidence == 0.877
+    assert entry.stale_reason is not None
+    assert "changed live service area" in entry.stale_reason
+
+
+def test_known_changed_catalog_entries_are_not_matched() -> None:
+    entries = {item.slug: item for item in load_catalog_entries()}
+
+    assert KNOWN_STALE_CATALOG_SLUGS <= set(entries)
+    for slug in KNOWN_STALE_CATALOG_SLUGS:
+        entry = entries[slug]
+        pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+        match = match_service_area_catalog(pixel_geometry, style=STYLE_BY_PROVIDER[entry.provider])
+
+        assert not entry.is_active
+        assert match is None or match.entry.slug != slug
 
 
 def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:

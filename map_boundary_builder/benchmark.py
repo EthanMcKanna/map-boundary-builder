@@ -4,6 +4,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
@@ -52,6 +53,7 @@ class BenchmarkScore:
     centroid_distance_m: float | None
     vertices: int | None
     style: str | None
+    duration_s: float | None = None
     georeference_source: str | None = None
     combined_confidence: float | None = None
     catalog_slug: str | None = None
@@ -70,6 +72,7 @@ class BenchmarkScore:
             "centroid_distance_m": round(self.centroid_distance_m, 1) if self.centroid_distance_m is not None else None,
             "vertices": self.vertices,
             "style": self.style,
+            "duration_s": round(self.duration_s, 3) if self.duration_s is not None else None,
             "georeference_source": self.georeference_source,
             "combined_confidence": round(self.combined_confidence, 6) if self.combined_confidence is not None else None,
             "catalog_slug": self.catalog_slug,
@@ -192,6 +195,7 @@ def run_benchmark(
     scored = [score for score in scores if score.status == "active"]
     skipped = [score for score in scores if score.status != "active"]
     ious = [score.iou for score in scored if score.iou is not None]
+    durations = [score.duration_s for score in scored if score.duration_s is not None]
     average_iou = float(mean(ious)) if ious else 0.0
     min_seen_iou = float(min(ious)) if ious else 0.0
     passed_count = sum(score.passed for score in scored)
@@ -214,6 +218,9 @@ def run_benchmark(
             "failed_fixtures": failed_count,
             "average_iou": round(average_iou, 6),
             "min_iou": round(min_seen_iou, 6),
+            "total_duration_s": round(sum(durations), 3),
+            "average_duration_s": round(float(mean(durations)), 3) if durations else None,
+            "max_duration_s": round(max(durations), 3) if durations else None,
         },
         "inventory": inventory,
         "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
@@ -302,6 +309,7 @@ def fixture_matches_filters(fixture: BenchmarkFixture, filters: list[str]) -> bo
 
 
 def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:
+    started = time.perf_counter()
     try:
         extraction = extract_service_area(fixture.image_path)
         reference = project_geometry(load_reference_geometry(fixture.reference_path))
@@ -317,6 +325,7 @@ def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> Be
             centroid_distance_m=metrics["centroid_distance_m"],
             vertices=count_vertices(extraction.pixel_geometry),
             style=extraction.style,
+            duration_s=time.perf_counter() - started,
             status=fixture.status,
             note=fixture.note,
         )
@@ -331,6 +340,7 @@ def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> Be
             centroid_distance_m=None,
             vertices=None,
             style=None,
+            duration_s=time.perf_counter() - started,
             error=str(exc),
             status=fixture.status,
             note=fixture.note,
@@ -364,13 +374,15 @@ def score_full_fixture(
         command.extend(["--city", fixture.area])
     if no_catalog:
         command.append("--no-catalog")
+    started = time.perf_counter()
     try:
         completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout_seconds, check=False)
     except subprocess.TimeoutExpired:
-        return failed_full_score(fixture, f"timed out after {timeout_seconds}s")
+        return failed_full_score(fixture, f"timed out after {timeout_seconds}s", duration_s=time.perf_counter() - started)
+    duration_s = time.perf_counter() - started
     if completed.returncode != 0:
         error = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
-        return failed_full_score(fixture, error)
+        return failed_full_score(fixture, error, duration_s=duration_s)
 
     try:
         output = json.loads(output_path.read_text())
@@ -389,6 +401,7 @@ def score_full_fixture(
             centroid_distance_m=metrics["centroid_distance_m"],
             vertices=count_vertices(shape(output["features"][0]["geometry"])),
             style=summary.get("style"),
+            duration_s=duration_s,
             georeference_source=summary.get("georeference_source"),
             combined_confidence=summary.get("combined_confidence"),
             catalog_slug=properties.get("catalog_slug"),
@@ -396,10 +409,10 @@ def score_full_fixture(
             note=fixture.note,
         )
     except Exception as exc:
-        return failed_full_score(fixture, str(exc))
+        return failed_full_score(fixture, str(exc), duration_s=duration_s)
 
 
-def failed_full_score(fixture: BenchmarkFixture, error: str) -> BenchmarkScore:
+def failed_full_score(fixture: BenchmarkFixture, error: str, *, duration_s: float | None = None) -> BenchmarkScore:
     return BenchmarkScore(
         slug=fixture.slug,
         image=fixture.image_path.name,
@@ -410,6 +423,7 @@ def failed_full_score(fixture: BenchmarkFixture, error: str) -> BenchmarkScore:
         centroid_distance_m=None,
         vertices=None,
         style=None,
+        duration_s=duration_s,
         error=error,
         status=fixture.status,
         note=fixture.note,
@@ -427,6 +441,7 @@ def skipped_fixture_score(fixture: BenchmarkFixture, *, mode: str) -> BenchmarkS
         centroid_distance_m=None,
         vertices=None,
         style=None,
+        duration_s=None,
         status=fixture.status,
         note=fixture.note,
     )
@@ -522,21 +537,26 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
         f"{status} {report['mode']} benchmark: "
         f"{summary['passed_fixtures']}/{summary['scored_fixtures']} scored fixtures, "
         f"{skipped_text}, "
-        f"avg IoU {summary['average_iou']:.3f}, min IoU {summary['min_iou']:.3f}"
+        f"avg IoU {summary['average_iou']:.3f}, min IoU {summary['min_iou']:.3f}, "
+        f"total {format_duration(summary.get('total_duration_s'))}"
     )
     print(f"report: {report_path}")
     print("")
-    print(f"{'status':6s} {'iou':>6s} {'area':>6s} {'verts':>6s} {'style':12s} {'source':38s} slug")
+    print(f"{'status':6s} {'iou':>6s} {'time':>7s} {'area':>6s} {'verts':>6s} {'style':12s} {'source':38s} slug")
     for row in report["scores"]:
         row_status = "PASS" if row["passed"] else "FAIL"
         if row["status"] != "active":
             row_status = "SKIP"
         iou = f"{row['iou']:.3f}" if row["iou"] is not None else "err"
         area = f"{row['area_ratio']:.2f}" if row["area_ratio"] is not None else "-"
+        duration = format_duration(row.get("duration_s"))
         vertices = str(row["vertices"]) if row["vertices"] is not None else "-"
         style = row["style"] or "-"
         source = (row.get("georeference_source") or "-")[:38]
-        print(f"{row_status:6s} {iou:>6s} {area:>6s} {vertices:>6s} {style:12s} {source:38s} {row['slug']}")
+        print(
+            f"{row_status:6s} {iou:>6s} {duration:>7s} {area:>6s} "
+            f"{vertices:>6s} {style:12s} {source:38s} {row['slug']}"
+        )
         if row["error"]:
             print(f"       error: {row['error']}")
         if row["note"]:
@@ -545,6 +565,15 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     if references_without_images:
         print("")
         print("references without screenshots: " + ", ".join(references_without_images))
+
+
+def format_duration(value: Any) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.2f}s"
+    except (TypeError, ValueError):
+        return "-"
 
 
 if __name__ == "__main__":

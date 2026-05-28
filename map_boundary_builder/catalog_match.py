@@ -41,9 +41,15 @@ class ServiceAreaCatalogEntry:
     area: str
     geometry: Polygon | MultiPolygon
     mercator_geometry: Polygon | MultiPolygon
+    status: str = "active"
+    stale_reason: str | None = None
     max_confidence: float | None = None
     min_iou: float = CATALOG_MIN_IOU
     use_exact_geometry: bool = False
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == "active"
 
 
 @dataclass(frozen=True)
@@ -79,7 +85,7 @@ def match_service_area_catalog(
     candidates = [
         entry
         for entry in load_catalog_entries()
-        if style in PROVIDER_STYLES.get(entry.provider, set())
+        if entry.is_active and style in PROVIDER_STYLES.get(entry.provider, set())
     ]
     if not candidates:
         return None
@@ -202,6 +208,8 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 area=area_from_slug(slug, provider),
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
+                status=parse_catalog_status(properties.get("catalog_status")),
+                stale_reason=parse_optional_text(properties.get("catalog_stale_reason")),
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
                 min_iou=parse_catalog_min_iou(properties.get("catalog_min_shape_iou"), use_exact_geometry),
                 use_exact_geometry=use_exact_geometry,
@@ -238,6 +246,20 @@ def parse_optional_confidence(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return max(0.0, min(0.99, confidence))
+
+
+def parse_catalog_status(value: Any) -> str:
+    if value is None:
+        return "active"
+    status = str(value).strip().lower()
+    return "active" if status in {"", "active", "current"} else "stale"
+
+
+def parse_optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def parse_catalog_min_iou(value: Any, use_exact_geometry: bool) -> float:

@@ -76,6 +76,7 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "centroid_distance_m": None,
             "vertices": None,
             "style": None,
+            "duration_s": None,
             "georeference_source": None,
             "combined_confidence": None,
             "catalog_slug": None,

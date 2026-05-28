@@ -17,6 +17,11 @@ saved ground truth. The affected local variants are Bay Area Tesla/Waymo/Zoox,
 Houston Tesla/Waymo, and Miami Waymo. Treat them as data debt, not model
 regressions, during latency experiments.
 
+The same drifted variants are now marked stale in the production service-area
+catalog and excluded from catalog matching until refreshed. Their JSON files
+remain in the bundle for audit/history, but production inference must fall back
+to OCR/georeference rather than returning an outdated fast-path polygon.
+
 ## Shipped Changes
 
 - `5c69590`: cache-only exploratory geocoder fanout, decisive OSM-place fast
@@ -193,9 +198,26 @@ regressions, during latency experiments.
   benchmark reports include georeference source, combined confidence, and
   catalog slug. This keeps the arbitrary OCR/georeference path measurable after
   catalog fast paths made the default active benchmark entirely catalog-sourced.
+- Known-changed Houston, Miami, and Bay Area catalog entries now carry stale
+  metadata and are ignored by the catalog matcher. This preserves the speed win
+  for active current catalog entries while preventing stale production shortcuts
+  for markets whose live service areas changed after the saved baseline.
 
 ## Current Validation
 
+- Current stale-catalog guard head: focused tests for catalog matching and
+  benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
+  `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
+  active fixtures, skipped 7 known reference mismatches, avg IoU 0.983, min IoU
+  0.943, total scored duration 3.125s, average 0.391s, max 0.498s. Fresh-cache
+  timed no-catalog benchmark
+  `out/benchmark-timed-no-catalog-20260528-155319/full-report.json` passed 8/8
+  active fixtures, avg IoU 0.962, min IoU 0.931, total 8.291s, average 1.036s,
+  max 1.694s. Stale-market CLI smoke
+  `out/stale-catalog-disabled-20260528-155344/` covered Bay Area Tesla/Waymo/
+  Zoox, Houston Tesla/Waymo, and Miami Waymo; all succeeded with
+  OCR/georeference sources and `catalog_slug: null`, proving the stale catalog
+  entries are not used by default.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
