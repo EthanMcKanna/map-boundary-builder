@@ -17,7 +17,13 @@ from map_boundary_builder.georeference import (
 )
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
-from map_boundary_builder.ocr import OcrLabel, group_stacked_labels, rapidocr_items_to_labels
+from map_boundary_builder.ocr import (
+    OcrLabel,
+    group_stacked_labels,
+    rapidocr_items_to_labels,
+    read_ocr_cache,
+    write_ocr_cache,
+)
 from map_boundary_builder.runner import fit_georeference, rank_road_context_queries
 
 
@@ -63,6 +69,13 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertAlmostEqual(labels[0].x, 60.0)
         self.assertAlmostEqual(labels[0].y, 37.0)
         self.assertAlmostEqual(labels[0].confidence, 96.0)
+
+    def test_ocr_label_cache_round_trips_labels(self) -> None:
+        label = OcrLabel("Miami Beach", x=60, y=37, width=100, height=34, confidence=96)
+
+        write_ocr_cache("unit-test-ocr-cache", [label])
+
+        self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
 
 
 class PlaceCandidateTests(unittest.TestCase):

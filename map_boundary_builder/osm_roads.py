@@ -19,7 +19,11 @@ from .ocr import OcrLabel
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass"
+ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 _TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "64")))
+ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
+_ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,11 @@ def refine_transform_with_osm_roads(
 ) -> RoadMatchResult | None:
     if city_center.bbox is None:
         return None
+    cache_key = road_refine_cache_key(rgb, city_center, initial, lock_scale=lock_scale)
+    cached = read_road_refine_cache(cache_key)
+    if cached is not None:
+        return cached
+
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
@@ -111,12 +120,87 @@ def refine_transform_with_osm_roads(
         confidence=min(0.93, max(initial.confidence, initial.confidence + min(0.08, best_score - base_score))),
         source=f"{initial.source}+osm-road-refine",
     )
-    return RoadMatchResult(
+    result = RoadMatchResult(
         transform=refined,
         score=round(best_score, 6),
         sampled_points=best_count,
         base_score=round(base_score, 6),
     )
+    write_road_refine_cache(cache_key, result)
+    return result
+
+
+def road_refine_cache_key(
+    rgb: np.ndarray,
+    city_center: GeocodeResult,
+    initial: GeoreferenceTransform,
+    *,
+    lock_scale: bool,
+) -> str:
+    image_digest = hashlib.sha256(np.ascontiguousarray(rgb).data).hexdigest()
+    bbox = tuple(round(value, 5) for value in (city_center.bbox or ()))
+    parts = [
+        ROAD_REFINE_CACHE_VERSION,
+        image_digest,
+        json.dumps(bbox, separators=(",", ":")),
+        initial.source,
+        f"{initial.lon:.8f}",
+        f"{initial.lat:.8f}",
+        f"{initial.meters_per_pixel:.8f}",
+        f"{initial.rotation_radians:.10f}",
+        f"{initial.confidence:.6f}",
+        "lock" if lock_scale else "free",
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def read_road_refine_cache(cache_key: str) -> RoadMatchResult | None:
+    if cache_key in _ROAD_REFINE_MEMORY_CACHE:
+        return _ROAD_REFINE_MEMORY_CACHE[cache_key]
+    cache_path = ROAD_REFINE_CACHE_DIR / f"{cache_key}.json"
+    if not cache_path.exists():
+        return None
+    try:
+        data = json.loads(cache_path.read_text())
+        transform = GeoreferenceTransform(**data["transform"])
+        result = RoadMatchResult(
+            transform=transform,
+            score=float(data["score"]),
+            sampled_points=int(data["sampled_points"]),
+            base_score=float(data["base_score"]) if data.get("base_score") is not None else None,
+        )
+    except Exception:
+        return None
+    _ROAD_REFINE_MEMORY_CACHE[cache_key] = result
+    return result
+
+
+def write_road_refine_cache(cache_key: str, result: RoadMatchResult) -> None:
+    _ROAD_REFINE_MEMORY_CACHE[cache_key] = result
+    cache_path = ROAD_REFINE_CACHE_DIR / f"{cache_key}.json"
+    payload = {
+        "transform": {
+            "city": result.transform.city,
+            "lon": result.transform.lon,
+            "lat": result.transform.lat,
+            "origin_x_ratio": result.transform.origin_x_ratio,
+            "origin_y_ratio": result.transform.origin_y_ratio,
+            "meters_per_pixel": result.transform.meters_per_pixel,
+            "rotation_radians": result.transform.rotation_radians,
+            "confidence": result.transform.confidence,
+            "source": result.transform.source,
+        },
+        "score": result.score,
+        "sampled_points": result.sampled_points,
+        "base_score": result.base_score,
+    }
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(payload, separators=(",", ":")))
+        tmp_path.replace(cache_path)
+    except OSError:
+        return
 
 
 def search_near_transform(
@@ -131,31 +215,47 @@ def search_near_transform(
     offset_meters: np.ndarray,
     min_count: int,
 ) -> tuple[float, int, GeoreferenceTransform] | None:
-    best: tuple[float, int, GeoreferenceTransform] | None = None
+    best: tuple[float, int, float, float, float, float] | None = None
+    batch: list[tuple[float, float, float, float]] = []
+
+    def score_batch() -> None:
+        nonlocal best, batch
+        if not batch:
+            return
+        scores = score_transform_batch(road_points, feature_distance, batch)
+        for (scale, rotation, tx, ty), (score, count) in zip(batch, scores):
+            if count < min_count:
+                continue
+            if best is None or score > best[0]:
+                best = (score, count, scale, rotation, tx, ty)
+        batch = []
+
     for scale_multiplier in scale_multipliers:
         scale = float(base_transform.meters_per_pixel * scale_multiplier)
         for rotation_offset in rotation_offsets:
             rotation = float(base_transform.rotation_radians + rotation_offset)
             for offset_x in offset_meters:
                 for offset_y in offset_meters:
-                    lon, lat = mercator_to_lonlat(base_tx + float(offset_x), base_ty + float(offset_y))
-                    candidate = GeoreferenceTransform(
-                        city=base_transform.city,
-                        lon=lon,
-                        lat=lat,
-                        origin_x_ratio=base_transform.origin_x_ratio,
-                        origin_y_ratio=base_transform.origin_y_ratio,
-                        meters_per_pixel=scale,
-                        rotation_radians=rotation,
-                        confidence=base_transform.confidence,
-                        source=base_transform.source,
-                    )
-                    score, count = score_georeference_transform(road_points, feature_distance, candidate)
-                    if count < min_count:
-                        continue
-                    if best is None or score > best[0]:
-                        best = (score, count, candidate)
-    return best
+                    batch.append((scale, rotation, base_tx + float(offset_x), base_ty + float(offset_y)))
+                    if len(batch) >= ROAD_SEARCH_BATCH_SIZE:
+                        score_batch()
+    score_batch()
+    if best is None:
+        return None
+    score, count, scale, rotation, tx, ty = best
+    lon, lat = mercator_to_lonlat(tx, ty)
+    candidate = GeoreferenceTransform(
+        city=base_transform.city,
+        lon=lon,
+        lat=lat,
+        origin_x_ratio=base_transform.origin_x_ratio,
+        origin_y_ratio=base_transform.origin_y_ratio,
+        meters_per_pixel=scale,
+        rotation_radians=rotation,
+        confidence=base_transform.confidence,
+        source=base_transform.source,
+    )
+    return score, count, candidate
 
 
 def georeference_from_osm_roads(
@@ -280,6 +380,44 @@ def score_georeference_transform(
     distances = feature_distance[iy[keep], ix[keep]]
     scores = np.exp(-((distances / 6.0) ** 2))
     return float(scores.mean()), int(keep.sum())
+
+
+def score_transform_batch(
+    road_points: np.ndarray,
+    feature_distance: np.ndarray,
+    transforms: list[tuple[float, float, float, float]],
+) -> list[tuple[float, int]]:
+    if not transforms:
+        return []
+    h, w = feature_distance.shape
+    params = np.asarray(transforms, dtype=float)
+    scales = params[:, 0][:, np.newaxis]
+    rotations = params[:, 1][:, np.newaxis]
+    txs = params[:, 2][:, np.newaxis]
+    tys = params[:, 3][:, np.newaxis]
+    road_x = road_points[:, 0][np.newaxis, :]
+    road_y = road_points[:, 1][np.newaxis, :]
+
+    dx = (road_x - txs) / scales
+    dy = (road_y - tys) / scales
+    cos_r = np.cos(rotations)
+    sin_r = np.sin(rotations)
+    px = dx * cos_r + dy * sin_r
+    py = -(-dx * sin_r + dy * cos_r)
+    ix = np.rint(px).astype(np.int32)
+    iy = np.rint(py).astype(np.int32)
+    keep = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
+    counts = keep.sum(axis=1).astype(np.int32)
+    if not np.any(counts):
+        return [(0.0, 0) for _ in transforms]
+
+    clipped_x = np.clip(ix, 0, max(w - 1, 0))
+    clipped_y = np.clip(iy, 0, max(h - 1, 0))
+    distances = feature_distance[clipped_y, clipped_x]
+    scores = np.exp(-((distances / 6.0) ** 2))
+    sums = np.where(keep, scores, 0.0).sum(axis=1)
+    means = np.divide(sums, counts, out=np.zeros_like(sums, dtype=float), where=counts > 0)
+    return [(float(score), int(count)) for score, count in zip(means, counts)]
 
 
 def sample_road_points(road_points: np.ndarray, *, max_points: int) -> np.ndarray:

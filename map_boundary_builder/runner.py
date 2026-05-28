@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 from dataclasses import dataclass
 from math import hypot
@@ -92,59 +93,62 @@ def build_boundary(
     with Image.open(image_path) as img:
         width, height = img.size
 
-    emit_progress(
-        progress,
-        stage="extract",
-        message="Extracting service-area pixels",
-        percent=18,
-        details={"width": width, "height": height},
-    )
-    rgb = load_rgb(image_path)
-    extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
-    emit_progress(
-        progress,
-        stage="extract",
-        message="Pixel polygon extracted",
-        percent=36,
-        details={
-            "style": extraction.style,
-            "coverage_ratio": round(extraction.coverage_ratio, 6),
-            "contour_count": extraction.contour_count,
-            "confidence": extraction.confidence,
-        },
-    )
+    with ThreadPoolExecutor(max_workers=1) as ocr_executor:
+        labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
 
-    label_y_max = (
-        extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
-        if extraction.style == "dark-teal"
-        else None
-    )
-    label_y_min = (
-        extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
-        if extraction.style == "gray-fill"
-        else None
-    )
-    emit_progress(
-        progress,
-        stage="ocr",
-        message="Reading map labels on server",
-        percent=44,
-    )
-    labels = extract_ocr_labels(str(image_path))
-    georef = fit_georeference(
-        labels,
-        image_path,
-        extraction.pixel_geometry,
-        rgb=rgb,
-        city_input=city_input,
-        width=width,
-        height=height,
-        coverage_ratio=extraction.coverage_ratio,
-        min_control_points=opts.min_control_points,
-        label_y_min=label_y_min,
-        label_y_max=label_y_max,
-        progress=progress,
-    )
+        emit_progress(
+            progress,
+            stage="extract",
+            message="Extracting service-area pixels",
+            percent=18,
+            details={"width": width, "height": height},
+        )
+        rgb = load_rgb(image_path)
+        extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
+        emit_progress(
+            progress,
+            stage="extract",
+            message="Pixel polygon extracted",
+            percent=36,
+            details={
+                "style": extraction.style,
+                "coverage_ratio": round(extraction.coverage_ratio, 6),
+                "contour_count": extraction.contour_count,
+                "confidence": extraction.confidence,
+            },
+        )
+
+        label_y_max = (
+            extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
+            if extraction.style == "dark-teal"
+            else None
+        )
+        label_y_min = (
+            extraction.pixel_geometry.bounds[1] - max(18.0, height * 0.06)
+            if extraction.style == "gray-fill"
+            else None
+        )
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Reading map labels on server",
+            percent=44,
+        )
+        labels = labels_future.result()
+        georef = fit_georeference(
+            labels,
+            image_path,
+            extraction.pixel_geometry,
+            rgb=rgb,
+            city_input=city_input,
+            width=width,
+            height=height,
+            coverage_ratio=extraction.coverage_ratio,
+            min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+            progress=progress,
+        )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "

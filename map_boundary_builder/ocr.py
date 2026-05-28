@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 import csv
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -25,9 +27,22 @@ class OcrLabel:
     confidence: float
 
 
+_CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
+OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
+OCR_CACHE_VERSION = "ocr-labels-v1"
+_OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
+
+
 def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
+    use_tesseract = tesseract_available()
+    cache_key = ocr_cache_key(image_path, use_tesseract=use_tesseract)
+    if cache_key is not None:
+        cached = read_ocr_cache(cache_key)
+        if cached is not None:
+            return list(cached)
+
     words: list[OcrLabel] = []
-    if tesseract_available():
+    if use_tesseract:
         words = run_tesseract_words(image_path)
         words = [word for word in words if is_useful_text(word.text)]
         if len(words) < 80:
@@ -38,7 +53,49 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     labels = list(words)
     labels.extend(group_line_labels(words))
     labels.extend(group_stacked_labels(words))
-    return dedupe_labels(labels)
+    labels = dedupe_labels(labels)
+    if cache_key is not None:
+        write_ocr_cache(cache_key, labels)
+    return labels
+
+
+def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
+    try:
+        digest = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+    engine = "tesseract" if use_tesseract else "rapidocr"
+    return hashlib.sha256(f"{OCR_CACHE_VERSION}:{engine}:{digest}".encode("utf-8")).hexdigest()
+
+
+def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
+    cached = _OCR_MEMORY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
+    if not cache_path.exists():
+        return None
+    try:
+        data = json.loads(cache_path.read_text())
+        labels = tuple(OcrLabel(**item) for item in data if isinstance(item, dict))
+    except Exception:
+        return None
+    _OCR_MEMORY_CACHE[cache_key] = labels
+    return labels
+
+
+def write_ocr_cache(cache_key: str, labels: list[OcrLabel]) -> None:
+    cached = tuple(labels)
+    _OCR_MEMORY_CACHE[cache_key] = cached
+    cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps([label.__dict__ for label in cached], separators=(",", ":"))
+        tmp_path = cache_path.with_suffix(".tmp")
+        tmp_path.write_text(payload)
+        tmp_path.replace(cache_path)
+    except OSError:
+        return
 
 
 def tesseract_available() -> bool:
