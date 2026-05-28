@@ -1,7 +1,11 @@
 import unittest
+from io import BytesIO
+
+from PIL import Image
 
 from api.index import (
     cached_run_payload,
+    normalized_image_sha256,
     read_run_result_cache,
     run_result_cache_key,
     write_run_result_cache,
@@ -23,6 +27,23 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_image)
         self.assertNotEqual(base, changed_city)
         self.assertNotEqual(base, changed_options)
+
+    def test_run_cache_key_uses_decoded_pixels(self) -> None:
+        first = BytesIO()
+        second = BytesIO()
+        image = Image.new("RGBA", (3, 2), (12, 34, 56, 255))
+        image.save(first, format="PNG", compress_level=0)
+        image.save(second, format="PNG", compress_level=9)
+
+        self.assertNotEqual(first.getvalue(), second.getvalue())
+        self.assertEqual(
+            normalized_image_sha256(first.getvalue()),
+            normalized_image_sha256(second.getvalue()),
+        )
+        self.assertEqual(
+            run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
+            run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
+        )
 
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:
         cache_key = run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())

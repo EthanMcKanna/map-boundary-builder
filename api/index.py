@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import time
+from io import BytesIO
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from importlib import resources
@@ -25,7 +26,7 @@ from map_boundary_builder.web import RequestError, float_field, int_field, safe_
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
-RUN_RESULT_CACHE_VERSION = "run-result-v1"
+RUN_RESULT_CACHE_VERSION = "run-result-v2"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 
 
@@ -246,7 +247,7 @@ def inline_overlay(path: Path | None) -> str | None:
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: BoundaryBuildOptions) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
-        "image_sha256": hashlib.sha256(image_bytes).hexdigest(),
+        "image_pixel_sha256": normalized_image_sha256(image_bytes),
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),
         "min_confidence": round(float(options.min_confidence), 4),
@@ -254,6 +255,21 @@ def run_result_cache_key(image_bytes: bytes, city: str | None, options: Boundary
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def normalized_image_sha256(image_bytes: bytes) -> str:
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(BytesIO(image_bytes)) as image:
+            normalized = ImageOps.exif_transpose(image).convert("RGBA")
+            digest = hashlib.sha256()
+            digest.update(str(normalized.size).encode("ascii"))
+            digest.update(normalized.mode.encode("ascii"))
+            digest.update(normalized.tobytes())
+            return digest.hexdigest()
+    except Exception:
+        return hashlib.sha256(image_bytes).hexdigest()
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
