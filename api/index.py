@@ -19,6 +19,7 @@ os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache
 
 from map_boundary_builder.extract import DEFAULT_SIMPLIFY_PX
 from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
+from map_boundary_builder.pipeline_version import get_pipeline_version
 from map_boundary_builder.runner import BoundaryBuildOptions, build_boundary
 from map_boundary_builder.web import RequestError, float_field, int_field, safe_extension
 
@@ -50,6 +51,7 @@ class handler(BaseHTTPRequestHandler):
                         "runtime": "vercel-python",
                         "tesseract": shutil.which("tesseract"),
                         "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
+                        "pipeline_version": get_pipeline_version(),
                     }
                 )
                 return

@@ -19,6 +19,7 @@ from urllib.parse import unquote, urlparse
 from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
+from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, build_boundary
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -72,6 +73,15 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/health":
+                self.send_json(
+                    {
+                        "ok": True,
+                        "runtime": "local-python",
+                        "pipeline_version": get_pipeline_version(),
+                    }
+                )
+                return
             if parsed.path == "/":
                 self.send_asset("index.html")
                 return

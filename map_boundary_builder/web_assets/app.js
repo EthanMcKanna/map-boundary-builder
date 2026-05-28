@@ -75,6 +75,7 @@ let latestRunError = null;
 let latestRunEvents = [];
 let latestRunStatus = "idle";
 let latestRunSummary = null;
+let pendingRunCacheKey = null;
 let activeReportStatus = "completed";
 let copyFeedbackTimeout = null;
 let activeImageMode = "original";
@@ -85,6 +86,8 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
+const RUN_CACHE_VERSION = "image-to-geojson-v1";
+const RUN_CACHE_SETTING_FIELDS = ["min_confidence", "min_control_points", "simplify_px"];
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
   ready: "Build boundary",
@@ -281,6 +284,19 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    markProgressStep("prepare", "running", "Checking local cache.");
+    setStatus("Checking browser cache", 6, "running", {
+      step: "prepare",
+      note: "Looking for an exact match from this browser.",
+    });
+    const cacheKey = await buildRunCacheKey(uploadFile, formData);
+    pendingRunCacheKey = cacheKey;
+    const cachedEntry = findCachedHistoryEntry(cacheKey);
+    if (cachedEntry) {
+      restoreCachedHistoryEntry(cachedEntry);
+      pendingRunCacheKey = null;
+      return;
+    }
     markProgressStep("prepare", "running", "Uploading image.");
     setStatus("Uploading image", 8, "running", {
       step: "prepare",
@@ -295,12 +311,13 @@ form.addEventListener("submit", async (event) => {
       throw new Error(payload.error || "Run failed to start.");
     }
     if (payload.status === "complete" && payload.artifacts) {
-      applyInlineRun(payload);
+      applyInlineRun(payload, { cacheKey });
     } else {
       latestRunId = payload.id || null;
       connectEvents(payload.id);
     }
   } catch (error) {
+    pendingRunCacheKey = null;
     finishWithError(error.message);
   }
 });
@@ -567,6 +584,7 @@ function setSelectedFile(file) {
   latestRunEvents = [];
   latestRunStatus = "idle";
   latestRunSummary = null;
+  pendingRunCacheKey = null;
   progressValue = 0;
   stopEstimatedProgress();
   resetProgressSteps();
@@ -610,6 +628,55 @@ async function prepareRunImage(file) {
     type: "image/png",
     lastModified: file.lastModified,
   });
+}
+
+async function buildRunCacheKey(file, formData) {
+  if (!window.crypto?.subtle || !file?.arrayBuffer || typeof TextEncoder === "undefined") {
+    return null;
+  }
+  try {
+    const pipelineVersion = await fetchRunCachePipelineVersion();
+    if (!pipelineVersion) return null;
+    const settingsSignature = RUN_CACHE_SETTING_FIELDS
+      .map((field) => `${field}=${String(formData.get(field) ?? "")}`)
+      .join("&");
+    const [imageHash, settingsHash] = await Promise.all([
+      sha256Hex(await file.arrayBuffer()),
+      sha256Hex(new TextEncoder().encode(settingsSignature)),
+    ]);
+    return [
+      RUN_CACHE_VERSION,
+      pipelineVersion,
+      file.type || "image",
+      file.size,
+      imageHash,
+      settingsHash,
+    ].join(":");
+  } catch (error) {
+    console.warn("Could not build local run cache key", error);
+    return null;
+  }
+}
+
+async function fetchRunCachePipelineVersion() {
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return typeof payload.pipeline_version === "string" && payload.pipeline_version
+      ? payload.pipeline_version
+      : null;
+  } catch (error) {
+    console.warn("Could not verify pipeline version for local run cache", error);
+    return null;
+  }
+}
+
+async function sha256Hex(bytes) {
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function isSvgFile(file) {
@@ -701,7 +768,7 @@ function connectEvents(runId) {
   };
 }
 
-function applyInlineRun(status) {
+function applyInlineRun(status, options = {}) {
   stopEstimatedProgress();
   latestRunId = status.id || latestRunId;
   latestRunEvents = status.events || latestRunEvents;
@@ -743,7 +810,9 @@ function applyInlineRun(status) {
     summary: status.summary,
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay_data_url,
+    cacheKey: options.cacheKey || pendingRunCacheKey,
   });
+  pendingRunCacheKey = null;
   updateRunButton();
   updateReportTrigger();
 }
@@ -1008,7 +1077,9 @@ async function loadArtifacts(runId) {
     summary: status.summary,
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay,
+    cacheKey: pendingRunCacheKey,
   });
+  pendingRunCacheKey = null;
   updateReportTrigger();
 }
 
@@ -1020,14 +1091,17 @@ function queueHistorySave(payload) {
 }
 
 async function saveHistoryEntry(payload) {
-  const existing = historyEntries.find((entry) => entry.id === String(payload.id));
+  const payloadId = String(payload.id || "");
+  const existing = historyEntries.find((entry) => (
+    entry.id === payloadId || (payload.cacheKey && entry.cacheKey === payload.cacheKey)
+  ));
   const title = historyTitle(payload);
   const [inputImage, overlayImage] = await Promise.all([
     imageUrlToStoredDataUrl(inputPreview.src),
     imageUrlToStoredDataUrl(payload.overlaySrc),
   ]);
   const entry = {
-    id: String(payload.id || Date.now()),
+    id: String(payload.id || existing?.id || Date.now()),
     title: existing?.renamedAt ? existing.title : title,
     filename: payload.filename || selectedFile?.name || "Map screenshot",
     city: payload.summary?.city || payload.city || "Auto",
@@ -1038,6 +1112,7 @@ async function saveHistoryEntry(payload) {
     geojson: payload.geojson,
     inputImage,
     overlayImage,
+    cacheKey: payload.cacheKey || existing?.cacheKey || null,
   };
   upsertHistoryEntry(entry);
 }
@@ -1051,7 +1126,12 @@ function historyTitle(payload) {
 
 function upsertHistoryEntry(entry) {
   activeHistoryId = entry.id;
-  historyEntries = [entry, ...historyEntries.filter((item) => item.id !== entry.id)];
+  historyEntries = [
+    entry,
+    ...historyEntries.filter((item) => (
+      item.id !== entry.id && (!entry.cacheKey || item.cacheKey !== entry.cacheKey)
+    )),
+  ];
   persistHistoryEntries();
   renderHistory();
 }
@@ -1070,6 +1150,7 @@ function loadHistoryEntries() {
         createdAt: Number(entry.createdAt) || Date.now(),
         starred: Boolean(entry.starred),
         renamedAt: Number(entry.renamedAt) || null,
+        cacheKey: typeof entry.cacheKey === "string" ? entry.cacheKey : null,
       })),
     );
   } catch (error) {
@@ -1119,6 +1200,13 @@ function sortHistoryEntries(entries) {
     if (Boolean(a.starred) !== Boolean(b.starred)) return a.starred ? -1 : 1;
     return Number(b.createdAt || 0) - Number(a.createdAt || 0);
   });
+}
+
+function findCachedHistoryEntry(cacheKey) {
+  if (!cacheKey) return null;
+  return sortHistoryEntries(historyEntries).find((entry) => (
+    entry.cacheKey === cacheKey && entry.geojson
+  )) || null;
 }
 
 function renderHistory() {
@@ -1289,6 +1377,18 @@ function deleteHistoryEntry(id) {
   historyEntries = historyEntries.filter((entry) => entry.id !== id);
   persistHistoryEntries();
   renderHistory();
+}
+
+function restoreCachedHistoryEntry(entry) {
+  const cachedEntry = {
+    ...entry,
+    createdAt: Date.now(),
+  };
+  upsertHistoryEntry(cachedEntry);
+  restoreHistoryEntry(cachedEntry);
+  setStatus("Loaded from browser cache", 100, "complete", {
+    note: "Exact image and settings match a completed run.",
+  });
 }
 
 function restoreHistoryEntry(entry) {
@@ -1708,6 +1808,7 @@ function startNewRun() {
   latestRunEvents = [];
   latestRunStatus = "idle";
   latestRunSummary = null;
+  pendingRunCacheKey = null;
   imageInput.value = "";
   progressValue = 0;
   resetProgressSteps();
@@ -1738,6 +1839,7 @@ function resetRun() {
   latestRunEvents = [];
   latestRunStatus = "running";
   latestRunSummary = null;
+  pendingRunCacheKey = null;
   hideFailureReport();
   resetProgressSteps();
   markProgressStep("prepare", "running", "Preparing image.");
@@ -1774,6 +1876,7 @@ function updateGeojsonPane(geojson) {
 
 function finishWithError(message) {
   stopEstimatedProgress();
+  pendingRunCacheKey = null;
   latestRunError = message || "Generation failed.";
   latestRunStatus = "failed";
   markProgressStep(activeProgressStep || "georeference", "error", message);
