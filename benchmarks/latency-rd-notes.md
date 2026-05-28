@@ -272,6 +272,17 @@ screenshots are refreshed.
   smoke geometry and confidence. The live request on `mapboundary.app` was
   12.05s wall / 8.406s event span, so warm generation speed was noise-flat;
   the shipped win is smaller packaged runtime/cold-start burden.
+- Deployment `dpl_8CR5bp7CtwYgWbp59BWcdnVvzZFM` deployed RGB reuse to
+  `https://mapboundary.app`. Build output still reported a 325.22 MB Python
+  bundle before runtime dependency installation, while `vercel inspect`
+  reported the function at 92.74 MB.
+- Health after RGB reuse deploy: `pipeline-f4de3136e0c322d2`, runtime
+  `vercel-python`, `tesseract: null`.
+- Production Phoenix smoke after RGB reuse with `simplify_px=6.39`: fresh
+  request completed in 17.50s wall / 13.707s event span with bbox
+  `[-112.1167239, 33.2306602, -111.8157216, 33.689586]`, confidence 0.917,
+  6 controls, and road score 0.718119. Exact repeat returned the same geometry
+  and confidence in 2.28s wall via run-result cache.
 
 ## Failed Or Rejected Experiments
 
@@ -314,9 +325,10 @@ screenshots are refreshed.
 
 ## Remaining Bottlenecks
 
-- Production package size is improved after the ONNX Runtime pin, with Vercel
-  reporting `api/index.py` at 92.74 MB on the promoted deployment. Cold starts
-  and OCR model initialization remain production-only latency risks.
+- Production function size is improved after the ONNX Runtime pin, with Vercel
+  reporting `api/index.py` at 92.74 MB on the current deployment. The remote
+  Python build still reports a 325.22 MB pre-runtime-installation bundle, so
+  cold starts and OCR model initialization remain production-only latency risks.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full
   active fixture suite before production.
