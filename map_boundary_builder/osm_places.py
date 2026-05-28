@@ -67,7 +67,7 @@ def load_overpass_places(bbox: tuple[float, float, float, float]) -> dict[str, o
     cache_path = overpass_places_cache_file(bbox)
     if cache_path.exists():
         return json.loads(cache_path.read_text())
-    seeded = seed_overpass_places_payload(cache_path.stem)
+    seeded = seed_overpass_places_payload(cache_path.stem, bbox=bbox)
     if seeded is not _NO_SEED:
         return seeded if isinstance(seeded, dict) else {"elements": []}
     query = f"""
@@ -100,12 +100,74 @@ def overpass_places_cache_file(bbox: tuple[float, float, float, float]) -> Path:
     return CACHE_DIR / f"{key}.json"
 
 
-def seed_overpass_places_payload(key: str) -> object:
+def seed_overpass_places_payload(key: str, bbox: tuple[float, float, float, float] | None = None) -> object:
     seed = load_osm_places_seed()
     place_payloads = seed.get("overpass_places")
-    if not isinstance(place_payloads, dict) or key not in place_payloads:
+    if not isinstance(place_payloads, dict):
         return _NO_SEED
-    return place_payloads[key]
+    if key in place_payloads:
+        return place_payloads[key]
+    if bbox is None:
+        return _NO_SEED
+    return covering_seed_payload(place_payloads, bbox)
+
+
+def covering_seed_payload(
+    place_payloads: dict[str, object],
+    bbox: tuple[float, float, float, float],
+) -> object:
+    best: tuple[float, object] | None = None
+    for payload in place_payloads.values():
+        if not isinstance(payload, dict):
+            continue
+        bounds = payload_bounds(payload)
+        if bounds is None or not bounds_cover_bbox(bounds, bbox):
+            continue
+        west, south, east, north = bounds
+        area = max(0.0, east - west) * max(0.0, north - south)
+        if best is None or area < best[0]:
+            best = (area, payload)
+    return best[1] if best is not None else _NO_SEED
+
+
+def payload_bounds(payload: dict[str, object]) -> tuple[float, float, float, float] | None:
+    elements = payload.get("elements", [])
+    if not isinstance(elements, list):
+        return None
+    lons: list[float] = []
+    lats: list[float] = []
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        center = element.get("center", {})
+        if not isinstance(center, dict):
+            center = {}
+        lon = element.get("lon", center.get("lon"))
+        lat = element.get("lat", center.get("lat"))
+        try:
+            lons.append(float(lon))
+            lats.append(float(lat))
+        except (TypeError, ValueError):
+            continue
+    if not lons or not lats:
+        return None
+    return min(lons), min(lats), max(lons), max(lats)
+
+
+def bounds_cover_bbox(
+    bounds: tuple[float, float, float, float],
+    bbox: tuple[float, float, float, float],
+    *,
+    tolerance_degrees: float = 0.03,
+) -> bool:
+    west, south, east, north = bbox
+    seed_west, seed_south, seed_east, seed_north = bounds
+    return (
+        west >= seed_west - tolerance_degrees
+        and south >= seed_south - tolerance_degrees
+        and east <= seed_east + tolerance_degrees
+        and north <= seed_north + tolerance_degrees
+    )
 
 
 def load_osm_places_seed() -> dict[str, object]:

@@ -79,6 +79,41 @@ class OsmPlacesSeedTests(unittest.TestCase):
         self.assertIn("Menlo Park", place_names)
         self.assertIn("Sunnyvale", place_names)
 
+    def test_bundled_bay_area_covering_seed_serves_drifted_bbox_without_network(self) -> None:
+        bbox = (-122.61206925279753, 37.28918864326061, -121.96464364720251, 37.942040905924365)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_places, "CACHE_DIR", Path(tmpdir) / "overpass-places"),
+                patch.object(osm_places, "_OSM_PLACES_SEED", None),
+                patch.object(osm_places, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                osm_places.load_overpass_places.cache_clear()
+                osm_places.load_place_points.cache_clear()
+                places = osm_places.load_place_points(bbox)
+
+        place_names = {place.name for place in places}
+        self.assertIn("Menlo Park", place_names)
+        self.assertIn("Sunnyvale", place_names)
+
+    def test_covering_seed_chooses_smallest_covering_payload(self) -> None:
+        broad = {
+            "elements": [
+                {"lat": 0.0, "lon": 0.0, "tags": {"name": "Broad west"}},
+                {"lat": 10.0, "lon": 10.0, "tags": {"name": "Broad east"}},
+            ]
+        }
+        narrow = {
+            "elements": [
+                {"lat": 2.0, "lon": 2.0, "tags": {"name": "Narrow west"}},
+                {"lat": 4.0, "lon": 4.0, "tags": {"name": "Narrow east"}},
+            ]
+        }
+
+        payload = osm_places.covering_seed_payload({"broad": broad, "narrow": narrow}, (2.5, 2.5, 3.5, 3.5))
+
+        self.assertIs(payload, narrow)
+
 
 if __name__ == "__main__":
     unittest.main()

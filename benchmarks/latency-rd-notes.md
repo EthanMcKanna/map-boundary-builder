@@ -408,6 +408,35 @@ regressions, during latency experiments.
   - Production cached Bay Area repeats returned WebP overlays in 2.05-2.41s wall
     with a 67.9 KB gzip wire response, down from the earlier same-image cached
     gzip check around 2.315s and 254 KB wire response.
+- Covering OSM-place and Miami geocoder seed validation:
+  - A cold local profile showed Bay Area georeference could still spend about
+    10.7s in `build_osm_place_control_points` / `load_overpass_places` when the
+    inferred regional bbox drifted from an exact seed hash, even though the bbox
+    was spatially covered by an existing bundled Bay Area seed.
+  - Added a covering-seed fallback that picks the smallest bundled OSM place
+    payload whose element bounds cover the requested bbox, preserving exact-key
+    lookup first and avoiding network only when a bundled regional seed clearly
+    covers the request.
+  - The user confirmed Houston, Miami, and Bay Area service areas have changed
+    from the saved ground truth. A fresh-cache smoke with geocoder, OSM-place,
+    and OSM-road network calls patched to fail exposed Miami Waymo as the only
+    missing bundled context; adding the live Miami Nominatim city seed made the
+    no-network path reproduce the same refined bbox, confidence, and source as
+    the live fresh-cache run.
+  - Focused tests passed:
+    `PYTHONPATH=. .venv/bin/pytest -q tests/test_geocoder.py tests/test_osm_places.py tests/test_ocr_georeference.py`,
+    39 tests. Full tests passed: `PYTHONPATH=. .venv/bin/pytest -q`, 63 tests.
+  - Fresh-cache changed-market no-network smoke passed Bay Area Waymo 0.682s,
+    Bay Area Tesla 0.089s, Bay Area Zoox 0.394s, Houston Waymo 0.450s, Houston
+    Tesla 0.073s, and Miami Waymo 1.334s. Miami preserved confidence 0.864, 6
+    controls, source `ocr-georeference:nominatim-label-fit+osm-road-refine`,
+    and bbox `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`; Bay Area
+    Waymo preserved confidence 0.877, 15 controls, source
+    `ocr-georeference:nominatim-label-fit`, and bbox
+    `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`.
+  - Full drift-aware benchmark stayed clean: 8/8 scored fixtures passed, 7
+    `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931, in
+    8.20s wall time.
 
 ## Failed Or Rejected Experiments
 
