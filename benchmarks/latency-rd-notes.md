@@ -81,10 +81,17 @@ screenshots are refreshed.
   matches. Against `34cdeed`, Phoenix improved from 0.983 to 0.985 IoU and
   Nashville from 0.981 to 0.986 IoU while reducing the road-georeference stage
   on both focused fresh-cache probes.
+- ONNX Runtime is pinned to `1.19.2`, the smallest tested NumPy-2-compatible
+  runtime wheel. A Python 3.12 throwaway venv kept NumPy 2.4.6 and OpenCV
+  4.13.0 behavior, passed all unit tests, and preserved the drift-aware full
+  benchmark at 8/8 scored fixtures with avg IoU 0.962 and min IoU 0.931.
 
 ## Current Validation
 
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
+- `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-full-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/ort119-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused hybrid road-refinement A/B against `34cdeed`:
   - baseline Phoenix 1.761s / 0.731s georef / 0.983 IoU / road score 0.698507;
     hybrid Phoenix 1.559s / 0.602s georef / 0.985 IoU / road score 0.718119.
@@ -246,6 +253,17 @@ screenshots are refreshed.
     0.718119 and the expected improved bbox. Production Phoenix wall time was
     noise-flat rather than a clear latency win, while local A/B and the
     drift-aware benchmark are the stronger evidence for the hybrid search.
+- Skip-domain production deployment `dpl_A4wEA77g64ibvs3DgcEY5Vf7YT71` tested
+  the ONNX Runtime 1.19.2 pin. `vercel inspect` reported `api/index.py` at
+  92.74 MB versus 101.17 MB on live deployment
+  `dpl_9488MQ1eoKgAnhKGjY7myYu3ZSun`.
+- Protected Orlando smoke on `dpl_A4wEA77g64ibvs3DgcEY5Vf7YT71` with
+  `simplify_px=6.37`: status complete, 12.77s wall through `vercel curl`,
+  8.485s event span, confidence 0.909, 6 controls, bbox
+  `[-81.5090796, 28.3588616, -81.3625383, 28.5554773]`, matching the live
+  smoke geometry and confidence. The live request on `mapboundary.app` was
+  12.05s wall / 8.406s event span, so warm generation speed was noise-flat;
+  the shipped win is smaller packaged runtime/cold-start burden.
 
 ## Failed Or Rejected Experiments
 
