@@ -245,6 +245,14 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/benchmark-fuzzy-label-hint-20260528-160018/full-report.json` passed 8/8
   active fixtures with avg IoU 0.983, min IoU 0.943, and total scored duration
   3.18s.
+- Production fuzzy-label hint deployment `dpl_D4vAfWFR7GbLZKC7HZTedcEzWA9S`
+  reported `pipeline-c44dde0142d2b891` and kept `api/index.py` at 92.82 MB.
+  The exact RGBA cache-bust production repro then succeeded uncached through
+  `catalog-shape-match:ocr-label-hint` with `nashville-waymo`, 0.949 confidence,
+  2.550s wall, and 1.362s internal event span. A second warm uncached RGB pixel
+  variant succeeded through the same source in 0.906s wall and 0.474s internal
+  event span. Miami remained uncached on OCR/georeference with `catalog_slug:
+  null`, preserving the stale-market guard.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
