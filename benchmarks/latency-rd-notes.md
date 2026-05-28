@@ -365,6 +365,15 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   pytest passed 88 tests and 9 subtests, and `compileall`,
   `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`
   passed.
+- Production road-batch deployment `dpl_BYrgHq7bSq9Bj4z22KZS1hknuzC2` was
+  aliased to `https://mapboundary.app` and reported
+  `pipeline-c1ba43b997adcc5b`. Cache-busted Miami Waymo, whose catalog entry is
+  intentionally stale, stayed on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` with `catalog_slug:
+  null`, the same bbox, confidence 0.864, and road score 0.681518. The first
+  request after deploy had a 7.235s event span; the warm-busted follow-up
+  dropped to 3.894s, preserving output while exercising the road-refinement
+  path in production.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
