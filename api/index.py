@@ -26,6 +26,7 @@ from map_boundary_builder.pipeline_version import get_pipeline_version
 DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
+INLINE_OVERLAY_OPTIMIZE_BYTES = 250_000
 RUN_RESULT_CACHE_VERSION = "run-result-v2"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
@@ -299,6 +300,10 @@ def inline_overlay(path: Path | None) -> str | None:
         return None
     data = path.read_bytes()
     mime = "image/png"
+    if len(data) > INLINE_OVERLAY_OPTIMIZE_BYTES:
+        optimized = optimized_overlay_bytes(path, original_size=len(data))
+        if optimized is not None:
+            mime, data = optimized
     if len(data) > MAX_INLINE_OVERLAY_BYTES:
         try:
             from PIL import Image
@@ -313,6 +318,22 @@ def inline_overlay(path: Path | None) -> str | None:
     if len(data) > MAX_INLINE_OVERLAY_BYTES:
         return None
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def optimized_overlay_bytes(path: Path, *, original_size: int) -> tuple[str, bytes] | None:
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            webp = BytesIO()
+            rgb.save(webp, format="WEBP", quality=90, method=4)
+            webp_data = webp.getvalue()
+            if webp_data and len(webp_data) < original_size:
+                return "image/webp", webp_data
+    except Exception:
+        return None
+    return None
 
 
 def safe_extension(filename: str) -> str:

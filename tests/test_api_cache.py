@@ -1,11 +1,14 @@
 import unittest
 import gzip
 from io import BytesIO
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from PIL import Image
+from PIL import Image, features
 
 from api.index import (
     cached_run_payload,
+    inline_overlay,
     json_response_body,
     normalized_image_sha256,
     raw_run_result_cache_key,
@@ -83,6 +86,18 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_inline_overlay_uses_webp_for_large_previews(self) -> None:
+        with NamedTemporaryFile(suffix=".png") as handle:
+            image = Image.effect_noise((900, 900), 64).convert("RGB")
+            image.save(handle.name, format="PNG")
+
+            data_url = inline_overlay(Path(handle.name))
+
+        self.assertIsNotNone(data_url)
+        assert data_url is not None
+        self.assertTrue(data_url.startswith("data:image/webp;base64,"))
 
 
 if __name__ == "__main__":
