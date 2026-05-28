@@ -373,6 +373,28 @@ regressions, during latency experiments.
     0.173s wall, 0.004s georeference after robust-fit cache reuse, confidence
     0.877, 15 controls, bbox
     `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`.
+- Local bright-blue extraction and response-payload validation:
+  - Moved gray/dark/green style signals behind the decisive bright-blue style
+    check, preserving the exact bright-blue decision rule while skipping unused
+    full-image reductions for Waymo-style screenshots.
+  - Lowered API overlay optimization threshold from 250 KB to 64 KB and bumped
+    run-result cache payload version to store WebP previews for normal
+    production overlays, not only very large previews.
+  - Focused tests:
+    `PYTHONPATH=. .venv/bin/pytest -q tests/test_api_cache.py tests/test_extract.py tests/test_image_io.py`
+    passed, 16 tests. Full tests: `PYTHONPATH=. .venv/bin/pytest -q` passed,
+    60 tests.
+  - Focused drift-aware extraction benchmark passed 3/3 scored fixtures, skipped
+    4 known `reference_mismatch` fixtures, avg IoU 0.988, min IoU 0.984.
+  - Full drift-aware benchmark passed 8/8 scored fixtures, skipped 7
+    `reference_mismatch` fixtures, avg IoU 0.962, min IoU 0.931, in 7.76s
+    wall time on the confirmation run.
+  - Direct extraction profiles for Miami/Bay Area Waymo dropped to 0.068s and
+    0.062s locally, with the same bright-blue style and masks passing the
+    benchmark. Production-like local warm smokes kept identical
+    geometry/source/confidence: Miami build 0.201s plus 0.067s WebP overlay,
+    gzip response 58.9 KB; Bay Area build 0.165s plus 0.052s WebP overlay,
+    gzip response 67.9 KB.
 
 ## Failed Or Rejected Experiments
 

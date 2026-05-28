@@ -26,9 +26,9 @@ from map_boundary_builder.pipeline_version import get_pipeline_version
 DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
-INLINE_OVERLAY_OPTIMIZE_BYTES = 250_000
+INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
-RUN_RESULT_CACHE_VERSION = "run-result-v2"
+RUN_RESULT_CACHE_VERSION = "run-result-v3"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 

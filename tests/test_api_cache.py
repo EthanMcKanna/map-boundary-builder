@@ -9,6 +9,7 @@ from unittest.mock import patch
 from PIL import Image, features
 
 from api.index import (
+    INLINE_OVERLAY_OPTIMIZE_BYTES,
     cached_run_payload,
     inline_overlay,
     json_response_body,
@@ -108,6 +109,19 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:
+        with NamedTemporaryFile(suffix=".png") as handle:
+            image = Image.effect_noise((240, 240), 64).convert("RGB")
+            image.save(handle.name, format="PNG")
+            self.assertGreater(Path(handle.name).stat().st_size, INLINE_OVERLAY_OPTIMIZE_BYTES)
+
+            data_url = inline_overlay(Path(handle.name))
+
+        self.assertIsNotNone(data_url)
+        assert data_url is not None
+        self.assertTrue(data_url.startswith("data:image/webp;base64,"))
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_large_previews(self) -> None:
