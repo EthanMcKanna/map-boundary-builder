@@ -14,6 +14,7 @@ from map_boundary_builder.georeference import (
     infer_city_contexts,
     is_reliable_single_token_context,
     place_query_text,
+    single_tokens_supported_by_fuller_labels,
 )
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
@@ -131,6 +132,15 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(place_query_text("San Jos"), "San Jose")
         self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")
+
+    def test_fuller_labels_identify_single_token_fragments(self) -> None:
+        labels = [
+            OcrLabel("Camellia Gardens", x=100, y=100, width=160, height=24, confidence=96),
+            OcrLabel("Gardens", x=120, y=132, width=80, height=20, confidence=94),
+            OcrLabel("Orlando", x=250, y=250, width=120, height=30, confidence=98),
+        ]
+
+        self.assertEqual(single_tokens_supported_by_fuller_labels(labels), {"camellia", "gardens"})
 
     def test_tiny_single_token_places_are_not_direct_contexts(self) -> None:
         francisco = GeocodeResult(

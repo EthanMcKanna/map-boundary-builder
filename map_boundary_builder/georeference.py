@@ -392,7 +392,7 @@ def georeference_from_labels(
         control_labels = [label for label in control_labels if not is_top_left_title_label(label, width, height)]
     control_labels = anchor_labels_to_marker_dots(control_labels, image_path)
     city_contexts = resolve_city_contexts(labels, city)
-    best: tuple[float, GeoreferenceResult] | None = None
+    best: tuple[float, GeoreferenceResult, CityContext] | None = None
     for city_context in city_contexts:
         result = georeference_from_label_context(
             control_labels,
@@ -407,11 +407,38 @@ def georeference_from_labels(
             if city is None and city_context.query == "Inferred map area":
                 result = georeference_result_with_city(result, city_context.center.display_name)
             score = georeference_result_score(result)
-            if best is None or score > best[0]:
-                best = (score, result)
+            if (
+                best is None
+                or score > best[0]
+                or should_prefer_named_context_result(city_context, result, score, best)
+            ):
+                best = (score, result, city_context)
             if is_decisive_georeference_result(result):
                 break
     return best[1] if best is not None else None
+
+
+def should_prefer_named_context_result(
+    context: CityContext,
+    result: GeoreferenceResult,
+    score: float,
+    best: tuple[float, GeoreferenceResult, CityContext],
+) -> bool:
+    best_score, best_result, best_context = best
+    if context.query == "Inferred map area" or best_context.query != "Inferred map area":
+        return False
+    if score < best_score - 0.04:
+        return False
+    if result.transform.confidence < best_result.transform.confidence - 0.025:
+        return False
+    scale_delta = abs(result.transform.meters_per_pixel - best_result.transform.meters_per_pixel)
+    if scale_delta / max(best_result.transform.meters_per_pixel, 1.0) > 0.035:
+        return False
+    if abs(result.transform.rotation_radians - best_result.transform.rotation_radians) > 0.03:
+        return False
+    if result.residual_p90_m > max(best_result.residual_p90_m * 1.35, best_result.residual_p90_m + 500.0):
+        return False
+    return len(result.control_points) >= len(best_result.control_points)
 
 
 def anchor_labels_to_marker_dots(labels: list[OcrLabel], image_path: str) -> list[OcrLabel]:
@@ -936,6 +963,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
     query_scores: dict[str, float] = {}
     query_evidence: dict[str, set[str]] = {}
     used_positions: set[tuple[str, int, int]] = set()
+    single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
     for label in labels[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
@@ -944,6 +972,8 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         if len(tokens) > 2:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
+            continue
+        if len(tokens) == 1 and tokens <= single_token_fragments and label.width * label.height < 8000:
             continue
         position_key = (" ".join(sorted(tokens)), round(label.x / 16), round(label.y / 16))
         if position_key in used_positions:
@@ -1269,12 +1299,15 @@ def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandid
     candidates: list[LabelGeocodeCandidate] = []
     used_text: set[str] = set()
     query_labels: list[tuple[OcrLabel, str]] = []
+    single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
     for label in rank_geocode_labels(labels)[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if len(tokens) > 4:
+            continue
+        if len(tokens) == 1 and tokens <= single_token_fragments:
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
             continue
@@ -2006,6 +2039,7 @@ def build_geocoded_control_points(
     controls: list[ControlPoint] = []
     used_text: set[tuple[str, ...]] = set()
     city_tokens = place_tokens(city)
+    single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
     for label in rank_geocode_labels(labels, prefer_large_text=prefer_large_text)[:max_labels]:
         raw_text_tokens = place_tokens(label.text)
         if raw_text_tokens & CITY_INFERENCE_STOP_TOKENS:
@@ -2022,6 +2056,8 @@ def build_geocoded_control_points(
         used_text.add(text_key)
         if text_tokens == city_tokens:
             controls.append(ControlPoint(label=label, geocode=city_center))
+            continue
+        if len(text_tokens) == 1 and text_tokens <= single_token_fragments:
             continue
         if len(text_tokens) == 1 and next(iter(text_tokens)) in GENERIC_SINGLE_TOKENS:
             continue
@@ -2051,6 +2087,15 @@ def build_geocoded_control_points(
             if stop_after_controls is not None and len(controls) >= stop_after_controls:
                 break
     return controls
+
+
+def single_tokens_supported_by_fuller_labels(labels: list[OcrLabel]) -> set[str]:
+    supported: set[str] = set()
+    for label in rank_geocode_labels(labels):
+        tokens = place_tokens(place_query_text(label.text))
+        if len(tokens) >= 2 and not tokens & CITY_INFERENCE_STOP_TOKENS:
+            supported.update(tokens)
+    return supported
 
 
 def has_decisive_control_fit(controls: list[ControlPoint]) -> bool:
