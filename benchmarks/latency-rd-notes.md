@@ -66,6 +66,13 @@ polygons and screenshots are refreshed.
 - RapidOCR max dimension 2200 was faster locally but dropped Orlando IoU from
   0.930 to 0.863 in focused validation. Rejected.
 - Road-point cap 3000 was faster but dropped Nashville IoU to 0.796. Rejected.
+- RapidOCR without the angle classifier matched normal focused fixtures but
+  produced high-count gibberish on a 180-degree rotated Orlando stress image,
+  while classifier-enabled OCR recovered readable labels. Rejected for
+  robustness.
+- Extraction downscaling sped up direct mask extraction, but even a 2000px cap
+  moved Phoenix IoU from 0.983 to 0.982 and lower caps shifted additional
+  stable fixtures. Rejected under the no-regression accuracy bar.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 
