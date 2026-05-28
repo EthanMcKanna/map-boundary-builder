@@ -444,6 +444,22 @@ regressions, during latency experiments.
     wall / 9.710s event span versus 16.61s / 13.098s; Bay Area Waymo 6.218s
     wall / 3.580s event span versus 8.12s / 4.763s. Exact repeats hit the
     result cache in 1.900s and 2.136s with identical bboxes and confidence.
+- Road score-image validation:
+  - A fresh-cache no-network Miami profile showed road refinement dominated the
+    run, with `refine_transform_with_osm_roads` at about 1.06s and
+    `score_transform_batch` at about 0.95s. Precomputing the distance-to-road
+    score image once per feature field preserved Miami's bbox, confidence,
+    controls, source, and road score while reducing the profiled run from 1.849s
+    to 1.455s.
+  - Clean A/B from a detached `HEAD` worktree versus the score-image prototype
+    preserved bboxes, confidence, and road scores on Miami/Phoenix/Nashville
+    no-network smokes while reducing total wall time from 3.79s to 3.65s.
+  - Clean full-suite A/B preserved the drift-aware benchmark at 8/8 scored
+    fixtures, 7 `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU
+    0.931, while moving wall time from 7.87s to 7.77s.
+  - Validation passed: `PYTHONPATH=. .venv/bin/pytest -q`, 63 tests;
+    `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`;
+    and `node --check map_boundary_builder/web_assets/app.js`.
 
 ## Failed Or Rejected Experiments
 

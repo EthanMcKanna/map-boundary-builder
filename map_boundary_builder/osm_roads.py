@@ -29,7 +29,8 @@ ROAD_REFINE_FULL_FALLBACK_MIN_SCORE = max(
     0.0,
     float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE", "0.68")),
 )
-ROAD_REFINE_CACHE_VERSION = "road-refine-v4"
+ROAD_SCORE_SIGMA_PX = np.float32(6.0)
+ROAD_REFINE_CACHE_VERSION = "road-refine-v5"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
 _ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
@@ -63,7 +64,8 @@ def refine_transform_with_osm_roads(
     if road_points.size == 0:
         return None
     road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
-    base_score, base_count = score_georeference_transform(road_points, feature_distance, initial)
+    feature_scores = feature_score_image(feature_distance)
+    base_score, base_count = score_georeference_transform_on_score_image(road_points, feature_scores, initial)
     if base_count < 1000:
         return None
 
@@ -79,6 +81,7 @@ def refine_transform_with_osm_roads(
         initial,
         base_tx,
         base_ty,
+        feature_scores=feature_scores,
         feature_scale=ROAD_REFINE_COARSE_FEATURE_SCALE,
         scale_multipliers=grids["coarse_scale_multipliers"],
         rotation_offsets=grids["coarse_rotation_offsets"],
@@ -94,6 +97,7 @@ def refine_transform_with_osm_roads(
             best_transform,
             best_tx,
             best_ty,
+            feature_scores=feature_scores,
             feature_scale=ROAD_REFINE_FINE_FEATURE_SCALE,
             scale_multipliers=grids["fine_scale_multipliers"],
             rotation_offsets=grids["fine_rotation_offsets"],
@@ -109,6 +113,7 @@ def refine_transform_with_osm_roads(
             best_transform,
             polish_tx,
             polish_ty,
+            feature_scores=feature_scores,
             scale_multipliers=grids["polish_scale_multipliers"],
             rotation_offsets=grids["polish_rotation_offsets"],
             offset_meters=grids["polish_offset_meters"],
@@ -124,6 +129,7 @@ def refine_transform_with_osm_roads(
             initial,
             base_tx,
             base_ty,
+            feature_scores=feature_scores,
             grids=grids,
         )
         if full_search is not None and full_search[0] > best_score:
@@ -214,6 +220,7 @@ def full_resolution_road_search(
     base_tx: float,
     base_ty: float,
     *,
+    feature_scores: np.ndarray,
     grids: dict[str, np.ndarray],
 ) -> tuple[float, int, GeoreferenceTransform] | None:
     coarse = search_near_transform(
@@ -222,6 +229,7 @@ def full_resolution_road_search(
         initial,
         base_tx,
         base_ty,
+        feature_scores=feature_scores,
         scale_multipliers=grids["coarse_scale_multipliers"],
         rotation_offsets=grids["coarse_rotation_offsets"],
         offset_meters=grids["coarse_offset_meters"],
@@ -237,6 +245,7 @@ def full_resolution_road_search(
         best_transform,
         best_tx,
         best_ty,
+        feature_scores=feature_scores,
         scale_multipliers=grids["fine_scale_multipliers"],
         rotation_offsets=grids["fine_rotation_offsets"],
         offset_meters=grids["fine_offset_meters"],
@@ -254,6 +263,7 @@ def search_near_transform_at_feature_scale(
     base_tx: float,
     base_ty: float,
     *,
+    feature_scores: np.ndarray | None = None,
     feature_scale: float,
     scale_multipliers: np.ndarray,
     rotation_offsets: np.ndarray,
@@ -267,6 +277,7 @@ def search_near_transform_at_feature_scale(
             base_transform,
             base_tx,
             base_ty,
+            feature_scores=feature_scores,
             scale_multipliers=scale_multipliers,
             rotation_offsets=rotation_offsets,
             offset_meters=offset_meters,
@@ -274,6 +285,7 @@ def search_near_transform_at_feature_scale(
         )
 
     scaled_feature_distance = downsample_feature_distance(feature_distance, feature_scale)
+    scaled_feature_scores = feature_score_image(scaled_feature_distance)
     scaled_base_transform = scale_transform_for_feature_distance(base_transform, feature_scale)
     result = search_near_transform(
         road_points,
@@ -281,6 +293,7 @@ def search_near_transform_at_feature_scale(
         scaled_base_transform,
         base_tx,
         base_ty,
+        feature_scores=scaled_feature_scores,
         scale_multipliers=scale_multipliers,
         rotation_offsets=rotation_offsets,
         offset_meters=offset_meters,
@@ -290,7 +303,8 @@ def search_near_transform_at_feature_scale(
         return None
     _, _, scaled_transform = result
     transform = unscale_transform_for_feature_distance(scaled_transform, feature_scale)
-    score, count = score_georeference_transform(road_points, feature_distance, transform)
+    score_image = feature_scores if feature_scores is not None else feature_score_image(feature_distance)
+    score, count = score_georeference_transform_on_score_image(road_points, score_image, transform)
     if count < min_count:
         return None
     return score, count, transform
@@ -378,6 +392,7 @@ def search_near_transform(
     base_tx: float,
     base_ty: float,
     *,
+    feature_scores: np.ndarray | None = None,
     scale_multipliers: np.ndarray,
     rotation_offsets: np.ndarray,
     offset_meters: np.ndarray,
@@ -385,12 +400,13 @@ def search_near_transform(
 ) -> tuple[float, int, GeoreferenceTransform] | None:
     best: tuple[float, int, float, float, float, float] | None = None
     batch: list[tuple[float, float, float, float]] = []
+    score_image = feature_scores if feature_scores is not None else feature_score_image(feature_distance)
 
     def score_batch() -> None:
         nonlocal best, batch
         if not batch:
             return
-        scores = score_transform_batch(road_points, feature_distance, batch)
+        scores = score_transform_batch_on_score_image(road_points, score_image, batch)
         for (scale, rotation, tx, ty), (score, count) in zip(batch, scores):
             if count < min_count:
                 continue
@@ -509,6 +525,10 @@ def image_feature_distance(rgb: np.ndarray) -> np.ndarray:
     return cv2.distanceTransform((features == 0).astype(np.uint8), cv2.DIST_L2, 5)
 
 
+def feature_score_image(feature_distance: np.ndarray) -> np.ndarray:
+    return np.exp(-np.square(feature_distance / ROAD_SCORE_SIGMA_PX)).astype(np.float32, copy=False)
+
+
 def score_transform(
     road_points: np.ndarray,
     feature_distance: np.ndarray,
@@ -523,7 +543,7 @@ def score_transform(
     if keep.sum() == 0:
         return 0.0, 0
     distances = feature_distance[py[keep], px[keep]]
-    scores = np.exp(-((distances / 6.0) ** 2))
+    scores = np.exp(-((distances / float(ROAD_SCORE_SIGMA_PX)) ** 2))
     return float(scores.mean()), int(keep.sum())
 
 
@@ -546,8 +566,29 @@ def score_georeference_transform(
     if keep.sum() == 0:
         return 0.0, 0
     distances = feature_distance[iy[keep], ix[keep]]
-    scores = np.exp(-((distances / 6.0) ** 2))
+    scores = np.exp(-((distances / float(ROAD_SCORE_SIGMA_PX)) ** 2))
     return float(scores.mean()), int(keep.sum())
+
+
+def score_georeference_transform_on_score_image(
+    road_points: np.ndarray,
+    feature_scores: np.ndarray,
+    geo_transform: GeoreferenceTransform,
+) -> tuple[float, int]:
+    h, w = feature_scores.shape
+    tx, ty = lonlat_to_mercator(geo_transform.lon, geo_transform.lat)
+    dx = (road_points[:, 0] - tx) / geo_transform.meters_per_pixel
+    dy = (road_points[:, 1] - ty) / geo_transform.meters_per_pixel
+    cos_r = np.cos(geo_transform.rotation_radians)
+    sin_r = np.sin(geo_transform.rotation_radians)
+    px = dx * cos_r + dy * sin_r
+    py = -(-dx * sin_r + dy * cos_r)
+    ix = np.round(px).astype(np.int32)
+    iy = np.round(py).astype(np.int32)
+    keep = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
+    if keep.sum() == 0:
+        return 0.0, 0
+    return float(feature_scores[iy[keep], ix[keep]].mean()), int(keep.sum())
 
 
 def score_transform_batch(
@@ -555,9 +596,17 @@ def score_transform_batch(
     feature_distance: np.ndarray,
     transforms: list[tuple[float, float, float, float]],
 ) -> list[tuple[float, int]]:
+    return score_transform_batch_on_score_image(road_points, feature_score_image(feature_distance), transforms)
+
+
+def score_transform_batch_on_score_image(
+    road_points: np.ndarray,
+    feature_scores: np.ndarray,
+    transforms: list[tuple[float, float, float, float]],
+) -> list[tuple[float, int]]:
     if not transforms:
         return []
-    h, w = feature_distance.shape
+    h, w = feature_scores.shape
     params = np.asarray(transforms, dtype=np.float32)
     scales = params[:, 0][:, np.newaxis]
     rotations = params[:, 1][:, np.newaxis]
@@ -579,11 +628,11 @@ def score_transform_batch(
     if not np.any(counts):
         return [(0.0, 0) for _ in transforms]
 
-    clipped_x = np.clip(ix, 0, max(w - 1, 0))
-    clipped_y = np.clip(iy, 0, max(h - 1, 0))
-    distances = feature_distance[clipped_y, clipped_x]
-    scores = np.exp(-np.square(distances / np.float32(6.0))).astype(np.float32, copy=False)
-    sums = np.where(keep, scores, 0.0).sum(axis=1)
+    np.clip(ix, 0, max(w - 1, 0), out=ix)
+    np.clip(iy, 0, max(h - 1, 0), out=iy)
+    scores = feature_scores[iy, ix]
+    scores *= keep
+    sums = scores.sum(axis=1)
     means = np.divide(sums, counts, out=np.zeros_like(sums, dtype=float), where=counts > 0)
     return [(float(score), int(count)) for score, count in zip(means, counts)]
 

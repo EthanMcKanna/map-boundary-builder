@@ -9,6 +9,7 @@ import map_boundary_builder.osm_roads as osm_roads
 from map_boundary_builder.georef_transform import GeoreferenceTransform, mercator_to_lonlat
 from map_boundary_builder.osm_roads import (
     RoadMatchResult,
+    feature_score_image,
     image_feature_distance,
     load_road_points_seed,
     read_road_refine_cache,
@@ -16,6 +17,7 @@ from map_boundary_builder.osm_roads import (
     road_refine_cache_key,
     score_georeference_transform,
     score_transform_batch,
+    score_transform_batch_on_score_image,
     seed_road_points,
     write_road_refine_cache,
 )
@@ -43,6 +45,13 @@ class RoadScoringTests(unittest.TestCase):
         ]
 
         batch_scores = score_transform_batch(road_points, feature_distance, params)
+        score_image_batch_scores = score_transform_batch_on_score_image(
+            road_points,
+            feature_score_image(feature_distance),
+            params,
+        )
+
+        self.assertEqual(batch_scores, score_image_batch_scores)
 
         for (scale, rotation, tx, ty), (batch_score, batch_count) in zip(params, batch_scores):
             lon, lat = mercator_to_lonlat(tx, ty)
@@ -141,7 +150,11 @@ class RoadScoringTests(unittest.TestCase):
                 with (
                     patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)),
                     patch.object(osm_roads, "load_road_points", return_value=road_points) as load_points,
-                    patch.object(osm_roads, "score_georeference_transform", return_value=(0.5, 1200)) as score,
+                    patch.object(
+                        osm_roads,
+                        "score_georeference_transform_on_score_image",
+                        return_value=(0.5, 1200),
+                    ) as score,
                     patch.object(osm_roads, "search_near_transform", return_value=(0.6, 1200, refined)) as search,
                 ):
                     first = refine_transform_with_osm_roads(rgb, center, initial)
