@@ -509,10 +509,13 @@ def anchor_labels_to_marker_dots(labels: list[OcrLabel], image_path: str) -> lis
 
 
 def detect_label_marker_dots(image_path: str) -> list[tuple[float, float]]:
-    bgr = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    if bgr is None:
+    try:
+        from .extract import load_rgb
+
+        rgb = load_rgb(image_path)
+    except Exception:
         return []
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     if float(np.median(gray)) > 115.0:
         return []
     mask = (gray >= 105).astype(np.uint8)

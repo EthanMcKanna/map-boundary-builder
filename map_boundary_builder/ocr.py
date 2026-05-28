@@ -203,12 +203,14 @@ def rapidocr_input_array(image_path: str | Path) -> tuple[Path | np.ndarray, flo
     source_path = Path(image_path)
     if RAPIDOCR_MAX_DIMENSION <= 0:
         return source_path, 1.0, 1.0
-    bgr = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    bgr, composited_alpha = load_rapidocr_bgr(source_path)
     if bgr is None:
         return source_path, 1.0, 1.0
     height, width = bgr.shape[:2]
     max_dimension = max(width, height)
     if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+        if composited_alpha:
+            return bgr, 1.0, 1.0
         return source_path, 1.0, 1.0
     scale = RAPIDOCR_MAX_DIMENSION / float(max_dimension)
     resized = cv2.resize(
@@ -217,6 +219,24 @@ def rapidocr_input_array(image_path: str | Path) -> tuple[Path | np.ndarray, flo
         interpolation=cv2.INTER_AREA,
     )
     return resized, scale, scale
+
+
+def load_rapidocr_bgr(image_path: str | Path) -> tuple[np.ndarray | None, bool]:
+    image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+    if image is None:
+        return None, False
+    if image.ndim == 2:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR), False
+    if image.shape[2] == 4:
+        alpha = image[:, :, 3]
+        bgr = image[:, :, :3]
+        if np.all(alpha == 255):
+            return np.ascontiguousarray(bgr), False
+        from .extract import load_rgb
+
+        rgb = load_rgb(image_path)
+        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), True
+    return image, False
 
 
 def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:

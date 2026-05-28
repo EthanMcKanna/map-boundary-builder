@@ -48,6 +48,29 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
             self.assertEqual(tuple(rgb[1, 1]), (0, 128, 255))
 
+    def test_transparent_png_can_skip_temp_composite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            png_path = workdir / "circle.png"
+            image = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+            image.putpixel((1, 1), (0, 128, 255, 255))
+            image.putpixel((2, 2), (10, 20, 30, 128))
+            image.save(png_path)
+
+            opaque_path = normalize_image_for_processing(png_path, output_dir=workdir)
+            opaque_rgb = load_rgb(opaque_path)
+            image_path = normalize_image_for_processing(
+                png_path,
+                output_dir=workdir,
+                composite_transparent_rasters=False,
+            )
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(image_path, png_path)
+            self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
+            self.assertEqual(tuple(rgb[1, 1]), (0, 128, 255))
+            np.testing.assert_array_equal(rgb, opaque_rgb)
+
     def test_opaque_rgba_png_loads_as_rgb(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             png_path = Path(tmp) / "opaque.png"

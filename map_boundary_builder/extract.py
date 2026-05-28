@@ -29,16 +29,13 @@ def load_rgb(path: str | Path) -> np.ndarray:
         if "A" not in image.getbands():
             return np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
 
-        rgba = np.array(image.convert("RGBA"), dtype=np.uint8, copy=True)
-    alpha_channel = rgba[:, :, 3]
-    if np.all(alpha_channel == 255):
-        return np.array(rgba[:, :, :3], dtype=np.uint8, copy=True)
-    alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
-    rgb = rgba[:, :, :3].astype(np.float32)
-    # Composite transparent screenshots over white. Most provided app-map PNGs
-    # are fully opaque, but this keeps alpha edges predictable.
-    composited = rgb * alpha + 255.0 * (1.0 - alpha)
-    return np.clip(composited, 0, 255).astype(np.uint8)
+        rgba_image = image.convert("RGBA")
+        if rgba_image.getchannel("A").getextrema()[0] == 255:
+            rgba = np.array(rgba_image, dtype=np.uint8, copy=True)
+            return np.array(rgba[:, :, :3], dtype=np.uint8, copy=True)
+        background = Image.new("RGBA", rgba_image.size, (255, 255, 255, 255))
+        background.alpha_composite(rgba_image)
+        return np.array(background.convert("RGB"), dtype=np.uint8, copy=True)
 
 
 def extract_service_area(

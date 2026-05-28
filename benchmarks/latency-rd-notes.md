@@ -57,6 +57,12 @@ screenshots are refreshed.
   of being written to temporary PNGs and read back. Small non-resized images
   stay on RapidOCR's original path because gray-fill fixtures regressed when
   forced through OpenCV-loaded arrays.
+- Transparent raster uploads now skip writing an opaque temp PNG. Extraction,
+  marker detection, and RapidOCR still see the same white-composited pixels as
+  the old temp-file path, but partial-alpha screenshots avoid the extra file
+  write/read. Local Phoenix A/B preserved bbox, geometry hash, confidence,
+  controls, georeference source, and road-match score while moving from
+  1.704-1.772s on baseline to 1.626-1.670s on the in-memory path.
 - Los Angeles OCR-geocoding now has bundled Nominatim miss markers, Photon seed
   payloads, and the OSM place payload needed by the place-control matcher.
   Fresh-cache warm local LA dropped from roughly 17s to 0.939s while preserving
@@ -72,7 +78,15 @@ screenshots are refreshed.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 51 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
+- Local Phoenix transparent-upload A/B against `58d8221`: baseline fresh-cache
+  warm runs were 1.772s and 1.704s; the in-memory alpha path was 1.670s and
+  1.626s with identical bbox, geometry hash `b446d2b20bebd0e1`, confidence
+  0.917, 6 controls, source `ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  and road score 0.698507.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-alpha-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/alpha-transparent-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-alpha-extraction-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode extraction --out-dir out/alpha-transparent-extraction`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.981, min IoU 0.925.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-alpha-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/alpha-transparent-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-nash-seed-road512-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only nashville --only phoenix --out-dir out/nash-seed-road512-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-nash-seed-road512-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/nash-seed-road512-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - Fresh-cache warm active-suite profile after Nashville seeds and road batch 512:

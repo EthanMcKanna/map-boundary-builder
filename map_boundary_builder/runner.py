@@ -91,6 +91,7 @@ def build_boundary(
     image_path = normalize_image_for_processing(
         image_path,
         output_dir=debug_path or output_path.parent,
+        composite_transparent_rasters=False,
     )
     with Image.open(image_path) as img:
         width, height = img.size

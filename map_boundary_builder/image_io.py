@@ -17,7 +17,12 @@ def safe_image_extension(filename: str) -> str:
     return ".png"
 
 
-def normalize_image_for_processing(path: str | Path, *, output_dir: str | Path | None = None) -> Path:
+def normalize_image_for_processing(
+    path: str | Path,
+    *,
+    output_dir: str | Path | None = None,
+    composite_transparent_rasters: bool = True,
+) -> Path:
     image_path = Path(path)
     target_dir = Path(output_dir) if output_dir is not None else image_path.parent
     if is_svg_image(image_path):
@@ -26,7 +31,7 @@ def normalize_image_for_processing(path: str | Path, *, output_dir: str | Path |
         rasterize_svg_to_png(image_path, target_path)
         return target_path
 
-    if raster_has_transparency(image_path):
+    if composite_transparent_rasters and raster_has_transparency(image_path):
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"{image_path.stem}.opaque.png"
         composite_raster_to_opaque(image_path, target_path)

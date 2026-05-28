@@ -121,6 +121,24 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertAlmostEqual(scale_x, 0.5)
             self.assertAlmostEqual(scale_y, 0.5)
 
+    def test_rapidocr_input_array_composites_transparent_png(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            image = Image.new("RGBA", (3, 1), (0, 0, 0, 0))
+            image.putpixel((1, 0), (255, 128, 0, 255))
+            image.putpixel((2, 0), (10, 20, 30, 128))
+            image.save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 10):
+                ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
+
+            self.assertIsInstance(ocr_input, np.ndarray)
+            self.assertEqual(tuple(ocr_input[0, 0]), (255, 255, 255))
+            self.assertEqual(tuple(ocr_input[0, 1]), (0, 128, 255))
+            self.assertEqual(tuple(ocr_input[0, 2]), (142, 137, 132))
+            self.assertEqual(scale_x, 1.0)
+            self.assertEqual(scale_y, 1.0)
+
     def test_ocr_cache_key_depends_on_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
