@@ -31,6 +31,7 @@ MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "12")))
+GEOCODE_LABEL_LOOKAHEAD = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD", "3")))
 EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
 EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
 EARLY_CONTEXT_MIN_CANDIDATES = 24
@@ -2049,6 +2050,7 @@ def build_geocoded_control_points(
     used_text: set[tuple[str, ...]] = set()
     city_tokens = place_tokens(city)
     single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
+    label_specs: list[tuple[OcrLabel, str, list[str]]] = []
     for label in rank_geocode_labels(labels, prefer_large_text=prefer_large_text)[:max_labels]:
         raw_text_tokens = place_tokens(label.text)
         if raw_text_tokens & CITY_INFERENCE_STOP_TOKENS:
@@ -2076,25 +2078,39 @@ def build_geocoded_control_points(
         queries.append(query_text)
         if city.lower() in query_text.lower():
             queries.append(query_text)
-        best: GeocodeResult | None = None
-        best_score = -1.0
-        query_batch = [query for query in queries if query]
-        for query, results in zip(query_batch, geocode_many([(query, 3) for query in query_batch])):
-            for candidate in results:
-                if not primary_name_matches_label(candidate.display_name, query_text):
-                    continue
-                cand_x, cand_y = candidate.mercator
-                distance = sqrt((cand_x - city_x) ** 2 + (cand_y - city_y) ** 2)
-                if distance > max_distance_m:
-                    continue
-                score = candidate.importance - distance / max_distance_m
-                if score > best_score:
-                    best = candidate
-                    best_score = score
-        if best is not None:
-            add_or_replace_control(controls, ControlPoint(label=label, geocode=best))
-            if stop_after_controls is not None and len(controls) >= stop_after_controls:
-                break
+        label_specs.append((label, query_text, [query for query in queries if query]))
+
+    for start in range(0, len(label_specs), GEOCODE_LABEL_LOOKAHEAD):
+        chunk = label_specs[start : start + GEOCODE_LABEL_LOOKAHEAD]
+        requests: list[tuple[str, int]] = []
+        lengths: list[int] = []
+        for _label, _query_text, query_batch in chunk:
+            lengths.append(len(query_batch))
+            requests.extend((query, 3) for query in query_batch)
+        batch_results = geocode_many(requests)
+        offset = 0
+        for (label, query_text, _query_batch), length in zip(chunk, lengths):
+            query_results = batch_results[offset : offset + length]
+            offset += length
+
+            best: GeocodeResult | None = None
+            best_score = -1.0
+            for results in query_results:
+                for candidate in results:
+                    if not primary_name_matches_label(candidate.display_name, query_text):
+                        continue
+                    cand_x, cand_y = candidate.mercator
+                    distance = sqrt((cand_x - city_x) ** 2 + (cand_y - city_y) ** 2)
+                    if distance > max_distance_m:
+                        continue
+                    score = candidate.importance - distance / max_distance_m
+                    if score > best_score:
+                        best = candidate
+                        best_score = score
+            if best is not None:
+                add_or_replace_control(controls, ControlPoint(label=label, geocode=best))
+                if stop_after_controls is not None and len(controls) >= stop_after_controls:
+                    return controls
     return controls
 
 
