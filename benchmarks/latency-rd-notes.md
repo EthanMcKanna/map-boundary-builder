@@ -216,6 +216,22 @@ regressions, during latency experiments.
   Area Zoox 0.094s, Houston Tesla 0.013s, Houston Waymo 0.116s, and Miami Waymo
   0.111s, all through `catalog-shape-match` with current-shape confidence caps
   and exact catalog bboxes.
+- Production deployment `dpl_DBUxQoadhf5RVmotskymbHSggxts` reported
+  `pipeline-d68b6e05753d3c01`, was aliased to `https://mapboundary.app`, and
+  kept `api/index.py` at 92.83 MB. The first cache-busted low-resolution
+  Nashville issue #5 POST succeeded through `catalog-shape-match:ocr-label-hint`
+  in 2.729s wall while the function warmed. Three following cache-busted,
+  uncached production repeats completed in 0.462s, 0.428s, and 0.466s wall with
+  timestamped server event spans of 0.043s, 0.037s, and 0.037s. All returned
+  catalog slug `nashville-waymo`, shape IoU 0.949070, margin 0.275103, and bbox
+  `[-86.8461084, 36.1089989, -86.6904545, 36.242681]`.
+- Production changed-market smoke after the same deployment covered the
+  user-confirmed stale-ground-truth markets through current catalog outputs:
+  Bay Area Tesla 0.969s wall, Bay Area Waymo 2.730s, Bay Area Zoox 2.660s,
+  Houston Tesla 0.890s, Houston Waymo 2.845s, and Miami Waymo 2.405s. All were
+  uncached, used `catalog-shape-match`, and returned the current catalog bboxes;
+  the higher wall times reflect Vercel instance variance rather than OCR/geocoder
+  fallback.
 - Current Los Angeles catalog head: the full pytest suite passed 75 tests and 9
   subtests. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
   bundled catalog `json.tool`, and `git diff --check` passed. The mistaken
