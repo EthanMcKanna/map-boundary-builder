@@ -182,6 +182,14 @@ regressions, during latency experiments.
   Bay Area Waymo, Houston Tesla, and Las Vegas Zoox remained on OCR. The scored
   full benchmark stayed clean at 8/8 scored, 7 `reference_mismatch` skipped,
   avg IoU 0.983, min IoU 0.943, in 4.16s wall.
+- Production deployment `dpl_BrUkaa4zLHGxJ3DorGnsVnc7JqAd` reported
+  `pipeline-66de065f3955a437` and `api/index.py` at 92.8 MB. Cache-busted
+  production smokes matched Miami Waymo via `catalog-shape-match` with
+  confidence 0.864 and 0.626s internal span, Bay Area Tesla via
+  `catalog-shape-match` with confidence 0.916 and 0.053s internal span, and
+  Houston Waymo via `catalog-shape-match` with confidence 0.865 and 0.520s
+  internal span. Houston Tesla correctly stayed on
+  `ocr-georeference:nominatim-label-fit`.
 - Current head: `PYTHONPATH=. .venv/bin/pytest -q`: 71 passed, 9 subtests
   passed. `compileall`, `node --check`, and `json.tool` passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final3-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final3-place-wait-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
