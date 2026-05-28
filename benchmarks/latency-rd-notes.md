@@ -57,14 +57,16 @@ screenshots are refreshed.
   of being written to temporary PNGs and read back. Small non-resized images
   stay on RapidOCR's original path because gray-fill fixtures regressed when
   forced through OpenCV-loaded arrays.
-- Los Angeles OCR-geocoding now has bundled Nominatim miss markers plus Photon
-  seed payloads for common screenshot labels. Fresh-cache LA geocoder batches
-  dropped from multi-second live calls to ~0.001s while preserving the same
-  bbox, confidence, and 0.943 full-benchmark IoU.
+- Los Angeles OCR-geocoding now has bundled Nominatim miss markers, Photon seed
+  payloads, and the OSM place payload needed by the place-control matcher.
+  Fresh-cache warm local LA dropped from roughly 17s to 0.939s while preserving
+  the same bbox, confidence, 20 controls, and 0.943 full-benchmark IoU.
 
 ## Current Validation
 
-- `PYTHONPATH=. .venv/bin/pytest`: 49 passed.
+- `PYTHONPATH=. .venv/bin/pytest`: 50 passed.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only los-angeles --out-dir out/la-places-seeded-focused-full`: PASS 1/1 active, IoU 0.943.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/la-places-seeded-drift-aware-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-seeded-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only los-angeles --out-dir out/la-seeded-focused-full`: PASS 1/1 active, IoU 0.943.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/la-seeded-drift-aware-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - After expanding the drift-aware fixture metadata for Houston/Bay Area provider
