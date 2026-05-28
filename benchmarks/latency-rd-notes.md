@@ -100,6 +100,19 @@ polygons and screenshots are refreshed.
   `https://mapboundary.app`.
 - Health after deploy: `pipeline-8fd0c71ed10e3b96`, runtime `vercel-python`,
   `tesseract: null`.
+- Deployment `dpl_F91Dk35znCEKB6eFmz1DL7EpWqio` deployed the
+  feature-distance road-refine cache key to `https://mapboundary.app`.
+- Health after deploy: `pipeline-691e8f992b33dd12`, runtime `vercel-python`,
+  `tesseract: null`.
+- Production Phoenix near-duplicate smoke after feature-distance road caching:
+  - Original Phoenix upload: HTTP 201, 24.14s wall, 19.99s event span,
+    confidence 0.917, 6 controls, road score 0.698507, georeference event
+    3.19s, export 0.20s.
+  - Single-pixel feature-equivalent variant: HTTP 201, 5.30s wall, 2.67s event
+    span, confidence 0.917, 6 controls, identical road score 0.698507,
+    georeference event 0.70s, export 0.21s. This confirms the warm
+    near-duplicate production path is much faster, while OCR/model warm state
+    also contributed to the total wall-clock drop.
 - Production unique-image smoke after bounded previews and no API mask artifact:
   - Orlando Waymo: HTTP 201, 12.12s wall, 8.63s event span, confidence 0.909,
     6 controls, export 0.148s, summary mask `null`, returned overlay
