@@ -78,6 +78,9 @@ screenshots are refreshed.
 - Fresh-cache warm active-suite profile after Nashville seeds and road batch 512:
   avg 0.662s, max 1.495s; Nashville 1.181s, Phoenix 1.495s, Los Angeles
   0.832s, all other active fixtures below 0.57s.
+- Production Nashville smoke on `dpl_HJ6mtJ6bsY8CnfVDirckSsS4vimd`
+  (`pipeline-bc7f59c6f98eb5cd`): HTTP 201, total wall 19.19s, timestamp
+  span 15.10s, confidence 0.821, 3 controls, road score 0.763, bbox unchanged.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only los-angeles --out-dir out/la-places-seeded-focused-full`: PASS 1/1 active, IoU 0.943.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-la-places-seeded-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/la-places-seeded-drift-aware-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.961, min IoU 0.931.
 - Production LA smoke on `dpl_ECWk6JTkvBc49hLgZkCyxijhVGQN`
