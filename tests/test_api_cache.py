@@ -31,10 +31,16 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(min_control_points=4),
         )
+        changed_preview_options = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(preview_max_dimension=1200),
+        )
 
         self.assertNotEqual(base, changed_image)
         self.assertNotEqual(base, changed_city)
         self.assertNotEqual(base, changed_options)
+        self.assertNotEqual(base, changed_preview_options)
 
     def test_run_cache_key_depends_on_pipeline_version(self) -> None:
         with patch("api.index.get_pipeline_version", return_value="pipeline-a"):

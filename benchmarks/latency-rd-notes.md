@@ -29,6 +29,9 @@ polygons and screenshots are refreshed.
 - Road refinement now samples up to 6000 road points by default instead of
   12000, preserving the full active suite while reducing Phoenix/Nashville
   focused benchmark time.
+- The Vercel API path now caps generated overlay previews at 1200px before
+  encoding the inline artifact, while CLI/debug outputs keep full-size overlays.
+  GeoJSON/extraction/georeferencing stay unchanged.
 
 ## Current Validation
 
@@ -36,6 +39,7 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-preview-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/preview-max-default-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
@@ -45,6 +49,10 @@ polygons and screenshots are refreshed.
 - Focused Phoenix/Nashville road-point cap sweep: 12000 points PASS 2/2 in
   6.52s, 6000 points PASS 2/2 in 5.04s with Phoenix IoU 0.983 and Nashville
   IoU 0.981.
+- Warm local preview generation A/B after caches are populated: Orlando export
+  stage dropped from 0.150s/full-size overlay to 0.047s/1200px overlay; Phoenix
+  export dropped from 0.153s to 0.055s. Inline overlay encoding dropped from
+  0.133s to 0.056s on Orlando and 0.107s to 0.060s on Phoenix.
 
 ## Production Smoke Evidence
 

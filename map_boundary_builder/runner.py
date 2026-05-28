@@ -32,6 +32,7 @@ class BoundaryBuildOptions:
     simplify_px: float = DEFAULT_SIMPLIFY_PX
     min_confidence: float = 0.55
     min_control_points: int = 3
+    preview_max_dimension: int | None = None
 
 
 @dataclass(frozen=True)
@@ -218,7 +219,13 @@ def build_boundary(
         mask_path = debug_path / f"{stem}.mask.png"
         overlay_path = debug_path / f"{stem}.overlay.png"
         write_mask_png(extraction.mask, mask_path)
-        write_overlay_png(image_path, extraction.mask, overlay_path, rgb=rgb)
+        write_overlay_png(
+            image_path,
+            extraction.mask,
+            overlay_path,
+            rgb=rgb,
+            max_dimension=opts.preview_max_dimension,
+        )
 
     summary = build_summary(
         data,

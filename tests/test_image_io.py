@@ -65,6 +65,18 @@ class OverlayPreviewTests(unittest.TestCase):
             self.assertLess(int(overlay[10, 10][1]), 240)
             self.assertEqual(tuple(overlay[0, 0]), (255, 255, 255))
 
+    def test_overlay_preview_can_be_bounded_for_inline_api_response(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "overlay.png"
+            rgb = np.full((40, 20, 3), 255, dtype=np.uint8)
+            mask = np.zeros((40, 20), dtype=bool)
+            mask[10:30, 5:15] = True
+
+            write_overlay_png("unused.png", mask, out_path, rgb=rgb, max_dimension=10)
+
+            with Image.open(out_path) as overlay:
+                self.assertEqual(overlay.size, (5, 10))
+
 
 if __name__ == "__main__":
     unittest.main()

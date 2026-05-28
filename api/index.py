@@ -113,6 +113,7 @@ class handler(BaseHTTPRequestHandler):
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
+            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_key = raw_run_result_cache_key(image_bytes, city, options)
@@ -398,6 +399,7 @@ def run_result_cache_key_for_hash(
         "simplify_px": round(float(options.simplify_px), 4),
         "min_confidence": round(float(options.min_confidence), 4),
         "min_control_points": int(options.min_control_points),
+        "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
