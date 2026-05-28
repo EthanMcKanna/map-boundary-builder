@@ -436,6 +436,13 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   current Vercel documentation says Fluid Compute memory/CPU is configured from
   project settings, not `vercel.json`; `maxDuration` can be configured for
   Python functions but affects timeout headroom rather than latency.
+- Vercel packaging now excludes `benchmarks/` and `tests/` from both source
+  upload (`.vercelignore`) and Python function bundling (`excludeFiles`). This
+  keeps evidence logs and test files out of production packages, reduces the
+  chance of notes-only commits affecting deployment payloads, and preserves the
+  existing `promo-video/`, cache, output, and virtualenv exclusions. Focused
+  pipeline/API cache tests passed 11 tests. Full pytest passed 90 tests and 9
+  subtests; `compileall`, `node --check`, and `git diff --check` passed.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

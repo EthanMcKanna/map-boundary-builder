@@ -4,10 +4,12 @@
 venv/
 .cache/
 .playwright-cli/
+benchmarks/
 out/
 output/
 input/
 promo-video/
+tests/
 *.log
 __pycache__/
 *.py[cod]
