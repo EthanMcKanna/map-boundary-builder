@@ -21,7 +21,7 @@ from .ocr import OcrLabel
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
-ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "64")))
+ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "256")))
 ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
