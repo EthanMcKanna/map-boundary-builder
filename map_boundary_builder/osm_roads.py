@@ -669,6 +669,13 @@ def seed_road_points(key: str) -> np.ndarray | None:
     return seed.get(key)
 
 
+def has_local_road_points(bbox: tuple[float, float, float, float] | None) -> bool:
+    if bbox is None:
+        return False
+    key = overpass_cache_file(bbox).stem
+    return seed_road_points(key) is not None or overpass_cache_file(bbox).exists()
+
+
 def load_road_points_seed() -> dict[str, np.ndarray]:
     global _ROAD_POINTS_SEED
     if _ROAD_POINTS_SEED is not None:

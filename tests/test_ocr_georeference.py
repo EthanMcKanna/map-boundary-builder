@@ -9,8 +9,10 @@ from PIL import Image
 import map_boundary_builder.ocr as ocr_module
 from map_boundary_builder.georeference import (
     CityContext,
+    ControlPoint,
     GeoreferenceResult,
     LabelGeocodeCandidate,
+    build_control_points,
     candidate_place_labels,
     direct_city_contexts_from_labels,
     detect_label_marker_dots,
@@ -256,6 +258,7 @@ class PlaceCandidateTests(unittest.TestCase):
     def test_place_query_text_removes_noise_and_repairs_aliases(self) -> None:
         self.assertEqual(place_query_text("edwood City acy"), "Redwood City")
         self.assertEqual(place_query_text("San Jos"), "San Jose")
+        self.assertEqual(place_query_text("Ersey Village"), "Jersey Village")
         self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")
 
@@ -325,6 +328,42 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertEqual(contexts[0].query, "Orlando")
         self.assertIn("Orlando", calls)
+
+    def test_clean_city_label_survives_noisy_road_context_labels(self) -> None:
+        labels = [
+            OcrLabel("W-Flamingo R Cameron St", x=170, y=88, width=245, height=100, confidence=97),
+            OcrLabel("Lindell-Rd CHARLESTON", x=165, y=136, width=210, height=90, confidence=98),
+            OcrLabel("WRussell Rd Patrick Ln", x=150, y=182, width=190, height=82, confidence=97),
+            OcrLabel("Badura Ave", x=140, y=220, width=115, height=55, confidence=99),
+            OcrLabel("FFALO", x=215, y=255, width=95, height=26, confidence=99),
+            OcrLabel("Las Vegas", x=387, y=267, width=102, height=23, confidence=99),
+        ]
+        calls: list[str] = []
+
+        def fake_geocode(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append(query)
+            if query == "Las Vegas":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-115.1484,
+                        lat=36.1674,
+                        display_name="Las Vegas, Clark County, Nevada, United States",
+                        bbox=(-115.406575, 36.129554, -115.062066, 36.401481),
+                        importance=0.724,
+                        place_type="city",
+                    )
+                ]
+            return []
+
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_geocode),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode),
+        ):
+            contexts = direct_city_contexts_from_labels(labels)
+
+        self.assertEqual(contexts[0].query, "Las Vegas")
+        self.assertIn("Las Vegas", calls)
 
     def test_broad_region_label_can_be_direct_context(self) -> None:
         labels = [
@@ -572,6 +611,51 @@ class RoadContextRankingTests(unittest.TestCase):
 
 
 class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_ready_place_controls_skip_live_geocoded_control_lookup(self) -> None:
+        center = GeocodeResult(
+            label="Las Vegas",
+            lon=-115.1484,
+            lat=36.1674,
+            display_name="Las Vegas, Clark County, Nevada, United States",
+            bbox=(-115.406575, 36.129554, -115.062066, 36.401481),
+            importance=0.724,
+            place_type="city",
+        )
+        labels = [
+            OcrLabel("Las Vegas", x=390, y=267, width=102, height=23, confidence=99),
+            OcrLabel("Huntridge", x=250, y=180, width=92, height=24, confidence=98),
+        ]
+        place_controls = [
+            ControlPoint(
+                label=OcrLabel(name, x=100 + index * 20, y=100 + index * 16, width=80, height=20, confidence=95),
+                geocode=GeocodeResult(
+                    label=name,
+                    lon=-115.20 + index * 0.01,
+                    lat=36.10 + index * 0.01,
+                    display_name=f"{name}, suburb",
+                    bbox=None,
+                    importance=0.5,
+                ),
+            )
+            for index, name in enumerate(("Huntridge", "Charleston Heights", "Angel Park Lindell"))
+        ]
+        geocode_network_modes: list[bool] = []
+
+        def fake_geocoded_controls(*args, allow_network: bool = True, **kwargs):
+            geocode_network_modes.append(allow_network)
+            if allow_network:
+                raise AssertionError("live geocoding should not run when place controls are ready")
+            return []
+
+        with (
+            patch("map_boundary_builder.georeference.build_osm_place_control_points", return_value=place_controls),
+            patch("map_boundary_builder.georeference.build_geocoded_control_points", side_effect=fake_geocoded_controls),
+        ):
+            controls = build_control_points(labels, "Las Vegas", center)
+
+        self.assertEqual(controls, place_controls)
+        self.assertEqual(geocode_network_modes, [False])
+
     def test_tight_five_control_label_fit_skips_road_refinement(self) -> None:
         context = CityContext(
             query="Dallas",
@@ -615,18 +699,62 @@ class GeoreferenceFallbackTests(unittest.TestCase):
             inferred=True,
         )
 
-        self.assertTrue(
-            should_try_road_refinement(
-                context,
-                meters_per_pixel=10.79,
-                inlier_count=3,
-                residual_median_m=385.6,
-                residual_p90_m=425.5,
-                spread=507150.0,
-                width=2400,
-                height=2400,
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertTrue(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=10.79,
+                    inlier_count=3,
+                    residual_median_m=385.6,
+                    residual_p90_m=425.5,
+                    spread=507150.0,
+                    width=2400,
+                    height=2400,
+                )
             )
+
+    def test_sparse_good_label_fit_skips_live_road_refinement_without_local_roads(self) -> None:
+        context = CityContext(
+            query="Las Vegas",
+            center=GeocodeResult(
+                label="Las Vegas",
+                lon=-115.1484,
+                lat=36.1674,
+                display_name="Las Vegas, Clark County, Nevada, United States",
+                bbox=(-115.406575, 36.129554, -115.062066, 36.401481),
+                importance=0.724,
+                place_type="city",
+            ),
+            inferred=True,
         )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=False):
+            self.assertFalse(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=40.4,
+                    inlier_count=3,
+                    residual_median_m=0.0,
+                    residual_p90_m=0.0,
+                    spread=65000.0,
+                    width=393,
+                    height=523,
+                )
+            )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertTrue(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=40.4,
+                    inlier_count=3,
+                    residual_median_m=0.0,
+                    residual_p90_m=0.0,
+                    spread=65000.0,
+                    width=393,
+                    height=523,
+                )
+            )
 
     def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]

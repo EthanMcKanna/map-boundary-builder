@@ -17,6 +17,7 @@ from .ocr import OcrLabel, extract_ocr_labels
 from .osm_places import PlacePoint, load_place_points
 from .osm_roads import (
     RoadMatchResult,
+    has_local_road_points,
     image_feature_distance,
     load_road_points,
     load_road_segments,
@@ -30,6 +31,12 @@ MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
+DIRECT_CONTEXT_QUERY_LIMIT = 6
+DIRECT_CONTEXT_MAX_QUERIES = 10
+DIRECT_CONTEXT_LIVE_QUERY_LIMIT = 3
+DIRECT_CONTEXT_MAX_LIVE_QUERIES = 5
+PROMOTED_DIRECT_CONTEXT_LABEL_SCORE = 100.0
+STRONG_DIRECT_CONTEXT_MIN_SCORE = 115.0
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "6")))
 GEOCODE_LABEL_LOOKAHEAD = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD", "3")))
@@ -96,6 +103,13 @@ POI_DESCRIPTOR_TOKENS = {
     "sunset",
     "tpc",
 }
+ROAD_CONTEXT_CUE_RE = re.compile(
+    r"(?:^|[^a-z0-9])"
+    r"(?:[nesw]|rd|road|st|street|ave|av|avenue|blvd|bivd|boulevard|"
+    r"ln|lane|dr|drive|pkwy|parkway|hwy|highway|ct|court|cir|circle|wy|way)"
+    r"(?:$|[^a-z0-9])",
+    re.IGNORECASE,
+)
 OCR_PLACE_TOKEN_ALIASES = {
     "anor": "manor",
     "arverdale": "carverdale",
@@ -107,6 +121,7 @@ OCR_PLACE_TOKEN_ALIASES = {
     "daklang": "oakland",
     "dall": "dallas",
     "edwood": "redwood",
+    "ersey": "jersey",
     "fran": "francisco",
     "frankisco": "francisco",
     "fransisco": "francisco",
@@ -1056,7 +1071,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         if position_key in used_positions:
             continue
         used_positions.add(position_key)
-        score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
+        score = direct_context_label_score(label)
         noisy_poi_query = is_noisy_poi_query(tokens)
         if len(tokens) <= 2 and not noisy_poi_query:
             query_scores[query] = query_scores.get(query, 0.0) + score
@@ -1076,14 +1091,23 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             query_scores[token_query] = query_scores.get(token_query, 0.0) + score * token_bonus
             query_evidence.setdefault(token_query, set()).add(label.text)
 
-    ranked_queries = sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:6]
+    promoted_queries = promoted_direct_context_queries(labels, query_scores)
+    ranked_queries = append_ranked_context_queries(
+        sorted(query_scores.items(), key=lambda item: item[1], reverse=True)[:DIRECT_CONTEXT_QUERY_LIMIT],
+        promoted_queries,
+        cap=DIRECT_CONTEXT_MAX_QUERIES,
+    )
     scored_contexts = score_direct_city_context_queries(
         ranked_queries,
         geocode_many([(query, 2) for query, _score in ranked_queries], allow_network=False),
         query_evidence,
     )
     if not scored_contexts:
-        live_ranked_queries = ranked_queries[:3]
+        live_ranked_queries = append_ranked_context_queries(
+            ranked_queries[:DIRECT_CONTEXT_LIVE_QUERY_LIMIT],
+            promoted_queries,
+            cap=DIRECT_CONTEXT_MAX_LIVE_QUERIES,
+        )
         scored_contexts = score_direct_city_context_queries(
             live_ranked_queries,
             geocode_many([(query, 2) for query, _score in live_ranked_queries]),
@@ -1094,12 +1118,80 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         return []
     scored_contexts.sort(key=lambda item: item[0], reverse=True)
     top_score, top_context = scored_contexts[0]
-    if top_score < 160.0:
+    if top_score < 160.0 and not is_strong_direct_admin_context(top_score, top_context):
         return []
     close_competitors = [context for score, context in scored_contexts[1:] if score >= top_score * 0.62]
     if close_competitors and not all(context_covers_context(top_context, competitor) for competitor in close_competitors):
         return []
     return [top_context]
+
+
+def direct_context_label_score(label: OcrLabel) -> float:
+    return label.confidence + min(35.0, (label.width * label.height) / 650.0)
+
+
+def promoted_direct_context_queries(
+    labels: list[OcrLabel],
+    query_scores: dict[str, float],
+) -> list[tuple[str, float]]:
+    promoted: dict[str, float] = {}
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        query = place_query_text(label.text)
+        tokens = place_tokens(query)
+        if not is_promotable_direct_context_label(label, query, tokens):
+            continue
+        score = max(query_scores.get(query, 0.0), direct_context_label_score(label))
+        promoted[query] = max(promoted.get(query, 0.0), score)
+    return sorted(promoted.items(), key=lambda item: item[1], reverse=True)
+
+
+def is_promotable_direct_context_label(label: OcrLabel, query: str, tokens: set[str]) -> bool:
+    if not query or tokens & CITY_INFERENCE_STOP_TOKENS:
+        return False
+    if len(tokens) != 2 and not (len(tokens) == 3 and "city" in tokens):
+        return False
+    if tokens <= GENERIC_SINGLE_TOKENS:
+        return False
+    if is_noisy_poi_query(tokens):
+        return False
+    if ROAD_CONTEXT_CUE_RE.search(label.text):
+        return False
+    return direct_context_label_score(label) >= PROMOTED_DIRECT_CONTEXT_LABEL_SCORE
+
+
+def append_ranked_context_queries(
+    ranked_queries: list[tuple[str, float]],
+    promoted_queries: list[tuple[str, float]],
+    *,
+    cap: int,
+) -> list[tuple[str, float]]:
+    merged: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for query, score in [*ranked_queries, *promoted_queries]:
+        key = query.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append((query, score))
+        if len(merged) >= cap:
+            break
+    return merged
+
+
+def is_strong_direct_admin_context(score: float, context: CityContext) -> bool:
+    if score < STRONG_DIRECT_CONTEXT_MIN_SCORE:
+        return False
+    tokens = place_tokens(context.query)
+    if len(tokens) < 2:
+        return False
+    if context.center.place_type.lower() not in ADMIN_CONTEXT_TYPES:
+        return False
+    if context.center.importance < 0.58:
+        return False
+    if geocode_bbox_span_m(context.center) < 24000.0:
+        return False
+    evidence_tokens = [place_tokens(place_query_text(evidence)) for evidence in context.evidence]
+    return any(tokens == tokens_from_evidence for tokens_from_evidence in evidence_tokens)
 
 
 def score_direct_city_context_queries(
@@ -2192,6 +2284,30 @@ def build_control_points(
             stop_after_controls=6 if merge_control_sources else 4,
             max_labels=max_geocoded_labels,
             prefer_large_text=merge_control_sources,
+            allow_network=False,
+        )
+        if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
+            place_future.cancel()
+            return geocoded_controls
+
+        if place_controls is not None and not merge_control_sources and len(place_controls) >= 3:
+            return place_controls
+
+        if place_controls is not None and merge_control_sources:
+            merged_controls = dedupe_control_points([*geocoded_controls, *place_controls])
+            if has_decisive_control_fit(merged_controls):
+                return merged_controls
+            if len(merged_controls) >= 2:
+                return merged_controls
+
+        geocoded_controls = build_geocoded_control_points(
+            labels,
+            city,
+            city_center,
+            stop_after_controls=6 if merge_control_sources else 4,
+            max_labels=max_geocoded_labels,
+            prefer_large_text=merge_control_sources,
+            allow_network=True,
         )
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
             place_future.cancel()
@@ -2224,6 +2340,7 @@ def build_geocoded_control_points(
     stop_after_controls: int | None = None,
     max_labels: int = MAX_GEOCODED_LABELS,
     prefer_large_text: bool = False,
+    allow_network: bool = True,
 ) -> list[ControlPoint]:
     city_x, city_y = city_center.mercator
     max_distance_m = 70000.0
@@ -2272,7 +2389,7 @@ def build_geocoded_control_points(
         for _label, _query_text, query_batch in chunk:
             lengths.append(len(query_batch))
             requests.extend((query, 3) for query in query_batch)
-        batch_results = geocode_many(requests)
+        batch_results = geocode_many(requests, allow_network=allow_network)
         offset = 0
         for (label, query_text, _query_batch), length in zip(chunk, lengths):
             query_results = batch_results[offset : offset + length]
@@ -2896,6 +3013,13 @@ def should_try_road_refinement(
     if inlier_count <= 2:
         return False
     if city_context.query == "Inferred map area" or geocode_bbox_span_m(city_context.center) >= 85000.0:
+        return False
+    if (
+        inlier_count <= 4
+        and residual_median_m <= 900.0
+        and residual_p90_m <= 1800.0
+        and not has_local_road_points(city_context.center.bbox)
+    ):
         return False
     image_area = max(float(width * height), 1.0)
     if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 1200.0:

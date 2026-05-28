@@ -124,9 +124,41 @@ regressions, during latency experiments.
   6000. Focused Phoenix/Nashville/Miami probes preserved bbox, confidence, and
   road-refined source while cutting road-refine time; a 3000-point probe was
   rejected because it shifted Nashville's bbox.
+- Direct city-context inference now preserves clean high-confidence city labels
+  even when OCR road-name noise outranks them, with an exact admin-city lower
+  threshold for those promoted labels. This fixes Zoox Las Vegas selecting no
+  context despite a readable `Las Vegas` label.
+- Ready cached OSM-place controls now win before live geocoded control lookup,
+  and sparse good label fits skip optional road refinement when no local road
+  points are bundled or cached. This keeps useful seeded road refinement for
+  Phoenix/Nashville/Miami while avoiding live geocoder/Overpass latency on
+  already-good sparse label fits such as Las Vegas.
+- Las Vegas now has a bundled Nominatim city seed; Bay Area Zoox combined OCR
+  misses (`Colevalley Castro`, `Castro Mission`) are explicit geocoder misses;
+  and `Ersey Village` is repaired to `Jersey Village` for Houston OCR.
 
 ## Current Validation
 
+- Current head: `PYTHONPATH=. .venv/bin/pytest -q`: 71 passed, 9 subtests
+  passed. `compileall`, `node --check`, and `json.tool` passed.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-final-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/final-las-vegas-context-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- Fresh-cache changed-service-area no-network smoke after the Las Vegas/context
+  changes had zero attempted geocoder/Overpass `urlopen` calls:
+  - Bay Area Waymo 0.575s, confidence 0.877, 15 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Bay Area Tesla 0.086s, confidence 0.916, 5 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Bay Area Zoox 0.345s, confidence 0.930, 6 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Houston Waymo 0.537s, confidence 0.865, 7 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Houston Tesla 0.084s, confidence 0.853, 3 controls,
+    `ocr-georeference:nominatim-label-fit`.
+  - Miami Waymo 0.724s, confidence 0.864, 6 controls,
+    `ocr-georeference:nominatim-label-fit+osm-road-refine`, road score
+    0.681518.
+  - Las Vegas Zoox 0.166s, confidence 0.767, 3 controls,
+    `ocr-georeference:nominatim-label-fit`.
 - After confirming Houston, Miami, and Bay Area are changed-service-area data
   debt, `PYTHONPATH=. .venv/bin/pytest -q`: 65 passed, 9 subtests passed.
 - `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`,
