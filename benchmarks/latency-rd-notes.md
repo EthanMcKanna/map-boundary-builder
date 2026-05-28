@@ -218,6 +218,18 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Zoox, Houston Tesla/Waymo, and Miami Waymo; all succeeded with
   OCR/georeference sources and `catalog_slug: null`, proving the stale catalog
   entries are not used by default.
+- Production stale-catalog guard deployment `dpl_CrmqczGPjnqdKEhsPoeURn8NGWKx`
+  was aliased to `https://mapboundary.app`, reported
+  `pipeline-96ee85e140a9929f`, and kept `api/index.py` at 92.82 MB. Production
+  stale-market smoke `out/prod-stale-catalog-disabled-20260528-155614/` covered
+  Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo; all six were
+  uncached, returned `catalog_slug: null`, and used OCR/georeference sources.
+  Internal event spans were 1.752s, 4.832s, 3.588s, 0.556s, 4.305s, and 6.244s
+  respectively. Active fast-path production smoke
+  `out/prod-active-fastpath-20260528-155700/` kept the low-resolution Nashville
+  issue #5 case on `catalog-shape-match:ocr-label-hint` in 0.862s wall /
+  0.464s event span and Los Angeles on `catalog-shape-match` in 2.470s wall /
+  0.244s event span.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
