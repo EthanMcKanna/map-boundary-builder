@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
 import io
@@ -23,7 +23,13 @@ CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "512")))
 ROAD_MATCH_MAX_POINTS = max(500, int(os.environ.get("MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS", "6000")))
-ROAD_REFINE_CACHE_VERSION = "road-refine-v3"
+ROAD_REFINE_COARSE_FEATURE_SCALE = max(1.0, float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_COARSE_FEATURE_SCALE", "4")))
+ROAD_REFINE_FINE_FEATURE_SCALE = max(1.0, float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE", "2")))
+ROAD_REFINE_FULL_FALLBACK_MIN_SCORE = max(
+    0.0,
+    float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE", "0.68")),
+)
+ROAD_REFINE_CACHE_VERSION = "road-refine-v4"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
 _ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
@@ -66,48 +72,62 @@ def refine_transform_with_osm_roads(
     best_count = base_count
     best_transform = initial
 
-    if lock_scale:
-        coarse_scale_multipliers = np.array([1.0])
-        coarse_rotation_offsets = np.deg2rad(np.linspace(-1.0, 1.0, 5))
-        coarse_offset_meters = np.linspace(-2400.0, 2400.0, 13)
-        fine_scale_multipliers = np.array([1.0])
-        fine_rotation_offsets = np.deg2rad(np.linspace(-0.5, 0.5, 5))
-        fine_offset_meters = np.linspace(-500.0, 500.0, 5)
-    else:
-        coarse_scale_multipliers = np.linspace(0.82, 1.12, 13)
-        coarse_rotation_offsets = np.deg2rad(np.linspace(-4.0, 4.0, 9))
-        coarse_offset_meters = np.linspace(-1600.0, 1600.0, 9)
-        fine_scale_multipliers = np.linspace(0.97, 1.03, 7)
-        fine_rotation_offsets = np.deg2rad(np.linspace(-1.0, 1.0, 7))
-        fine_offset_meters = np.linspace(-400.0, 400.0, 5)
-
-    coarse = search_near_transform(
+    grids = road_refine_search_grids(lock_scale=lock_scale)
+    coarse = search_near_transform_at_feature_scale(
         road_points,
         feature_distance,
         initial,
         base_tx,
         base_ty,
-        scale_multipliers=coarse_scale_multipliers,
-        rotation_offsets=coarse_rotation_offsets,
-        offset_meters=coarse_offset_meters,
+        feature_scale=ROAD_REFINE_COARSE_FEATURE_SCALE,
+        scale_multipliers=grids["coarse_scale_multipliers"],
+        rotation_offsets=grids["coarse_rotation_offsets"],
+        offset_meters=grids["coarse_offset_meters"],
         min_count=1000,
     )
     if coarse is not None:
         best_score, best_count, best_transform = coarse
         best_tx, best_ty = lonlat_to_mercator(best_transform.lon, best_transform.lat)
-        fine = search_near_transform(
+        fine = search_near_transform_at_feature_scale(
             road_points,
             feature_distance,
             best_transform,
             best_tx,
             best_ty,
-            scale_multipliers=fine_scale_multipliers,
-            rotation_offsets=fine_rotation_offsets,
-            offset_meters=fine_offset_meters,
+            feature_scale=ROAD_REFINE_FINE_FEATURE_SCALE,
+            scale_multipliers=grids["fine_scale_multipliers"],
+            rotation_offsets=grids["fine_rotation_offsets"],
+            offset_meters=grids["fine_offset_meters"],
             min_count=1000,
         )
         if fine is not None and fine[0] > best_score:
             best_score, best_count, best_transform = fine
+        polish_tx, polish_ty = lonlat_to_mercator(best_transform.lon, best_transform.lat)
+        polish = search_near_transform(
+            road_points,
+            feature_distance,
+            best_transform,
+            polish_tx,
+            polish_ty,
+            scale_multipliers=grids["polish_scale_multipliers"],
+            rotation_offsets=grids["polish_rotation_offsets"],
+            offset_meters=grids["polish_offset_meters"],
+            min_count=1000,
+        )
+        if polish is not None and polish[0] > best_score:
+            best_score, best_count, best_transform = polish
+
+    if best_score < ROAD_REFINE_FULL_FALLBACK_MIN_SCORE:
+        full_search = full_resolution_road_search(
+            road_points,
+            feature_distance,
+            initial,
+            base_tx,
+            base_ty,
+            grids=grids,
+        )
+        if full_search is not None and full_search[0] > best_score:
+            best_score, best_count, best_transform = full_search
 
     if best_score < max(base_score + 0.04, 0.32):
         return None
@@ -153,9 +173,153 @@ def road_refine_cache_key(
         f"{initial.rotation_radians:.10f}",
         f"{initial.confidence:.6f}",
         f"road-points={ROAD_MATCH_MAX_POINTS}",
+        f"coarse-feature-scale={ROAD_REFINE_COARSE_FEATURE_SCALE:.3f}",
+        f"fine-feature-scale={ROAD_REFINE_FINE_FEATURE_SCALE:.3f}",
+        f"full-fallback-min-score={ROAD_REFINE_FULL_FALLBACK_MIN_SCORE:.3f}",
         "lock" if lock_scale else "free",
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def road_refine_search_grids(*, lock_scale: bool) -> dict[str, np.ndarray]:
+    if lock_scale:
+        return {
+            "coarse_scale_multipliers": np.array([1.0]),
+            "coarse_rotation_offsets": np.deg2rad(np.linspace(-1.0, 1.0, 5)),
+            "coarse_offset_meters": np.linspace(-2400.0, 2400.0, 13),
+            "fine_scale_multipliers": np.array([1.0]),
+            "fine_rotation_offsets": np.deg2rad(np.linspace(-0.5, 0.5, 5)),
+            "fine_offset_meters": np.linspace(-500.0, 500.0, 5),
+            "polish_scale_multipliers": np.array([1.0]),
+            "polish_rotation_offsets": np.deg2rad(np.linspace(-0.5, 0.5, 5)),
+            "polish_offset_meters": np.linspace(-200.0, 200.0, 5),
+        }
+    return {
+        "coarse_scale_multipliers": np.linspace(0.82, 1.12, 13),
+        "coarse_rotation_offsets": np.deg2rad(np.linspace(-4.0, 4.0, 9)),
+        "coarse_offset_meters": np.linspace(-1600.0, 1600.0, 9),
+        "fine_scale_multipliers": np.linspace(0.97, 1.03, 7),
+        "fine_rotation_offsets": np.deg2rad(np.linspace(-1.0, 1.0, 7)),
+        "fine_offset_meters": np.linspace(-400.0, 400.0, 5),
+        "polish_scale_multipliers": np.linspace(0.98, 1.02, 5),
+        "polish_rotation_offsets": np.deg2rad(np.linspace(-0.5, 0.5, 5)),
+        "polish_offset_meters": np.linspace(-200.0, 200.0, 5),
+    }
+
+
+def full_resolution_road_search(
+    road_points: np.ndarray,
+    feature_distance: np.ndarray,
+    initial: GeoreferenceTransform,
+    base_tx: float,
+    base_ty: float,
+    *,
+    grids: dict[str, np.ndarray],
+) -> tuple[float, int, GeoreferenceTransform] | None:
+    coarse = search_near_transform(
+        road_points,
+        feature_distance,
+        initial,
+        base_tx,
+        base_ty,
+        scale_multipliers=grids["coarse_scale_multipliers"],
+        rotation_offsets=grids["coarse_rotation_offsets"],
+        offset_meters=grids["coarse_offset_meters"],
+        min_count=1000,
+    )
+    if coarse is None:
+        return None
+    best_score, best_count, best_transform = coarse
+    best_tx, best_ty = lonlat_to_mercator(best_transform.lon, best_transform.lat)
+    fine = search_near_transform(
+        road_points,
+        feature_distance,
+        best_transform,
+        best_tx,
+        best_ty,
+        scale_multipliers=grids["fine_scale_multipliers"],
+        rotation_offsets=grids["fine_rotation_offsets"],
+        offset_meters=grids["fine_offset_meters"],
+        min_count=1000,
+    )
+    if fine is not None and fine[0] > best_score:
+        return fine
+    return best_score, best_count, best_transform
+
+
+def search_near_transform_at_feature_scale(
+    road_points: np.ndarray,
+    feature_distance: np.ndarray,
+    base_transform: GeoreferenceTransform,
+    base_tx: float,
+    base_ty: float,
+    *,
+    feature_scale: float,
+    scale_multipliers: np.ndarray,
+    rotation_offsets: np.ndarray,
+    offset_meters: np.ndarray,
+    min_count: int,
+) -> tuple[float, int, GeoreferenceTransform] | None:
+    if feature_scale <= 1.0:
+        return search_near_transform(
+            road_points,
+            feature_distance,
+            base_transform,
+            base_tx,
+            base_ty,
+            scale_multipliers=scale_multipliers,
+            rotation_offsets=rotation_offsets,
+            offset_meters=offset_meters,
+            min_count=min_count,
+        )
+
+    scaled_feature_distance = downsample_feature_distance(feature_distance, feature_scale)
+    scaled_base_transform = scale_transform_for_feature_distance(base_transform, feature_scale)
+    result = search_near_transform(
+        road_points,
+        scaled_feature_distance,
+        scaled_base_transform,
+        base_tx,
+        base_ty,
+        scale_multipliers=scale_multipliers,
+        rotation_offsets=rotation_offsets,
+        offset_meters=offset_meters,
+        min_count=min_count,
+    )
+    if result is None:
+        return None
+    _, _, scaled_transform = result
+    transform = unscale_transform_for_feature_distance(scaled_transform, feature_scale)
+    score, count = score_georeference_transform(road_points, feature_distance, transform)
+    if count < min_count:
+        return None
+    return score, count, transform
+
+
+def downsample_feature_distance(feature_distance: np.ndarray, factor: float) -> np.ndarray:
+    if factor <= 1.0:
+        return feature_distance
+    height, width = feature_distance.shape
+    size = (
+        max(1, int(round(width / factor))),
+        max(1, int(round(height / factor))),
+    )
+    scaled = cv2.resize(feature_distance, size, interpolation=cv2.INTER_AREA)
+    return (scaled / float(factor)).astype(np.float32, copy=False)
+
+
+def scale_transform_for_feature_distance(
+    transform: GeoreferenceTransform,
+    factor: float,
+) -> GeoreferenceTransform:
+    return replace(transform, meters_per_pixel=transform.meters_per_pixel * factor)
+
+
+def unscale_transform_for_feature_distance(
+    transform: GeoreferenceTransform,
+    factor: float,
+) -> GeoreferenceTransform:
+    return replace(transform, meters_per_pixel=transform.meters_per_pixel / factor)
 
 
 def read_road_refine_cache(cache_key: str) -> RoadMatchResult | None:

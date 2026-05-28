@@ -145,12 +145,14 @@ class RoadScoringTests(unittest.TestCase):
                     patch.object(osm_roads, "search_near_transform", return_value=(0.6, 1200, refined)) as search,
                 ):
                     first = refine_transform_with_osm_roads(rgb, center, initial)
+                    first_counts = (load_points.call_count, score.call_count, search.call_count)
                     second = refine_transform_with_osm_roads(noisy, center, initial)
 
                 self.assertEqual(first, second)
-                self.assertEqual(load_points.call_count, 1)
-                self.assertEqual(score.call_count, 1)
-                self.assertEqual(search.call_count, 2)
+                self.assertGreater(first_counts[0], 0)
+                self.assertGreater(first_counts[1], 0)
+                self.assertGreater(first_counts[2], 0)
+                self.assertEqual((load_points.call_count, score.call_count, search.call_count), first_counts)
                 self.assertEqual(len(list(Path(cache_dir).glob("*.json"))), 1)
             finally:
                 osm_roads._ROAD_REFINE_MEMORY_CACHE.clear()

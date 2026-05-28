@@ -75,10 +75,31 @@ screenshots are refreshed.
   scoring batch. Focused Nashville/Phoenix probes preserved road scores and
   confidence while reducing the two-fixture local timing from 2.97s at batch
   256 to 2.85s at batch 512.
+- Road refinement now searches coarse and fine candidates on downsampled road
+  feature-distance fields, then polishes the winning basin on the full-resolution
+  feature field and falls back to the old full-resolution search for weak
+  matches. Against `34cdeed`, Phoenix improved from 0.983 to 0.985 IoU and
+  Nashville from 0.981 to 0.986 IoU while reducing the road-georeference stage
+  on both focused fresh-cache probes.
 
 ## Current Validation
 
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
+- Focused hybrid road-refinement A/B against `34cdeed`:
+  - baseline Phoenix 1.761s / 0.731s georef / 0.983 IoU / road score 0.698507;
+    hybrid Phoenix 1.559s / 0.602s georef / 0.985 IoU / road score 0.718119.
+  - baseline Nashville 1.247s / 0.676s georef / 0.981 IoU / road score
+    0.763171; hybrid Nashville 1.135s / 0.553s georef / 0.986 IoU / road
+    score 0.770739.
+  - repeat baseline Phoenix 1.643s / 0.673s georef and Nashville 1.176s /
+    0.659s georef; repeat hybrid Phoenix 1.582s / 0.607s georef and Nashville
+    1.066s / 0.532s georef with the same improved IoUs and road scores.
+- Fresh-cache warm active-suite profile after hybrid road refinement: avg
+  0.619s, max 1.300s; Phoenix 1.300s with 0.985 IoU, Nashville 1.000s with
+  0.986 IoU, Los Angeles 0.849s, all other active fixtures below 0.55s.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-hybrid-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/hybrid-road-focused`: PASS 2/2 active, avg IoU 0.985, min IoU 0.985.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-hybrid-extraction-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode extraction --out-dir out/hybrid-road-extraction`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.981, min IoU 0.925.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-hybrid-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/hybrid-road-full`: PASS 8/8 active, 7 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Local Phoenix transparent-upload A/B against `58d8221`: baseline fresh-cache
   warm runs were 1.772s and 1.704s; the in-memory alpha path was 1.670s and
   1.626s with identical bbox, geometry hash `b446d2b20bebd0e1`, confidence
