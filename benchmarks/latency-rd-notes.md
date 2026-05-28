@@ -339,6 +339,15 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.58s, and
   `out/benchmark-catalog-scaled-no-catalog-city-20260528-continue/full-report.json`
   passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.50s.
+- Production catalog-scaled deployment `dpl_C993qiU2JYypGVgtYrCjk8iTFZZh`
+  was aliased to `https://mapboundary.app` and reported
+  `pipeline-515414da4702cdfb`. Cache-busted Phoenix with `city=Phoenix` stayed
+  on `catalog-shape-match` with `phoenix-waymo`, exact catalog bbox, and server
+  event spans of 0.624s cold and 0.444s warm-busted, improving on the prior
+  city-fastpath production spans of 0.688s and 0.519s. Production stale checks
+  for Houston Tesla, Miami Waymo, and Bay Area Tesla returned `catalog_slug:
+  null` and OCR/georeference sources, preserving the user-confirmed stale-market
+  guard.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
