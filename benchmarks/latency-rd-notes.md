@@ -207,6 +207,16 @@ regressions, during latency experiments.
   IoU 1.0 against the current OCR baseline because current-verified entries
   return exact verified geometry after matching. Bay Area Waymo and Las Vegas
   Zoox correctly stayed on OCR.
+- Production deployment `dpl_HgroMZbD67NmTEeL4jabF6e9zEDp` reported
+  `pipeline-72b0f2c4fe22282c` and kept `api/index.py` at 92.8 MB.
+  Cache-busted Houston Tesla now uses `catalog-shape-match` with confidence
+  0.853, catalog IoU 0.970925, and the exact current OCR bbox. The first live
+  smoke returned in 1.909s wall / 0.166s internal generation, down from the
+  previous OCR-path evidence at 2.084s wall / 1.302s internal; warmed
+  cache-busted repeats returned in 0.899s and 0.741s wall with 0.056s internal
+  generation spans. A cache-busted Bay Area Waymo guard check stayed on
+  `ocr-georeference:nominatim-label-fit`, proving the rotation search did not
+  force a weak Bay Area catalog match.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.
