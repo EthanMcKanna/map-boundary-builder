@@ -40,7 +40,7 @@ polygons and screenshots are refreshed.
 - OCR fallback now reuses the initial RapidOCR words instead of rerunning the
   same RapidOCR pass when Tesseract is unavailable or when Tesseract fallback
   still produces too few labels.
-- RapidOCR detector `limit_side_len` now defaults to 640 instead of the upstream
+- RapidOCR detector `limit_side_len` now defaults to 608 instead of the upstream
   736. The setting is included in OCR cache keys through
   `MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN`.
 - Road-refinement cache keys now hash the derived road-feature distance field
@@ -59,6 +59,8 @@ polygons and screenshots are refreshed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-f32-cachev2-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-f32-cachev2-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-rapid-dedupe-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-dedupe-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-det640-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-det640-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-det608-full-XXXXXX) MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN=608 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-det608-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-det608-default-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-det608-default-full`: PASS 11/11 active, avg IoU 0.962, min IoU 0.931 with detector 608 as the code default.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-focused-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --out-dir out/road-feature-cache-focused`: PASS 2/2 active, avg IoU 0.982, min IoU 0.981; Phoenix stayed 0.983 and Nashville stayed 0.981.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road-feature-cache-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-feature-cache-full`: PASS 11/11 active, 4 skipped data-drift fixtures, avg IoU 0.962, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
@@ -88,6 +90,10 @@ polygons and screenshots are refreshed.
   0.472s versus 0.451s; Phoenix was effectively flat in the repeated run. A
   focused full-pipeline A/B had equal IoUs but noisy wall time, so this is
   treated as a CPU reduction rather than a guaranteed wall-clock breakthrough.
+- RapidOCR 608 detector-limit probes with identical sampled label counts:
+  Orlando averaged 0.493s at 640 versus 0.464s at 608; Phoenix averaged 0.786s
+  versus 0.774s; Tesla Bay Area was noise-flat at 0.069s versus 0.074s. The
+  full-suite geometry stayed at avg IoU 0.962 and min IoU 0.931.
 - Feature-distance road-refine cache proof: a synthetic near-duplicate whose
   raw RGB changed but whose road-feature distance field stayed identical reused
   the cached result. With an intentionally slow patched road search, the first
@@ -155,6 +161,10 @@ polygons and screenshots are refreshed.
 - Skipping road refinement is not safe: Nashville without road refinement fell
   to 0.796 IoU, and Phoenix without road refinement fell to 0.903 IoU. Rejected
   because the road stage is still carrying important georeference accuracy.
+- RapidOCR detector 512 passed the coarse benchmark thresholds but dropped Bay
+  Area Tesla to 0.862 IoU and Houston Tesla to 0.912 IoU. Detector 576 and 592
+  also slipped Houston Tesla to 0.944 and 0.943 respectively. Rejected because
+  the goal is no accuracy reduction, not just passing the floor.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 
