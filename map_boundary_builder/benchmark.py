@@ -9,11 +9,11 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from pyproj import Transformer
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import transform
 
 from .extract import extract_service_area
+from .georef_transform import lonlat_to_mercator
 
 DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons")
 DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
@@ -29,9 +29,6 @@ AREA_ALIASES = {
     "los angeles": "los-angeles",
     "san antonio": "san-antonio",
 }
-
-PROJECT_TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform
-
 
 @dataclass(frozen=True)
 class BenchmarkFixture:
@@ -443,7 +440,7 @@ def fit_pixel_geometry_to_reference_bounds(
 
 
 def project_geometry(geometry: Polygon | MultiPolygon) -> Polygon | MultiPolygon:
-    return transform(PROJECT_TO_MERCATOR, geometry)
+    return transform(lonlat_to_mercator, geometry)
 
 
 def compare_geometries(predicted: Polygon | MultiPolygon, reference: Polygon | MultiPolygon) -> dict[str, float]:

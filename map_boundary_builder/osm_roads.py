@@ -13,7 +13,6 @@ from urllib.request import Request, urlopen
 
 import cv2
 import numpy as np
-from pyproj import Transformer
 
 from .geocoder import GeocodeResult
 from .georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
@@ -22,7 +21,6 @@ from .ocr import OcrLabel
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
-_TO_MERCATOR = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "64")))
 ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
@@ -284,8 +282,8 @@ def georeference_from_osm_roads(
     feature_distance = image_feature_distance(rgb)
 
     west, south, east, north = city_center.bbox
-    west_m, south_m = _TO_MERCATOR.transform(west, south)
-    east_m, north_m = _TO_MERCATOR.transform(east, north)
+    west_m, south_m = lonlat_to_mercator(west, south)
+    east_m, north_m = lonlat_to_mercator(east, north)
     base_scale = max(abs(east_m - west_m) / max(w, 1), abs(north_m - south_m) / max(h, 1))
     if base_scale <= 0:
         return None
@@ -440,7 +438,7 @@ def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
     points: list[tuple[float, float]] = []
     for element in payload.get("elements", []):
         geometry = element.get("geometry", [])
-        projected = [_TO_MERCATOR.transform(point["lon"], point["lat"]) for point in geometry]
+        projected = [lonlat_to_mercator(point["lon"], point["lat"]) for point in geometry]
         points.extend(sample_line(projected, spacing_m=140.0))
     if not points:
         return np.empty((0, 2), dtype=float)
@@ -476,7 +474,7 @@ def load_road_segments(bbox: tuple[float, float, float, float]) -> np.ndarray:
     segments: list[tuple[float, float, float, float, float]] = []
     for element in payload.get("elements", []):
         geometry = element.get("geometry", [])
-        projected = [_TO_MERCATOR.transform(point["lon"], point["lat"]) for point in geometry]
+        projected = [lonlat_to_mercator(point["lon"], point["lat"]) for point in geometry]
         for start, end in zip(projected, projected[1:]):
             sx, sy = start
             ex, ey = end
