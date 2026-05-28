@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import json
 import mimetypes
@@ -279,10 +280,15 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def send_json(self, payload: dict[str, Any], *, status: HTTPStatus = HTTPStatus.OK) -> None:
-        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        data, extra_headers = json_response_body(
+            payload,
+            accept_encoding=self.headers.get("Accept-Encoding", ""),
+        )
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        for name, value in extra_headers.items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -328,6 +334,16 @@ def int_field(fields: dict[str, str], name: str, default: int, minimum: int, max
     except (TypeError, ValueError):
         value = default
     return max(minimum, min(maximum, value))
+
+
+def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") -> tuple[bytes, dict[str, str]]:
+    data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    if len(data) < 1024 or "gzip" not in accept_encoding.lower():
+        return data, {}
+    return gzip.compress(data, compresslevel=3), {
+        "Content-Encoding": "gzip",
+        "Vary": "Accept-Encoding",
+    }
 
 
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:

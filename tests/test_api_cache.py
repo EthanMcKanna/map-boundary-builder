@@ -1,10 +1,12 @@
 import unittest
+import gzip
 from io import BytesIO
 
 from PIL import Image
 
 from api.index import (
     cached_run_payload,
+    json_response_body,
     normalized_image_sha256,
     raw_run_result_cache_key,
     read_run_result_cache,
@@ -72,6 +74,15 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["filename"], "Miami.png")
         self.assertEqual(payload["events"][-1]["message"], "Boundary export ready from cache")
+
+    def test_json_response_body_gzips_large_payloads_when_supported(self) -> None:
+        payload = {"data": "x" * 4096}
+
+        encoded, headers = json_response_body(payload, accept_encoding="br, gzip")
+
+        self.assertEqual(headers["Content-Encoding"], "gzip")
+        self.assertLess(len(encoded), 512)
+        self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
 
 
 if __name__ == "__main__":
