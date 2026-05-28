@@ -5,6 +5,7 @@ from functools import lru_cache
 import hashlib
 import json
 import os
+from importlib import resources
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -15,6 +16,10 @@ _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary
 CACHE_DIR = _CACHE_ROOT / "geocoder"
 PHOTON_CACHE_DIR = _CACHE_ROOT / "geocoder-photon"
 NOMINATIM_TIMEOUT_SECONDS = float(os.environ.get("MAP_BOUNDARY_NOMINATIM_TIMEOUT_SECONDS", "4.0"))
+GEOCODER_SEED_FILE = "geocoder_seed.json"
+
+_NO_SEED = object()
+_GEOCODER_SEED: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,28 +52,32 @@ def _geocode_cached(query: str, limit: int, country_codes: str) -> tuple[Geocode
     if cache_path.exists():
         payload = json.loads(cache_path.read_text())
     else:
-        params = {
-            "q": query,
-            "format": "jsonv2",
-            "limit": limit,
-            "addressdetails": 0,
-            "countrycodes": country_codes,
-        }
-        request = Request(
-            f"https://nominatim.openstreetmap.org/search?{urlencode(params)}",
-            headers={
-                "User-Agent": "map-boundary-builder/0.1 local georeferencer",
-                "Accept": "application/json",
-            },
-        )
-        try:
-            with urlopen(request, timeout=NOMINATIM_TIMEOUT_SECONDS) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except Exception:
-            payload = []
+        seeded = seed_cache_payload("nominatim", cache_path.stem)
+        if seeded is not _NO_SEED:
+            payload = seeded
         else:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps(payload, indent=2) + "\n")
+            params = {
+                "q": query,
+                "format": "jsonv2",
+                "limit": limit,
+                "addressdetails": 0,
+                "countrycodes": country_codes,
+            }
+            request = Request(
+                f"https://nominatim.openstreetmap.org/search?{urlencode(params)}",
+                headers={
+                    "User-Agent": "map-boundary-builder/0.1 local georeferencer",
+                    "Accept": "application/json",
+                },
+            )
+            try:
+                with urlopen(request, timeout=NOMINATIM_TIMEOUT_SECONDS) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+            except Exception:
+                payload = []
+            else:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                cache_path.write_text(json.dumps(payload, indent=2) + "\n")
 
     results = parse_nominatim_payload(payload, query)
     if results:
@@ -108,25 +117,29 @@ def geocode_photon(query: str, *, limit: int, country_codes: str) -> list[Geocod
     if cache_path.exists():
         payload = json.loads(cache_path.read_text())
     else:
-        params = {
-            "q": query,
-            "limit": limit,
-            "lang": "en",
-        }
-        request = Request(
-            f"https://photon.komoot.io/api/?{urlencode(params)}",
-            headers={
-                "User-Agent": "map-boundary-builder/0.1 local georeferencer",
-                "Accept": "application/json",
-            },
-        )
-        try:
-            with urlopen(request, timeout=5) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except Exception:
-            return []
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(payload, indent=2) + "\n")
+        seeded = seed_cache_payload("photon", cache_path.stem)
+        if seeded is not _NO_SEED:
+            payload = seeded
+        else:
+            params = {
+                "q": query,
+                "limit": limit,
+                "lang": "en",
+            }
+            request = Request(
+                f"https://photon.komoot.io/api/?{urlencode(params)}",
+                headers={
+                    "User-Agent": "map-boundary-builder/0.1 local georeferencer",
+                    "Accept": "application/json",
+                },
+            )
+            try:
+                with urlopen(request, timeout=5) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+            except Exception:
+                return []
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(payload, indent=2) + "\n")
 
     if not isinstance(payload, dict):
         return []
@@ -200,6 +213,27 @@ def photon_importance(place_type: str) -> float:
         "neighbourhood": 0.42,
         "locality": 0.38,
     }.get(place_type.lower(), 0.35)
+
+
+def seed_cache_payload(provider: str, key: str) -> object:
+    seed = load_geocoder_seed()
+    provider_payloads = seed.get(provider)
+    if not isinstance(provider_payloads, dict) or key not in provider_payloads:
+        return _NO_SEED
+    return provider_payloads[key]
+
+
+def load_geocoder_seed() -> dict[str, object]:
+    global _GEOCODER_SEED
+    if _GEOCODER_SEED is not None:
+        return _GEOCODER_SEED
+    try:
+        seed_file = resources.files("map_boundary_builder").joinpath(GEOCODER_SEED_FILE)
+        payload = json.loads(seed_file.read_text())
+    except Exception:
+        payload = {}
+    _GEOCODER_SEED = payload if isinstance(payload, dict) else {}
+    return _GEOCODER_SEED
 
 
 def cache_file(query: str, limit: int, country_codes: str) -> Path:

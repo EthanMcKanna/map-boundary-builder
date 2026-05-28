@@ -60,4 +60,4 @@ where = ["."]
 include = ["map_boundary_builder*"]
 
 [tool.setuptools.package-data]
-map_boundary_builder = ["web_assets/*"]
+map_boundary_builder = ["web_assets/*", "geocoder_seed.json"]

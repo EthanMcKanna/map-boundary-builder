@@ -1,0 +1,86 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import map_boundary_builder.geocoder as geocoder
+
+
+class GeocoderSeedTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        geocoder._geocode_cached.cache_clear()
+
+    def test_nominatim_seed_serves_without_network(self) -> None:
+        key = geocoder.cache_file("Orlando", 3, "us").stem
+        seed = {
+            "version": 1,
+            "nominatim": {
+                key: [
+                    {
+                        "lon": "-81.3790",
+                        "lat": "28.5421",
+                        "display_name": "Orlando, Orange County, Florida, United States",
+                        "boundingbox": ["28.35", "28.65", "-81.55", "-81.20"],
+                        "importance": 0.7,
+                        "addresstype": "city",
+                    }
+                ]
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "_GEOCODER_SEED", seed),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("Orlando", limit=1)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].display_name, "Orlando, Orange County, Florida, United States")
+        self.assertEqual(results[0].bbox, (-81.55, 28.35, -81.2, 28.65))
+
+    def test_empty_nominatim_seed_can_fall_through_to_photon_seed(self) -> None:
+        nominatim_key = geocoder.cache_file("Ped Pflugerville", 3, "us").stem
+        photon_key = geocoder.photon_cache_file("Ped Pflugerville", 3, "us").stem
+        seed = {
+            "version": 1,
+            "nominatim": {nominatim_key: []},
+            "photon": {
+                photon_key: {
+                    "features": [
+                        {
+                            "geometry": {"coordinates": [-97.62, 30.44]},
+                            "properties": {
+                                "name": "Pflugerville",
+                                "city": "Pflugerville",
+                                "state": "Texas",
+                                "country": "United States",
+                                "countrycode": "US",
+                                "osm_value": "city",
+                                "extent": [-97.75, 30.55, -97.50, 30.30],
+                            },
+                        }
+                    ]
+                }
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", seed),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("Ped Pflugerville", limit=1)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].display_name, "Pflugerville, Texas, United States")
+        self.assertEqual(results[0].bbox, (-97.75, 30.3, -97.5, 30.55))
+
+
+if __name__ == "__main__":
+    unittest.main()

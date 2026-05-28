@@ -10,6 +10,7 @@ PIPELINE_VERSION_ENV = "MAP_BOUNDARY_PIPELINE_VERSION"
 PIPELINE_VERSION_FILES = (
     "extract.py",
     "geocoder.py",
+    "geocoder_seed.json",
     "georeference.py",
     "georef_transform.py",
     "geojson.py",
