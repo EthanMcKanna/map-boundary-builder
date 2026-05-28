@@ -202,6 +202,11 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   metadata and are ignored by the catalog matcher. This preserves the speed win
   for active current catalog entries while preventing stale production shortcuts
   for markets whose live service areas changed after the saved baseline.
+- Label-aided catalog hints now tolerate a single OCR edit on longer area
+  tokens. This recovered the low-resolution Nashville issue #5 RGBA
+  cache-bust variant where RapidOCR read `Nashville` as `Naslville`, while
+  still requiring the same strong shape IoU, runner-up margin, provider style,
+  and area-ratio guards before a catalog result can be returned.
 
 ## Current Validation
 
@@ -230,6 +235,16 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   issue #5 case on `catalog-shape-match:ocr-label-hint` in 0.862s wall /
   0.464s event span and Los Angeles on `catalog-shape-match` in 2.470s wall /
   0.244s event span.
+- Current fuzzy-label hint head: the one-pixel RGBA cache-bust variant
+  `/tmp/mbb-issue5-input-warm-bust.png` reproduced the production miss because
+  OCR returned `Naslville`, then passed locally after the single-edit hint guard
+  with the same Nashville bbox, source `catalog-shape-match:ocr-label-hint`,
+  and confidence 0.949. Focused catalog tests passed 12 tests, full pytest
+  passed 84 tests and 9 subtests, `compileall`, `node --check`, and
+  `git diff --check` passed, and fresh-cache full benchmark
+  `out/benchmark-fuzzy-label-hint-20260528-160018/full-report.json` passed 8/8
+  active fixtures with avg IoU 0.983, min IoU 0.943, and total scored duration
+  3.18s.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

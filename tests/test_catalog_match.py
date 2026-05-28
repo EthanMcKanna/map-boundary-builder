@@ -187,6 +187,22 @@ def test_label_hint_accepts_sparse_low_resolution_shape_match() -> None:
     assert CATALOG_LABEL_HINT_MIN_IOU <= hinted_match.iou < 0.97
 
 
+def test_label_hint_accepts_single_edit_ocr_area_typo() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    simplified_reference = entry.mercator_geometry.simplify(500, preserve_topology=True)
+    pixel_geometry = mercator_geometry_to_pixel(simplified_reference)
+
+    hinted_match = match_service_area_catalog(
+        pixel_geometry,
+        style="bright-blue",
+        min_iou=CATALOG_LABEL_HINT_MIN_IOU,
+        area_hint_texts=["Naslville"],
+    )
+
+    assert hinted_match is not None
+    assert hinted_match.entry.slug == "nashville-waymo"
+
+
 def test_label_hint_rejects_wrong_area_match() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
     simplified_reference = entry.mercator_geometry.simplify(500, preserve_topology=True)

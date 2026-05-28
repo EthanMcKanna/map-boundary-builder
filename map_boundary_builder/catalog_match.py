@@ -287,8 +287,41 @@ def area_from_slug(slug: str, provider: str) -> str:
 
 def catalog_area_matches_text(area: str, text: str) -> bool:
     area_tokens = normalize_catalog_area_tokens(area)
-    text_tokens = set(normalize_catalog_area_tokens(text))
-    return bool(area_tokens) and all(token in text_tokens for token in area_tokens)
+    text_tokens = normalize_catalog_area_tokens(text)
+    return bool(area_tokens) and all(
+        any(catalog_area_token_matches(area_token, text_token) for text_token in text_tokens)
+        for area_token in area_tokens
+    )
+
+
+def catalog_area_token_matches(expected: str, observed: str) -> bool:
+    if expected == observed:
+        return True
+    if len(expected) < 6 or len(observed) < 5:
+        return False
+    return edit_distance_at_most_one(expected, observed)
+
+
+def edit_distance_at_most_one(left: str, right: str) -> bool:
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) <= 1
+    if len(left) < len(right):
+        left, right = right, left
+    i = 0
+    j = 0
+    edits = 0
+    while i < len(left) and j < len(right):
+        if left[i] == right[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        i += 1
+    return True
 
 
 def normalize_catalog_area_tokens(value: str) -> tuple[str, ...]:
