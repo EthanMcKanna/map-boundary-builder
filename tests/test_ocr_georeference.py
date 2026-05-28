@@ -25,6 +25,7 @@ from map_boundary_builder.georeference import (
     place_query_text,
     place_tokens,
     residual_median_p90,
+    should_try_road_refinement,
     single_tokens_supported_by_fuller_labels,
 )
 from map_boundary_builder.geocoder import GeocodeResult
@@ -571,6 +572,62 @@ class RoadContextRankingTests(unittest.TestCase):
 
 
 class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_tight_five_control_label_fit_skips_road_refinement(self) -> None:
+        context = CityContext(
+            query="Dallas",
+            center=GeocodeResult(
+                label="Dallas",
+                lon=-96.797,
+                lat=32.776,
+                display_name="Dallas, Dallas County, Texas, United States",
+                bbox=(-97.0, 32.6, -96.5, 33.0),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        self.assertFalse(
+            should_try_road_refinement(
+                context,
+                meters_per_pixel=10.68,
+                inlier_count=5,
+                residual_median_m=126.0,
+                residual_p90_m=374.7,
+                spread=397085.0,
+                width=2400,
+                height=2400,
+            )
+        )
+
+    def test_sparse_label_fit_can_still_try_road_refinement(self) -> None:
+        context = CityContext(
+            query="Nashville",
+            center=GeocodeResult(
+                label="Nashville",
+                lon=-86.7816,
+                lat=36.1627,
+                display_name="Nashville, Davidson County, Tennessee, United States",
+                bbox=(-87.05, 35.96, -86.51, 36.4),
+                importance=0.7,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        self.assertTrue(
+            should_try_road_refinement(
+                context,
+                meters_per_pixel=10.79,
+                inlier_count=3,
+                residual_median_m=385.6,
+                residual_p90_m=425.5,
+                spread=507150.0,
+                width=2400,
+                height=2400,
+            )
+        )
+
     def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
         fallback_result = object()

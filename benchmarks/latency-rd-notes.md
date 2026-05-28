@@ -115,6 +115,11 @@ regressions, during latency experiments.
   downsampled road score is below 0.60. Miami's road score was already 0.673,
   so the prior 0.68 default reran a full-resolution search without changing the
   final transform.
+- Road refinement is also skipped when a label fit already has at least five
+  inlier controls with median residual <=500m and p90 residual <=1000m. Dallas
+  Waymo had a tight 5-control fit but still spent roughly 9-11s on a live
+  Overpass-backed road refinement that was rejected by the label-fit preservation
+  check.
 
 ## Current Validation
 
@@ -159,6 +164,27 @@ regressions, during latency experiments.
   threshold: Bay Area Waymo 0.560s, Bay Area Tesla 0.423s, Bay Area Zoox 0.340s,
   Houston Waymo 0.422s, Houston Tesla 0.439s, Miami Waymo 0.887s; all had zero
   attempted geocoder/Overpass `urlopen` calls.
+- Dallas Waymo road-gate trace before the tight-fit skip made one live Overpass
+  road request, took 13.878s, and still returned
+  `ocr-georeference:nominatim-label-fit` with bbox
+  `[-96.8802629,32.7284439,-96.7280792,32.8668601]`, confidence 0.864, and
+  5 controls. Instrumented gate metrics showed the road refine spent 9.331s,
+  produced score 0.822784, then was rejected by label-fit preservation.
+- After the tight-fit road skip, Dallas Waymo with geocoder, OSM road, and OSM
+  place `urlopen` blocked completed with zero attempted network calls, the same
+  bbox/confidence/controls/source, and 1.859s cold local wall time. In a warm OCR
+  timing sweep, Dallas georeference dropped to 0.036s and total runtime to
+  1.653s; the remaining Dallas time is RapidOCR-heavy rather than georef-heavy.
+- After the tight-fit road skip, `PYTHONPATH=. .venv/bin/pytest -q`: 67 passed,
+  9 subtests passed. `PYTHONPATH=. .venv/bin/python -m compileall -q api
+  map_boundary_builder`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`: pass.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-tight-label-road-gate-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/tight-label-road-gate-full`: PASS 8/8 scored fixtures, 7 skipped `reference_mismatch`, avg IoU 0.962, min IoU 0.931.
+- Rejected a Dallas-only OCR max-dimension sweep as too small and too risky to
+  generalize. Dallas preserved bbox/confidence/controls/source from caps 1600
+  down to 900, but cold local wall time only moved from 1.714s at 1600 to 1.536s
+  at 1000, and prior full-suite cap probes found lower global caps can regress
+  other screenshots.
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
