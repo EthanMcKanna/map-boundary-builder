@@ -26,18 +26,25 @@ polygons and screenshots are refreshed.
 - Conservative RapidOCR input downscaling caps the OCR image's longest side at
   2000px by default, with coordinates scaled back to the original image. This
   keeps an env override through `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION`.
+- Road refinement now samples up to 6000 road points by default instead of
+  12000, preserving the full active suite while reducing Phoenix/Nashville
+  focused benchmark time.
 
 ## Current Validation
 
 - `PYTHONPATH=. .venv/bin/pytest`: 39 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-batch256-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/batch256-no-tess-full`: PASS 11/11 active, avg IoU 0.957, min IoU 0.896.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-default2000-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/rapid-default-2000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
+- `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-road6000-full-XXXXXX) MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=6000 PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full --out-dir out/road-points-6000-full`: PASS 11/11 active, avg IoU 0.961, min IoU 0.931.
 - Focused no-downscale A/B (`Orlando`, `Phoenix`, `Nashville`, `San Antonio`):
   old path PASS 4/4 in 10.24s, avg IoU 0.946, min IoU 0.896.
 - Focused default-2000 A/B on the same four fixtures: PASS 4/4 in 8.84s,
   avg IoU 0.958, min IoU 0.931.
 - Focused Phoenix/Nashville with batch size 256: PASS 2/2, IoUs 0.978 and
   0.981, matching the high-accuracy baseline.
+- Focused Phoenix/Nashville road-point cap sweep: 12000 points PASS 2/2 in
+  6.52s, 6000 points PASS 2/2 in 5.04s with Phoenix IoU 0.983 and Nashville
+  IoU 0.981.
 
 ## Production Smoke Evidence
 
@@ -58,6 +65,7 @@ polygons and screenshots are refreshed.
   because the goal requires no accuracy reduction, not merely passing thresholds.
 - RapidOCR max dimension 2200 was faster locally but dropped Orlando IoU from
   0.930 to 0.863 in focused validation. Rejected.
+- Road-point cap 3000 was faster but dropped Nashville IoU to 0.796. Rejected.
 - Local `vercel build --prod` remained blocked unless `uv` is on PATH; remote
   deploys are the reliable bundle-size evidence source for now.
 

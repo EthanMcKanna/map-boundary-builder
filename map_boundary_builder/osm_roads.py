@@ -22,6 +22,7 @@ _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary
 CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
 ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "256")))
+ROAD_MATCH_MAX_POINTS = max(500, int(os.environ.get("MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS", "6000")))
 ROAD_REFINE_CACHE_VERSION = "road-refine-v1"
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
@@ -54,7 +55,7 @@ def refine_transform_with_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
-    road_points = sample_road_points(road_points, max_points=12000)
+    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS)
     feature_distance = image_feature_distance(rgb)
     base_score, base_count = score_georeference_transform(road_points, feature_distance, initial)
     if base_count < 1000:
@@ -151,6 +152,7 @@ def road_refine_cache_key(
         f"{initial.meters_per_pixel:.8f}",
         f"{initial.rotation_radians:.10f}",
         f"{initial.confidence:.6f}",
+        f"road-points={ROAD_MATCH_MAX_POINTS}",
         "lock" if lock_scale else "free",
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
@@ -278,7 +280,7 @@ def georeference_from_osm_roads(
     road_points = load_road_points(city_center.bbox)
     if road_points.size == 0:
         return None
-    road_points = sample_road_points(road_points, max_points=12000)
+    road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS)
     feature_distance = image_feature_distance(rgb)
 
     west, south, east, north = city_center.bbox
