@@ -1,4 +1,6 @@
 import numpy as np
+from shapely.affinity import rotate
+from shapely.geometry import shape
 from shapely.ops import transform
 
 from map_boundary_builder.catalog_match import (
@@ -39,6 +41,20 @@ def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
     assert match.confidence == 0.864
 
 
+def test_catalog_shape_match_accepts_near_miss_after_small_rotation() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "houston-tesla")
+    unrotated_reference = rotate(entry.mercator_geometry, 1.4, origin="centroid", use_radians=False)
+    pixel_geometry = mercator_geometry_to_pixel(unrotated_reference)
+
+    match = match_service_area_catalog(pixel_geometry, style="gray-fill")
+
+    assert match is not None
+    assert match.entry.slug == "houston-tesla"
+    assert match.iou >= 0.97
+    assert abs(match.rotation_degrees) > 0.0
+    assert match.confidence == 0.853
+
+
 def test_catalog_feature_collection_has_summary_properties() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "phoenix-waymo")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
@@ -68,6 +84,33 @@ def test_catalog_feature_collection_has_summary_properties() -> None:
     assert properties["catalog_slug"] == "phoenix-waymo"
     assert properties["combined_confidence"] == 0.98
     assert data["features"][0]["geometry"]["type"] == "Polygon"
+
+
+def test_current_verified_catalog_entry_outputs_exact_geometry_after_match() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "miami-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+    assert match is not None
+    extraction = ExtractionResult(
+        mask=np.zeros((100, 100), dtype=np.uint8),
+        style="bright-blue",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=0.98,
+    )
+
+    data = catalog_feature_collection(
+        extraction,
+        match,
+        width=1000,
+        height=1000,
+        image_path="input.png",
+        city_input="Auto",
+    )
+
+    output_geometry = shape(data["features"][0]["geometry"])
+    assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
 
 
 def mercator_geometry_to_pixel(geometry):

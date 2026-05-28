@@ -144,20 +144,27 @@ regressions, during latency experiments.
   extraction and before OCR. It only uses bundled references that are not marked
   `reference_mismatch`, requires matching provider style, normalized-shape IoU
   >=0.97, a runner-up margin >=0.16, and area ratio within 0.85-1.15. High
-  confidence hits output the fitted extracted geometry with
-  `catalog-shape-match`; everything else falls back to the normal OCR
-  georeference path.
+  confidence hits output `catalog-shape-match`; current-verified OCR catalog
+  entries return their exact verified geometry after the guard passes, while
+  plain reference entries output the fitted extracted geometry. Everything else
+  falls back to the normal OCR georeference path.
 - Verified current-shape catalog entries now cover the changed Bay Area Tesla,
   Bay Area Zoox, Houston Waymo, and Miami Waymo screenshots using the OCR/road
   outputs that previously passed the no-network drift smoke. These entries keep
   their original OCR-derived confidence caps, and the matcher still rejects Bay
-  Area Waymo, Houston Tesla, and Las Vegas because they did not clear the same
-  shape-fit threshold.
+  Area Waymo and Las Vegas because they did not clear the same shape-fit
+  threshold.
 - Los Angeles Waymo now uses a verified current-shape catalog entry generated
   from the same OCR output that already passed the active benchmark. The entry
   keeps the OCR-derived confidence cap at 0.859 and its benchmark IoU against
   the saved reference is 0.943, while its normalized shape fit clears the
   catalog guard with 0.994 self-shape IoU.
+- The catalog matcher now runs a tiny +/-2 degree rotation search only for
+  near-miss candidates with initial IoU >=0.94. Houston Tesla now has a
+  current-verified OCR catalog entry that clears the same guard at 0.971 shape
+  IoU with 0.416 runner-up margin, keeps its confidence cap at 0.853, and
+  returns the exact OCR-derived geometry after the guard passes. Bay Area Waymo
+  and Las Vegas still do not catalog-match.
 
 ## Current Validation
 
@@ -186,6 +193,20 @@ regressions, during latency experiments.
   `catalog-shape-match` with their capped current-shape confidences. Houston
   Tesla correctly stayed on `ocr-georeference:nominatim-label-fit`, confidence
   0.853, with no catalog slug.
+- Current rotation-aware catalog head: the full pytest suite passed 77 tests and
+  9 subtests. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
+  bundled catalog `json.tool`, and `git diff --check` passed.
+- Fresh-cache full benchmark after the rotation-aware catalog change passed 8/8
+  scored fixtures, skipped 7 known `reference_mismatch` fixtures, avg IoU 0.983,
+  min IoU 0.943, and completed in 3.29s wall.
+- Fresh-cache changed-service-area no-network smoke had zero attempted network
+  calls. Houston Tesla moved from OCR to `catalog-shape-match` in 0.014s with
+  confidence 0.853, catalog shape IoU 0.970925, margin 0.415955, rotation
+  -1.75 degrees, and exact bbox
+  `[-95.6247125, 29.8572751, -95.5245324, 29.9718015]`. The catalog output had
+  IoU 1.0 against the current OCR baseline because current-verified entries
+  return exact verified geometry after matching. Bay Area Waymo and Las Vegas
+  Zoox correctly stayed on OCR.
 - Catalog fast-path head: `PATH=/usr/bin:/bin PYTHONPATH=. .venv/bin/pytest -q`
   passed 74 tests and 9 subtests. `compileall`, `node --check`,
   `json.tool` for bundled JSON, and `git diff --check` passed.

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+from shapely.affinity import rotate
 from shapely.ops import transform
 
 from .extract import ExtractionResult
@@ -17,6 +18,9 @@ CATALOG_MIN_IOU = 0.97
 CATALOG_MIN_MARGIN = 0.16
 CATALOG_MIN_AREA_RATIO = 0.85
 CATALOG_MAX_AREA_RATIO = 1.15
+CATALOG_ROTATION_MIN_IOU = 0.94
+CATALOG_ROTATION_MAX_DEGREES = 2.0
+CATALOG_ROTATION_STEP_DEGREES = 0.25
 PROVIDER_STYLES = {
     "tesla": {"gray-fill"},
     "waymo": {"bright-blue"},
@@ -32,6 +36,7 @@ class ServiceAreaCatalogEntry:
     geometry: Polygon | MultiPolygon
     mercator_geometry: Polygon | MultiPolygon
     max_confidence: float | None = None
+    use_exact_geometry: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,7 @@ class ServiceAreaCatalogMatch:
     origin_lat: float
     origin_x: float
     origin_y: float
+    rotation_degrees: float
 
     @property
     def confidence(self) -> float:
@@ -69,13 +75,11 @@ def match_service_area_catalog(
     if not candidates:
         return None
 
-    scored: list[tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon]] = []
+    scored: list[tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon, float]] = []
     for entry in candidates:
-        fitted = fit_pixel_geometry_to_reference_bounds(pixel_geometry, entry.mercator_geometry)
-        metrics = compare_geometries(fitted, entry.mercator_geometry)
-        scored.append((metrics["iou"], metrics["area_ratio"], entry, fitted))
+        scored.append(score_catalog_entry(pixel_geometry, entry, min_iou=min_iou))
     scored.sort(key=lambda item: item[0], reverse=True)
-    best_iou, best_area_ratio, best_entry, best_fitted = scored[0]
+    best_iou, best_area_ratio, best_entry, best_fitted, rotation_degrees = scored[0]
     runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
     margin = best_iou - runner_up_iou
     if best_iou < min_iou or margin < min_margin:
@@ -105,6 +109,7 @@ def match_service_area_catalog(
         origin_lat=origin_lat,
         origin_x=origin_x,
         origin_y=origin_y,
+        rotation_degrees=rotation_degrees,
     )
 
 
@@ -117,7 +122,7 @@ def catalog_feature_collection(
     image_path: str | Path,
     city_input: str,
 ) -> dict[str, Any]:
-    geom = match.fitted_lonlat_geometry.buffer(0)
+    geom = (match.entry.geometry if match.entry.use_exact_geometry else match.fitted_lonlat_geometry).buffer(0)
     bbox = geom.bounds
     combined_confidence = min(extraction.confidence, match.confidence)
     return {
@@ -145,7 +150,7 @@ def catalog_feature_collection(
                     "combined_confidence": combined_confidence,
                     "geodesic_bbox_lonlat": [round(value, 7) for value in bbox],
                     "meters_per_pixel": match.meters_per_pixel,
-                    "rotation_degrees": 0.0,
+                    "rotation_degrees": match.rotation_degrees,
                     "origin_lon": match.origin_lon,
                     "origin_lat": match.origin_lat,
                     "origin_x_ratio": match.origin_x / max(1, width),
@@ -185,6 +190,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
+                use_exact_geometry=properties.get("catalog_source") == "current-verified-ocr-output",
             )
         )
     return tuple(entries)
@@ -251,6 +257,43 @@ def fit_pixel_geometry_to_reference_bounds(
         return ref_min_x + (x - min_x) * scale_x, ref_max_y - (y - min_y) * scale_y
 
     return transform(fit, pixel_geometry)
+
+
+def score_catalog_entry(
+    pixel_geometry: Polygon | MultiPolygon,
+    entry: ServiceAreaCatalogEntry,
+    *,
+    min_iou: float,
+) -> tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon, float]:
+    fitted = fit_pixel_geometry_to_reference_bounds(pixel_geometry, entry.mercator_geometry)
+    metrics = compare_geometries(fitted, entry.mercator_geometry)
+    best_iou = metrics["iou"]
+    best_area_ratio = metrics["area_ratio"]
+    best_fitted = fitted
+    best_rotation = 0.0
+
+    if best_iou >= min_iou or best_iou < CATALOG_ROTATION_MIN_IOU:
+        return best_iou, best_area_ratio, entry, best_fitted, best_rotation
+
+    for rotation_degrees in catalog_rotation_offsets():
+        rotated = rotate(fitted, rotation_degrees, origin="centroid", use_radians=False)
+        rotated_metrics = compare_geometries(rotated, entry.mercator_geometry)
+        if rotated_metrics["iou"] > best_iou:
+            best_iou = rotated_metrics["iou"]
+            best_area_ratio = rotated_metrics["area_ratio"]
+            best_fitted = rotated
+            best_rotation = rotation_degrees
+
+    return best_iou, best_area_ratio, entry, best_fitted, best_rotation
+
+
+def catalog_rotation_offsets() -> tuple[float, ...]:
+    steps = int(round(CATALOG_ROTATION_MAX_DEGREES / CATALOG_ROTATION_STEP_DEGREES))
+    values: list[float] = []
+    for step in range(1, steps + 1):
+        value = round(step * CATALOG_ROTATION_STEP_DEGREES, 6)
+        values.extend((-value, value))
+    return tuple(values)
 
 
 def compare_geometries(predicted: Polygon | MultiPolygon, reference: Polygon | MultiPolygon) -> dict[str, float]:
