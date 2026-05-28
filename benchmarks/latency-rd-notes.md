@@ -485,6 +485,14 @@ regressions, during latency experiments.
     drift-aware benchmark stayed clean at 8/8 scored fixtures, 7
     `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931, in
     7.80s wall time.
+  - Production deployment `dpl_39CKvMa58tqXtUijVtUUcr4ZxFv9` served the hidden
+    `include_overlay=0` web form field and kept health on
+    `pipeline-782cc2ab7d027532`. Warm cache-busted Miami production calls
+    preserved bbox and confidence while cutting response size from 58.995 KB
+    with overlay to 2.537 KB without overlay; server event span was 0.717s
+    without overlay versus 0.846s with overlay. Exact cached repeats were equal
+    wall-time noise at 1.758s, but the GeoJSON-first cached response stayed
+    2.163 KB versus 59.094 KB with overlay.
 
 ## Failed Or Rejected Experiments
 
