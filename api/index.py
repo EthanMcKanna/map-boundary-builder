@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -23,6 +24,8 @@ from map_boundary_builder.web import RequestError, float_field, int_field, safe_
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
+RUN_RESULT_CACHE_VERSION = "run-result-v1"
+RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 
 
 class handler(BaseHTTPRequestHandler):
@@ -87,14 +90,6 @@ class handler(BaseHTTPRequestHandler):
         if not image_bytes:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Uploaded image is empty.")
 
-        run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
-        run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
-        debug_dir = run_dir / "debug"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        image_path = run_dir / f"input{safe_extension(original_filename)}"
-        output_path = run_dir / "boundary.geojson"
-        image_path.write_bytes(image_bytes)
-
         events: list[dict[str, Any]] = [
             {"stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}
         ]
@@ -107,6 +102,23 @@ class handler(BaseHTTPRequestHandler):
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
         )
+        run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
+        cache_key = run_result_cache_key(image_bytes, city, options)
+        cached = read_run_result_cache(cache_key)
+        if cached is not None:
+            self.send_json(
+                cached_run_payload(cached, run_id, original_filename, events),
+                status=HTTPStatus.CREATED,
+            )
+            return
+
+        run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
+        debug_dir = run_dir / "debug"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        image_path = run_dir / f"input{safe_extension(original_filename)}"
+        output_path = run_dir / "boundary.geojson"
+        image_path.write_bytes(image_bytes)
+
         result = build_boundary(
             image_path,
             city,
@@ -128,6 +140,7 @@ class handler(BaseHTTPRequestHandler):
                 "overlay_data_url": inline_overlay(result.overlay_path),
             },
         }
+        write_run_result_cache(cache_key, payload)
         self.send_json(payload, status=HTTPStatus.CREATED)
 
     def handle_create_report(self) -> None:
@@ -226,3 +239,75 @@ def inline_overlay(path: Path | None) -> str | None:
     if len(data) > MAX_INLINE_OVERLAY_BYTES:
         return None
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def run_result_cache_key(image_bytes: bytes, city: str | None, options: BoundaryBuildOptions) -> str:
+    parts = {
+        "version": RUN_RESULT_CACHE_VERSION,
+        "image_sha256": hashlib.sha256(image_bytes).hexdigest(),
+        "city": city or "",
+        "simplify_px": round(float(options.simplify_px), 4),
+        "min_confidence": round(float(options.min_confidence), 4),
+        "min_control_points": int(options.min_control_points),
+    }
+    encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
+    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
+    if not cache_path.exists():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text())
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
+    cached = {
+        "city": payload.get("city"),
+        "summary": payload.get("summary"),
+        "artifacts": payload.get("artifacts"),
+    }
+    try:
+        RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
+        tmp_path = cache_path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(cached, separators=(",", ":")))
+        tmp_path.replace(cache_path)
+    except OSError:
+        return
+
+
+def cached_run_payload(
+    cached: dict[str, Any],
+    run_id: str,
+    original_filename: str,
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    payload = json.loads(json.dumps(cached))
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    payload.update(
+        {
+            "id": run_id,
+            "city": payload.get("city") or summary.get("city"),
+            "filename": Path(original_filename).name or "uploaded-image",
+            "status": "complete",
+            "percent": 100,
+            "cached": True,
+            "events": [
+                *events,
+                {
+                    "timestamp": time.time(),
+                    "stage": "complete",
+                    "message": "Boundary export ready from cache",
+                    "percent": 100,
+                    "status": "complete",
+                    "details": summary,
+                },
+            ],
+        }
+    )
+    return payload
