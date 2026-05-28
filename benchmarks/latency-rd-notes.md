@@ -402,6 +402,31 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   0.893s server event span, down from the prior comparable warm-busted 3.894s
   road-batch production smoke, because OCR labels were ready immediately after
   full extraction.
+- API run summaries now expose catalog observability fields directly:
+  `catalog_slug`, `catalog_shape_iou`, `catalog_shape_margin`, and
+  `catalog_area_ratio`. This makes production smokes less error-prone because
+  active catalog hits and stale-market OCR fallbacks can be distinguished from
+  the stable summary payload instead of progress events alone. Focused summary,
+  API-cache, and catalog tests passed 26 tests. A local Phoenix/Miami smoke
+  proved Phoenix summary now reports `catalog_slug: phoenix-waymo`, while stale
+  Miami reports `catalog_slug: null` and preserves
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864, and
+  road score 0.681518. Full pytest passed 90 tests and 9 subtests;
+  `compileall`, `node --check`, and `git diff --check` passed. The default
+  benchmark `out/summary-metadata-default-full-20260528-continue2/full-report.json`
+  passed 8/8 active, skipped 7 known `reference_mismatch` fixtures, avg IoU
+  0.993, min IoU 0.943, total 2.92s; the no-catalog benchmark
+  `out/summary-metadata-no-catalog-full-20260528-continue2/full-report.json`
+  passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.36s.
+- Rejected RapidOCR detector-side reduction as a default after a fresh-cache
+  full no-catalog gate. `MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN=544` and
+  `512` preserved pass/fail but slowed the total benchmark and reduced gray-fill
+  IoU; `576` was effectively tied and not enough evidence to revisit the older
+  rejection. Current 608 remains the safer default.
+- Vercel code-side memory/CPU tuning is not currently a shippable repo change:
+  current Vercel documentation says Fluid Compute memory/CPU is configured from
+  project settings, not `vercel.json`; `maxDuration` can be configured for
+  Python functions but affects timeout headroom rather than latency.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
