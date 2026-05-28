@@ -76,7 +76,6 @@ let latestRunEvents = [];
 let latestRunStatus = "idle";
 let latestRunSummary = null;
 let pendingRunCacheKey = null;
-let generationWarmupController = null;
 let activeReportStatus = "completed";
 let copyFeedbackTimeout = null;
 let activeImageMode = "original";
@@ -611,7 +610,6 @@ function setSelectedFile(file) {
   });
   renderHistory();
   activateTab("input");
-  warmGenerationRuntime();
 }
 
 async function prepareRunImage(file) {
@@ -697,21 +695,6 @@ async function fetchRunCachePipelineVersion() {
     console.warn("Could not verify pipeline version for local run cache", error);
     return null;
   }
-}
-
-function warmGenerationRuntime() {
-  if (typeof AbortController === "function") {
-    generationWarmupController?.abort();
-    generationWarmupController = new AbortController();
-  }
-  fetch("/api/health?warm=generation", {
-    cache: "no-store",
-    signal: generationWarmupController?.signal,
-  }).catch((error) => {
-    if (error?.name !== "AbortError") {
-      console.warn("Could not prewarm generation runtime", error);
-    }
-  });
 }
 
 async function sha256Hex(bytes) {
@@ -1874,8 +1857,6 @@ function startNewRun() {
 }
 
 function resetRun() {
-  generationWarmupController?.abort();
-  generationWarmupController = null;
   stopEstimatedProgress();
   progressValue = 0;
   latestRunId = null;

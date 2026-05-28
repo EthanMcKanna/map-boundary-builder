@@ -21,7 +21,6 @@ from .github_reports import FailureReport, GithubReportError, create_failure_iss
 from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, build_boundary
-from .runtime_warmup import parse_warm_targets, warm_generation_runtime
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 TERMINAL_STATUSES = {"complete", "error"}
@@ -75,14 +74,11 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
-                warm_targets = parse_warm_targets(parsed.query)
-                warm_details = warm_generation_runtime(warm_targets) if warm_targets else {}
                 self.send_json(
                     {
                         "ok": True,
                         "runtime": "local-python",
                         "pipeline_version": get_pipeline_version(),
-                        **warm_details,
                     }
                 )
                 return

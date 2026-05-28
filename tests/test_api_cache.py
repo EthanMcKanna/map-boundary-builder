@@ -19,7 +19,6 @@ from api.index import (
     run_result_cache_key,
     write_run_result_cache,
 )
-from map_boundary_builder.runtime_warmup import parse_warm_targets, warm_generation_runtime
 from map_boundary_builder.runner import BoundaryBuildOptions
 
 
@@ -110,19 +109,6 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
-
-    def test_parse_warm_targets_accepts_generation_aliases(self) -> None:
-        self.assertEqual(parse_warm_targets("warm=generation,ocr"), {"generation", "ocr"})
-        self.assertEqual(parse_warm_targets("warm=1"), {"generation"})
-        self.assertEqual(parse_warm_targets("warm=unknown"), set())
-
-    def test_warm_generation_runtime_reports_failures_without_raising(self) -> None:
-        with patch("builtins.__import__", side_effect=RuntimeError("boom")):
-            details = warm_generation_runtime({"generation"})
-
-        self.assertEqual(details["warm_targets"], ["generation"])
-        self.assertIn("warm_elapsed_ms", details)
-        self.assertIn("generation", details["warm_errors"])
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:

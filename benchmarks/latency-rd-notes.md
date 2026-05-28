@@ -408,23 +408,6 @@ regressions, during latency experiments.
   - Production cached Bay Area repeats returned WebP overlays in 2.05-2.41s wall
     with a 67.9 KB gzip wire response, down from the earlier same-image cached
     gzip check around 2.315s and 254 KB wire response.
-- Runtime prewarm validation:
-  - Added a best-effort `?warm=generation` health mode that imports the
-    generation stack and initializes the cached RapidOCR engine, while leaving
-    plain `/api/health` cheap. The frontend now fires this request after image
-    selection and cancels it if the user immediately starts a run, so it can
-    move cold-start/model-init work into the review/settings moment without
-    changing extraction, OCR, georeferencing, or export decisions.
-  - Local focused tests for API cache/warmup passed: 9 tests. Full tests passed:
-    `PYTHONPATH=. .venv/bin/pytest -q`, 62 tests.
-  - Local HTTP check on `map_boundary_builder.web` returned
-    `generation: true`, `ocr: true`, and `warm_elapsed_ms: 99.8` for
-    `/api/health?warm=generation`; plain `/api/health` returned only the normal
-    lightweight health payload.
-  - Full drift-aware benchmark passed 8/8 scored fixtures, skipped 7
-    `reference_mismatch` fixtures, avg IoU 0.962, min IoU 0.931, in 8.08s
-    wall time. This is not expected to change CLI benchmark speed; it targets
-    first-run production UX when a user selects an image before clicking Run.
 
 ## Failed Or Rejected Experiments
 
