@@ -348,6 +348,23 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   for Houston Tesla, Miami Waymo, and Bay Area Tesla returned `catalog_slug:
   null` and OCR/georeference sources, preserving the user-confirmed stale-market
   guard.
+- Road-refinement search batches now default to 1024 candidates. This does not
+  change the candidate grid or scoring function; it reduces Python batching
+  overhead in the road-heavy arbitrary OCR/georeference path. Focused
+  Phoenix/Nashville no-catalog probes preserved avg IoU 0.985 and min IoU
+  0.984 while reducing total scored time from 2.85s at batch 512 to 2.77s at
+  batch 1024. Full no-catalog benchmark
+  `out/benchmark-roadbatch1024-no-catalog-20260528-continue/full-report.json`
+  passed 8/8 active, skipped 7 known `reference_mismatch` fixtures, preserved
+  avg IoU 0.962 and min IoU 0.931, and reduced total scored time from the
+  current catalog-scaled no-catalog gate's 7.58s to 7.27s. With batch 1024 as
+  the code default, `out/benchmark-roadbatch1024-defaultcode-no-catalog-20260528-continue/full-report.json`
+  passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.41s; default
+  catalog benchmark `out/benchmark-roadbatch1024-defaultcode-default-20260528-continue/full-report.json`
+  stayed green at 8/8 active, avg IoU 0.993, min IoU 0.943, total 2.96s. Full
+  pytest passed 88 tests and 9 subtests, and `compileall`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`
+  passed.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
