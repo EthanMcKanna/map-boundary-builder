@@ -5,6 +5,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -13,21 +14,26 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from importlib import resources
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
-from map_boundary_builder.extract import DEFAULT_SIMPLIFY_PX
-from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
 from map_boundary_builder.pipeline_version import get_pipeline_version
-from map_boundary_builder.runner import BoundaryBuildOptions, build_boundary
-from map_boundary_builder.web import RequestError, float_field, int_field, safe_extension
 
-MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+DEFAULT_SIMPLIFY_PX = 6.0
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
 RUN_RESULT_CACHE_VERSION = "run-result-v2"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
+
+
+class RequestError(ValueError):
+    def __init__(self, status: HTTPStatus, message: str) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class handler(BaseHTTPRequestHandler):
@@ -100,7 +106,7 @@ class handler(BaseHTTPRequestHandler):
         def progress(event: dict[str, Any]) -> None:
             events.append({"timestamp": time.time(), **event})
 
-        options = BoundaryBuildOptions(
+        options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
@@ -123,6 +129,8 @@ class handler(BaseHTTPRequestHandler):
         image_path.write_bytes(image_bytes)
 
         try:
+            from map_boundary_builder.runner import build_boundary
+
             result = build_boundary(
                 image_path,
                 city,
@@ -168,6 +176,8 @@ class handler(BaseHTTPRequestHandler):
             summary = json.loads(fields.get("summary", "{}") or "{}")
         except json.JSONDecodeError:
             summary = {}
+        from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
+
         try:
             result = create_failure_issue(
                 FailureReport(
@@ -190,9 +200,49 @@ class handler(BaseHTTPRequestHandler):
         self.send_json(result, status=HTTPStatus.CREATED)
 
     def parse_multipart(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
-        from map_boundary_builder.web import BoundaryWebHandler
+        content_type = self.headers.get("Content-Type", "")
+        match = re.search(r'boundary="?([^";]+)"?', content_type)
+        if "multipart/form-data" not in content_type or match is None:
+            raise RequestError(HTTPStatus.BAD_REQUEST, "Expected multipart/form-data.")
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            raise RequestError(HTTPStatus.BAD_REQUEST, "Request body is empty.")
+        if length > MAX_UPLOAD_BYTES:
+            limit_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+            raise RequestError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, f"Upload is larger than {limit_mb} MB.")
 
-        return BoundaryWebHandler.parse_multipart(self)
+        body = self.rfile.read(length)
+        boundary = ("--" + match.group(1)).encode()
+        fields: dict[str, str] = {}
+        files: dict[str, tuple[str, bytes]] = {}
+        for raw_part in body.split(boundary):
+            part = raw_part
+            if part.startswith(b"\r\n"):
+                part = part[2:]
+            if part.endswith(b"\r\n"):
+                part = part[:-2]
+            if not part or part == b"--":
+                continue
+            if part.endswith(b"--"):
+                part = part[:-2].rstrip(b"\r\n")
+            header_blob, separator, content = part.partition(b"\r\n\r\n")
+            if not separator:
+                continue
+            headers = header_blob.decode("utf-8", "replace").split("\r\n")
+            disposition = next(
+                (header for header in headers if header.lower().startswith("content-disposition:")),
+                "",
+            )
+            name_match = re.search(r'name="([^"]+)"', disposition)
+            if name_match is None:
+                continue
+            field_name = name_match.group(1)
+            filename_match = re.search(r'filename="([^"]*)"', disposition)
+            if filename_match is not None:
+                files[field_name] = (filename_match.group(1), content)
+            else:
+                fields[field_name] = content.decode("utf-8", "replace").strip()
+        return fields, files
 
     def send_asset(self, name: str) -> None:
         if "/" in name or "\\" in name or name.startswith("."):
@@ -248,7 +298,28 @@ def inline_overlay(path: Path | None) -> str | None:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
-def run_result_cache_key(image_bytes: bytes, city: str | None, options: BoundaryBuildOptions) -> str:
+def safe_extension(filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    return ext if ext in SUPPORTED_IMAGE_EXTENSIONS else ".png"
+
+
+def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:
+    try:
+        value = float(fields.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def int_field(fields: dict[str, str], name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(fields.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
         "image_pixel_sha256": normalized_image_sha256(image_bytes),
