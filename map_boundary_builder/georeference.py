@@ -29,8 +29,8 @@ MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
-GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "8")))
-GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "8")))
+GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
+GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "12")))
 EARLY_CONTEXT_MIN_REGIONAL_SPREAD_M = 45000.0
 EARLY_CONTEXT_MIN_REGIONAL_NAMES = 6
 EARLY_CONTEXT_MIN_CANDIDATES = 24
@@ -2348,7 +2348,12 @@ def geocode_contexts(city: str, city_center: GeocodeResult) -> list[str]:
     for value in [city, *city_center.display_name.split(",")[:5]]:
         value = value.strip()
         lowered = value.lower()
-        if not value or value.isdigit() or lowered == "united states" or "county" in lowered:
+        if (
+            not value
+            or value.isdigit()
+            or lowered in {"inferred map area", "united states"}
+            or "county" in lowered
+        ):
             continue
         if value.lower() not in {context.lower() for context in contexts}:
             contexts.append(value)

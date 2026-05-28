@@ -8,6 +8,7 @@ from map_boundary_builder.georeference import (
     LabelGeocodeCandidate,
     candidate_place_labels,
     geocode_many,
+    geocode_contexts,
     georeference_from_labels,
     has_reliable_candidate_cluster,
     infer_city_contexts,
@@ -87,6 +88,19 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertEqual([items[0].label for items in results], ["Miami", "Orlando", "Miami"])
         self.assertEqual(set(calls), {("Miami", 2, "us"), ("Orlando", 1, "us")})
+
+    def test_geocode_contexts_skip_synthetic_inferred_area(self) -> None:
+        center = GeocodeResult(
+            label="Inferred map area",
+            lon=-80.2,
+            lat=25.8,
+            display_name="Inferred map area",
+            bbox=(-80.4, 25.6, -80.0, 26.0),
+            importance=0.5,
+            place_type="region",
+        )
+
+        self.assertEqual(geocode_contexts("Inferred map area", center), [])
 
     def test_concise_high_confidence_labels_are_preserved(self) -> None:
         noisy_labels = [
