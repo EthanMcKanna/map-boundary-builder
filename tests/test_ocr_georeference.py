@@ -7,6 +7,7 @@ from map_boundary_builder.georeference import (
     GeoreferenceResult,
     LabelGeocodeCandidate,
     candidate_place_labels,
+    direct_city_contexts_from_labels,
     geocode_many,
     geocode_contexts,
     georeference_from_labels,
@@ -164,6 +165,38 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertFalse(is_reliable_single_token_context(francisco))
         self.assertTrue(is_reliable_single_token_context(dallas))
+
+    def test_multiword_label_tokens_can_promote_repeated_city_context(self) -> None:
+        labels = [
+            OcrLabel("Orlando Lake", x=120, y=100, width=260, height=120, confidence=96),
+            OcrLabel("Parramore Orlando", x=180, y=160, width=280, height=110, confidence=94),
+            OcrLabel("Downtown Orlando", x=240, y=220, width=300, height=100, confidence=95),
+            OcrLabel("Orlando", x=260, y=245, width=120, height=80, confidence=96),
+            OcrLabel("Lake Heights", x=300, y=280, width=180, height=70, confidence=94),
+        ]
+        calls: list[str] = []
+
+        def fake_geocode(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append(query)
+            if query == "Orlando":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-81.3792,
+                        lat=28.5383,
+                        display_name="Orlando, Orange County, Florida, United States",
+                        bbox=(-81.51, 28.35, -81.22, 28.65),
+                        importance=0.72,
+                        place_type="city",
+                    )
+                ]
+            return []
+
+        with patch("map_boundary_builder.georeference.geocode", side_effect=fake_geocode):
+            contexts = direct_city_contexts_from_labels(labels)
+
+        self.assertEqual(contexts[0].query, "Orlando")
+        self.assertIn("Orlando", calls)
 
     def test_direct_city_context_expands_when_labels_span_adjacent_places(self) -> None:
         labels = [

@@ -965,6 +965,19 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
     query_evidence: dict[str, set[str]] = {}
     used_positions: set[tuple[str, int, int]] = set()
     single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
+    standalone_queries: set[str] = set()
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        query = place_query_text(label.text)
+        tokens = place_tokens(query)
+        if len(tokens) != 1:
+            continue
+        token = next(iter(tokens))
+        if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if tokens <= single_token_fragments and label.width * label.height < 8000:
+            continue
+        standalone_queries.add(token.title())
+
     for label in labels[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
@@ -983,9 +996,16 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         score = label.confidence + min(35.0, (label.width * label.height) / 650.0)
         query_scores[query] = query_scores.get(query, 0.0) + score
         query_evidence.setdefault(query, set()).add(label.text)
-        if len(tokens) == 1:
-            token_query = next(iter(tokens)).title()
-            query_scores[token_query] = query_scores.get(token_query, 0.0) + score
+        token_bonus = 1.0 if len(tokens) == 1 else 0.64
+        for token in tokens:
+            if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
+                continue
+            if len(token) < 5:
+                continue
+            token_query = token.title()
+            if len(tokens) > 1 and token_query not in standalone_queries:
+                continue
+            query_scores[token_query] = query_scores.get(token_query, 0.0) + score * token_bonus
             query_evidence.setdefault(token_query, set()).add(label.text)
 
     scored_contexts: list[tuple[float, CityContext]] = []
