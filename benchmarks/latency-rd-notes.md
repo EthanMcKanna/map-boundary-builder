@@ -232,6 +232,20 @@ screenshots are refreshed.
     `null`, returned overlay `image/webp` at 1200x1200. Production OCR timing
     remained noisy on a single call; local repeated OCR and full-suite accuracy
     are the stronger evidence for this change.
+- Deployment `dpl_9BCK2kUuKrr99BjroGGh1rmh7EzE` deployed hybrid road refinement
+  to `https://mapboundary.app`.
+- Health after deploy: `pipeline-b33f5471e1bf94a4`, runtime `vercel-python`,
+  `tesseract: null`.
+- Production hybrid road-refinement smoke against previous production
+  `dpl_7UZ8A5b1QgftEgQ6vq6XpqEYitod`:
+  - Nashville warm cache-busted pair: old HTTP 201, 3.76s wall, 1.244s event
+    span, road score 0.763171; hybrid HTTP 201, 3.91s wall, 1.165s event span,
+    road score 0.770739, with the expected improved bbox.
+  - Phoenix warm cache-busted repeats: old event spans 1.192s and 1.202s with
+    road score 0.698507; hybrid event spans 1.248s and 1.217s with road score
+    0.718119 and the expected improved bbox. Production Phoenix wall time was
+    noise-flat rather than a clear latency win, while local A/B and the
+    drift-aware benchmark are the stronger evidence for the hybrid search.
 
 ## Failed Or Rejected Experiments
 
