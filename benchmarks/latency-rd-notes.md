@@ -210,6 +210,12 @@ regressions, during latency experiments.
   `[-80.3230924,25.6880246,-80.1184998,25.9396977]`, confidence 0.864,
   6 controls, `ocr-georeference:nominatim-label-fit+osm-road-refine`, and road
   score 0.681518.
+- Production deploy `dpl_8tVWMypKxGqmQnXZubpVuooxkqc2` is live at
+  `mapboundary.app` with pipeline hash `pipeline-79b1bc6754d6e3bc`. After the
+  first post-deploy warm-up, cache-busted production repeats returned Phoenix
+  0.747s event span / road score 0.706232, Nashville 0.723s / road score
+  0.772836, and Miami 0.726s / road score 0.681518, all preserving the expected
+  road-refined source and bbox.
 - `PYTHONPATH=. .venv/bin/pytest`: 53 passed.
 - `PATH=/usr/bin:/bin PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m pytest -q`: 53 passed.
 - `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d /tmp/mbb-ort119-focused-XXXXXX) PYTHONPATH=. /tmp/mbb-ort119-py312-venv-*/bin/python -m map_boundary_builder.benchmark --mode full --only phoenix --only nashville --only orlando --only los-angeles --out-dir out/ort119-focused`: PASS 4/4 active, avg IoU 0.961, min IoU 0.931.
