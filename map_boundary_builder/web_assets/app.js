@@ -641,20 +641,45 @@ async function buildRunCacheKey(file, formData) {
       .map((field) => `${field}=${String(formData.get(field) ?? "")}`)
       .join("&");
     const [imageHash, settingsHash] = await Promise.all([
-      sha256Hex(await file.arrayBuffer()),
+      imageContentHash(file),
       sha256Hex(new TextEncoder().encode(settingsSignature)),
     ]);
     return [
       RUN_CACHE_VERSION,
       pipelineVersion,
-      file.type || "image",
-      file.size,
       imageHash,
       settingsHash,
     ].join(":");
   } catch (error) {
     console.warn("Could not build local run cache key", error);
     return null;
+  }
+}
+
+async function imageContentHash(file) {
+  const pixelHash = await imagePixelHash(file);
+  if (pixelHash) return pixelHash;
+  return `bytes:${await sha256Hex(await file.arrayBuffer())}`;
+}
+
+async function imagePixelHash(file) {
+  if (typeof createImageBitmap !== "function") return null;
+  let bitmap = null;
+  try {
+    bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+    context.drawImage(bitmap, 0, 0);
+    const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    return `pixels:${bitmap.width}x${bitmap.height}:${await sha256Hex(pixels)}`;
+  } catch (error) {
+    console.warn("Could not build pixel hash for local run cache", error);
+    return null;
+  } finally {
+    bitmap?.close?.();
   }
 }
 
