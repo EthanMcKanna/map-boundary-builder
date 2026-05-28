@@ -22,6 +22,7 @@ from urllib.parse import unquote, urlparse
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
 from map_boundary_builder.pipeline_version import get_pipeline_version
+from map_boundary_builder.runtime_warmup import parse_warm_targets, warm_generation_runtime
 
 DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -55,6 +56,8 @@ class handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
+                warm_targets = parse_warm_targets(parsed.query)
+                warm_details = warm_generation_runtime(warm_targets) if warm_targets else {}
                 self.send_json(
                     {
                         "ok": True,
@@ -62,6 +65,7 @@ class handler(BaseHTTPRequestHandler):
                         "tesseract": shutil.which("tesseract"),
                         "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
                         "pipeline_version": get_pipeline_version(),
+                        **warm_details,
                     }
                 )
                 return
