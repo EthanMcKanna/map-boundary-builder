@@ -437,6 +437,13 @@ regressions, during latency experiments.
   - Full drift-aware benchmark stayed clean: 8/8 scored fixtures passed, 7
     `reference_mismatch` fixtures skipped, avg IoU 0.962, min IoU 0.931, in
     8.20s wall time.
+  - Production deployment `dpl_G1AMGx4uRNGgUFAyv3nL2mbuoudT` reported
+    `pipeline-8d4c85b80b06ef10` and kept `api/index.py` at 92.86 MB. First
+    cache-busted production POSTs preserved geometry/source/confidence while
+    improving over the previous first post-deploy evidence: Miami Waymo 13.004s
+    wall / 9.710s event span versus 16.61s / 13.098s; Bay Area Waymo 6.218s
+    wall / 3.580s event span versus 8.12s / 4.763s. Exact repeats hit the
+    result cache in 1.900s and 2.136s with identical bboxes and confidence.
 
 ## Failed Or Rejected Experiments
 
