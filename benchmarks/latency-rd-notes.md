@@ -460,6 +460,14 @@ regressions, during latency experiments.
   - Validation passed: `PYTHONPATH=. .venv/bin/pytest -q`, 63 tests;
     `PYTHONPATH=. .venv/bin/python -m compileall -q api map_boundary_builder`;
     and `node --check map_boundary_builder/web_assets/app.js`.
+  - Production deployment `dpl_CbPzvdUsFmhrLw434Y8HmUqFqYMw` reported
+    `pipeline-782cc2ab7d027532` and kept `api/index.py` at 92.86 MB. First
+    cache-busted post-deploy calls paid cold/cache-invalidation cost: Miami
+    15.634s wall / 12.519s event span and Phoenix 12.114s wall / 9.410s event
+    span, with identical geometry, confidence, and road scores. After warmup,
+    new cache-busted calls hit sub-second server-side generation spans: Miami
+    4.722s wall / 0.788s event span and Phoenix 3.427s wall / 0.791s event
+    span. Exact repeats returned from the result cache in 2.293s and 2.217s.
 
 ## Failed Or Rejected Experiments
 
