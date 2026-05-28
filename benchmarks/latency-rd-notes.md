@@ -275,6 +275,18 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   green at 8/8 active fixtures, avg IoU 0.983, min IoU 0.943. Full pytest
   passed 85 tests and 9 subtests, and `compileall`, `node --check`, and
   `git diff --check` passed.
+- Production OCR/extraction overlap deployment `dpl_93LnxNN4wAVRHAMBvbHe7hmw1Cai`
+  reported `pipeline-c9d6bfac3de23dd9` and kept `api/index.py` at 92.82 MB.
+  Cache-busted active Nashville stayed on `catalog-shape-match:ocr-label-hint`
+  with `nashville-waymo`, 1.009s wall and 0.504s internal event span. A
+  city-forced Phoenix smoke exercised the overlapped OCR/georeference path and
+  returned the expected `ocr-georeference:nominatim-label-fit+osm-road-refine`
+  output with `catalog_slug: null`, confidence 0.918, road score 0.806613, and
+  the expected bbox; however Vercel CPU/runtime time remained high at 13.552s
+  wall / 10.177s internal on the first uncached variant and 9.194s wall /
+  6.937s internal on a warmed uncached variant, so this is a local/server-path
+  latency win rather than a production sub-second breakthrough for the
+  OCR-heavy Phoenix city-forced path.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default
