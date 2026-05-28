@@ -4,6 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 import json
 from dataclasses import dataclass
 from math import hypot
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -11,7 +12,14 @@ from PIL import Image
 from shapely.geometry import shape
 
 from .catalog_match import CATALOG_LABEL_HINT_MIN_IOU, catalog_feature_collection, match_service_area_catalog
-from .extract import DEFAULT_SIMPLIFY_PX, extract_service_area, load_rgb, write_mask_png, write_overlay_png
+from .extract import (
+    DEFAULT_SIMPLIFY_PX,
+    extract_service_area,
+    extraction_scale_factor,
+    load_rgb,
+    write_mask_png,
+    write_overlay_png,
+)
 from .georeference import (
     CityContext,
     georeference_from_city_context,
@@ -26,6 +34,7 @@ from .ocr import extract_ocr_labels
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
+CATALOG_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION", "1600")))
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
@@ -117,7 +126,16 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
-        extraction = extract_service_area(image_path, simplify_px=opts.simplify_px, rgb=rgb)
+        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_catalog else 0
+        used_catalog_scaled_extraction = (
+            allow_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
+        )
+        extraction = extract_service_area(
+            image_path,
+            simplify_px=opts.simplify_px,
+            rgb=rgb,
+            max_dimension=extraction_max_dimension,
+        )
         emit_progress(
             progress,
             stage="extract",
@@ -138,45 +156,65 @@ def build_boundary(
                 area_hint_texts=[city_input] if city_input is not None else None,
             )
             if catalog_match is not None:
-                data = catalog_feature_collection(
+                return finish_catalog_boundary_result(
                     extraction,
                     catalog_match,
                     width=width,
                     height=height,
                     image_path=image_path,
                     city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
                 )
-                combined_confidence = data["features"][0]["properties"]["combined_confidence"]
-                emit_progress(
-                    progress,
-                    stage="georeference",
-                    message="Matched known service-area shape",
-                    percent=78,
-                    details={
-                        "source": "catalog-shape-match",
-                        "catalog_slug": catalog_match.entry.slug,
-                        "shape_iou": round(catalog_match.iou, 3),
-                        "combined_confidence": combined_confidence,
-                        "control_points": 0,
-                        "median_residual_m": 0.0,
-                        "p90_residual_m": 0.0,
-                    },
-                )
-                if combined_confidence < opts.min_confidence:
-                    raise ValueError(
-                        f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
-                        f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
-                    )
-                return finish_boundary_result(
-                    data,
+
+        if used_catalog_scaled_extraction:
+            if labels_future is None:
+                ocr_executor = ThreadPoolExecutor(max_workers=1)
+                labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+            emit_progress(
+                progress,
+                stage="extract",
+                message="Refining service-area pixels",
+                percent=38,
+                details={"width": width, "height": height},
+            )
+            extraction = extract_service_area(
+                image_path,
+                simplify_px=opts.simplify_px,
+                rgb=rgb,
+                max_dimension=0,
+            )
+            emit_progress(
+                progress,
+                stage="extract",
+                message="Pixel polygon refined",
+                percent=40,
+                details={
+                    "style": extraction.style,
+                    "coverage_ratio": round(extraction.coverage_ratio, 6),
+                    "contour_count": extraction.contour_count,
+                    "confidence": extraction.confidence,
+                },
+            )
+            catalog_match = match_service_area_catalog(
+                extraction.pixel_geometry,
+                style=extraction.style,
+                area_hint_texts=[city_input] if city_input is not None else None,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
                     extraction,
-                    image_path,
-                    output_path,
-                    debug_path,
-                    opts,
-                    width,
-                    height,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
                     city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
                     rgb=rgb,
                     progress=progress,
                 )
@@ -364,6 +402,64 @@ def high_confidence_label_texts(labels: list[Any]) -> list[str]:
         for label in labels
         if label.text.strip() and label.confidence >= CATALOG_LABEL_HINT_MIN_CONFIDENCE
     ]
+
+
+def finish_catalog_boundary_result(
+    extraction,
+    catalog_match,
+    *,
+    width: int,
+    height: int,
+    image_path: Path,
+    city_input: str,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    rgb,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult:
+    data = catalog_feature_collection(
+        extraction,
+        catalog_match,
+        width=width,
+        height=height,
+        image_path=image_path,
+        city_input=city_input,
+    )
+    combined_confidence = data["features"][0]["properties"]["combined_confidence"]
+    emit_progress(
+        progress,
+        stage="georeference",
+        message="Matched known service-area shape",
+        percent=78,
+        details={
+            "source": "catalog-shape-match",
+            "catalog_slug": catalog_match.entry.slug,
+            "shape_iou": round(catalog_match.iou, 3),
+            "combined_confidence": combined_confidence,
+            "control_points": 0,
+            "median_residual_m": 0.0,
+            "p90_residual_m": 0.0,
+        },
+    )
+    if combined_confidence < opts.min_confidence:
+        raise ValueError(
+            f"Combined confidence {combined_confidence:.2f} is below --min-confidence "
+            f"{opts.min_confidence:.2f}. Provide a clearer map crop or lower the threshold."
+        )
+    return finish_boundary_result(
+        data,
+        extraction,
+        image_path,
+        output_path,
+        debug_path,
+        opts,
+        width,
+        height,
+        city_input=city_input,
+        rgb=rgb,
+        progress=progress,
+    )
 
 
 def finish_boundary_result(

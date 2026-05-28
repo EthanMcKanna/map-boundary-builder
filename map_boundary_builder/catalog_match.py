@@ -200,7 +200,8 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
         payload = json.loads(item.read_text())
         geometry = load_geometry_payload(payload)
         properties = catalog_properties(payload)
-        use_exact_geometry = properties.get("catalog_source") == "current-verified-ocr-output"
+        status = parse_catalog_status(properties.get("catalog_status"))
+        use_exact_geometry = status == "active" or properties.get("catalog_source") == "current-verified-ocr-output"
         entries.append(
             ServiceAreaCatalogEntry(
                 slug=slug,
@@ -208,7 +209,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 area=area_from_slug(slug, provider),
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
-                status=parse_catalog_status(properties.get("catalog_status")),
+                status=status,
                 stale_reason=parse_optional_text(properties.get("catalog_stale_reason")),
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
                 min_iou=parse_catalog_min_iou(properties.get("catalog_min_shape_iou"), use_exact_geometry),

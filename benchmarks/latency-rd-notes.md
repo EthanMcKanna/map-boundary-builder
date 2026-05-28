@@ -217,6 +217,12 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   current shapes return through `catalog-shape-match` even when the user typed a
   city, while still ignoring stale Houston, Miami, and Bay Area catalog entries
   and falling back to OCR/georeference when the city hint does not match.
+- Catalog-enabled requests now use a conservative 1600px extraction pass only
+  for the strict pre-OCR catalog guard, and active catalog hits return exact
+  catalog geometry. If that fast guard misses, the runner overlaps OCR with a
+  full-resolution extraction retry before falling back to general georeference,
+  so arbitrary/no-catalog accuracy is not traded away for the catalog speed
+  path.
 
 ## Current Validation
 
@@ -314,6 +320,25 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   the active no-catalog benchmark but took 7.82s total versus the matched 608
   baseline at 7.46s, and slightly reduced some gray-fill IoUs, so the current
   608 default remains better.
+- Current catalog-scaled extraction head: focused extract/catalog/API tests
+  passed 27 tests, full pytest passed 88 tests and 9 subtests, and `compileall`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`
+  passed. A blunt global 1200px extraction cap was rejected even though
+  extraction-only scoring passed, because the no-catalog full benchmark slightly
+  reduced individual OCR/georeference IoUs and did not improve total time. The
+  accepted version uses the 1600px scaled extraction only for catalog probing and
+  exact catalog outputs. Default full benchmark
+  `out/benchmark-catalog-scaled-default-20260528-continue/full-report.json`
+  passed 8/8 active fixtures, skipped 7 known `reference_mismatch` fixtures,
+  improved avg IoU from the prior 0.983 city-fastpath gate to 0.993, kept min
+  IoU 0.943, and completed in 3.02s total. City-overrides benchmark
+  `out/benchmark-catalog-scaled-city-20260528-continue/full-report.json`
+  passed 8/8 active, avg IoU 0.993, min IoU 0.943, total 2.94s. The explicit
+  no-catalog gates stayed on OCR/georeference with `catalog_slug: null`:
+  `out/benchmark-catalog-scaled-no-catalog-20260528-continue/full-report.json`
+  passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.58s, and
+  `out/benchmark-catalog-scaled-no-catalog-city-20260528-continue/full-report.json`
+  passed 8/8 active, avg IoU 0.962, min IoU 0.931, total 7.50s.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

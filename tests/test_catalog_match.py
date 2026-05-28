@@ -144,6 +144,33 @@ def test_current_verified_catalog_entry_outputs_exact_geometry_after_match() -> 
     assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
 
 
+def test_reference_catalog_entry_outputs_exact_geometry_after_match() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "phoenix-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+    match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+    assert match is not None
+    extraction = ExtractionResult(
+        mask=np.zeros((100, 100), dtype=np.uint8),
+        style="bright-blue",
+        pixel_geometry=pixel_geometry.simplify(500, preserve_topology=True),
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=0.98,
+    )
+
+    data = catalog_feature_collection(
+        extraction,
+        match,
+        width=1000,
+        height=1000,
+        image_path="input.png",
+        city_input="input.png",
+    )
+
+    output_geometry = shape(data["features"][0]["geometry"])
+    assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
+
+
 def test_stale_current_verified_catalog_entry_can_keep_audit_threshold() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
 

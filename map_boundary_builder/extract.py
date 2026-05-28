@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image
+from shapely.affinity import scale as scale_geometry
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 
 DEFAULT_SIMPLIFY_PX = 6.0
+EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
 
 
 @dataclass(frozen=True)
@@ -43,9 +46,21 @@ def extract_service_area(
     simplify_px: float = DEFAULT_SIMPLIFY_PX,
     *,
     rgb: np.ndarray | None = None,
+    max_dimension: int | None = None,
 ) -> ExtractionResult:
     if rgb is None:
         rgb = load_rgb(image_path)
+    max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
+    scale = extraction_scale_factor(rgb, max_dimension)
+    if scale < 1.0:
+        height, width = rgb.shape[:2]
+        scaled_rgb = cv2.resize(
+            rgb,
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+        scaled = extract_service_area_from_rgb(scaled_rgb, simplify_px=simplify_px * scale)
+        return rescale_extraction_result(scaled, width=width, height=height, scale=scale)
     return extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
 
 
@@ -75,6 +90,41 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
         pixel_geometry=geometry,
         coverage_ratio=coverage_ratio,
         contour_count=contour_count,
+        confidence=confidence,
+    )
+
+
+def extraction_scale_factor(rgb: np.ndarray, max_dimension: int) -> float:
+    if max_dimension <= 0:
+        return 1.0
+    height, width = rgb.shape[:2]
+    largest = max(width, height)
+    if largest <= max_dimension:
+        return 1.0
+    return max_dimension / float(largest)
+
+
+def rescale_extraction_result(
+    result: ExtractionResult,
+    *,
+    width: int,
+    height: int,
+    scale: float,
+) -> ExtractionResult:
+    mask = cv2.resize(
+        result.mask.astype(np.uint8),
+        (width, height),
+        interpolation=cv2.INTER_NEAREST,
+    ).astype(bool)
+    geometry = scale_geometry(result.pixel_geometry, xfact=1.0 / scale, yfact=1.0 / scale, origin=(0, 0))
+    coverage_ratio = float(mask.mean())
+    confidence = extraction_confidence(mask, result.style, result.contour_count)
+    return ExtractionResult(
+        mask=mask,
+        style=result.style,
+        pixel_geometry=geometry,
+        coverage_ratio=coverage_ratio,
+        contour_count=result.contour_count,
         confidence=confidence,
     )
 

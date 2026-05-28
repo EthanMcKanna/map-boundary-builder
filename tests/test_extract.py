@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from map_boundary_builder.extract import repair_mask
+from map_boundary_builder.extract import extract_service_area, repair_mask
 
 
 class MaskRepairTests(unittest.TestCase):
@@ -25,6 +25,19 @@ class MaskRepairTests(unittest.TestCase):
         repaired = repair_mask(raw, "bright-blue")
 
         self.assertTrue(repaired[99, 80])
+
+    def test_downscaled_extraction_returns_original_coordinate_space(self) -> None:
+        rgb = np.full((240, 240, 3), 255, dtype=np.uint8)
+        rgb[60:190, 50:180] = (46, 119, 246)
+
+        result = extract_service_area("unused.png", rgb=rgb, max_dimension=120)
+
+        self.assertEqual(result.mask.shape, (240, 240))
+        min_x, min_y, max_x, max_y = result.pixel_geometry.bounds
+        self.assertLess(abs(min_x - 50), 3)
+        self.assertLess(abs(min_y - 60), 3)
+        self.assertLess(abs(max_x - 179), 3)
+        self.assertLess(abs(max_y - 189), 3)
 
 
 if __name__ == "__main__":
