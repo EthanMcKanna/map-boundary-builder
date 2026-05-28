@@ -21,6 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simplify-px", type=float, default=DEFAULT_SIMPLIFY_PX, help="Pixel simplification tolerance.")
     parser.add_argument("--min-confidence", type=float, default=0.55, help="Fail below this combined confidence.")
     parser.add_argument("--min-control-points", type=int, default=3, help="Minimum OCR/geocoder control points for georeferencing.")
+    parser.add_argument(
+        "--no-catalog",
+        action="store_true",
+        help="Bypass bundled service-area catalog matching and force OCR/georeference inference.",
+    )
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")
     return parser
 
@@ -47,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
                 simplify_px=args.simplify_px,
                 min_confidence=args.min_confidence,
                 min_control_points=args.min_control_points,
+                allow_catalog=not args.no_catalog,
             ),
         )
 

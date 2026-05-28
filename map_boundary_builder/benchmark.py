@@ -52,6 +52,9 @@ class BenchmarkScore:
     centroid_distance_m: float | None
     vertices: int | None
     style: str | None
+    georeference_source: str | None = None
+    combined_confidence: float | None = None
+    catalog_slug: str | None = None
     error: str | None = None
     status: str = "active"
     note: str | None = None
@@ -67,6 +70,9 @@ class BenchmarkScore:
             "centroid_distance_m": round(self.centroid_distance_m, 1) if self.centroid_distance_m is not None else None,
             "vertices": self.vertices,
             "style": self.style,
+            "georeference_source": self.georeference_source,
+            "combined_confidence": round(self.combined_confidence, 6) if self.combined_confidence is not None else None,
+            "catalog_slug": self.catalog_slug,
             "error": self.error,
             "status": self.status,
             "note": self.note,
@@ -107,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="For --mode full, pass the reference area name as --city. The default tests image-only inference.",
     )
+    parser.add_argument(
+        "--no-catalog",
+        action="store_true",
+        help="For --mode full, bypass catalog matching so OCR/georeference inference remains benchmarked.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -122,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         mean_iou=args.mean_iou,
         timeout_seconds=args.timeout_seconds,
         city_overrides=args.city_overrides,
+        no_catalog=args.no_catalog,
         only_filters=args.only,
         fixture_config=args.fixture_config,
     )
@@ -148,6 +160,7 @@ def run_benchmark(
     city_overrides: bool,
     only_filters: list[str],
     fixture_config: Path,
+    no_catalog: bool = False,
 ) -> dict[str, Any]:
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
@@ -170,6 +183,7 @@ def run_benchmark(
                     min_iou=min_iou,
                     timeout_seconds=timeout_seconds,
                     city_overrides=city_overrides,
+                    no_catalog=no_catalog,
                 )
             )
         else:
@@ -188,6 +202,7 @@ def run_benchmark(
         "thresholds": {
             "min_iou": min_iou,
             "mean_iou": mean_iou,
+            "no_catalog": no_catalog,
         },
         "summary": {
             "passed": passed,
@@ -329,6 +344,7 @@ def score_full_fixture(
     min_iou: float,
     timeout_seconds: int,
     city_overrides: bool,
+    no_catalog: bool,
 ) -> BenchmarkScore:
     output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
     debug_dir = out_dir / "full-debug" / fixture.slug
@@ -346,6 +362,8 @@ def score_full_fixture(
     ]
     if city_overrides:
         command.extend(["--city", fixture.area])
+    if no_catalog:
+        command.append("--no-catalog")
     try:
         completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout_seconds, check=False)
     except subprocess.TimeoutExpired:
@@ -360,6 +378,7 @@ def score_full_fixture(
         reference = project_geometry(load_reference_geometry(fixture.reference_path))
         metrics = compare_geometries(predicted, reference)
         summary = json.loads(completed.stdout)
+        properties = output["features"][0].get("properties", {})
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
@@ -370,6 +389,9 @@ def score_full_fixture(
             centroid_distance_m=metrics["centroid_distance_m"],
             vertices=count_vertices(shape(output["features"][0]["geometry"])),
             style=summary.get("style"),
+            georeference_source=summary.get("georeference_source"),
+            combined_confidence=summary.get("combined_confidence"),
+            catalog_slug=properties.get("catalog_slug"),
             status=fixture.status,
             note=fixture.note,
         )
@@ -504,7 +526,7 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     )
     print(f"report: {report_path}")
     print("")
-    print(f"{'status':6s} {'iou':>6s} {'area':>6s} {'verts':>6s} {'style':12s} slug")
+    print(f"{'status':6s} {'iou':>6s} {'area':>6s} {'verts':>6s} {'style':12s} {'source':38s} slug")
     for row in report["scores"]:
         row_status = "PASS" if row["passed"] else "FAIL"
         if row["status"] != "active":
@@ -513,7 +535,8 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
         area = f"{row['area_ratio']:.2f}" if row["area_ratio"] is not None else "-"
         vertices = str(row["vertices"]) if row["vertices"] is not None else "-"
         style = row["style"] or "-"
-        print(f"{row_status:6s} {iou:>6s} {area:>6s} {vertices:>6s} {style:12s} {row['slug']}")
+        source = (row.get("georeference_source") or "-")[:38]
+        print(f"{row_status:6s} {iou:>6s} {area:>6s} {vertices:>6s} {style:12s} {source:38s} {row['slug']}")
         if row["error"]:
             print(f"       error: {row['error']}")
         if row["note"]:

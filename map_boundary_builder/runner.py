@@ -38,6 +38,7 @@ class BoundaryBuildOptions:
     min_control_points: int = 3
     preview_max_dimension: int | None = None
     write_mask_artifact: bool = True
+    allow_catalog: bool = True
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ def build_boundary(
         },
     )
 
-    if city_input is None:
+    if city_input is None and opts.allow_catalog:
         catalog_match = match_service_area_catalog(extraction.pixel_geometry, style=extraction.style)
         if catalog_match is not None:
             data = catalog_feature_collection(
@@ -197,7 +198,7 @@ def build_boundary(
                 "top_labels": [label.text for label in labels[:8]],
             },
         )
-        if city_input is None and should_try_label_hinted_catalog(width, height, labels):
+        if city_input is None and opts.allow_catalog and should_try_label_hinted_catalog(width, height, labels):
             label_hints = high_confidence_label_texts(labels)
             catalog_match = match_service_area_catalog(
                 extraction.pixel_geometry,

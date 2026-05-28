@@ -189,9 +189,35 @@ regressions, during latency experiments.
   OCR label names the candidate catalog area and the image is small or has very
   few labels. This recovered the issue #5 420px Nashville screenshot from a
   slow georeference failure into a 0.305s current catalog result.
+- The CLI and benchmark harness now expose a `--no-catalog` switch, and full
+  benchmark reports include georeference source, combined confidence, and
+  catalog slug. This keeps the arbitrary OCR/georeference path measurable after
+  catalog fast paths made the default active benchmark entirely catalog-sourced.
 
 ## Current Validation
 
+- Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
+  PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
+  `compileall`, `node --check`, and `git diff --check` passed. The default
+  full benchmark `out/benchmark-default-observability-20260528-154401/full-report.json`
+  stayed green at 8/8 active fixtures, 7 skipped, avg IoU 0.983, min IoU 0.943,
+  and now prints source columns proving the active suite is catalog-sourced.
+  Both explicit non-catalog gates passed: image-only inference
+  `out/benchmark-no-catalog-20260528-154327/full-report.json` and city-forced
+  inference `out/benchmark-no-catalog-city-20260528-154327/full-report.json`
+  each passed 8/8 active fixtures, skipped 7 known `reference_mismatch`
+  fixtures, avg IoU 0.962, min IoU 0.931. The reports show OCR/georeference
+  sources and `catalog_slug: null`, confirming the catalog path was bypassed.
+- Rejected mask-bounds OCR cropping as a default optimization. It reduced OCR
+  time on representative city-forced cases, but Phoenix dropped from confidence
+  0.908 with 6 controls to 0.873 with 5 controls, and Miami's road score moved
+  from 0.681518 to 0.676386. That is not enough evidence for the no-regression
+  bar even though several other cases were slightly faster.
+- Rejected lower dynamic RapidOCR max dimensions for the general path. At 1500,
+  Phoenix lost road refinement and dropped to confidence 0.854; at 1400,
+  Nashville lost road refinement and dropped to confidence 0.672; at 1300/1200,
+  Miami dropped to 3 controls with a substantially shifted bbox. Keep the 1600
+  cap until a stronger validator exists.
 - Current label-aided catalog head: `PATH=/usr/bin:/bin PYTHONPATH=.
   .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests. `compileall`
   over `map_boundary_builder`, `api`, and `tests`, `node --check
