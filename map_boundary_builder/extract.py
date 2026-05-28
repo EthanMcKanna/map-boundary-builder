@@ -50,17 +50,18 @@ def extract_service_area(
 
 
 def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
-    style = classify_style(rgb)
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    style = classify_style(rgb, hsv=hsv)
     if style == "bright-blue":
-        raw_mask = blue_service_mask(rgb)
+        raw_mask = blue_service_mask(rgb, hsv=hsv)
     elif style == "purple-fill":
-        raw_mask = purple_service_mask(rgb)
+        raw_mask = purple_service_mask(rgb, hsv=hsv)
     elif style == "light-fill":
-        raw_mask = light_fill_service_mask(rgb)
+        raw_mask = light_fill_service_mask(rgb, hsv=hsv)
     elif style == "gray-fill":
         raw_mask = gray_fill_service_mask(rgb)
     else:
-        raw_mask = dark_teal_service_mask(rgb)
+        raw_mask = dark_teal_service_mask(rgb, hsv=hsv)
     mask = repair_mask(raw_mask, style)
     if style in {"gray-fill", "light-fill"}:
         mask = keep_main_components(mask, max_components=1)
@@ -78,8 +79,9 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
     )
 
 
-def classify_style(rgb: np.ndarray) -> str:
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+def classify_style(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> str:
+    if hsv is None:
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
@@ -93,10 +95,10 @@ def classify_style(rgb: np.ndarray) -> str:
     ).mean()
     if bright_blue > 0.02 and bright_blue > teal_pixels * 1.5:
         return "bright-blue"
-    purple_fill = purple_service_mask(rgb).mean()
+    purple_fill = purple_service_mask(rgb, hsv=hsv).mean()
     if purple_fill > 0.02:
         return "purple-fill"
-    light_fill = light_fill_service_mask(rgb)
+    light_fill = light_fill_service_mask(rgb, hsv=hsv)
     light_fill_ratio = float(light_fill.mean())
     if 0.025 <= light_fill_ratio <= 0.55:
         return "light-fill"
@@ -111,8 +113,9 @@ def classify_style(rgb: np.ndarray) -> str:
     return "bright-blue"
 
 
-def blue_service_mask(rgb: np.ndarray) -> np.ndarray:
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+def blue_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
+    if hsv is None:
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
@@ -123,8 +126,9 @@ def blue_service_mask(rgb: np.ndarray) -> np.ndarray:
     return saturated_blue | app_blue
 
 
-def purple_service_mask(rgb: np.ndarray) -> np.ndarray:
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+def purple_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
+    if hsv is None:
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
@@ -138,8 +142,9 @@ def purple_service_mask(rgb: np.ndarray) -> np.ndarray:
     )
 
 
-def light_fill_service_mask(rgb: np.ndarray) -> np.ndarray:
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+def light_fill_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
+    if hsv is None:
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
     light = (val >= 230) & (sat <= 75)
@@ -161,8 +166,9 @@ def remove_edge_connected_components(mask: np.ndarray) -> np.ndarray:
     return mask & ~np.isin(labels, list(edge_labels))
 
 
-def dark_teal_service_mask(rgb: np.ndarray) -> np.ndarray:
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+def dark_teal_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
+    if hsv is None:
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]

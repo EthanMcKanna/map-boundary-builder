@@ -350,6 +350,29 @@ regressions, during latency experiments.
   `simplify_px=6.42`: status complete, 14.60s wall through `vercel curl`,
   10.189s event span, confidence 0.909, 6 controls, bbox
   `[-81.5090796, 28.3588616, -81.3625383, 28.5554773]`.
+- Local robust-fit cache and quantile helper validation:
+  - Houston, Miami, and Bay Area service-area screenshots are known to have
+    drifted from the saved reference polygons, so those fixtures remain
+    `reference_mismatch` data debt rather than scored regressions.
+  - Replaced repeated NumPy median/percentile calls over tiny residual lists
+    with an exact linear percentile helper, then cached robust similarity fits
+    by control coordinates so the decisive-fit check and final fit reuse the
+    same result inside a request.
+  - Focused tests:
+    `PYTHONPATH=. .venv/bin/pytest -q tests/test_ocr_georeference.py tests/test_extract.py tests/test_image_io.py`
+    passed, 38 tests.
+  - Full tests: `PYTHONPATH=. .venv/bin/pytest -q` passed, 59 tests.
+  - Focused drift-aware extraction benchmark passed 3/3 scored fixtures, skipped
+    4 known `reference_mismatch` fixtures, avg IoU 0.988, min IoU 0.984.
+  - Full drift-aware benchmark passed 8/8 scored fixtures, skipped 7
+    `reference_mismatch` fixtures, avg IoU 0.962, min IoU 0.931, in 7.80s
+    wall time versus the prior seeded-Overpass full-suite evidence of 8.28s.
+  - Production-like local warm smokes kept identical geometry/source/confidence:
+    Miami Waymo 0.220s wall, 0.045s georeference, confidence 0.864, 6 controls,
+    bbox `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`; Bay Area Waymo
+    0.173s wall, 0.004s georeference after robust-fit cache reuse, confidence
+    0.877, 15 controls, bbox
+    `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`.
 
 ## Failed Or Rejected Experiments
 

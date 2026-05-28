@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
 import os
@@ -675,9 +676,7 @@ def georeference_from_label_context(
             scale, rotation, tx, ty, inliers, residuals = fit
             min_required_controls = 2 if allow_two_control_fit and len(inliers) == 2 else min_control_points
             if len(inliers) >= min_required_controls:
-                residual_values = np.array([residuals[i] for i in inliers], dtype=float)
-                residual_median = float(np.median(residual_values))
-                residual_p90 = float(np.percentile(residual_values, 90))
+                residual_median, residual_p90 = residual_median_p90([residuals[i] for i in inliers])
                 if residual_median <= 2500 and residual_p90 <= 6500 and abs(rotation) <= 0.35:
                     lon, lat = mercator_to_lonlat(tx, ty)
                     confidence = confidence_from_fit(len(inliers), len(controls), residual_median, residual_p90)
@@ -2318,10 +2317,11 @@ def has_decisive_control_fit(controls: list[ControlPoint]) -> bool:
     _scale, rotation, _tx, _ty, inliers, residuals = fit
     if len(inliers) < 5 or abs(rotation) > 0.35:
         return False
-    residual_values = np.array([residuals[i] for i in inliers], dtype=float)
-    if residual_values.size == 0:
+    residual_values = [residuals[i] for i in inliers]
+    if not residual_values:
         return False
-    return float(np.median(residual_values)) <= 1200.0 and float(np.percentile(residual_values, 90)) <= 3000.0
+    median, p90 = residual_median_p90(residual_values)
+    return median <= 1200.0 and p90 <= 3000.0
 
 
 def is_geocodeable_control_query(tokens: set[str], city_tokens: set[str]) -> bool:
@@ -2708,9 +2708,7 @@ def choose_similarity_fit(
     total_spread = control_spread(np.array([control.pixel for control in controls], dtype=float))
     for kind, fit in candidates:
         scale, rotation, tx, ty, inliers, residuals = fit
-        residual_values = [residuals[idx] for idx in inliers]
-        median = float(np.median(residual_values)) if residual_values else 0.0
-        p90 = float(np.percentile(residual_values, 90)) if residual_values else 0.0
+        median, p90 = residual_median_p90([residuals[idx] for idx in inliers])
         spread = control_spread(pixel_positions(controls, inliers))
         fit_score = fit_candidate_score(len(inliers), len(controls), spread, total_spread, median, p90, rotation)
         road_score, road_count = road_scorer(scale, rotation, tx, ty) if road_scorer is not None else (0.0, 0)
@@ -2798,13 +2796,31 @@ def robust_similarity_fit(
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
     if len(controls) < 2:
         return None
-    pixel = np.array([control.pixel for control in controls], dtype=float)
-    merc = np.array([control.mercator for control in controls], dtype=float)
+    key = tuple(
+        (
+            float(control.pixel[0]),
+            float(control.pixel[1]),
+            float(control.mercator[0]),
+            float(control.mercator[1]),
+        )
+        for control in controls
+    )
+    return _robust_similarity_fit_cached(key)
+
+
+@lru_cache(maxsize=256)
+def _robust_similarity_fit_cached(
+    key: tuple[tuple[float, float, float, float], ...],
+) -> tuple[float, float, float, float, list[int], list[float]] | None:
+    if len(key) < 2:
+        return None
+    pixel = np.array([(item[0], item[1]) for item in key], dtype=float)
+    merc = np.array([(item[2], item[3]) for item in key], dtype=float)
 
     best: tuple[float, float, float, float, list[int], list[float]] | None = None
     best_score: float | None = None
     total_spread = control_spread(pixel)
-    for i, j in combinations(range(len(controls)), 2):
+    for i, j in combinations(range(len(key)), 2):
         p1, p2 = pixel[i], pixel[j]
         m1, m2 = merc[i], merc[j]
         p_vec = p2 - p1
@@ -2836,17 +2852,15 @@ def robust_similarity_fit(
         if len(r_inliers) < 3:
             continue
         spread = control_spread(pixel[r_inliers])
-        residual_values = [r_residuals[idx] for idx in r_inliers]
-        median = float(np.median(residual_values)) if residual_values else float("inf")
-        p90 = float(np.percentile(residual_values, 90)) if residual_values else float("inf")
+        median, p90 = residual_median_p90([r_residuals[idx] for idx in r_inliers], empty=float("inf"))
         if median > 2500.0 or p90 > 6500.0:
             continue
-        score = fit_candidate_score(len(r_inliers), len(controls), spread, total_spread, median, p90, r_rotation)
+        score = fit_candidate_score(len(r_inliers), len(key), spread, total_spread, median, p90, r_rotation)
         if best_score is None or score > best_score:
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
 
-    for seed in combinations(range(len(controls)), 3):
+    for seed in combinations(range(len(key)), 3):
         refined = fit_similarity(pixel[list(seed)], merc[list(seed)])
         if refined is None:
             continue
@@ -2859,12 +2873,10 @@ def robust_similarity_fit(
         if len(r_inliers) < 3:
             continue
         spread = control_spread(pixel[r_inliers])
-        residual_values = [r_residuals[idx] for idx in r_inliers]
-        median = float(np.median(residual_values))
-        p90 = float(np.percentile(residual_values, 90))
+        median, p90 = residual_median_p90([r_residuals[idx] for idx in r_inliers])
         if median > 2500.0 or p90 > 6500.0:
             continue
-        score = fit_candidate_score(len(r_inliers), len(controls), spread, total_spread, median, p90, r_rotation)
+        score = fit_candidate_score(len(r_inliers), len(key), spread, total_spread, median, p90, r_rotation)
         if best_score is None or score > best_score:
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
@@ -2943,8 +2955,7 @@ def refinement_preserves_label_fit(
 ) -> bool:
     if residuals.size == 0:
         return False
-    median = float(np.median(residuals))
-    p90 = float(np.percentile(residuals, 90))
+    median, p90 = residual_median_p90(residuals)
     if control_count <= 4:
         median_limit = max(650.0, base_median_m + 650.0)
         p90_limit = max(1200.0, base_p90_m + 900.0)
@@ -2956,6 +2967,28 @@ def refinement_preserves_label_fit(
 
 def pixel_positions(controls: list[ControlPoint], indexes: list[int]) -> np.ndarray:
     return np.array([controls[idx].pixel for idx in indexes], dtype=float)
+
+
+def residual_median_p90(values: list[float] | np.ndarray, *, empty: float = 0.0) -> tuple[float, float]:
+    if isinstance(values, np.ndarray):
+        if values.size == 0:
+            return empty, empty
+        sorted_values = sorted(float(value) for value in values.ravel())
+    else:
+        if not values:
+            return empty, empty
+        sorted_values = sorted(float(value) for value in values)
+    return linear_percentile(sorted_values, 50.0), linear_percentile(sorted_values, 90.0)
+
+
+def linear_percentile(sorted_values: list[float], percentile: float) -> float:
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    rank = (len(sorted_values) - 1) * percentile / 100.0
+    lower_index = int(rank)
+    upper_index = min(lower_index + 1, len(sorted_values) - 1)
+    fraction = rank - lower_index
+    return sorted_values[lower_index] * (1.0 - fraction) + sorted_values[upper_index] * fraction
 
 
 def control_spread(points: np.ndarray) -> float:

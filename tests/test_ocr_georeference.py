@@ -24,6 +24,7 @@ from map_boundary_builder.georeference import (
     is_reliable_single_token_context,
     place_query_text,
     place_tokens,
+    residual_median_p90,
     single_tokens_supported_by_fuller_labels,
 )
 from map_boundary_builder.geocoder import GeocodeResult
@@ -43,6 +44,16 @@ from map_boundary_builder.runner import fit_georeference, rank_road_context_quer
 
 
 class OcrGroupingTests(unittest.TestCase):
+    def test_residual_median_p90_matches_numpy_linear_percentile(self) -> None:
+        for values in ([4.0], [8.0, 2.0], [12.0, 2.0, 7.0], [0.0, 100.0, 300.0, 900.0, 1400.0]):
+            median, p90 = residual_median_p90(values)
+
+            self.assertAlmostEqual(median, float(np.median(values)))
+            self.assertAlmostEqual(p90, float(np.percentile(values, 90)))
+
+    def test_residual_median_p90_handles_empty_numpy_arrays(self) -> None:
+        self.assertEqual(residual_median_p90(np.array([]), empty=float("inf")), (float("inf"), float("inf")))
+
     def test_stacked_labels_require_nearby_rows(self) -> None:
         labels = [
             OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96),
