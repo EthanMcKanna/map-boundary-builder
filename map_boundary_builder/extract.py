@@ -79,9 +79,6 @@ def classify_style(rgb: np.ndarray) -> str:
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
     bright_blue = ((hue >= 92) & (hue <= 116) & (sat >= 90) & (val >= 130)).mean()
-    purple_fill = purple_service_mask(rgb).mean()
-    light_fill = light_fill_service_mask(rgb)
-    light_fill_ratio = float(light_fill.mean())
     dark_pixels = (val < 95).mean()
     low_saturation = (sat < 25).mean()
     teal_pixels = ((hue >= 78) & (hue <= 104) & (sat >= 45) & (val >= 50) & (val <= 190)).mean()
@@ -91,8 +88,11 @@ def classify_style(rgb: np.ndarray) -> str:
     ).mean()
     if bright_blue > 0.02 and bright_blue > teal_pixels * 1.5:
         return "bright-blue"
+    purple_fill = purple_service_mask(rgb).mean()
     if purple_fill > 0.02:
         return "purple-fill"
+    light_fill = light_fill_service_mask(rgb)
+    light_fill_ratio = float(light_fill.mean())
     if 0.025 <= light_fill_ratio <= 0.55:
         return "light-fill"
     if green_pixels > 0.015:
