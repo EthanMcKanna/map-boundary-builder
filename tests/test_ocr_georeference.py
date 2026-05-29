@@ -51,14 +51,12 @@ from map_boundary_builder.ocr import (
     ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
     ocr_visual_cache_key,
-    modern_rapidocr_output_to_labels,
     rapidocr_detector_limit_for_input,
     rapidocr_input_array,
     rapidocr_input_image,
     rapidocr_items_to_labels,
     read_ocr_cache,
     rgb_to_bgr,
-    rapidocr_runtime_warm_error,
     warm_rapidocr_runtime,
     write_ocr_cache,
 )
@@ -602,18 +600,6 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_608, key_640)
 
-    def test_ocr_cache_key_depends_on_rapidocr_engine_backend(self) -> None:
-        with TemporaryDirectory() as workdir:
-            image_path = Path(workdir) / "input.png"
-            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
-
-            with patch.object(ocr_module, "RAPIDOCR_ENGINE", "legacy"):
-                legacy_key = ocr_cache_key(image_path, use_tesseract=False)
-            with patch.object(ocr_module, "RAPIDOCR_ENGINE", "modern"):
-                modern_key = ocr_cache_key(image_path, use_tesseract=False)
-
-        self.assertNotEqual(legacy_key, modern_key)
-
     def test_ocr_cache_key_depends_on_native_rapidocr_array_threshold(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -829,66 +815,6 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertEqual(engine.use_cls_calls, [False] * len(expected_limits))
         finally:
             warm_rapidocr_runtime.cache_clear()
-
-    def test_warm_rapidocr_runtime_warms_both_engines_for_bright_blue_modern(self) -> None:
-        legacy_engine = FakeRapidOcrEngine({False: [[unit_ocr_box(), "Miami", 0.98]]})
-        modern_engine = FakeRapidOcrEngine({False: [[unit_ocr_box(), "Miami", 0.98]]})
-        warm_rapidocr_runtime.cache_clear()
-        try:
-            with (
-                patch.object(ocr_module, "RAPIDOCR_ENGINE", "modern-bright-blue"),
-                patch.object(ocr_module, "rapidocr_engine", return_value=legacy_engine) as legacy,
-                patch.object(ocr_module, "modern_rapidocr_engine", return_value=modern_engine) as modern,
-            ):
-                self.assertTrue(warm_rapidocr_runtime())
-
-            expected_limits = ocr_module.rapidocr_warm_detector_limits()
-            self.assertEqual([call.args[0] for call in legacy.call_args_list], expected_limits)
-            self.assertEqual([call.args[0] for call in modern.call_args_list], expected_limits)
-            self.assertEqual(legacy_engine.use_cls_calls, [False] * len(expected_limits))
-            self.assertEqual(modern_engine.use_cls_calls, [False] * len(expected_limits))
-        finally:
-            warm_rapidocr_runtime.cache_clear()
-
-    def test_warm_rapidocr_runtime_retries_after_failed_attempt(self) -> None:
-        engine = FakeRapidOcrEngine({False: [[unit_ocr_box(), "Miami", 0.98]]})
-        warm_rapidocr_runtime.cache_clear()
-        try:
-            with (
-                patch.object(ocr_module, "RAPIDOCR_ENGINE", "legacy"),
-                patch.object(ocr_module, "rapidocr_engine", side_effect=[RuntimeError("cold install"), engine]),
-            ):
-                self.assertFalse(warm_rapidocr_runtime())
-                self.assertIn("cold install", rapidocr_runtime_warm_error() or "")
-                self.assertTrue(warm_rapidocr_runtime())
-
-            self.assertIsNone(rapidocr_runtime_warm_error())
-            self.assertEqual(engine.use_cls_calls, [False])
-        finally:
-            warm_rapidocr_runtime.cache_clear()
-
-    def test_modern_rapidocr_output_is_converted_to_labels(self) -> None:
-        output = SimpleNamespace(
-            boxes=np.array(
-                [
-                    [[10.0, 20.0], [110.0, 20.0], [110.0, 50.0], [10.0, 50.0]],
-                    [[4.0, 4.0], [20.0, 4.0], [20.0, 14.0], [4.0, 14.0]],
-                    [[0.0, 0.0], [40.0, 0.0], [40.0, 20.0], [0.0, 20.0]],
-                ]
-            ),
-            txts=("SouthSan", "99", "Low Score"),
-            scores=(0.98, 0.99, 0.2),
-        )
-
-        labels = modern_rapidocr_output_to_labels(output)
-
-        self.assertEqual(len(labels), 1)
-        self.assertEqual(labels[0].text, "South San")
-        self.assertEqual(labels[0].x, 60.0)
-        self.assertEqual(labels[0].y, 35.0)
-        self.assertEqual(labels[0].width, 100.0)
-        self.assertEqual(labels[0].height, 30.0)
-        self.assertEqual(labels[0].confidence, 98.0)
 
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
         rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)

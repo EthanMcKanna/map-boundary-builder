@@ -611,7 +611,7 @@ def cron_warm_generation_payload(*, authorization_header: str | None) -> tuple[d
 def runtime_health_ok(runtime_dependencies: dict[str, str], *, tmp_writable: bool) -> bool:
     if not tmp_writable:
         return False
-    for dependency in ("numpy", "onnxruntime", "pillow", "rapidocr", "rapidocr-onnxruntime", "shapely", "cv2"):
+    for dependency in ("numpy", "onnxruntime", "pillow", "rapidocr-onnxruntime", "shapely", "cv2"):
         if runtime_dependencies.get(dependency) in {None, "", "missing", "unknown"}:
             return False
     return True

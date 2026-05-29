@@ -4449,3 +4449,28 @@ with zero failures in 0.531s.
   `reference_mismatch` fixtures with zero failures; Bay Area, Houston, and Miami
   remain stale-reference data debt and are not scored as accuracy evidence until
   refreshed.
+- Production decision on modern bright-blue OCR: rolled the code path back out
+  after live fresh smokes failed to prove a current production latency win over
+  the immediately preceding performance-resource deployment. The final modern
+  candidate `dpl_ED2wK95ZWu5aMnAFeDTLSdekTqNC` warmed successfully with
+  `pipeline-cab33b3d1578654d`, but cache-busted Waymo changed-market smokes
+  were mixed: Houston regressed to 3.019943s build / 2.590324s OCR versus the
+  prior 2.377010s / 1.748319s, Miami improved to 2.465654s / 1.614087s versus
+  2.798293s / 1.828548s, and Bay Area was slightly slower at 2.389588s /
+  1.894282s versus 2.282286s / 1.671644s. Because the aggregate was slower and
+  the dependency added Vercel runtime-installation risk, keep the result as a
+  rejected/local-only hypothesis unless a later model packaging or runtime
+  experiment proves live production speed, not just in-process benchmark speed.
+  The rollback no-catalog gate
+  `out/rollback-modern-ocr-nocatalog-20260529/full-report.json` passed 8/8
+  scored active fixtures with no regression issues against
+  `out/current-nocatalog-baseline-20260529/full-report.json`, preserved avg IoU
+  0.961733/min IoU 0.931476, and smoked all seven `reference_mismatch` fixtures
+  with zero failures.
+- Rollback production verification: `dpl_CKnYVMJAoJnzn9DLK1UCFiYyhAkQ` is
+  aliased to `https://mapboundary.app`, reports `pipeline-ce284dc37ba33fcc`,
+  keeps the Python function at 101.05 MB, and warms OCR successfully. A fresh
+  cache-busted Houston Waymo smoke with `catalog_probe_missed=true` preserved
+  the same current-output bbox/source/confidence with `catalog_slug: null` and
+  returned 2.222711s build / 1.744530s OCR, back on the faster
+  performance-resource path.

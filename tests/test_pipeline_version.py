@@ -22,7 +22,6 @@ def test_pipeline_version_tracks_runtime_dependency_versions() -> None:
     assert versions["onnxruntime"]
     assert "opencv-python" in versions
     assert versions["cv2"]
-    assert versions["rapidocr"]
     assert versions["rapidocr-onnxruntime"]
 
 

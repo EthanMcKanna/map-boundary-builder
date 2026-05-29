@@ -536,14 +536,12 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_detector_limit_side_len"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_side_len"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
-        self.assertEqual(cold["ocr"]["rapidocr_engine"], "modern-bright-blue")
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
         self.assertTrue(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])
         self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
         self.assertIn("cv2", cold["runtime_dependencies"])
-        self.assertIn("rapidocr", cold["runtime_dependencies"])
         self.assertIn("rapidocr-onnxruntime", cold["runtime_dependencies"])
         self.assertNotIn("warm", cold)
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
@@ -556,7 +554,6 @@ class ApiRunCacheTests(unittest.TestCase):
             ("opencv-python", "missing"),
             ("opencv-python-headless", "4.10.0.84"),
             ("pillow", "12.2.0"),
-            ("rapidocr", "3.8.1"),
             ("rapidocr-onnxruntime", "1.4.4"),
             ("shapely", "2.1.2"),
             ("cv2", "missing"),
