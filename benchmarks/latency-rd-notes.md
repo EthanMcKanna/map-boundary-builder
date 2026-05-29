@@ -4137,3 +4137,18 @@ with zero failures in 0.531s.
   stayed green at avg IoU 0.961733/min 0.931476. Rejected OCR-cap retest:
   global 1400px RapidOCR failed Nashville at 0.759 IoU, and 1200px/1500px
   reduced active accuracy headroom, so no global OCR downscale shipped.
+- Current tiny catalog-probe head: the refreshed Houston/Miami fast path still
+  paid roughly 2s browser-like HTTP wall time in production because the browser
+  uploaded the full 0.5-1.1 MB screenshot before the server could discover that
+  only the strict 240/400px catalog shape guard was needed. A catalog-probe-only
+  runner/API path now stops before OCR and full extraction refinement when the
+  tiny probe misses, and the frontend first uploads a 520px JPEG probe for
+  likely known-provider/known-city screenshots. Local 520px probes were only
+  26.9 KB for Houston and 32.5 KB for Miami, returning refreshed catalog
+  geometry in 0.028s and 0.008s respectively; a Bay Area Waymo probe missed in
+  0.018s and fell back to the full upload. Playwright verified the UI hit path
+  completes directly from one `/api/runs` POST, while the miss path returns a
+  clean `catalog_miss` JSON response with HTTP 200 and then starts the normal
+  full upload with no console error. The probe response is intentionally only
+  accepted when the inline run is a `catalog-shape-match`; every non-catalog
+  response falls through to the original full-resolution generation path.

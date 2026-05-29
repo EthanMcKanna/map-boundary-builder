@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image
+import pytest
 from shapely.geometry import Polygon
 
 import map_boundary_builder.runner as runner
@@ -266,6 +267,55 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
     assert cache_flags == [False, False]
     assert result.summary["catalog_slug"] == "bay-area-tesla"
     assert result.summary["georeference_source"] == "catalog-shape-match:retry"
+
+
+def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Houston probe.jpg"
+    Image.new("RGB", (1400, 933), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((933, 1400, 3), 245, dtype=np.uint8)
+    mask = np.zeros((933, 1400), dtype=bool)
+    mask[150:835, 470:995] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(470, 150), (995, 150), (995, 835), (470, 835)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    max_dimensions: list[int] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
+        max_dimensions.append(max_dimension)
+        return extraction
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("catalog probes must not fall through to OCR")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+
+    with pytest.raises(runner.CatalogProbeMiss):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(
+                catalog_probe_only=True,
+                filename_hint="Waymo Houston probe.jpg",
+                write_mask_artifact=False,
+            ),
+        )
+
+    assert max_dimensions == [
+        runner.CATALOG_EXTRACT_MAX_DIMENSION,
+        runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+    ]
 
 
 def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monkeypatch) -> None:

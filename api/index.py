@@ -186,6 +186,7 @@ class handler(BaseHTTPRequestHandler):
 
         include_overlay = bool_field(fields, "include_overlay", default=True)
         normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=True)
+        catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -193,6 +194,7 @@ class handler(BaseHTTPRequestHandler):
             include_overlay=include_overlay,
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
             write_mask_artifact=False,
+            catalog_probe_only=catalog_probe_only,
             filename_hint=original_filename,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
@@ -278,7 +280,7 @@ class handler(BaseHTTPRequestHandler):
         profile["write_upload_s"] = elapsed_seconds(write_upload_started)
 
         try:
-            from map_boundary_builder.runner import build_boundary
+            from map_boundary_builder.runner import CatalogProbeMiss, build_boundary
 
             build_started = time.perf_counter()
             result = build_boundary(
@@ -291,6 +293,22 @@ class handler(BaseHTTPRequestHandler):
             )
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+        except CatalogProbeMiss as exc:
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            profile["cache_hit"] = "miss"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = {
+                "id": run_id,
+                "filename": Path(original_filename).name or "uploaded-image",
+                "status": "catalog_miss",
+                "percent": 100,
+                "error": str(exc),
+                "events": events[-20:],
+                "profile": profile,
+            }
+            self.send_json(payload, status=HTTPStatus.OK)
+            return
         except Exception as exc:
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
@@ -686,6 +704,7 @@ def run_result_cache_key_for_hash(
         "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
+        "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")

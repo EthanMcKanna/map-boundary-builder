@@ -86,7 +86,12 @@ class BoundaryBuildOptions:
     preview_max_dimension: int | None = None
     write_mask_artifact: bool = True
     allow_catalog: bool = True
+    catalog_probe_only: bool = False
     filename_hint: str | None = None
+
+
+class CatalogProbeMiss(ValueError):
+    """Raised when a catalog-only probe does not match a known service area."""
 
 
 @dataclass(frozen=True)
@@ -317,6 +322,9 @@ def build_boundary(
                     progress=progress,
                     georeference_source="catalog-shape-match:retry",
                 )
+
+        if catalog_probe_only_enabled(opts):
+            raise CatalogProbeMiss("No known service-area shape matched the catalog probe.")
 
         if used_catalog_scaled_extraction:
             if labels_future is None:
@@ -764,6 +772,10 @@ def is_stale_only_catalog_hint(text: str | None) -> bool:
 
 def catalog_matching_enabled(options: Any) -> bool:
     return bool(getattr(options, "allow_catalog", True))
+
+
+def catalog_probe_only_enabled(options: Any) -> bool:
+    return bool(getattr(options, "catalog_probe_only", False))
 
 
 def high_confidence_label_texts(labels: list[Any]) -> list[str]:

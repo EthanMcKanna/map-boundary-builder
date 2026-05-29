@@ -20,7 +20,7 @@ from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
-from .runner import BoundaryBuildOptions, build_boundary
+from .runner import BoundaryBuildOptions, CatalogProbeMiss, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -157,6 +157,50 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         image_path = run_dir / f"input{ext}"
         image_path.write_bytes(image_bytes)
         output_path = run_dir / "boundary.geojson"
+        catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
+        if catalog_probe_only:
+            events: list[dict[str, Any]] = []
+
+            def progress(event: dict[str, Any]) -> None:
+                events.append({"timestamp": time.time(), **event})
+
+            options = BoundaryBuildOptions(
+                simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
+                min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
+                min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
+                catalog_probe_only=True,
+                write_mask_artifact=False,
+                filename_hint=original_filename,
+            )
+            try:
+                result = build_boundary(image_path, city, output_path, debug_dir=None, options=options, progress=progress)
+            except CatalogProbeMiss as exc:
+                self.send_json(
+                    {
+                        "id": run_id,
+                        "filename": Path(original_filename).name or "uploaded-image",
+                        "status": "catalog_miss",
+                        "percent": 100,
+                        "error": str(exc),
+                        "events": events[-20:],
+                    },
+                    status=HTTPStatus.OK,
+                )
+                return
+            self.send_json(
+                {
+                    "id": run_id,
+                    "city": result.summary["city"],
+                    "filename": Path(original_filename).name or "uploaded-image",
+                    "status": "complete",
+                    "percent": 100,
+                    "summary": result.summary,
+                    "events": events[-20:],
+                    "artifacts": {"geojson_inline": result.geojson},
+                },
+                status=HTTPStatus.CREATED,
+            )
+            return
 
         state = RunState(
             run_id=run_id,
@@ -437,6 +481,13 @@ def int_field(fields: dict[str, str], name: str, default: int, minimum: int, max
     except (TypeError, ValueError):
         value = default
     return max(minimum, min(maximum, value))
+
+
+def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
+    value = fields.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", ""}
 
 
 def build_parser() -> argparse.ArgumentParser:

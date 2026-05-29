@@ -96,6 +96,25 @@ const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
 const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v5";
 const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
+const CATALOG_PROBE_MAX_DIMENSION = 520;
+const CATALOG_PROBE_MIN_BYTES = 180_000;
+const CATALOG_PROBE_JPEG_QUALITY = 0.82;
+const CATALOG_PROBE_HINT_PATTERNS = [
+  /\bwaymo\b/,
+  /\btesla\b/,
+  /\bzoox\b/,
+  /\bavride\b/,
+  /\batlanta\b/,
+  /\baustin\b/,
+  /\bdallas\b/,
+  /\bhouston\b/,
+  /\bmiami\b/,
+  /\bnashville\b/,
+  /\borlando\b/,
+  /\bphoenix\b/,
+  /\b(?:bay\s+area|san\s+francisco|sf)\b/,
+  /\b(?:las\s+vegas|los\s+angeles|san\s+antonio)\b/,
+];
 const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
   "app",
   "boundary",
@@ -359,6 +378,15 @@ form.addEventListener("submit", async (event) => {
       pendingRunCacheKey = null;
       pendingRunCacheKeys = [];
       pendingRunCacheKeysPromise = null;
+      return;
+    }
+    const catalogProbePayload = await tryCatalogProbe(uploadFile, formData);
+    if (catalogProbePayload) {
+      applyInlineRun(catalogProbePayload, {
+        cacheKey: pendingRunCacheKey,
+        cacheKeys: pendingRunCacheKeys,
+        cacheKeysPromise: pendingRunCacheKeysPromise,
+      });
       return;
     }
     markProgressStep("prepare", "running", "Uploading image.");
@@ -764,6 +792,70 @@ async function prepareRunImage(file) {
     type: "image/png",
     lastModified: file.lastModified,
   });
+}
+
+async function tryCatalogProbe(file, formData) {
+  if (!shouldTryCatalogProbe(file, formData)) return null;
+  markProgressStep("prepare", "running", "Checking known service areas.");
+  setStatus("Checking known service areas", 7, "running", {
+    step: "prepare",
+    note: "Trying a tiny shape probe before uploading the full screenshot.",
+  });
+  try {
+    const probeFile = await catalogProbeFile(file);
+    if (!probeFile) return null;
+    const probeData = new FormData();
+    formData.forEach((value, name) => {
+      if (name !== "image") probeData.append(name, value);
+    });
+    probeData.set("image", probeFile, probeFile.name);
+    probeData.set("catalog_probe_only", "1");
+    probeData.set("include_overlay", "0");
+    probeData.set("normalized_cache_lookup", "0");
+    const response = await fetch("/api/runs", {
+      method: "POST",
+      body: probeData,
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && isCatalogRunPayload(payload)) return payload;
+  } catch (error) {
+    console.warn("Known service-area probe failed", error);
+  }
+  return null;
+}
+
+function shouldTryCatalogProbe(file, formData) {
+  if (!file || file.size < CATALOG_PROBE_MIN_BYTES) return false;
+  const city = String(formData.get("city") || "");
+  const hintText = `${file.name || ""} ${city}`.toLowerCase().replace(/[_-]+/g, " ");
+  return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
+}
+
+async function catalogProbeFile(file) {
+  const sourceCanvas = await imageFileToCanvas(file);
+  const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
+  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return null;
+  const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+  const blob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
+  if (!blob || blob.size >= file.size * 0.75) return null;
+  return new File([blob], `${fileBaseName(file.name)}.catalog-probe.jpg`, {
+    type: "image/jpeg",
+    lastModified: file.lastModified,
+  });
+}
+
+function isCatalogRunPayload(payload) {
+  const source = payload?.summary?.georeference_source || "";
+  return payload?.status === "complete"
+    && Boolean(payload?.summary?.catalog_slug)
+    && source.startsWith("catalog-shape-match");
 }
 
 async function buildRunCacheKeys(file, formData) {
