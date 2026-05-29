@@ -2115,6 +2115,27 @@ OCR/georeference rather than returning outdated fast-path polygons.
   non-catalog road-refine behavior while moving some model/seed initialization
   to the background file-selection warmup request when the platform reuses the
   warmed instance.
+- OCR visual-cache prototype: the OCR cache now keeps its cheap raw-byte key as
+  the first lookup, then falls back to a decoded BGR visual key on raw misses
+  and backfills the raw key after a visual hit. This preserves exact-upload
+  cache speed while letting same-pixel uploads with different PNG metadata or
+  compression share labels. Unit tests confirm two same-pixel PNGs with
+  different metadata have different raw OCR keys but the same visual OCR key,
+  and that a visual-cache hit avoids RapidOCR and backfills the raw key. On a
+  local cache-busted Miami pair in
+  `out/ocr-visual-cache-reuse-20260529/report.json`, the first run completed in
+  0.980s with OCR 0.418s; the second same-pixel/different-metadata run returned
+  the same bbox/source/confidence in 0.174s with OCR 0.004s. Validation stayed
+  clean: OCR/georeference tests passed 43/43, full pytest passed 113 tests plus
+  9 subtests, `compileall`, `node --check`, and `git diff --check` passed. The
+  corrected default gate
+  `out/ocr-visual-cache-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 reference mismatches, avg IoU 0.993, min IoU 0.943, total
+  0.41s. Corrected no-catalog gates
+  `out/ocr-visual-cache-no-catalog-20260529/full-report.json` and
+  `out/ocr-visual-cache-no-catalog2-20260529/full-report.json` both passed 8/8
+  scored fixtures with avg IoU 0.962 and min IoU 0.931 at 3.62s and 3.60s,
+  inside the current local timing noise while preserving outputs.
 
 ## Remaining Bottlenecks
 

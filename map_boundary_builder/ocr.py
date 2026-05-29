@@ -29,7 +29,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v4"
+OCR_CACHE_VERSION = "ocr-labels-v5"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
 RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
@@ -53,7 +53,23 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         if cached is not None:
             return list(cached)
 
-    rapid_words: list[OcrLabel] = run_rapidocr_words(image_path)
+    prepared_bgr: np.ndarray | None = None
+    prepared_composited_alpha = False
+    visual_cache_key: str | None = None
+    if cache_key is not None:
+        prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
+        visual_cache_key = ocr_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
+        if visual_cache_key is not None and visual_cache_key != cache_key:
+            cached = read_ocr_cache(visual_cache_key)
+            if cached is not None:
+                write_ocr_cache(cache_key, list(cached))
+                return list(cached)
+
+    rapid_words: list[OcrLabel] = run_rapidocr_words(
+        image_path,
+        prepared_bgr=prepared_bgr,
+        composited_alpha=prepared_composited_alpha,
+    )
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
     if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and use_tesseract:
@@ -75,6 +91,8 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     labels = dedupe_labels(labels)
     if cache_key is not None:
         write_ocr_cache(cache_key, labels)
+    if visual_cache_key is not None and visual_cache_key != cache_key:
+        write_ocr_cache(visual_cache_key, labels)
     return labels
 
 
@@ -83,6 +101,20 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
         digest = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
     except OSError:
         return None
+    return ocr_cache_key_for_digest("raw-sha256", digest, use_tesseract=use_tesseract)
+
+
+def ocr_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+    if bgr is None:
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"bgr")
+    digest.update(str(tuple(bgr.shape)).encode("ascii"))
+    digest.update(np.ascontiguousarray(bgr).data)
+    return ocr_cache_key_for_digest("visual-bgr-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
+
+
+def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bool) -> str:
     engine = "tesseract" if use_tesseract else "rapidocr"
     return hashlib.sha256(
         (
@@ -91,7 +123,8 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
             f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
-            f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:{digest}"
+            f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:"
+            f"{digest_kind}:{digest}"
         ).encode("utf-8")
     ).hexdigest()
 
@@ -192,8 +225,17 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
     return words
 
 
-def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
-    ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
+def run_rapidocr_words(
+    image_path: str | Path,
+    *,
+    prepared_bgr: np.ndarray | None = None,
+    composited_alpha: bool = False,
+) -> list[OcrLabel]:
+    ocr_input, scale_x, scale_y = rapidocr_input_array(
+        image_path,
+        prepared_bgr=prepared_bgr,
+        composited_alpha=composited_alpha,
+    )
     try:
         engine = rapidocr_engine()
         result, _elapsed = engine(ocr_input, use_cls=False)
@@ -227,11 +269,19 @@ def scale_rapidocr_labels(labels: list[OcrLabel], scale_x: float, scale_y: float
     ]
 
 
-def rapidocr_input_array(image_path: str | Path) -> tuple[Path | np.ndarray, float, float]:
+def rapidocr_input_array(
+    image_path: str | Path,
+    *,
+    prepared_bgr: np.ndarray | None = None,
+    composited_alpha: bool = False,
+) -> tuple[Path | np.ndarray, float, float]:
     source_path = Path(image_path)
     if RAPIDOCR_MAX_DIMENSION <= 0:
         return source_path, 1.0, 1.0
-    bgr, composited_alpha = load_rapidocr_bgr(source_path)
+    if prepared_bgr is None:
+        bgr, composited_alpha = load_rapidocr_bgr(source_path)
+    else:
+        bgr = prepared_bgr
     if bgr is None:
         return source_path, 1.0, 1.0
     height, width = bgr.shape[:2]
