@@ -4252,3 +4252,41 @@ with zero failures in 0.531s.
   Profile`; a local Playwright run confirmed a completed Bay Area generation
   saved `upload_bytes`, `build_boundary_s`, and `build_stage_elapsed_s` in the
   history entry with zero console warnings.
+- Full-canvas whiteout compression was rejected. The idea preserved original
+  dimensions and coordinate frame while blanking pixels outside an
+  oracle-derived service-area neighborhood so PNG upload bytes could shrink.
+  The 8% padding run failed hard (`out/whiteout08-nocatalog-profile-20260529/`):
+  Dallas Tesla could not extract and Austin Tesla dropped to 0.848445 IoU. Wider
+  20%, 35%, and 50% sweeps kept every changed Houston/Miami/Bay Area fixture as
+  unscored `reference_mismatch` smoke checks with zero smoke failures, but still
+  failed the strict no-catalog regression gate on active fixtures. The 20% run
+  saved 20.9% average bytes but dropped Austin Tesla by 0.008287 IoU and Dallas
+  Tesla by 0.005373; 35% and 50% still dropped Austin Tesla by 0.008287 while
+  saving about 19.2% average bytes. This is not safe as a client upload shortcut
+  without a preflight validator that can prove OCR/georef invariance.
+- Hybrid reduced-upload OCR was rejected as a production shortcut. An optimistic
+  offline prototype kept the original full-resolution extraction geometry and
+  original road-feature image, but replaced OCR labels with labels read from a
+  resized JPEG payload and scaled back to the original coordinate frame. Even
+  with that favorable setup, 1600px/q82 averaged 0.937780 IoU with Orlando at
+  0.863376 and Phoenix at 0.892434; 1600px/q95 improved Phoenix to 0.976898 but
+  still left Orlando at 0.861988 and averaged only 0.949102; 1200px/q82 dropped
+  Phoenix to 0.841223. Since this fails before accounting for the unimplemented
+  client-side polygon extractor, reduced OCR-image upload is not safe without a
+  proof-of-equivalence validator and exact fallback to the original full upload.
+- Generic filename catalog probe: the frontend now tries the existing strict
+  520px catalog probe for large or small service-area-like screenshots even
+  when the filename is a phone-style `IMG_...` with no provider/city hint. The
+  client-side color sampler only decides whether a tiny probe is worth sending;
+  the backend still accepts only existing `catalog-shape-match` completions and
+  falls back to the unchanged full upload on every miss or error. Renaming every
+  benchmark screenshot to generic `IMG_000x` names showed 11 strict probe hits
+  and 4 misses, with no errors. A negative local set of non-service screenshots
+  produced zero false catalog hits. Browser validation against the local app
+  completed generic `IMG_1111.PNG` Tesla Austin from a 29.3 KB probe and
+  generic `IMG_2222.PNG` Waymo Dallas from a 32.8 KB probe, while generic
+  `/Users/ethanmckanna/Downloads/IMG_0010.PNG` did not take the catalog-probe
+  shortcut. `node --check`, full pytest (213 tests plus 9 subtests),
+  drift-aware default benchmark `out/generic-probe-default-20260529/full-report.json`,
+  no-catalog benchmark `out/generic-probe-nocatalog-20260529/full-report.json`,
+  and `git diff --check` all passed with zero regression issues.

@@ -99,6 +99,7 @@ const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const CATALOG_PROBE_MAX_DIMENSION = 520;
 const CATALOG_PROBE_MIN_BYTES = 180_000;
+const CATALOG_PROBE_GENERIC_MIN_BYTES = 650_000;
 const CATALOG_PROBE_JPEG_QUALITY = 0.82;
 const CATALOG_PROBE_HINT_PATTERNS = [
   /\bwaymo\b/,
@@ -800,14 +801,14 @@ async function prepareRunImage(file) {
 }
 
 async function tryCatalogProbe(file, formData) {
-  if (!shouldTryCatalogProbe(file, formData)) return null;
+  if (!shouldTryCatalogProbe(file)) return null;
   markProgressStep("prepare", "running", "Checking known service areas.");
   setStatus("Checking known service areas", 7, "running", {
     step: "prepare",
     note: "Trying a tiny shape probe before uploading the full screenshot.",
   });
   try {
-    const probeFile = await catalogProbeFile(file);
+    const probeFile = await catalogProbeFile(file, formData);
     if (!probeFile) return null;
     const probeData = new FormData();
     formData.forEach((value, name) => {
@@ -830,17 +831,23 @@ async function tryCatalogProbe(file, formData) {
   return null;
 }
 
-function shouldTryCatalogProbe(file, formData) {
+function shouldTryCatalogProbe(file) {
   if (!file || file.size < CATALOG_PROBE_MIN_BYTES) return false;
+  return !isSvgFile(file);
+}
+
+function hasCatalogProbeHint(file, formData) {
   const city = String(formData.get("city") || "");
   const hintText = `${file.name || ""} ${city}`.toLowerCase().replace(/[_-]+/g, " ");
   return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
 }
 
-async function catalogProbeFile(file) {
+async function catalogProbeFile(file, formData) {
+  const hasHint = hasCatalogProbeHint(file, formData);
   const sourceCanvas = await imageFileToCanvas(file);
   const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
   if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return null;
+  if (!hasHint && !catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file)) return null;
   const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
@@ -855,6 +862,62 @@ async function catalogProbeFile(file) {
     type: "image/jpeg",
     lastModified: file.lastModified,
   });
+}
+
+function catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file) {
+  const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
+  const sampleSize = 128;
+  const scale = Math.min(1, sampleSize / maxDimension);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const total = pixels.length / 4;
+  let blue = 0;
+  let neutral = 0;
+  let teal = 0;
+  let purple = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blueChannel = pixels[index + 2];
+    if (blueChannel >= 125 && green >= 95 && red <= 130 && blueChannel - red >= 45 && green - red >= 5) {
+      blue += 1;
+    }
+    if (
+      green >= 75
+      && blueChannel >= 65
+      && red <= 95
+      && green - red >= 15
+      && blueChannel - red >= 5
+      && Math.abs(green - blueChannel) <= 70
+    ) {
+      teal += 1;
+    }
+    if (blueChannel >= 105 && red >= 80 && green <= 120 && blueChannel - green >= 20 && red - green >= 5) {
+      purple += 1;
+    }
+    if (Math.abs(red - green) <= 18 && Math.abs(green - blueChannel) <= 18 && red >= 85 && red <= 225) {
+      neutral += 1;
+    }
+  }
+  const blueRatio = blue / total;
+  const tealRatio = teal / total;
+  const purpleRatio = purple / total;
+  const neutralRatio = neutral / total;
+  const largeOverlay = file.size >= CATALOG_PROBE_GENERIC_MIN_BYTES
+    && (blueRatio >= 0.04 || tealRatio >= 0.04 || purpleRatio >= 0.03);
+  const smallNeutralOverlay = file.size >= CATALOG_PROBE_MIN_BYTES
+    && maxDimension <= 900
+    && neutralRatio >= 0.02
+    && neutralRatio <= 0.08;
+  const smallTealOverlay = file.size >= CATALOG_PROBE_MIN_BYTES
+    && maxDimension <= 900
+    && tealRatio >= 0.015;
+  return largeOverlay || smallNeutralOverlay || smallTealOverlay;
 }
 
 function isCatalogRunPayload(payload) {
