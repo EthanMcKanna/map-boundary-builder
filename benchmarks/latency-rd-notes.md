@@ -4767,3 +4767,17 @@ with zero failures in 0.531s.
   screenshot with `city=Santa Monica` and no catalog slug measured
   `build_boundary_s: 2.517070`, OCR 2.185205s, and `total_before_send_s:
   2.524661`.
+- Production deploy `dpl_5fC8cmS8YySBRdUr8gKA5dvYuJjs` is aliased to
+  `https://mapboundary.app`, reports `pipeline-904c134671cd17e5`, and health
+  returned HTTP 200 with warm status OK. A direct same-image A/B against the
+  previous deployment `dpl_3oiSmw8Ec5DzXjx894H977b9V92c` used a pixel-distinct
+  LA screenshot plus `city=Santa Monica`, which bypasses catalog matching and
+  returns `ocr-georeference:nominatim-label-fit`. The previous deployment
+  returned bbox `[-118.5324802,33.9303557,-118.2265349,34.1191264]`,
+  confidence 0.855, `build_boundary_s: 2.271181`, OCR 1.939540s, and
+  `total_before_send_s: 2.278231`; the new deployment preserved the exact bbox,
+  confidence, source, and no-catalog output while reducing
+  `build_boundary_s` to 2.219200, OCR to 1.883430s, and
+  `total_before_send_s` to 2.226233. This is a small but real production win on
+  the arbitrary OCR/georeference path, while the local no-catalog gate shows the
+  larger expected benefit across active fixtures.
