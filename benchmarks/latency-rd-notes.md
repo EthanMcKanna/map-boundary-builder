@@ -4537,3 +4537,12 @@ with zero failures in 0.531s.
   at 1.26.0, and `rapidocr` remains latest at 3.8.1. There is no safe drop-in
   dependency upgrade lane available right now; the rejected modern `rapidocr`
   v3 production experiment remains the relevant evidence for that branch.
+- Rejected skipping the runner's metadata-only `Image.open` on catalog/probe
+  paths. The prototype derived width/height from the already-loaded RGB array
+  when OCR was not being overlapped, which preserved behavior in focused tests
+  and the default catalog benchmark, but targeted local A/Bs on current Houston,
+  current Miami, and Dallas catalog hits were noise-flat: current Houston
+  0.090/0.073/0.072s vs baseline 0.088/0.072/0.074s, current Miami
+  0.068/0.064/0.064s vs baseline 0.067/0.066/0.069s, and Dallas
+  0.071/0.071/0.072s vs baseline 0.071/0.072/0.071s. Reverted because it was
+  not a measurable latency win.
