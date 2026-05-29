@@ -1806,6 +1806,19 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Houston Tesla used `catalog-shape-match` in 0.051s, 0.039s, and 0.023s;
   Bay Area Waymo, Houston Waymo, and Miami Waymo stayed on OCR/georeference with
   `catalog_slug: null` in 0.570s, 0.349s, and 0.690s.
+- Production deployment `dpl_6HVGtiV9MytxUim2CEz78wJe1aNo` was built with
+  Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-32ef01c5b1ec6c78`. The
+  local prebuilt output reported a 296.54 MB pre-runtime-installation bundle.
+  Cache-busted production POSTs with `include_overlay=false` and normalized
+  cache disabled confirmed the reactivated entries are live catalog fast paths:
+  Bay Area Tesla `catalog-shape-match` with a 0.121s warmed server span, Bay
+  Area Zoox `catalog-shape-match` with a 0.368s warmed server span, and Houston
+  Tesla `catalog-shape-match` with a 0.255s warmed server span. Drifted Waymo
+  markets stayed off stale catalog entries: Bay Area Waymo, Houston Waymo, and
+  Miami Waymo returned `catalog_slug: null` through OCR/georeference. Repeat
+  OCR spans remained production-noisy and OCR-bound, but behavior and
+  confidence stayed stable.
 
 ## Remaining Bottlenecks
 
