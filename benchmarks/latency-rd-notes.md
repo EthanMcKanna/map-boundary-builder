@@ -2480,6 +2480,28 @@ OCR/georeference rather than returning outdated fast-path polygons.
   startup made exactly one `/api/health?warm=ocr` request, selecting/running
   `waymo phoenix.png` made one `/api/runs` request, and no extra `/api/health`
   call occurred.
+- Added a protected production cron warm path, `/api/cron/warm-generation`,
+  scheduled every minute in `vercel.json`. The endpoint requires Vercel's
+  `Authorization: Bearer $CRON_SECRET` header and then runs the same catalog,
+  seed, and RapidOCR prewarm routine. This is a production cold-start mitigation,
+  not a GeoJSON algorithm shortcut: it should keep more requests on the already
+  loaded path while preserving identical extraction/OCR/georeference behavior.
+  Vercel's cron docs say cron invokes the production deployment URL and that
+  `CRON_SECRET` is sent as an authorization header when configured; the plan
+  limit for once-per-minute schedules is Pro/Enterprise, so deployment was the
+  final compatibility check. Production deploy `dpl_8QDfxmQrJ7kqWHDszdQwPtw9ZNnv`
+  registered one cron job at `* * * * *` and aliased `https://mapboundary.app`.
+  The unauthenticated cron probe returned 401, the authenticated probe returned
+  200 with `rapidocr_inference_warmed: true` after 2.69s in-process, and the
+  immediately following `/api/health?warm=ocr` alias request returned in 0.245s
+  wall time with `warm.total_s` 0.000053. Fresh production `/api/runs` probes
+  after warmup: a Houston Waymo drift screenshot completed uncached in 0.275s
+  server time before send (`catalog-shape-match`, confidence 0.978); a Miami
+  screenshot with overlay completed uncached in 0.844s server time before send
+  (`catalog-shape-match`, confidence 0.983). A non-catalog Avride Dallas
+  screenshot remains outside the sub-second arbitrary-map goal at 2.91s server
+  time before send, dominated by 2.56s OCR, so the next real breakthrough still
+  has to attack OCR latency without losing generality.
 
 ## Remaining Bottlenecks
 

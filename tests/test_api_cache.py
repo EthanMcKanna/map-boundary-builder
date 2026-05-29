@@ -1,6 +1,7 @@
 import unittest
 import base64
 import gzip
+from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -11,7 +12,9 @@ from PIL import Image, features
 
 from api.index import (
     INLINE_OVERLAY_OPTIMIZE_BYTES,
+    authorized_cron_request,
     cached_run_payload,
+    cron_warm_generation_payload,
     event_stage_elapsed_seconds,
     health_payload,
     inline_overlay,
@@ -260,6 +263,34 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 640)
         self.assertNotIn("warm", cold)
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
+        prewarm.assert_called_once_with()
+
+    def test_cron_warm_generation_requires_bearer_secret(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(authorized_cron_request("Bearer secret"))
+
+        with patch.dict("os.environ", {"CRON_SECRET": "secret"}):
+            self.assertTrue(authorized_cron_request("Bearer secret"))
+            self.assertFalse(authorized_cron_request(None))
+            self.assertFalse(authorized_cron_request("secret"))
+            self.assertFalse(authorized_cron_request("Bearer different"))
+
+    def test_cron_warm_generation_payload_runs_authenticated_prewarm(self) -> None:
+        with (
+            patch.dict("os.environ", {"CRON_SECRET": "secret"}),
+            patch("api.index.get_pipeline_version", return_value="pipeline-test"),
+            patch("api.index.prewarm_generation_runtime", return_value={"status": "ok"}) as prewarm,
+        ):
+            unauthorized_payload, unauthorized_status = cron_warm_generation_payload(
+                authorization_header="Bearer wrong"
+            )
+            payload, status = cron_warm_generation_payload(authorization_header="Bearer secret")
+
+        self.assertEqual(unauthorized_status, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(unauthorized_payload["error"], "Unauthorized")
+        self.assertEqual(status, HTTPStatus.OK)
+        self.assertEqual(payload["pipeline_version"], "pipeline-test")
+        self.assertEqual(payload["warm"], {"status": "ok"})
         prewarm.assert_called_once_with()
 
     def test_index_asset_embeds_pipeline_version_for_local_cache(self) -> None:

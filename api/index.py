@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -32,6 +33,7 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
+CRON_WARM_PATH = "/api/cron/warm-generation"
 RUN_RESULT_CACHE_VERSION = "run-result-v4"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
@@ -58,6 +60,12 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if parsed.path == CRON_WARM_PATH:
+                payload, status = cron_warm_generation_payload(
+                    authorization_header=self.headers.get("Authorization")
+                )
+                self.send_json(payload, status=status)
+                return
             if parsed.path == "/api/health":
                 query = parse_qs(parsed.query)
                 self.send_json(health_payload(warm=first_query_value(query, "warm")))
@@ -430,6 +438,23 @@ def health_payload(*, warm: str | None = None) -> dict[str, Any]:
     if should_prewarm_generation_runtime(warm):
         payload["warm"] = prewarm_generation_runtime()
     return payload
+
+
+def cron_warm_generation_payload(*, authorization_header: str | None) -> tuple[dict[str, Any], HTTPStatus]:
+    if not authorized_cron_request(authorization_header):
+        return {"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED
+    return {
+        "ok": True,
+        "pipeline_version": get_pipeline_version(),
+        "warm": prewarm_generation_runtime(),
+    }, HTTPStatus.OK
+
+
+def authorized_cron_request(authorization_header: str | None) -> bool:
+    secret = os.environ.get("CRON_SECRET", "")
+    if not secret:
+        return False
+    return hmac.compare_digest(authorization_header or "", f"Bearer {secret}")
 
 
 def elapsed_seconds(started: float) -> float:

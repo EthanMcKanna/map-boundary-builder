@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/warm-generation",
+      "schedule": "* * * * *"
+    }
+  ],
   "builds": [
     {
       "src": "api/index.py",
