@@ -1229,6 +1229,18 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `ocr-georeference:nominatim-label-fit+osm-road-refine`; the warmed variant
   completed in 5.659s wall / 3.462s event span with a 2.624 KB GeoJSON-first
   response, with OCR still the dominant production cost.
+- Production fast-classifier OCR retry deployment `dpl_5rKvrAp4SQpbZVWHQkq4gHSi6JJg`
+  is Ready and aliased to `https://mapboundary.app`; health reports
+  `pipeline-33591a02aa548c56` and the build again reported a 297.93 MB Python
+  bundle before runtime dependency installation. Cache-busted Miami
+  `include_overlay=0` POSTs preserved `catalog_slug: null`, bbox
+  `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`, confidence 0.864, and
+  source `ocr-georeference:nominatim-label-fit+osm-road-refine`; the warm
+  variant completed in 5.504s wall / 3.379s event span versus the previous
+  5.659s / 3.462s catalog-pre-extraction evidence. Cache-busted Bay Area Waymo
+  also stayed off the stale catalog with bbox `[-122.4978873, 37.3073419,
+  -121.8576229, 37.7981634]`, confidence 0.877, and 5.486s wall / 3.392s event
+  span.
 
 ## Failed Or Rejected Experiments
 
