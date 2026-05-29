@@ -4564,3 +4564,15 @@ with zero failures in 0.531s.
   smoked the same seven changed/data-debt fixtures. Houston, Miami, and Bay
   Area remain excluded from scored accuracy proof until refreshed ground truth
   is adopted.
+- Production deploy `dpl_5B3Rh2exnh5mmXBtz8qZAUNna4sj` is aliased to
+  `https://mapboundary.app`, reports `pipeline-dcfbc49f8636cdde`, keeps
+  `api/index.py (101.05MB) [sfo1]`, and `/api/health?warm=ocr` returned HTTP
+  200 with warm status OK. A cache-busted stale Bay Area 520px
+  `catalog_probe_only=1` production proof preserved response semantics while
+  making repeat misses effectively free: first call returned HTTP 200
+  `catalog_miss`, `cache_hit: miss`, `build_boundary_s: 0.073993`,
+  `total_before_send_s: 0.145247`, wall 0.503376s; second identical-byte call
+  returned HTTP 200 `catalog_miss`, `cached: true`, `cache_hit: raw`,
+  `total_before_send_s: 0.000397`, wall 0.146653s. This is a 365.9x reduction
+  in server time before send for repeat probe misses with no GeoJSON or
+  accuracy-path change.
