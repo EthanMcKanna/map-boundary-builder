@@ -226,6 +226,36 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
 
 ## Current Validation
 
+- Current stage-profile evidence head: after the user re-confirmed Houston,
+  Miami, and Bay Area are changed-service-area data debt, focused drift guards
+  passed 26 tests and verified Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo,
+  and Miami Waymo are `reference_mismatch` fixtures. Full pytest passed 92 tests
+  and 9 subtests; `compileall`, `node --check`, and `git diff --check` passed.
+  The default full benchmark
+  `out/profile-events-default-full-20260528-continue4/full-report.json` passed
+  8/8 scored fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993,
+  min IoU 0.943, total 2.96s, and now records per-stage timings such as
+  Phoenix catalog extraction 0.100s and export 0.155s. The no-catalog full
+  benchmark
+  `out/profile-events-no-catalog-full-20260528-continue4/full-report.json`
+  passed 8/8 scored fixtures, avg IoU 0.962, min IoU 0.931, total 7.62s, with
+  stage timings that expose OCR and road-refinement georeference as the
+  remaining active-path bottlenecks.
+- Catalog pre-extraction can safely default to a 300px longest-side probe
+  because catalog hits return exact catalog geometry and catalog misses refine
+  the extraction at full resolution before OCR/georeference. The default-code
+  full benchmark
+  `out/catalog-extract-300-default-full-20260528-continue4/full-report.json`
+  passed 8/8 scored fixtures, skipped the same 7 reference mismatches, avg IoU
+  0.993, min IoU 0.943, and total 2.81s versus the pre-change 2.96s
+  `out/profile-events-default-full-20260528-continue4/full-report.json`.
+  The no-catalog gate
+  `out/catalog-extract-300-no-catalog-full-20260528-continue4/full-report.json`
+  stayed green at 8/8 scored fixtures, avg IoU 0.962, min IoU 0.931, total
+  7.65s. A no-network stale-market smoke under
+  `out/stale-market-no-network-300-20260528-continue4/` completed Bay Area
+  Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo in 0.193-0.554s with
+  OCR/georeference sources and `catalog_slug: null`.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8

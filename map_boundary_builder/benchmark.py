@@ -57,6 +57,7 @@ class BenchmarkScore:
     georeference_source: str | None = None
     combined_confidence: float | None = None
     catalog_slug: str | None = None
+    stage_elapsed_s: dict[str, float] | None = None
     error: str | None = None
     status: str = "active"
     note: str | None = None
@@ -76,6 +77,7 @@ class BenchmarkScore:
             "georeference_source": self.georeference_source,
             "combined_confidence": round(self.combined_confidence, 6) if self.combined_confidence is not None else None,
             "catalog_slug": self.catalog_slug,
+            "stage_elapsed_s": self.stage_elapsed_s,
             "error": self.error,
             "status": self.status,
             "note": self.note,
@@ -369,6 +371,7 @@ def score_full_fixture(
         "--debug-dir",
         str(debug_dir),
         "--print-summary",
+        "--profile-events",
     ]
     if city_overrides:
         command.extend(["--city", fixture.area])
@@ -390,6 +393,8 @@ def score_full_fixture(
         reference = project_geometry(load_reference_geometry(fixture.reference_path))
         metrics = compare_geometries(predicted, reference)
         summary = json.loads(completed.stdout)
+        event_profile = summary.get("event_profile") if isinstance(summary, dict) else None
+        stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
         properties = output["features"][0].get("properties", {})
         return BenchmarkScore(
             slug=fixture.slug,
@@ -404,7 +409,8 @@ def score_full_fixture(
             duration_s=duration_s,
             georeference_source=summary.get("georeference_source"),
             combined_confidence=summary.get("combined_confidence"),
-            catalog_slug=properties.get("catalog_slug"),
+            catalog_slug=summary.get("catalog_slug") or properties.get("catalog_slug"),
+            stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
             status=fixture.status,
             note=fixture.note,
         )

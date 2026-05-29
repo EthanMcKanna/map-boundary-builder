@@ -80,6 +80,7 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "georeference_source": None,
             "combined_confidence": None,
             "catalog_slug": None,
+            "stage_elapsed_s": None,
             "error": None,
             "status": "reference_mismatch",
             "note": "changed live service area",
