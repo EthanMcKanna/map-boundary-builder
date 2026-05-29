@@ -3342,3 +3342,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `total_before_send_s: 0.096s`. This improves the previous production base
   proof at 2.873s and bordered proof at 0.105s. Repeating the bordered filename
   hit raw run cache in 0.00420s server time.
+- Rejected the next first-pass OCR probes after the memory-first deployment.
+  A production-shaped synthetic RapidOCR warmup made warmup slower locally and
+  did not reduce the subsequent Avride OCR time versus the existing tiny warmup.
+  OpenVINO is not a near-term Vercel candidate: current RapidOCR/OpenVINO Linux
+  wheels pull in `openvino` plus non-headless `opencv-python`, making the
+  already-over-limit bundle materially larger. Lowering the small-image
+  RapidOCR detector limit to 544 moved Avride output slightly, lowered the
+  active no-catalog avg IoU from 0.962 to 0.960, and ran slower on the full
+  gate (`out/det544-small-nocatalog-20260529/full-report.json`). Selective
+  recognition by largest detector boxes failed all active georeferences, while
+  keeping the first 64 detector boxes preserved accuracy but was slower overall
+  (`out/cap64-order-nocatalog-20260529/full-report.json`, 9.25s total). Keep
+  the current full-recognition path until a selector can prove both speed and
+  exact no-regression behavior.
