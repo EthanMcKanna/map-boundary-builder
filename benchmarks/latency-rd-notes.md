@@ -3090,3 +3090,15 @@ OCR/georeference rather than returning outdated fast-path polygons.
   passed 8/8 scored, avg IoU 0.962, min IoU 0.931. Changed-market smoke
   `out/coarse-ocr-changed-smoke-20260529/full-report.json` smoke-checked the
   six Houston/Miami/Bay Area screenshots with zero failures.
+- Production coarse-OCR-cache deployment `dpl_5cvxjQLXJ2Dmitd26P89fzfeLeXP`
+  is aliased to `https://mapboundary.app` and reports
+  `pipeline-64a699ab7e66f8cb`. A fresh Avride Dallas variant populated the OCR
+  cache with the same Dallas bbox and confidence 0.709. A second pixel-changed
+  Avride variant then returned the same output with `cache_hit: miss` at the
+  run-result layer but OCR served from the new visual cache: OCR stage 0.003s,
+  georeference 0.030s, `build_boundary_s: 0.221s`, and
+  `total_before_send_s: 0.225s`. An exact repeat of the second filename still
+  hit raw run cache in 0.001704s. The Vercel build reported a 308.02 MB bundle
+  and runtime dependency installation, so cold start/runtime install remains a
+  production latency risk to monitor even though warm near-variant generation is
+  now sub-second.
