@@ -3405,3 +3405,13 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `cv2: missing`, and using only `opencv-python==4.10.0.84` failed on Vercel
   with missing `libGL.so.1`. Production was kept/rolled back on the working
   deployment `dpl_9wpsvkbhK4Gm58aE9G6BiPnSxmWy` after those probes.
+- Production deployment `dpl_2cKgGNNqzZSnpCBZza4mGCDsr9Yw` was then explicitly
+  aliased to `https://mapboundary.app` with the working OpenCV package pair and
+  reports `pipeline-edf2e81dbb196ad2`, `opencv-python 4.10.0.84`,
+  `opencv-python-headless 4.10.0.84`, and `cv2 4.10.0` from live health. The
+  fresh neutral Avride WebP proof preserved Dallas output at server
+  `build_boundary_s: 2.660s` and `total_before_send_s: 2.731s`; a fresh 2px
+  border PNG with the same visual content reused canonical extraction/OCR and
+  returned the same bbox/source at `build_boundary_s: 0.094s` and
+  `total_before_send_s: 0.099s`; repeating the identical border filename hit raw
+  run cache at `total_before_send_s: 0.002s`.
