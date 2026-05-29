@@ -1847,6 +1847,17 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   OCR/georeference with `catalog_slug: null` in 0.574s, 0.389s, and 0.784s.
   Full regression passed 106 tests plus 9 subtests, `compileall`, `node
   --check`, and `git diff --check`.
+- Production deployment `dpl_7MYb4EzSLz1xWdcJpPjxsRVJLhii` was built with
+  Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-a96065987b90c5bb`. The
+  local prebuilt output again reported a 296.54 MB pre-runtime-installation
+  bundle. Cache-busted production smokes with `include_overlay=false` and
+  normalized cache disabled confirmed synthetic current-reference Waymo shapes
+  use the new live catalog entries: Bay Area Waymo `catalog-shape-match` with a
+  0.196s server build, Houston Waymo `catalog-shape-match` with 0.094s, and
+  Miami Waymo `catalog-shape-match` with 0.089s. The old drifted screenshots
+  for those same markets still bypassed the current catalog entries and
+  returned `catalog_slug: null` through OCR/georeference.
 
 ## Remaining Bottlenecks
 
