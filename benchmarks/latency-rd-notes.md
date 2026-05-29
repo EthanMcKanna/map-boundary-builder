@@ -4152,3 +4152,20 @@ with zero failures in 0.531s.
   full upload with no console error. The probe response is intentionally only
   accepted when the inline run is a `catalog-shape-match`; every non-catalog
   response falls through to the original full-resolution generation path.
+- Current region-placement head: Vercel inspection showed the production Python
+  function was still deployed in `iad1`, while measured browser/probe requests
+  entered at the San Francisco edge and crossed to Washington D.C.
+  (`x-vercel-id` like `sfo1::iad1::...`). Since the app's hot catalog path uses
+  bundled local data rather than an East Coast database, `vercel.json` now pins
+  functions to `sfo1`. The production deployment `dpl_AtF9Sf6dGjkdSaZYQPk7mq9D6ion`
+  inspected as `api/index.py (101.05MB) [sfo1]` and health stayed OK on
+  `pipeline-825379bcfc1f9f1d`. Five cache-miss Houston tiny-probe uploads after
+  the move all routed `sfo1::sfo1`; after warmup they measured 0.277s, 0.419s,
+  0.185s, and 0.161s HTTP wall time, versus the pre-change `sfo1::iad1`
+  baseline of 0.384s, 0.391s, and 0.236s. Server generation stayed the same
+  catalog path (`catalog-shape-match:low-res-shape`) and the change is
+  geometry-neutral. A final cache-miss current-Houston sanity probe through
+  `mapboundary.app` after aliasing uploaded a 15 KB 520px JPEG, routed
+  `sfo1::sfo1`, returned HTTP 201 in 0.182s wall time, and spent 0.079s on the
+  server with `catalog_slug: houston-waymo` and `georeference_source:
+  catalog-shape-match`.
