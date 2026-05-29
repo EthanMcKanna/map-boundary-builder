@@ -150,6 +150,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--score-skipped-catalog-references",
+        action="store_true",
+        help=(
+            "For --mode full, score non-active fixtures against matching current catalog geometry "
+            "when the saved reference is stale."
+        ),
+    )
+    parser.add_argument(
         "--require-smoked-catalog-miss",
         action="store_true",
         help=(
@@ -236,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         execution=args.execution,
         debug_artifacts=not args.no_debug_artifacts,
         smoke_skipped=args.smoke_skipped,
+        score_skipped_catalog_references=args.score_skipped_catalog_references,
         require_smoked_catalog_miss=args.require_smoked_catalog_miss,
         block_network=args.block_network,
     )
@@ -291,6 +300,7 @@ def run_benchmark(
     execution: str = "subprocess",
     debug_artifacts: bool = True,
     smoke_skipped: bool = False,
+    score_skipped_catalog_references: bool = False,
     require_smoked_catalog_miss: bool = False,
     block_network: bool = False,
 ) -> dict[str, Any]:
@@ -306,7 +316,32 @@ def run_benchmark(
     with benchmark_network_policy(block_network):
         for fixture in fixtures:
             if fixture.status != "active":
-                if mode == "full" and smoke_skipped:
+                catalog_reference = (
+                    catalog_reference_geometry_for_fixture(fixture)
+                    if mode == "full" and score_skipped_catalog_references
+                    else None
+                )
+                if catalog_reference is not None:
+                    score_fixture = replace(
+                        fixture,
+                        status="active",
+                        note=fixture_catalog_reference_note(fixture),
+                    )
+                    scores.append(
+                        score_full_fixture(
+                            score_fixture,
+                            out_dir=out_dir,
+                            min_iou=min_iou,
+                            timeout_seconds=timeout_seconds,
+                            city_overrides=city_overrides,
+                            no_catalog=no_catalog,
+                            execution=execution,
+                            debug_artifacts=debug_artifacts,
+                            score_reference=True,
+                            reference_geometry=catalog_reference,
+                        )
+                    )
+                elif mode == "full" and smoke_skipped:
                     score = score_full_fixture(
                         fixture,
                         out_dir=out_dir,
@@ -371,6 +406,7 @@ def run_benchmark(
             "execution": execution,
             "debug_artifacts": debug_artifacts,
             "smoke_skipped": smoke_skipped,
+            "score_skipped_catalog_references": score_skipped_catalog_references,
             "require_smoked_catalog_miss": require_smoked_catalog_miss,
             "block_network": block_network,
         },
@@ -551,6 +587,7 @@ def score_full_fixture(
     execution: str,
     debug_artifacts: bool,
     score_reference: bool = True,
+    reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
     output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
     debug_dir = out_dir / "full-debug" / fixture.slug if debug_artifacts else None
@@ -564,6 +601,7 @@ def score_full_fixture(
             no_catalog=no_catalog,
             debug_artifacts=debug_artifacts,
             score_reference=score_reference,
+            reference_geometry=reference_geometry,
         )
     if execution != "subprocess":
         raise ValueError(f"Unsupported full benchmark execution mode: {execution}")
@@ -613,7 +651,16 @@ def score_full_fixture(
         stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
         properties = output["features"][0].get("properties", {})
         output_geometry = shape(output["features"][0]["geometry"])
-        metrics = score_output_geometry(output_geometry, fixture.reference_path, min_iou) if score_reference else None
+        metrics = (
+            score_output_geometry(
+                output_geometry,
+                reference_path=fixture.reference_path,
+                min_iou=min_iou,
+                reference_geometry=reference_geometry,
+            )
+            if score_reference
+            else None
+        )
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
@@ -654,6 +701,7 @@ def score_full_fixture_in_process(
     no_catalog: bool,
     debug_artifacts: bool,
     score_reference: bool = True,
+    reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
     from .cli import stage_elapsed_seconds
     from .runner import BoundaryBuildOptions, build_boundary
@@ -678,7 +726,16 @@ def score_full_fixture_in_process(
         )
         duration_s = time.perf_counter() - started
         output_geometry = shape(result.geojson["features"][0]["geometry"])
-        metrics = score_output_geometry(output_geometry, fixture.reference_path, min_iou) if score_reference else None
+        metrics = (
+            score_output_geometry(
+                output_geometry,
+                reference_path=fixture.reference_path,
+                min_iou=min_iou,
+                reference_geometry=reference_geometry,
+            )
+            if score_reference
+            else None
+        )
         properties = result.geojson["features"][0].get("properties", {})
         return BenchmarkScore(
             slug=fixture.slug,
@@ -702,14 +759,40 @@ def score_full_fixture_in_process(
         return failed_full_score(fixture, str(exc), duration_s=time.perf_counter() - started)
 
 
-def score_output_geometry(output_geometry, reference_path: Path, min_iou: float) -> dict[str, Any]:
+def score_output_geometry(
+    output_geometry,
+    reference_path: Path | None = None,
+    min_iou: float | None = None,
+    *,
+    reference_geometry: Polygon | MultiPolygon | None = None,
+) -> dict[str, Any]:
+    if min_iou is None:
+        raise ValueError("min_iou is required")
     predicted = project_geometry(output_geometry)
-    reference = project_geometry(load_reference_geometry(reference_path))
+    if reference_geometry is None:
+        if reference_path is None:
+            raise ValueError("reference_path or reference_geometry is required")
+        reference_geometry = load_reference_geometry(reference_path)
+    reference = project_geometry(reference_geometry)
     metrics = compare_geometries(predicted, reference)
     return {
         "passed": metrics["iou"] >= min_iou,
         **metrics,
     }
+
+
+def catalog_reference_geometry_for_fixture(fixture: BenchmarkFixture) -> Polygon | MultiPolygon | None:
+    from .catalog_match import load_catalog_entries
+
+    for entry in load_catalog_entries():
+        if entry.slug == fixture.slug and entry.status == "active":
+            return entry.geometry
+    return None
+
+
+def fixture_catalog_reference_note(fixture: BenchmarkFixture) -> str:
+    base_note = fixture.note.rstrip(".") if fixture.note else "Saved benchmark reference is stale"
+    return f"{base_note}. Scored against current catalog geometry instead of the stale saved reference."
 
 
 def failed_full_score(

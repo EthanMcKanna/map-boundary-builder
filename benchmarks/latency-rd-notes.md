@@ -57,6 +57,28 @@ with zero failures in 0.531s.
   batch sizes 8 and 24 were both slower than the current 12; and a larger
   synthetic OCR warmup only moved LA OCR from 0.506s to 0.501s after adding
   extra warmup cost.
+- Added an opt-in current-catalog audit for stale fixtures:
+  `--score-skipped-catalog-references` promotes non-active full-benchmark
+  fixtures only for that run and scores their generated GeoJSON against the
+  matching active service-area catalog geometry instead of the stale saved
+  reference. This is a data-quality probe, not part of the default production
+  regression gate. Focused benchmark tests passed 5/5, then all
+  `tests/test_benchmark.py` passed 19/19. The normal drift-aware default gate
+  `out/post-catalogref-default-20260529/full-report.json` still passed 8/8
+  scored fixtures with 7 `reference_mismatch` skips, avg IoU 0.992917, min IoU
+  0.943345, total 0.455050s; the no-catalog gate
+  `out/post-catalogref-nocatalog-20260529/full-report.json` passed 8/8 with
+  avg IoU 0.961733, min IoU 0.931476, total 3.771973s; and targeted
+  Houston/Miami/Bay Area smoke
+  `out/post-catalogref-smoke-20260529/full-report.json` ran all six changed
+  fixtures with zero smoke failures. The new audit report
+  `out/catalog-reference-default-20260529/full-report.json` intentionally fails
+  until stale current-image debt is resolved: Waymo Houston scored IoU 0.412,
+  Miami 0.548, and Bay Area 0.706 against current catalog geometry, all via
+  OCR/georeference and with `catalog_slug: null`. Tesla Houston, Tesla Bay
+  Area, Zoox Bay Area, and Zoox Las Vegas scored 1.0 against their current
+  catalog references. Keep the default skip/smoke behavior for the old Waymo
+  images until refreshed screenshots or refreshed benchmark pairs exist.
 - Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
   upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
   OCR median moved from 0.606837s to 0.597544s, but production did not validate

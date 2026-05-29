@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+from shapely.geometry import Polygon
+
 import map_boundary_builder.benchmark as benchmark_module
 from map_boundary_builder.benchmark import (
     BenchmarkFixture,
@@ -24,6 +26,15 @@ KNOWN_REFERENCE_MISMATCH_FIXTURES = {
     "houston-tesla",
     "houston-waymo",
     "las-vegas-zoox",
+    "miami-waymo",
+}
+
+KNOWN_CHANGED_REFERENCE_MISMATCH_FIXTURES = {
+    "bay-area-tesla",
+    "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
+    "houston-waymo",
     "miami-waymo",
 }
 
@@ -247,6 +258,142 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     assert report["scores"][0]["status"] == "reference_mismatch"
     assert report["scores"][0]["iou"] is None
     assert report["scores"][0]["georeference_source"] == "ocr-georeference:nominatim-label-fit"
+
+
+def test_catalog_reference_lookup_covers_changed_reference_mismatches() -> None:
+    for slug in KNOWN_CHANGED_REFERENCE_MISMATCH_FIXTURES:
+        area_slug, provider = slug.rsplit("-", 1)
+        fixture = BenchmarkFixture(
+            slug=slug,
+            provider=provider,
+            area=area_slug.replace("-", " ").title(),
+            image_path=Path(f"{slug}.png"),
+            reference_path=Path(f"{slug}.json"),
+            status="reference_mismatch",
+        )
+
+        geometry = benchmark_module.catalog_reference_geometry_for_fixture(fixture)
+
+        assert geometry is not None
+        assert not geometry.is_empty
+
+
+def test_score_skipped_catalog_references_scores_against_current_catalog_geometry(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "houston-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Houston.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "houston-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+    catalog_geometry = Polygon(
+        [
+            (-95.5, 29.6),
+            (-95.2, 29.6),
+            (-95.2, 29.9),
+            (-95.5, 29.9),
+            (-95.5, 29.6),
+        ]
+    )
+    calls = []
+
+    def fake_catalog_reference(fixture: BenchmarkFixture):
+        assert fixture.slug == "houston-waymo"
+        return catalog_geometry
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        calls.append((fixture, kwargs))
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=1.0,
+            area_ratio=1.0,
+            centroid_distance_m=0.0,
+            vertices=42,
+            style="bright-blue",
+            duration_s=0.12,
+            georeference_source="catalog-shape-match",
+            combined_confidence=0.98,
+            catalog_slug="houston-waymo",
+            stage_elapsed_s={"match_catalog": 0.01},
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "catalog_reference_geometry_for_fixture", fake_catalog_reference)
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        score_skipped_catalog_references=True,
+    )
+
+    assert len(calls) == 1
+    scored_fixture, score_kwargs = calls[0]
+    assert scored_fixture.status == "active"
+    assert scored_fixture.note == (
+        "changed live service area. "
+        "Scored against current catalog geometry instead of the stale saved reference."
+    )
+    assert score_kwargs["score_reference"] is True
+    assert score_kwargs["reference_geometry"] is catalog_geometry
+    assert report["thresholds"]["score_skipped_catalog_references"] is True
+    assert report["summary"]["passed"] is True
+    assert report["summary"]["scored_fixtures"] == 1
+    assert report["summary"]["skipped_fixtures"] == 0
+    assert report["scores"][0]["status"] == "active"
+    assert report["scores"][0]["iou"] == 1.0
+
+
+def test_score_output_geometry_accepts_direct_reference_geometry() -> None:
+    geometry = Polygon(
+        [
+            (-118.5, 34.0),
+            (-118.2, 34.0),
+            (-118.2, 34.2),
+            (-118.5, 34.2),
+            (-118.5, 34.0),
+        ]
+    )
+
+    metrics = benchmark_module.score_output_geometry(
+        geometry,
+        None,
+        0.99,
+        reference_geometry=geometry,
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["iou"] == 1.0
 
 
 def test_smoke_skipped_catalog_miss_requirement_fails_catalog_hits(
