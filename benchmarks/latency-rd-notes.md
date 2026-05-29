@@ -3136,3 +3136,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   the OCR cache and completed in 0.132s server time with OCR 0.0035s,
   georeference 0.0168s, and the same output. Repeating that exact filename hit
   raw run cache in 0.0020s server time.
+- Production logs after deployment confirmed the warm cron is active: Vercel
+  invoked `/api/cron/warm-generation` every minute on
+  `dpl_HzYyupbVeLBcmteASXXRkoh2V3Ji` with HTTP 200. The first health request on
+  the new deployment still showed runtime dependency installation, including
+  1.85s to install dependencies from the 308.03 MB Python bundle. A
+  cache-missing shifted Avride upload after warmup kept georeference fast
+  (0.0398s) but still spent 2.524s in OCR on Vercel CPU, confirming uncached
+  arbitrary-image OCR remains the main non-catalog production bottleneck.
+- Rejected package-size pin churn for the cold runtime-install problem. Linux
+  wheel checks showed OpenCV headless 4.8.1/4.9.0/4.10.0 all sit around
+  47-48 MB, so downgrading OpenCV would save only about 1 MB. ONNX Runtime
+  1.19.2 would save about 5 MB versus 1.26.0, far below the roughly 58 MB
+  needed to avoid the 250 MB bundle threshold and previously slowed the
+  no-catalog gate materially. Rejected the newer `rapidocr` package as a
+  replacement engine for now: it recognized the Avride screenshot locally but
+  downloaded mobile models on first use, adds another production model-bundling
+  concern, and a monkey-patched no-catalog gate was slower at 7.631s with avg
+  IoU 0.960857 versus the current 0.962 baseline.
