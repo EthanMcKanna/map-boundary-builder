@@ -38,18 +38,18 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
+        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
+        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Miami", allow_catalog=True))
-        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
-        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Atlantis", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
 
     def test_pre_ocr_catalog_only_runs_when_it_can_match(self) -> None:
         self.assertTrue(should_try_pre_ocr_catalog(city_input=None, allow_catalog=True))
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=True))
+        self.assertTrue(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
+        self.assertTrue(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Miami", allow_catalog=True))
-        self.assertFalse(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
-        self.assertFalse(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Atlantis", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=False))
 

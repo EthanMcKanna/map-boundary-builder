@@ -18,10 +18,12 @@ Tesla, Bay Area Zoox, and Houston Tesla now score cleanly again and are active
 benchmark fixtures. Bay Area Waymo, Houston Waymo, Miami Waymo, and Las Vegas
 Zoox remain data debt rather than model-regression signals.
 
-The same drifted variants are now marked stale in the production service-area
-catalog and excluded from catalog matching until refreshed. Their JSON files
-remain in the bundle for audit/history, but production inference must fall back
-to OCR/georeference rather than returning an outdated fast-path polygon.
+The remaining mismatched variants are marked stale in the production
+service-area catalog and excluded from catalog matching until refreshed. Their
+JSON files remain in the bundle for audit/history, but production inference must
+fall back to OCR/georeference rather than returning an outdated fast-path
+polygon. Reactivated reference-backed variants can use the active catalog fast
+path again.
 
 ## Shipped Changes
 
@@ -353,6 +355,38 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   11/11, avg IoU 0.985, min IoU 0.943, total 4.35s, and the extraction gate
   `out/reactivated-extraction-20260529/extraction-report.json` passed 11/11,
   avg IoU 0.975, min IoU 0.900.
+- Current active-catalog-reactivation head: Bay Area Tesla, Bay Area Zoox, and
+  Houston Tesla current-verified catalog entries were made active again after
+  the current-reference gate above proved they are no longer stale regression
+  signals. Focused catalog/benchmark tests passed 18 tests. A targeted smoke
+  `out/reactivated-catalog-target-smoke-20260529/report.json` returned
+  `catalog-shape-match` for Bay Area Tesla (0.060s), Bay Area Zoox (0.106s),
+  and Houston Tesla (0.033s), while preserving OCR/georeference with
+  `catalog_slug: null` for Bay Area Waymo, Houston Waymo, and Miami Waymo. The
+  expanded production-shaped default benchmark
+  `out/active-current-catalog-prodshape-default-20260529/full-report.json`
+  passed 11/11 scored fixtures, skipped 4 `reference_mismatch` fixtures, avg
+  IoU 0.985, min IoU 0.943, total 0.69s, down from the reactivated fixture
+  baseline's 1.63s. The no-catalog gate
+  `out/active-current-catalog-prodshape-no-catalog-20260529/full-report.json`
+  stayed green at 11/11 scored, avg IoU 0.962, min IoU 0.931, total 4.57s. The
+  historical subprocess default benchmark
+  `out/active-current-catalog-subprocess-default-20260529/full-report.json`
+  passed 11/11 scored, avg IoU 0.985, min IoU 0.943, total 4.62s.
+- Current Bay Area alias head: catalog area hints now treat `San Francisco` and
+  `SF` as aliases for `Bay Area`, so city-provided Zoox San Francisco can use
+  the active Bay Area catalog fast path instead of falling back to OCR. Focused
+  API/catalog/benchmark tests passed 30 tests, and the full suite passed 101
+  tests plus 9 subtests; `compileall`, `node --check`, and `git diff --check`
+  passed. The city-overrides production-shaped benchmark
+  `out/active-current-catalog-prodshape-city-alias-20260529/full-report.json`
+  passed 11/11 scored fixtures, skipped 4 `reference_mismatch` fixtures, avg
+  IoU 0.985, min IoU 0.943, total 0.60s; Bay Area Zoox moved from OCR at 0.33s
+  in the prior city-overrides probe to `catalog-shape-match` at 0.04s. A
+  blocked-network guard
+  `out/active-current-catalog-stale-no-network-20260529/report.json` kept Bay
+  Area Waymo, Houston Waymo, and Miami Waymo on OCR/georeference with
+  `catalog_slug: null` and zero attempted geocoder/OSM network calls.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8

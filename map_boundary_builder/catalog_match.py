@@ -298,6 +298,11 @@ def area_from_slug(slug: str, provider: str) -> str:
 def catalog_area_matches_text(area: str, text: str) -> bool:
     area_tokens = normalize_catalog_area_tokens(area)
     text_tokens = normalize_catalog_area_tokens(text)
+    if area_tokens == ("bay", "area") and text_tokens in {
+        ("san", "francisco"),
+        ("sf",),
+    }:
+        return True
     return bool(area_tokens) and all(
         any(catalog_area_token_matches(area_token, text_token) for text_token in text_tokens)
         for area_token in area_tokens
