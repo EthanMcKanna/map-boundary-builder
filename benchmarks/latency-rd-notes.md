@@ -4342,3 +4342,17 @@ with zero failures in 0.531s.
   aborting (`healthRequested: 1`, `healthFulfilled: 1`, `healthFailed: 0`) while
   the generation completed. Focused warmup/API tests passed 33 tests, and
   `node --check map_boundary_builder/web_assets/app.js` passed.
+- Native RapidOCR array threshold default: the production runtime has already
+  used `MAP_BOUNDARY_RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION=1000` successfully, so
+  the code default now matches that proven deployment setting instead of
+  relying on an environment override. This avoids the slower RapidOCR file path
+  for original images at or above 1000px while leaving smaller images and
+  explicit env overrides unchanged. The current changed-code no-catalog gate
+  `out/native-array-default-code-nocatalog-20260529/full-report.json` passed
+  8/8 scored fixtures, smoke-checked all seven stale-reference fixtures with
+  zero failures, preserved avg IoU 0.962/min 0.931 with no regression issues
+  against `out/generic-miss-handoff-nocatalog-20260529/full-report.json`, and
+  reduced active total duration from 6.01s to 3.25s. The catalog-enabled gate
+  `out/native-array-default-code-default-20260529/full-report.json` also stayed
+  green at 8/8 scored, avg IoU 0.993/min 0.943, total 0.46s, with the same
+  seven drift-aware smoke checks.
