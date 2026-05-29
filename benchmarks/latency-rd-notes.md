@@ -3398,7 +3398,10 @@ OCR/georeference rather than returning outdated fast-path polygons.
   remained clean under heavy unrelated CPU load: 179/179 pytest, compileall, JS
   syntax, default full benchmark 8/8 avg IoU 0.993/min 0.943, no-catalog 8/8 avg
   0.962/min 0.931, and changed-market smoke 6/6 with zero failures. A direct
-  `opencv-python==4.10.0.84` production pin was rejected after Vercel's bundle
-  grew to 402.75 MB; the project already uses `uv` dependency metadata to avoid
-  RapidOCR's non-headless OpenCV dependency in production. Keep the runtime
-  signature fix without the direct non-headless OpenCV pin.
+  `opencv-python==4.10.0.84` production pin alongside
+  `opencv-python-headless==4.10.0.84` was rejected after Vercel's bundle grew to
+  402.75 MB. Removing the non-headless pin restored the smaller bundle but
+  produced a broken deployment with `cv2: missing`; production was immediately
+  rolled back to `dpl_9wpsvkbhK4Gm58aE9G6BiPnSxmWy`. The next packaging attempt
+  uses `opencv-python==4.10.0.84` as the single OpenCV provider so `cv2` exists
+  without bundling two OpenCV wheels.
