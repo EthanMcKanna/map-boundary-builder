@@ -4290,3 +4290,14 @@ with zero failures in 0.531s.
   drift-aware default benchmark `out/generic-probe-default-20260529/full-report.json`,
   no-catalog benchmark `out/generic-probe-nocatalog-20260529/full-report.json`,
   and `git diff --check` all passed with zero regression issues.
+  Production deployment `dpl_54M2z7T9Lj3ABUQJPZ52gZqVtekN` was aliased to
+  `https://mapboundary.app`; static JS on the custom domain contains
+  `CATALOG_PROBE_GENERIC_MIN_BYTES` and
+  `catalogProbeCanvasLooksServiceAreaLike`. A production browser smoke for
+  generic `IMG_2222.PNG` Waymo Dallas completed from one 32.8 KB
+  `IMG_2222.catalog-probe.jpg` request in 0.644s wall time with
+  `build_boundary_s` 0.117014 and `total_before_send_s` 0.323066. The direct
+  full-upload comparison on the same production deployment took 2.348679s wall,
+  uploaded 1,198,637 bytes, and used the same `dallas-waymo`
+  `catalog-shape-match` source, so this generic-known-service-area path is now
+  about 3.65x faster with the same catalog result.
