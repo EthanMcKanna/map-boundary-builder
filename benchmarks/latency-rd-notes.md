@@ -2776,6 +2776,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   exposes `onnxruntime_enable_cpu_mem_arena` and
   `onnxruntime_allow_spinning` so production smokes can confirm the live session
   settings.
+- Production deployment `dpl_AHLTZ9eQhUqc8YYCKK2uNFm7NSKN` is aliased to
+  `https://mapboundary.app`, reports `pipeline-23fc379e7cb4fa7b`, and confirms
+  ONNX Runtime `1.26.0`, `onnxruntime_enable_cpu_mem_arena: true`, and
+  `onnxruntime_allow_spinning: true` from `/api/health`. The same fresh
+  one-pixel-corner Avride Dallas variant before and after deploy preserved
+  `catalog_slug: null`, `Dallas`, confidence 0.847, four controls, bbox
+  `[-96.8183764,32.7679509,-96.7549157,32.8376675]`, and
+  `ocr-georeference:nominatim-label-fit`; server time before send improved from
+  2.999s to 2.406s and OCR time from 2.619s to 2.030s. A fresh Miami changed-
+  service-area smoke stayed off stale catalog geometry with `catalog_slug:
+  null`, confidence 0.864, six controls, bbox
+  `[-80.3230932,25.6879523,-80.1186554,25.9397748]`, and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`; it completed server
+  time before send in 4.754s with 3.200s OCR, improved from the prior documented
+  Miami production smoke at 8.491s server / 5.818s OCR.
 
 ## Remaining Bottlenecks
 
