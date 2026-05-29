@@ -406,10 +406,15 @@ def search_near_transform(
         nonlocal best, batch
         if not batch:
             return
-        scores = score_transform_batch_on_score_image(road_points, score_image, batch)
-        for (scale, rotation, tx, ty), (score, count) in zip(batch, scores):
-            if count < min_count:
-                continue
+        params = np.asarray(batch, dtype=np.float32)
+        scores, counts = score_transform_batch_arrays_on_score_image(road_points, score_image, params)
+        valid = counts >= min_count
+        if np.any(valid):
+            valid_scores = np.where(valid, scores, -np.inf)
+            best_index = int(np.argmax(valid_scores))
+            score = float(scores[best_index])
+            count = int(counts[best_index])
+            scale, rotation, tx, ty = batch[best_index]
             if best is None or score > best[0]:
                 best = (score, count, scale, rotation, tx, ty)
         batch = []
@@ -606,6 +611,18 @@ def score_transform_batch_on_score_image(
 ) -> list[tuple[float, int]]:
     if not transforms:
         return []
+    params = np.asarray(transforms, dtype=np.float32)
+    scores, counts = score_transform_batch_arrays_on_score_image(road_points, feature_scores, params)
+    return [(float(score), int(count)) for score, count in zip(scores, counts)]
+
+
+def score_transform_batch_arrays_on_score_image(
+    road_points: np.ndarray,
+    feature_scores: np.ndarray,
+    transforms: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    if transforms.size == 0:
+        return np.empty(0, dtype=float), np.empty(0, dtype=np.int32)
     h, w = feature_scores.shape
     params = np.asarray(transforms, dtype=np.float32)
     scales = params[:, 0][:, np.newaxis]
@@ -626,7 +643,7 @@ def score_transform_batch_on_score_image(
     keep = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
     counts = keep.sum(axis=1).astype(np.int32)
     if not np.any(counts):
-        return [(0.0, 0) for _ in transforms]
+        return np.zeros(len(params), dtype=float), counts
 
     np.clip(ix, 0, max(w - 1, 0), out=ix)
     np.clip(iy, 0, max(h - 1, 0), out=iy)
@@ -634,7 +651,7 @@ def score_transform_batch_on_score_image(
     scores *= keep
     sums = scores.sum(axis=1)
     means = np.divide(sums, counts, out=np.zeros_like(sums, dtype=float), where=counts > 0)
-    return [(float(score), int(count)) for score, count in zip(means, counts)]
+    return means, counts
 
 
 def sample_road_points(road_points: np.ndarray, *, max_points: int) -> np.ndarray:

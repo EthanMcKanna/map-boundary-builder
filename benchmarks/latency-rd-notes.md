@@ -2013,6 +2013,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   lowered per-fixture IoU for San Antonio, Dallas, Phoenix, Nashville, and Bay
   Area Zoox. Because the goal forbids accuracy regressions, the default stays at
   the safer 1600px extraction cap.
+- Road-refine batch winner cleanup: `search_near_transform` now chooses the best
+  scored candidate from each vectorized NumPy batch before crossing back into
+  Python, while `score_transform_batch_on_score_image` keeps its existing
+  list-of-tuples API. A direct 9,477-candidate synthetic search preserved the
+  exact best score/count and moved from 0.2536s old avg to 0.2523s new avg.
+  Phoenix and Nashville hard road-refine outputs stayed byte-for-byte identical
+  to the stricter 11-fixture baseline. Focused road fixtures passed 2/2 at avg
+  IoU 0.985, min IoU 0.983. Clean serial no-catalog gates passed 11/11 scored
+  fixtures with 4 reference mismatches skipped at 3.96s and 4.15s total in
+  `out/road-array-winner-no-catalog-serial-20260529/full-report.json` and
+  `out/road-array-winner-no-catalog-serial2-20260529/full-report.json`,
+  compared with the previous stricter baseline's 4.35s. The catalog-enabled
+  gate `out/road-array-winner-default-20260529/full-report.json` passed 11/11,
+  skipped the same 4 reference mismatches, avg IoU 0.985, min IoU 0.943, total
+  0.68s.
 
 ## Remaining Bottlenecks
 
