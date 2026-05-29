@@ -2662,8 +2662,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   pytest passed 146 tests plus 9 subtests. The drift-aware active no-catalog
   gate passed 8/8 scored fixtures with avg IoU 0.962 and min IoU 0.931, and the
   default active catalog gate passed 8/8 scored fixtures with avg IoU 0.993 and
-  min IoU 0.943. Houston, Miami, and Bay Area fixtures remain
-  `reference_mismatch` data debt rather than scored regressions.
+  min IoU 0.943. Production deployment `dpl_GymcbeWmqkwiCwaBcgxJrZjdTR9i`
+  reported pipeline `pipeline-f848659088db1b35`; after `/api/health?warm=ocr`,
+  a cache-busted Avride Dallas PNG miss preserved `Dallas`, confidence 0.847,
+  and `ocr-georeference:nominatim-label-fit` at 2.975s server time. A second
+  one-pixel-different variant missed the run cache but reused OCR labels through
+  the visual OCR cache, returning the same result in 0.248s server time.
+  Houston, Miami, and Bay Area fixtures remain `reference_mismatch` data debt
+  rather than scored regressions.
 
 ## Remaining Bottlenecks
 
