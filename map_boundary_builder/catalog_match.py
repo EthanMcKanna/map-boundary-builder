@@ -143,6 +143,10 @@ def has_active_catalog_area_hint(text: str | None) -> bool:
     )
 
 
+def catalog_style_supported(style: str) -> bool:
+    return any(style in styles for styles in PROVIDER_STYLES.values())
+
+
 def has_stale_catalog_area_hint(text: str | None) -> bool:
     if text is None or not text.strip():
         return False

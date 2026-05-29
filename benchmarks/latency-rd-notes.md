@@ -3574,3 +3574,23 @@ OCR/georeference rather than returning outdated fast-path polygons.
   than the pre-adaptive production miss at 2.584s and materially more confident
   than the 1000px cap proof. Repeating the same upload hit raw cache at
   `total_before_send_s: 0.003s`.
+- Unsupported extracted styles now skip pre-OCR service-area catalog matching
+  and its intermediate retry. The current catalog only has gray-fill,
+  bright-blue, dark-teal, and light-fill provider styles, so purple-fill Avride
+  maps cannot produce a valid catalog hit. Direct Avride Dallas proof
+  `out/purple-skip-retry-avride-20260529/out.geojson` preserved Dallas,
+  `purple-fill`, `ocr-georeference:nominatim-label-fit`, five controls, bbox
+  `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`, and confidence 0.922
+  while removing the useless catalog-retry event and cutting local total to
+  0.495s with OCR at 0.244s. The full validation gate passed 189/189 pytest,
+  compileall, `node --check`, and `git diff --check`; default active benchmark
+  `out/purple-skip-default-20260529/full-report.json` passed 8/8 scored with
+  avg IoU 0.992917/min 0.943345, no-catalog benchmark
+  `out/purple-skip-nocatalog-20260529/full-report.json` passed 8/8 scored with
+  avg IoU 0.961670/min 0.931476, and changed-market smoke
+  `out/purple-skip-changed-smoke-20260529/full-report.json` passed six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures.
+  Lowering purple-fill RapidOCR detector limits was rejected in the same round:
+  544 shifted Avride geometry to IoU 0.962212 versus the accepted 800px-cap
+  output, while 480 preserved geometry but reduced controls/confidence and did
+  not provide a meaningful speed win.

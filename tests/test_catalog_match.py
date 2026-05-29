@@ -11,6 +11,7 @@ from map_boundary_builder.catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_area_matches_text,
     catalog_feature_collection,
+    catalog_style_supported,
     has_active_catalog_area_hint,
     has_stale_catalog_area_hint,
     load_catalog_entries,
@@ -65,6 +66,14 @@ STYLE_BY_PROVIDER = {
     "waymo": "bright-blue",
     "zoox": "dark-teal",
 }
+
+
+def test_catalog_style_supported_only_accepts_catalog_provider_styles() -> None:
+    assert catalog_style_supported("bright-blue")
+    assert catalog_style_supported("gray-fill")
+    assert catalog_style_supported("dark-teal")
+    assert catalog_style_supported("light-fill")
+    assert not catalog_style_supported("purple-fill")
 
 
 def test_catalog_shape_match_accepts_current_high_confidence_shape() -> None:

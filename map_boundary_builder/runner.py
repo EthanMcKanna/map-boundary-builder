@@ -13,6 +13,7 @@ from shapely.geometry import shape
 
 from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
+    catalog_style_supported,
     catalog_feature_collection,
     has_active_catalog_area_hint,
     has_stale_catalog_area_hint,
@@ -189,7 +190,8 @@ def build_boundary(
             },
         )
 
-        if allow_pre_ocr_catalog:
+        catalog_style_can_match = catalog_style_supported(extraction.style)
+        if allow_pre_ocr_catalog and catalog_style_can_match:
             catalog_match = match_service_area_catalog(
                 extraction.pixel_geometry,
                 style=extraction.style,
@@ -236,6 +238,7 @@ def build_boundary(
             filename_hint=filename_hint,
             allow_pre_ocr_catalog=allow_pre_ocr_catalog,
             used_catalog_scaled_extraction=used_catalog_scaled_extraction,
+            catalog_style_can_match=catalog_style_can_match,
         ):
             emit_progress(
                 progress,
@@ -305,7 +308,7 @@ def build_boundary(
                     "confidence": extraction.confidence,
                 },
             )
-            if allow_pre_ocr_catalog:
+            if allow_pre_ocr_catalog and catalog_style_supported(extraction.style):
                 catalog_match = match_service_area_catalog(
                     extraction.pixel_geometry,
                     style=extraction.style,
@@ -629,8 +632,11 @@ def should_retry_pre_ocr_catalog(
     filename_hint: str | None,
     allow_pre_ocr_catalog: bool,
     used_catalog_scaled_extraction: bool,
+    catalog_style_can_match: bool = True,
 ) -> bool:
     if not allow_pre_ocr_catalog or not used_catalog_scaled_extraction:
+        return False
+    if not catalog_style_can_match:
         return False
     if CATALOG_RETRY_EXTRACT_MAX_DIMENSION <= CATALOG_EXTRACT_MAX_DIMENSION:
         return False
