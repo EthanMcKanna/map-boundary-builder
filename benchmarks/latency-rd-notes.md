@@ -2943,6 +2943,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   0.883s. Fresh Houston Tesla and Bay Area Zoox production smokes still return
   `houston-tesla` and `bay-area-zoox` direct catalog matches with current
   external geometry.
+- Rejected lower RapidOCR max-dimension and lower road-point caps as unsafe
+  speed levers. Cache-cold no-catalog OCR sweeps showed `max1200` passing the
+  current active suite faster than the default, but Orlando fell to 0.781 IoU,
+  leaving almost no robustness margin. `max1400` failed Nashville at 0.759 IoU.
+  Road-point caps below 4000 also looked faster but degraded Nashville from
+  0.986 IoU to 0.917 or 0.799, so the current road-match quality settings stay.
+- Warmup now primes both RapidOCR detector limits used in production instead of
+  only the large-image `640` engine. The default small-image `608` engine fits
+  in the existing two-entry LRU and removes a first-use ONNX initialization hit
+  for smaller OCR fallbacks. A fresh-process Tesla Dallas probe improved from
+  0.328s without warmup to 0.128s after the patched warmup. Focused OCR/API
+  tests passed 82 tests, full pytest passed 161 tests plus 9 subtests,
+  `compileall` passed, and `git diff --check` passed. The default active
+  benchmark `out/dual-rapidocr-warm-default-20260529/full-report.json`
+  preserved 8/8 scored accuracy, avg IoU 0.993, min IoU 0.943, total 0.625s.
+  The cache-cold no-catalog gate
+  `out/dual-rapidocr-warm-cold-nocatalog-20260529/full-report.json` preserved
+  8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total 7.568s.
 
 ## Remaining Bottlenecks
 

@@ -64,6 +64,14 @@ def rapidocr_warm_detector_limit() -> int:
     return RAPIDOCR_DET_LIMIT_SIDE_LEN
 
 
+def rapidocr_warm_detector_limits() -> list[int]:
+    limits: list[int] = []
+    for limit in (rapidocr_warm_detector_limit(), RAPIDOCR_DET_LIMIT_SIDE_LEN):
+        if limit > 0 and limit not in limits:
+            limits.append(limit)
+    return limits
+
+
 def ocr_runtime_config() -> dict[str, Any]:
     return {
         "rapidocr_max_dimension": RAPIDOCR_MAX_DIMENSION,
@@ -75,6 +83,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
+        "rapidocr_warm_detector_limits": rapidocr_warm_detector_limits(),
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,
