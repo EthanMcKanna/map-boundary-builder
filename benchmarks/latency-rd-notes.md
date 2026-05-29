@@ -2042,6 +2042,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   OCR 2.678s, and georeference 0.226s. OCR remains the production bottleneck,
   but the road-refine portion is now much smaller on the warmed non-catalog
   path.
+- Drift-policy correction after the user stepped in: all saved Houston, Miami,
+  and Bay Area fixture pairs are treated as stale ground truth again, even when
+  a pair still scores cleanly against today's external reference polygon. This
+  supersedes the temporary 11-fixture reactivation evidence above; future
+  regression gates should use the drift-aware 8 scored / 7 skipped baseline
+  until fresh screenshots and references are captured. Focused fixture/catalog
+  tests passed 23/23. The corrected catalog-enabled gate
+  `out/drift-restored-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU
+  0.943, total 0.41s. The corrected no-catalog gate
+  `out/drift-restored-no-catalog-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped the same 7 stale pairs, avg IoU 0.962, min IoU 0.931, total
+  3.55s.
+- Rejected another RapidOCR recognition batch sweep under the corrected
+  no-regression bar. Focused 16/18/20 batch runs all passed 6/6 scored fixtures,
+  but the full serial `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=20` gate at
+  `out/ocr-rec20-no-catalog-serial-20260529/full-report.json` was not a clear
+  improvement over the current no-catalog baseline, so the default remains 12.
 
 ## Remaining Bottlenecks
 

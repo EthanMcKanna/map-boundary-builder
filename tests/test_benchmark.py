@@ -11,7 +11,10 @@ from map_boundary_builder.benchmark import (
 
 
 KNOWN_REFERENCE_MISMATCH_FIXTURES = {
+    "bay-area-tesla",
     "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
     "houston-waymo",
     "las-vegas-zoox",
     "miami-waymo",

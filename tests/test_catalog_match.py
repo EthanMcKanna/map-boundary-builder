@@ -44,7 +44,10 @@ KNOWN_CURRENT_EXTERNAL_CHANGED_WAYMO_SLUGS = {
 }
 
 KNOWN_CHANGED_REFERENCE_MISMATCH_SLUGS = {
+    "bay-area-tesla",
     "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
     "houston-waymo",
     "miami-waymo",
 }
