@@ -2469,6 +2469,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   same code with the grace disabled took 3.81s. Waiting for near-complete
   feature precompute is not a default latency win; the nonblocking reuse/fallback
   path remains better.
+- The web app now schedules the existing `/api/health?warm=ocr` generation
+  prewarm during idle time immediately after startup, not only after image
+  selection. This does not change extraction, OCR, georeferencing, or GeoJSON
+  output; it just gives production Fluid Compute/RapidOCR more time to load
+  before the user clicks Build. The warm health response also seeds the browser
+  pipeline-version cache, avoiding a later cold `/api/health` lookup during
+  local-cache key construction. Verification used a local served page with
+  Playwright routes for external MapLibre assets and mocked API calls:
+  startup made exactly one `/api/health?warm=ocr` request, selecting/running
+  `waymo phoenix.png` made one `/api/runs` request, and no extra `/api/health`
+  call occurred.
 
 ## Remaining Bottlenecks
 

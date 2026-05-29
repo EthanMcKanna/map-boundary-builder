@@ -220,6 +220,7 @@ renderProgressSteps();
 historyEntries = loadHistoryEntries();
 renderHistory();
 updateRunButton();
+scheduleGenerationRuntimePrewarm();
 
 themeModeButtons.forEach((button) => {
   button.addEventListener("click", () => applyThemeMode(button.dataset.themeMode));
@@ -644,6 +645,12 @@ function scheduleGenerationRuntimePrewarm() {
   const start = () => {
     generationRuntimePrewarm = fetch("/api/health?warm=ocr", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (typeof payload?.pipeline_version === "string" && payload.pipeline_version) {
+          cachedRunCachePipelineVersion = payload.pipeline_version;
+        }
+        return payload;
+      })
       .catch((error) => {
         console.warn("Could not prewarm generation runtime", error);
         generationRuntimePrewarm = null;
