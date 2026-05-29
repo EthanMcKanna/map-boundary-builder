@@ -81,6 +81,7 @@ let copyFeedbackTimeout = null;
 let activeImageMode = "original";
 let generationRuntimePrewarm = null;
 let generationRuntimePrewarmScheduled = false;
+let generationRuntimePrewarmAbortController = null;
 let selectedImageHashTask = null;
 let pendingRunCacheKeys = [];
 let pendingRunCacheKeysPromise = null;
@@ -286,8 +287,9 @@ form.addEventListener("submit", async (event) => {
   }
 
   resetRun();
-  startEstimatedProgress();
   setRunButtonState("running");
+  cancelPendingGenerationRuntimePrewarm();
+  startEstimatedProgress();
 
   try {
     const uploadFile = await prepareRunImage(selectedFile);
@@ -643,7 +645,16 @@ function scheduleGenerationRuntimePrewarm() {
   generationRuntimePrewarmScheduled = true;
 
   const start = () => {
-    generationRuntimePrewarm = fetch("/api/health?warm=ocr", { cache: "no-store" })
+    if (isRunButtonRunning()) {
+      generationRuntimePrewarmScheduled = false;
+      return;
+    }
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    generationRuntimePrewarmAbortController = controller;
+    generationRuntimePrewarm = fetch("/api/health?warm=ocr", {
+      cache: "no-store",
+      ...(controller ? { signal: controller.signal } : {}),
+    })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => {
         if (typeof payload?.pipeline_version === "string" && payload.pipeline_version) {
@@ -652,9 +663,19 @@ function scheduleGenerationRuntimePrewarm() {
         return payload;
       })
       .catch((error) => {
-        console.warn("Could not prewarm generation runtime", error);
-        generationRuntimePrewarm = null;
-        generationRuntimePrewarmScheduled = false;
+        if (error?.name !== "AbortError") {
+          console.warn("Could not prewarm generation runtime", error);
+        }
+        if (generationRuntimePrewarmAbortController === controller) {
+          generationRuntimePrewarm = null;
+          generationRuntimePrewarmScheduled = false;
+        }
+        return null;
+      })
+      .finally(() => {
+        if (generationRuntimePrewarmAbortController === controller) {
+          generationRuntimePrewarmAbortController = null;
+        }
       });
   };
 
@@ -662,6 +683,19 @@ function scheduleGenerationRuntimePrewarm() {
     window.requestIdleCallback(start, { timeout: 1500 });
   } else {
     window.setTimeout(start, 400);
+  }
+}
+
+function cancelPendingGenerationRuntimePrewarm() {
+  if (generationRuntimePrewarmAbortController) {
+    generationRuntimePrewarmAbortController.abort();
+    generationRuntimePrewarmAbortController = null;
+    generationRuntimePrewarm = null;
+    generationRuntimePrewarmScheduled = false;
+    return;
+  }
+  if (!generationRuntimePrewarm) {
+    generationRuntimePrewarmScheduled = false;
   }
 }
 

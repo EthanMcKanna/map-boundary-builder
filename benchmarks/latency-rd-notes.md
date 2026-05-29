@@ -2599,6 +2599,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   restored the same cached payload, confirmed oversized overlays are skipped,
   and measured 1000 memory reads at 0.0026s versus 1000 forced disk reads at
   0.0270s (10.5x faster).
+- The browser now cancels any pending `/api/health?warm=ocr` prewarm when the
+  user starts a real generation, and the idle prewarm callback re-checks run
+  state before it starts. This prevents a quick submit from making the warmup
+  request compete with `/api/runs` for the same production runtime. Local
+  validation used Playwright with a delayed warmup route: the warm request was
+  observed as failed/aborted, the run still posted once, and the page completed
+  the cache-busted Avride Dallas upload as `Dallas boundary`. `node --check`
+  and the full pytest suite passed.
 
 ## Remaining Bottlenecks
 
