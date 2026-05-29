@@ -2533,6 +2533,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   one pixel's low bit toggled skipped OCR (`ocr` 0.000083s), completed server
   work in 0.283s before send, and preserved `Dallas`,
   `ocr-georeference:nominatim-label-fit`, and confidence 0.847.
+- Deferred Vercel Runtime Cache integration for OCR/run payloads. Official
+  Vercel docs now describe a Python Runtime Cache SDK that can share regional
+  ephemeral cache entries across function instances with a 2 MB item limit, but
+  the current `vercel==0.3.2` package exposes the cache under `vercel.cache`
+  rather than the documented `vercel.functions` import path and pulls in
+  additional runtime dependencies (`httpx`, `pydantic`, `vercel-sandbox`, and
+  transitive packages). Since the current UI intentionally disables normalized
+  server cache lookup to avoid a measured 0.17-0.21s production fresh-upload
+  penalty, adding a charged remote cache dependency is not justified until a
+  controlled production probe proves a cross-instance hit rate or first-user
+  benefit large enough to offset package size and lookup overhead.
 
 ## Remaining Bottlenecks
 
