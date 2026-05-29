@@ -3327,3 +3327,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   rather than over-weighting one local run. Changed-market smoke
   `out/ocr-memory-changed-smoke-20260529/full-report.json` smoke-checked the
   user-confirmed changed Bay Area/Houston/Miami fixtures with zero failures.
+- Production memory-first OCR deployment `dpl_BJbCmSi9kfa2EJcjNaezeREqkXud` is
+  aliased to `https://mapboundary.app` and reports
+  `pipeline-dd787e156eedc0d4`. Vercel still used the 308.06 MB bundle with
+  runtime dependency installation. After `/api/health?warm=ocr`, a fresh
+  neutral Avride Dallas base upload (`img-ebdc369-base-1780066001.webp`) missed
+  the run-result cache and preserved bbox/source with server
+  `build_boundary_s: 2.578s`, extract 0.180s, OCR 2.342s, georeference 0.045s,
+  and `total_before_send_s: 2.660s`. A fresh 2px white-border upload with a
+  different filename (`img-ebdc369-border-1780066002.png`) also missed the
+  run-result cache but reused in-process canonical extraction/OCR, preserved the
+  exact bbox/source, and returned with server `build_boundary_s: 0.091s`,
+  extract 0.032s, OCR 0.015s, georeference 0.018s, and
+  `total_before_send_s: 0.096s`. This improves the previous production base
+  proof at 2.873s and bordered proof at 0.105s. Repeating the bordered filename
+  hit raw run cache in 0.00420s server time.
