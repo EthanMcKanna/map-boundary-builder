@@ -29,7 +29,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v3"
+OCR_CACHE_VERSION = "ocr-labels-v4"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
 RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
@@ -64,6 +64,10 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         used_tesseract_fallback = True
     if used_tesseract_fallback and count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS:
         words.extend(rapid_words)
+    elif used_tesseract_fallback:
+        words.extend(
+            word for word in rapid_words if word.confidence >= 80.0 and is_useful_text(word.text)
+        )
     words = dedupe_labels(words)
     labels = list(words)
     labels.extend(group_line_labels(words))

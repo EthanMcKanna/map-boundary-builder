@@ -296,6 +296,27 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(rapidocr.call_count, 1)
         self.assertIn("Bay Area CA", {label.text for label in labels})
 
+    def test_extract_ocr_labels_preserves_high_confidence_rapidocr_after_noisy_tesseract(self) -> None:
+        rapid_label = OcrLabel("Nashville", x=250, y=99, width=37, height=10, confidence=98)
+        noisy_tesseract_labels = [
+            OcrLabel("Mar", x=156, y=98, width=9, height=3, confidence=50),
+            OcrLabel("fee", x=221, y=116, width=12, height=3, confidence=45),
+            OcrLabel("Bur", x=164, y=144, width=22, height=5, confidence=34),
+        ]
+
+        with (
+            patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(ocr_module, "tesseract_available", return_value=True),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]) as rapidocr,
+            patch.object(ocr_module, "run_tesseract_words", return_value=noisy_tesseract_labels),
+            patch.object(ocr_module, "run_preprocessed_tesseract_words", return_value=[]),
+        ):
+            labels = extract_ocr_labels("unused.png")
+
+        self.assertEqual(rapidocr.call_count, 1)
+        self.assertIn("Nashville", {label.text for label in labels})
+
     def test_extract_ocr_labels_skips_tesseract_when_rapidocr_has_enough_labels(self) -> None:
         rapid_labels = [
             OcrLabel("University Park", x=10, y=10, width=80, height=20, confidence=96),

@@ -1905,6 +1905,29 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/user-drift-correction-no-catalog-20260529/full-report.json` passed 8/8
   scored fixtures, skipped the same 7 drifted pairs, avg IoU 0.962, min IoU
   0.931, and total 3.71s.
+- Low-resolution OCR fallback reliability: the issue #5 Nashville screenshot
+  exposed a local-environment failure where Tesseract fallback labels could
+  replace RapidOCR's high-confidence `Nashville` label with tiny low-confidence
+  fragments. OCR cache version `v4` now preserves high-confidence RapidOCR
+  labels after a Tesseract fallback, so the label-aided catalog rescue works in
+  both Tesseract-enabled dev environments and production-like RapidOCR-only
+  environments. Focused OCR tests passed 41/41; the exact issue artifact passed
+  in 0.69s with local Tesseract available and 0.50s with `PATH=/usr/bin:/bin`.
+  Full pytest passed 108 tests plus 9 subtests. The corrected drift-aware
+  catalog benchmark `out/ocr-preserve-rapid-default-20260529/full-report.json`
+  passed 8/8 scored fixtures, skipped 7 reference mismatches, avg IoU 0.993,
+  min IoU 0.943, total 0.50s. The no-catalog generalization gate
+  `out/ocr-preserve-rapid-no-catalog-20260529/full-report.json` passed 8/8,
+  skipped 7 reference mismatches, avg IoU 0.962, min IoU 0.931, total 3.77s.
+- Rejected low-resolution no-catalog threshold loosening for issue #5. With
+  catalog disabled, the 420px Nashville image still lacks enough readable place
+  labels for a label fit, and city/road context candidates with the highest
+  road scores only reached about 0.69 IoU against the known Nashville shape.
+  Upscaling RapidOCR inputs to 1.5x-4x and CLAHE/high-pass variants recovered
+  only the same single city label. The existing catalog-hint solution remains
+  the accurate low-res path for known service-area shapes; arbitrary
+  single-label screenshots still need a stronger independent georeferencing
+  signal before accepting a no-catalog road-only fit.
 
 ## Remaining Bottlenecks
 
