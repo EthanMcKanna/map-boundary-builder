@@ -2326,6 +2326,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Francisco, Phoenix, Nashville, or Los Angeles, and it took 3.8-30.1s on those
   failures. It only returned for Tesla Houston and Tesla Bay Area, where the
   existing catalog path is already faster and more auditable.
+- Rejected production-shaped RapidOCR warmup after live deployment. A 1600px
+  synthetic warm looked promising locally, moving stale Miami after warm to
+  0.947s while preserving `catalog_slug: null`, confidence 0.864, and road
+  score 0.681518. Production deployment
+  `dpl_3AcZ1YdUNyM5RvTEVjWnqjPhuyaq`, however, made live
+  `/api/health?warm=ocr` much heavier: `rapidocr_s` 5.191s and total 6.146s.
+  Cache-busted stale Miami stayed correct but server `build_boundary_s` was
+  still 6.458s with OCR 3.917s and georeference 1.727s, only a noisy/slight
+  improvement over the previous catalog-miss deployment. Cache-busted Houston
+  regressed versus the prior production smoke, with server `build_boundary_s`
+  4.369s versus 3.327s before. The change was reverted and the known-good tiny
+  warmup path redeployed.
 
 ## Remaining Bottlenecks
 
