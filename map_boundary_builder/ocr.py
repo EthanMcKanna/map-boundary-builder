@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import csv
 import hashlib
+from importlib.metadata import PackageNotFoundError, version
 import json
 import os
 import re
@@ -48,6 +49,12 @@ OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_MEMORY_CACHE_MAX = 128
+OCR_CACHE_DEPENDENCY_PACKAGES = (
+    "onnxruntime",
+    "opencv-python-headless",
+    "pillow",
+    "rapidocr-onnxruntime",
+)
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
 
@@ -169,13 +176,27 @@ def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bo
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
+            f"rapidocr-native-array-min={RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
             f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
             f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:"
+            f"deps={ocr_cache_dependency_signature()}:"
             f"{digest_kind}:{digest}"
         ).encode("utf-8")
     ).hexdigest()
+
+
+@lru_cache(maxsize=1)
+def ocr_cache_dependency_signature() -> str:
+    versions: list[str] = []
+    for package in OCR_CACHE_DEPENDENCY_PACKAGES:
+        try:
+            package_version = version(package)
+        except PackageNotFoundError:
+            package_version = "missing"
+        versions.append(f"{package}={package_version}")
+    return ",".join(versions)
 
 
 def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:

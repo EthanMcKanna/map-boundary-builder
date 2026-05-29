@@ -2827,6 +2827,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   inside noise. Because Vercel's build hardware and Fluid Compute runtime are
   not a reliable exact match for locally generated optimized models, and runtime
   generation would make the first cold request slower, this stays unshipped.
+- OCR label cache keys now include the RapidOCR native-array threshold plus the
+  OCR-critical dependency versions for ONNX Runtime, OpenCV, Pillow, and
+  RapidOCR. This closes a correctness hole where run caches could invalidate
+  after a pipeline or dependency change while the lower-level OCR label cache
+  still reused labels from an older runtime or from a different RapidOCR input
+  path. Focused OCR tests passed 57 tests. Full pytest passed 155 tests plus 9
+  subtests. The drift-aware default gate
+  `out/ocr-cache-key-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 known `reference_mismatch` fixtures, avg IoU 0.993, min
+  IoU 0.943, total 0.50s. The arbitrary no-catalog gate
+  `out/ocr-cache-key-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  skipped the same 7 stale pairs, avg IoU 0.962, min IoU 0.931, total 5.17s,
+  preserving the Phoenix/Nashville road-refined sources.
 
 ## Remaining Bottlenecks
 

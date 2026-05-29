@@ -41,6 +41,7 @@ from map_boundary_builder.ocr import (
     group_stacked_labels,
     load_rapidocr_bgr,
     ocr_cache_key,
+    ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
     ocr_visual_cache_key,
     rapidocr_detector_limit_for_input,
@@ -374,6 +375,35 @@ class OcrGroupingTests(unittest.TestCase):
                 key_640 = ocr_cache_key(image_path, use_tesseract=False)
 
         self.assertNotEqual(key_608, key_640)
+
+    def test_ocr_cache_key_depends_on_native_rapidocr_array_threshold(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION", 0):
+                key_0 = ocr_cache_key(image_path, use_tesseract=False)
+            with patch.object(ocr_module, "RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION", 1000):
+                key_1000 = ocr_cache_key(image_path, use_tesseract=False)
+
+        self.assertNotEqual(key_0, key_1000)
+
+    def test_ocr_cache_key_depends_on_runtime_dependency_signature(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            ocr_cache_dependency_signature.cache_clear()
+            try:
+                with patch.object(ocr_module, "version", return_value="1.0"):
+                    key_1 = ocr_cache_key(image_path, use_tesseract=False)
+                ocr_cache_dependency_signature.cache_clear()
+                with patch.object(ocr_module, "version", return_value="2.0"):
+                    key_2 = ocr_cache_key(image_path, use_tesseract=False)
+            finally:
+                ocr_cache_dependency_signature.cache_clear()
+
+        self.assertNotEqual(key_1, key_2)
 
     def test_ocr_cache_key_depends_on_rapidocr_classifier_batch(self) -> None:
         with TemporaryDirectory() as workdir:
