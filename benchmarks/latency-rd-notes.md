@@ -2735,6 +2735,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   gate but lowered avg IoU to 0.959 versus 0.962 at 1600, so the runtime stays
   on the accuracy-preserving OCR dimension and takes the ONNX Runtime upgrade
   instead.
+- Road-refinement search now scores each offset grid from per-scale/per-rotation
+  projected road points instead of rebuilding full transform-by-point arrays
+  for every candidate. This keeps the exact same search grid and acceptance
+  thresholds while avoiding repeated scale/rotation math across the offset
+  candidates. A focused no-road-cache A/B with OCR warmed preserved identical
+  Phoenix and Nashville road-refined bboxes/scores; Phoenix moved from about
+  1.07-1.08s to 0.82-0.86s, while Nashville was neutral/noisy at about
+  0.85-0.89s. A deterministic unit test now proves the optimized search matches
+  exhaustive batch scoring. Full pytest passed 152 tests plus 9 subtests, and
+  `compileall` passed. The drift-aware no-catalog gate still passed 8/8 scored
+  fixtures with avg IoU 0.962/min 0.931 and preserved Phoenix/Nashville
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`; the default catalog
+  gate passed 8/8 scored with avg IoU 0.993/min 0.943. The no-catalog timing run
+  was contention-noisy because it ran in parallel with the default gate, so the
+  focused no-cache A/B is the cleaner speed signal for this patch.
 
 ## Remaining Bottlenecks
 

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 
 import map_boundary_builder.osm_roads as osm_roads
-from map_boundary_builder.georef_transform import GeoreferenceTransform, mercator_to_lonlat
+from map_boundary_builder.georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
 from map_boundary_builder.osm_roads import (
     ROAD_REFINE_MEMORY_CACHE_MAX,
     RoadMatchResult,
@@ -18,6 +18,8 @@ from map_boundary_builder.osm_roads import (
     refine_transform_with_osm_roads,
     road_refine_cache_key,
     score_georeference_transform,
+    search_near_transform,
+    score_transform_batch_arrays_on_score_image,
     score_transform_batch,
     score_transform_batch_on_score_image,
     seed_road_points,
@@ -90,6 +92,73 @@ class RoadScoringTests(unittest.TestCase):
             scalar_score, scalar_count = score_georeference_transform(road_points, feature_distance, transform)
             self.assertEqual(batch_count, scalar_count)
             self.assertAlmostEqual(batch_score, scalar_score, places=7)
+
+    def test_search_near_transform_matches_exhaustive_batch_scores(self) -> None:
+        rng = np.random.default_rng(42)
+        feature_scores = rng.random((64, 72), dtype=np.float32)
+        road_points = np.column_stack(
+            (np.linspace(-160.0, 180.0, 80), np.linspace(-110.0, 130.0, 80))
+        ).astype(np.float32)
+        base_tx, base_ty = 8.0, -12.0
+        lon, lat = mercator_to_lonlat(base_tx, base_ty)
+        base = GeoreferenceTransform(
+            city="Test",
+            lon=lon,
+            lat=lat,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=5.0,
+            rotation_radians=0.02,
+            confidence=0.8,
+            source="test",
+        )
+        scale_multipliers = np.array([0.95, 1.0, 1.05])
+        rotation_offsets = np.deg2rad(np.array([-0.5, 0.0, 0.5]))
+        offset_meters = np.array([-18.0, 0.0, 18.0])
+
+        result = search_near_transform(
+            road_points,
+            np.zeros_like(feature_scores, dtype=np.float32),
+            base,
+            base_tx,
+            base_ty,
+            feature_scores=feature_scores,
+            scale_multipliers=scale_multipliers,
+            rotation_offsets=rotation_offsets,
+            offset_meters=offset_meters,
+            min_count=1,
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+
+        params = np.asarray(
+            [
+                (
+                    base.meters_per_pixel * scale_multiplier,
+                    base.rotation_radians + rotation_offset,
+                    base_tx + offset_x,
+                    base_ty + offset_y,
+                )
+                for scale_multiplier in scale_multipliers
+                for rotation_offset in rotation_offsets
+                for offset_x in offset_meters
+                for offset_y in offset_meters
+            ],
+            dtype=np.float32,
+        )
+        scores, counts = score_transform_batch_arrays_on_score_image(road_points, feature_scores, params)
+        valid_scores = np.where(counts >= 1, scores, -np.inf)
+        best_index = int(np.argmax(valid_scores))
+        expected_scale, expected_rotation, expected_tx, expected_ty = params[best_index]
+        actual_score, actual_count, actual = result
+        actual_tx, actual_ty = lonlat_to_mercator(actual.lon, actual.lat)
+
+        self.assertAlmostEqual(actual_score, float(scores[best_index]), places=7)
+        self.assertEqual(actual_count, int(counts[best_index]))
+        self.assertAlmostEqual(actual.meters_per_pixel, float(expected_scale), places=7)
+        self.assertAlmostEqual(actual.rotation_radians, float(expected_rotation), places=7)
+        self.assertAlmostEqual(actual_tx, float(expected_tx), places=5)
+        self.assertAlmostEqual(actual_ty, float(expected_ty), places=5)
 
     def test_road_refine_cache_round_trips_result(self) -> None:
         transform = GeoreferenceTransform(

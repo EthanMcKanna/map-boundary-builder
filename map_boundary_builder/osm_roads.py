@@ -23,7 +23,6 @@ from .ocr import OcrLabel
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass"
 ROAD_REFINE_CACHE_DIR = _CACHE_ROOT / "road-refine"
-ROAD_SEARCH_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE", "1024")))
 ROAD_MATCH_MAX_POINTS = max(500, int(os.environ.get("MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS", "4000")))
 ROAD_REFINE_COARSE_FEATURE_SCALE = max(1.0, float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_COARSE_FEATURE_SCALE", "4")))
 ROAD_REFINE_FINE_FEATURE_SCALE = max(1.0, float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE", "2")))
@@ -412,36 +411,53 @@ def search_near_transform(
     min_count: int,
 ) -> tuple[float, int, GeoreferenceTransform] | None:
     best: tuple[float, int, float, float, float, float] | None = None
-    batch: list[tuple[float, float, float, float]] = []
     score_image = feature_scores if feature_scores is not None else feature_score_image(feature_distance)
-
-    def score_batch() -> None:
-        nonlocal best, batch
-        if not batch:
-            return
-        params = np.asarray(batch, dtype=np.float32)
-        scores, counts = score_transform_batch_arrays_on_score_image(road_points, score_image, params)
-        valid = counts >= min_count
-        if np.any(valid):
-            valid_scores = np.where(valid, scores, -np.inf)
-            best_index = int(np.argmax(valid_scores))
-            score = float(scores[best_index])
-            count = int(counts[best_index])
-            scale, rotation, tx, ty = batch[best_index]
-            if best is None or score > best[0]:
-                best = (score, count, scale, rotation, tx, ty)
-        batch = []
+    h, w = score_image.shape
+    road_x = road_points[:, 0].astype(np.float32, copy=False)
+    road_y = road_points[:, 1].astype(np.float32, copy=False)
+    offsets = np.asarray([(float(x), float(y)) for x in offset_meters for y in offset_meters], dtype=np.float32)
 
     for scale_multiplier in scale_multipliers:
         scale = float(base_transform.meters_per_pixel * scale_multiplier)
+        inv_scale = np.float32(1.0 / scale)
+        dx0 = (road_x - np.float32(base_tx)) * inv_scale
+        dy0 = (road_y - np.float32(base_ty)) * inv_scale
         for rotation_offset in rotation_offsets:
             rotation = float(base_transform.rotation_radians + rotation_offset)
-            for offset_x in offset_meters:
-                for offset_y in offset_meters:
-                    batch.append((scale, rotation, base_tx + float(offset_x), base_ty + float(offset_y)))
-                    if len(batch) >= ROAD_SEARCH_BATCH_SIZE:
-                        score_batch()
-    score_batch()
+            cos_r = np.float32(np.cos(rotation))
+            sin_r = np.float32(np.sin(rotation))
+            base_px = dx0 * cos_r + dy0 * sin_r
+            base_py = dx0 * sin_r - dy0 * cos_r
+            shift_x = -((offsets[:, 0] * cos_r + offsets[:, 1] * sin_r) * inv_scale)
+            shift_y = -((offsets[:, 0] * sin_r - offsets[:, 1] * cos_r) * inv_scale)
+            ix = np.rint(base_px[np.newaxis, :] + shift_x[:, np.newaxis]).astype(np.int32)
+            iy = np.rint(base_py[np.newaxis, :] + shift_y[:, np.newaxis]).astype(np.int32)
+            keep = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
+            counts = keep.sum(axis=1).astype(np.int32)
+            valid = counts >= min_count
+            if not np.any(valid):
+                continue
+
+            np.clip(ix, 0, max(w - 1, 0), out=ix)
+            np.clip(iy, 0, max(h - 1, 0), out=iy)
+            scores = score_image[iy, ix]
+            scores *= keep
+            sums = scores.sum(axis=1)
+            means = np.divide(sums, counts, out=np.zeros_like(sums, dtype=float), where=counts > 0)
+            valid_scores = np.where(valid, means, -np.inf)
+            best_index = int(np.argmax(valid_scores))
+            score = float(means[best_index])
+            count = int(counts[best_index])
+            if best is None or score > best[0]:
+                offset_x, offset_y = offsets[best_index]
+                best = (
+                    score,
+                    count,
+                    scale,
+                    rotation,
+                    base_tx + float(offset_x),
+                    base_ty + float(offset_y),
+                )
     if best is None:
         return None
     score, count, scale, rotation, tx, ty = best
