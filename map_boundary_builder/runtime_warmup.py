@@ -38,11 +38,16 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         profile["extraction_s"] = elapsed_seconds(extraction_started)
 
         ocr_started = time.perf_counter()
-        from .ocr import warm_rapidocr_runtime
+        from .ocr import rapidocr_runtime_warm_error, warm_rapidocr_runtime
 
-        profile["rapidocr_inference_warmed"] = warm_rapidocr_runtime()
+        rapidocr_warmed = warm_rapidocr_runtime()
+        profile["rapidocr_inference_warmed"] = rapidocr_warmed
         profile["rapidocr_s"] = elapsed_seconds(ocr_started)
-        profile["status"] = "ok"
+        if rapidocr_warmed:
+            profile["status"] = "ok"
+        else:
+            profile["status"] = "error"
+            profile["error"] = rapidocr_runtime_warm_error() or "RapidOCR warmup failed"
     except Exception as exc:
         profile["status"] = "error"
         profile["error"] = str(exc)

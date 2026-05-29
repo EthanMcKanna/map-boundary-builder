@@ -7,6 +7,7 @@ from functools import lru_cache
 import csv
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ from .runtime_config import (
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
+    RAPIDOCR_ENGINE,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_MAX_DIMENSION,
@@ -63,9 +65,12 @@ OCR_CACHE_DEPENDENCY_PACKAGES = (
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",
+    "rapidocr",
 )
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
+_RAPIDOCR_RUNTIME_WARMED = False
+_RAPIDOCR_RUNTIME_WARM_ERROR: str | None = None
 
 
 def extract_ocr_labels(
@@ -74,12 +79,14 @@ def extract_ocr_labels(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
     cache_key = ocr_cache_key(
         image_path,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
     if cache_key is not None:
         cached = read_ocr_cache(cache_key)
@@ -102,6 +109,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_engine_backend=rapidocr_engine_backend,
         )
         if visual_cache_key is not None and visual_cache_key != cache_key:
             cached = read_ocr_cache(visual_cache_key)
@@ -113,6 +121,7 @@ def extract_ocr_labels(
             canonical_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_engine_backend=rapidocr_engine_backend,
         )
         canonical_trimmed = canonical_ocr_bgr_trimmed(prepared_bgr, canonical_bgr, canonical_origin)
         if (
@@ -132,6 +141,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_engine_backend=rapidocr_engine_backend,
         )
         if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
             cached = read_ocr_cache(near_visual_cache_key)
@@ -145,6 +155,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_engine_backend=rapidocr_engine_backend,
         )
         if coarse_visual_cache_key is not None and coarse_visual_cache_key not in {
             cache_key,
@@ -182,9 +193,11 @@ def extract_ocr_labels(
                     write_ocr_cache(coarse_visual_cache_key, labels)
                 return labels
 
-    rapidocr_kwargs: dict[str, int] = {}
+    rapidocr_kwargs: dict[str, object] = {}
     if rapidocr_max_dimension is not None:
         rapidocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+    if rapidocr_engine_backend is not None:
+        rapidocr_kwargs["rapidocr_engine_backend"] = rapidocr_engine_backend
     rapid_words: list[OcrLabel] = run_rapidocr_words(
         image_path,
         prepared_bgr=prepared_bgr,
@@ -240,11 +253,13 @@ def extract_ocr_labels_from_rgb(
     rgb: np.ndarray,
     *,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> list[OcrLabel]:
     return extract_ocr_labels(
         image_path,
         prepared_bgr=rgb_to_bgr(rgb),
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
 
 
@@ -259,6 +274,7 @@ def ocr_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str | None:
     try:
         digest = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
@@ -269,6 +285,7 @@ def ocr_cache_key(
         digest,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
 
 
@@ -277,6 +294,7 @@ def ocr_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str | None:
     if bgr is None:
         return None
@@ -289,6 +307,7 @@ def ocr_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
 
 
@@ -297,11 +316,13 @@ def ocr_near_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
         mask=OCR_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr6-sha256",
         digest_tag=b"bgr-quantized",
@@ -313,11 +334,13 @@ def ocr_coarse_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
         mask=OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr5-sha256",
         digest_tag=b"bgr-coarse-quantized",
@@ -329,6 +352,7 @@ def ocr_quantized_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
     mask: int,
     digest_kind: str,
     digest_tag: bytes,
@@ -345,6 +369,7 @@ def ocr_quantized_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
 
 
@@ -353,6 +378,7 @@ def ocr_canonical_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str | None:
     if bgr is None:
         return None
@@ -365,6 +391,7 @@ def ocr_canonical_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_engine_backend=rapidocr_engine_backend,
     )
 
 
@@ -460,18 +487,37 @@ def effective_rapidocr_max_dimension(rapidocr_max_dimension: int | None = None) 
     return max(0, int(rapidocr_max_dimension))
 
 
+def effective_rapidocr_engine_backend(rapidocr_engine_backend: str | None = None) -> str:
+    backend = RAPIDOCR_ENGINE if rapidocr_engine_backend is None else rapidocr_engine_backend
+    backend = str(backend).strip().lower()
+    if backend in {"modern", "legacy"}:
+        return backend
+    return "legacy"
+
+
+def warm_legacy_rapidocr_runtime_enabled() -> bool:
+    return RAPIDOCR_ENGINE not in {"modern"}
+
+
+def warm_modern_rapidocr_runtime_enabled() -> bool:
+    return RAPIDOCR_ENGINE in {"modern", "modern-bright-blue", "bright-blue"}
+
+
 def ocr_cache_key_for_digest(
     digest_kind: str,
     digest: str,
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> str:
     engine = "tesseract" if use_tesseract else "rapidocr"
     effective_max_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
+    effective_backend = effective_rapidocr_engine_backend(rapidocr_engine_backend)
     return hashlib.sha256(
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={effective_max_dimension}:"
+            f"rapidocr-engine={effective_backend}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
@@ -605,6 +651,7 @@ def run_rapidocr_words(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_engine_backend: str | None = None,
 ) -> list[OcrLabel]:
     ocr_input, scale_x, scale_y = rapidocr_input_array(
         image_path,
@@ -613,6 +660,8 @@ def run_rapidocr_words(
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
     detector_limit = rapidocr_detector_limit_for_input(ocr_input)
+    if effective_rapidocr_engine_backend(rapidocr_engine_backend) == "modern":
+        return run_modern_rapidocr_words(ocr_input, scale_x, scale_y, detector_limit)
     try:
         engine = rapidocr_engine(detector_limit)
         result, _elapsed = engine(ocr_input, use_cls=False)
@@ -624,6 +673,24 @@ def run_rapidocr_words(
         return []
     labels = rapidocr_items_to_labels(result)
     return scale_rapidocr_labels(labels, scale_x, scale_y)
+
+
+def run_modern_rapidocr_words(
+    ocr_input: Path | np.ndarray,
+    scale_x: float,
+    scale_y: float,
+    detector_limit: int,
+) -> list[OcrLabel]:
+    try:
+        engine = modern_rapidocr_engine(detector_limit)
+        result = engine(ocr_input, use_cls=False)
+        labels = scale_rapidocr_labels(modern_rapidocr_output_to_labels(result), scale_x, scale_y)
+        if not should_retry_rapidocr_with_classifier(labels):
+            return labels
+        result = engine(ocr_input, use_cls=True)
+    except Exception:
+        return []
+    return scale_rapidocr_labels(modern_rapidocr_output_to_labels(result), scale_x, scale_y)
 
 
 def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
@@ -639,8 +706,10 @@ def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
     return RAPIDOCR_DET_LIMIT_SIDE_LEN
 
 
-@lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
+    global _RAPIDOCR_RUNTIME_WARMED, _RAPIDOCR_RUNTIME_WARM_ERROR
+    if _RAPIDOCR_RUNTIME_WARMED:
+        return True
     try:
         sample = np.full((128, 384, 3), 255, dtype=np.uint8)
         cv2.putText(
@@ -654,11 +723,31 @@ def warm_rapidocr_runtime() -> bool:
             cv2.LINE_AA,
         )
         for detector_limit in rapidocr_warm_detector_limits():
-            engine = rapidocr_engine(detector_limit)
-            engine(sample, use_cls=False)
-    except Exception:
+            if warm_legacy_rapidocr_runtime_enabled():
+                engine = rapidocr_engine(detector_limit)
+                engine(sample, use_cls=False)
+            if warm_modern_rapidocr_runtime_enabled():
+                engine = modern_rapidocr_engine(detector_limit)
+                engine(sample, use_cls=False)
+    except Exception as exc:
+        _RAPIDOCR_RUNTIME_WARM_ERROR = f"{type(exc).__name__}: {exc}"
         return False
+    _RAPIDOCR_RUNTIME_WARMED = True
+    _RAPIDOCR_RUNTIME_WARM_ERROR = None
     return True
+
+
+def rapidocr_runtime_warm_error() -> str | None:
+    return _RAPIDOCR_RUNTIME_WARM_ERROR
+
+
+def clear_warm_rapidocr_runtime_cache() -> None:
+    global _RAPIDOCR_RUNTIME_WARMED, _RAPIDOCR_RUNTIME_WARM_ERROR
+    _RAPIDOCR_RUNTIME_WARMED = False
+    _RAPIDOCR_RUNTIME_WARM_ERROR = None
+
+
+warm_rapidocr_runtime.cache_clear = clear_warm_rapidocr_runtime_cache  # type: ignore[attr-defined]
 
 
 def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:
@@ -791,6 +880,59 @@ def rapidocr_engine_kwargs(det_limit_side_len: int | None = None) -> dict[str, i
     return kwargs
 
 
+@lru_cache(maxsize=2)
+def modern_rapidocr_engine(det_limit_side_len: int | None = None):
+    configure_rapidocr_onnxruntime_session_options()
+    from rapidocr import RapidOCR
+
+    rapidocr_logger = logging.getLogger("RapidOCR")
+    rapidocr_logger.setLevel(logging.ERROR)
+    for handler in rapidocr_logger.handlers:
+        handler.setLevel(logging.ERROR)
+    det_limit = RAPIDOCR_DET_LIMIT_SIDE_LEN if det_limit_side_len is None else max(0, int(det_limit_side_len))
+    params: dict[str, object] = {
+        "Rec.rec_batch_num": RAPIDOCR_REC_BATCH_NUM,
+        "Cls.cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
+    }
+    params.update(modern_rapidocr_model_params())
+    if det_limit > 0:
+        params["Det.limit_side_len"] = det_limit
+    return RapidOCR(params=params)
+
+
+def modern_rapidocr_model_params() -> dict[str, str]:
+    model_root = Path(tempfile.gettempdir()) / "map-boundary-builder-rapidocr-models"
+    model_root.mkdir(parents=True, exist_ok=True)
+    params = {"Global.model_root_dir": str(model_root)}
+    try:
+        import rapidocr
+
+        models_dir = Path(rapidocr.__file__).resolve().parent / "models"
+        model_paths = {
+            "Det.model_path": models_dir / "ch_PP-OCRv4_det_mobile.onnx",
+            "Rec.model_path": models_dir / "ch_PP-OCRv4_rec_mobile.onnx",
+            "Cls.model_path": models_dir / "ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+        }
+        if all(path.is_file() for path in model_paths.values()):
+            return {**params, **{key: str(path) for key, path in model_paths.items()}}
+    except Exception:
+        pass
+    try:
+        import rapidocr_onnxruntime
+
+        models_dir = Path(rapidocr_onnxruntime.__file__).resolve().parent / "models"
+        model_paths = {
+            "Det.model_path": models_dir / "ch_PP-OCRv4_det_infer.onnx",
+            "Rec.model_path": models_dir / "ch_PP-OCRv4_rec_infer.onnx",
+            "Cls.model_path": models_dir / "ch_ppocr_mobile_v2.0_cls_infer.onnx",
+        }
+        if all(path.is_file() for path in model_paths.values()):
+            params.update({key: str(path) for key, path in model_paths.items()})
+    except Exception:
+        pass
+    return params
+
+
 def configure_rapidocr_onnxruntime_session_options() -> None:
     global _RAPIDOCR_SESSION_OPTIONS_PATCHED
     if _RAPIDOCR_SESSION_OPTIONS_PATCHED:
@@ -867,6 +1009,44 @@ def rapidocr_items_to_labels(items: object) -> list[OcrLabel]:
     for item in items:
         try:
             box, raw_text, raw_score = item
+            points = [(float(point[0]), float(point[1])) for point in box]
+            text = clean_text(str(raw_text))
+            score = float(raw_score)
+        except Exception:
+            continue
+        if score < 0.35 or not is_useful_text(text):
+            continue
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        left, right = min(xs), max(xs)
+        top, bottom = min(ys), max(ys)
+        width = right - left
+        height = bottom - top
+        if width <= 0 or height <= 0:
+            continue
+        labels.append(
+            OcrLabel(
+                text=text,
+                x=(left + right) / 2.0,
+                y=(top + bottom) / 2.0,
+                width=width,
+                height=height,
+                confidence=max(0.0, min(100.0, score * 100.0)),
+            )
+        )
+    return labels
+
+
+def modern_rapidocr_output_to_labels(output: object) -> list[OcrLabel]:
+    boxes = getattr(output, "boxes", None)
+    texts = getattr(output, "txts", None)
+    scores = getattr(output, "scores", None)
+    if boxes is None or texts is None or scores is None:
+        return []
+
+    labels: list[OcrLabel] = []
+    for box, raw_text, raw_score in zip(boxes, texts, scores):
+        try:
             points = [(float(point[0]), float(point[1])) for point in box]
             text = clean_text(str(raw_text))
             score = float(raw_score)

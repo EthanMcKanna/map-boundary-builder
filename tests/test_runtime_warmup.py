@@ -37,3 +37,22 @@ class RuntimeWarmupTests(unittest.TestCase):
         self.assertTrue(profile["rapidocr_inference_warmed"])
         warm_extraction.assert_called_once_with()
         warm_ocr.assert_called_once_with()
+
+    def test_prewarm_generation_runtime_marks_rapidocr_warm_failure_unhealthy(self) -> None:
+        with (
+            patch("map_boundary_builder.catalog_match.load_catalog_entries", return_value=[]),
+            patch("map_boundary_builder.geocoder.load_geocoder_seed", return_value={}),
+            patch("map_boundary_builder.osm_places.load_osm_places_seed", return_value={}),
+            patch("map_boundary_builder.osm_roads.load_road_points_seed", return_value={}),
+            patch(
+                "map_boundary_builder.runtime_warmup.warm_extraction_runtime",
+                return_value={"style": "bright-blue", "contour_count": 1},
+            ),
+            patch("map_boundary_builder.ocr.warm_rapidocr_runtime", Mock(return_value=False)),
+            patch("map_boundary_builder.ocr.rapidocr_runtime_warm_error", Mock(return_value="RuntimeError: cold install")),
+        ):
+            profile = prewarm_generation_runtime()
+
+        self.assertEqual(profile["status"], "error")
+        self.assertFalse(profile["rapidocr_inference_warmed"])
+        self.assertEqual(profile["error"], "RuntimeError: cold install")

@@ -4425,3 +4425,27 @@ with zero failures in 0.531s.
   Area 2.282286s / 1.671644s OCR, with the same OCR/georeference sources,
   bboxes, confidence values, and `catalog_slug: null`. This materially improves
   live fresh OCR but is still not the sub-second arbitrary screenshot target.
+- Modern bright-blue OCR backend experiment: global `rapidocr` v3 was rejected
+  because Austin Tesla's scored IoU moved from 0.973925 to 0.965638 even though
+  most Waymo outputs were preserved. A narrower default now uses the modern
+  backend only for bright-blue extractions, keeps gray-fill/light-fill/dark-teal
+  on legacy RapidOCR, warms both OCR runtimes in the mixed mode, and suppresses
+  modern RapidOCR's startup logger noise. A production follow-up also prevents
+  transient OCR warmup failures from being cached for the whole instance,
+  reports failed OCR prewarm attempts as warm-health errors instead of hidden
+  `ok` payloads, and points the modern wrapper at explicit read-only model
+  paths, preferring `rapidocr` v3 mobile ONNX files and falling back to
+  `rapidocr_onnxruntime` files so Vercel never tries to write defaults under
+  read-only `/var/task/_vendor`. Full pytest passed 218 tests plus 9 subtests.
+  The production-shaped no-catalog gate
+  `out/default-modern-bright-blue-v3-models-nocatalog-20260529/full-report.json` passed
+  8/8 scored active fixtures with no regression issues against
+  `out/current-nocatalog-baseline-20260529/full-report.json`, preserved avg IoU
+  0.961733/min IoU 0.931476, and reduced active total duration from 3.525950s
+  to 3.327179s. The catalog-enabled gate
+  `out/default-modern-bright-blue-default-logquiet-20260529/full-report.json`
+  passed 8/8 scored active fixtures at avg IoU 0.992917/min IoU 0.943345 and
+  0.448751s total active duration. Both gates smoked all seven
+  `reference_mismatch` fixtures with zero failures; Bay Area, Houston, and Miami
+  remain stale-reference data debt and are not scored as accuracy evidence until
+  refreshed.

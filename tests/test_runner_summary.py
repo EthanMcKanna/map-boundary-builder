@@ -144,9 +144,11 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
         return extraction
 
     ocr_rgb_shapes: list[tuple[int, ...]] = []
+    ocr_kwargs: list[dict[str, object]] = []
 
-    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb):
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
         ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        ocr_kwargs.append(kwargs)
         return []
 
     georef = GeoreferenceResult(
@@ -183,6 +185,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
+    assert ocr_kwargs == [{"rapidocr_engine_backend": "modern"}]
 
 
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:

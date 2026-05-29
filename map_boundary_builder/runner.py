@@ -42,7 +42,7 @@ from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
-from .runtime_config import RAPIDOCR_MAX_DIMENSION, RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+from .runtime_config import RAPIDOCR_ENGINE, RAPIDOCR_MAX_DIMENSION, RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
@@ -690,13 +690,23 @@ def submit_ocr_labels_from_rgb(
     style: str,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    rapidocr_engine_backend = rapidocr_engine_backend_for_extraction_style(style)
+    ocr_kwargs: dict[str, Any] = {}
+    if rapidocr_engine_backend is not None:
+        ocr_kwargs["rapidocr_engine_backend"] = rapidocr_engine_backend
     if rapidocr_max_dimension is None:
-        return executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+        return executor.submit(
+            extract_ocr_labels_from_rgb,
+            str(image_path),
+            rgb,
+            **ocr_kwargs,
+        )
+    ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
     return executor.submit(
         extract_ocr_labels_from_rgb,
         str(image_path),
         rgb,
-        rapidocr_max_dimension=rapidocr_max_dimension,
+        **ocr_kwargs,
     )
 
 
@@ -708,6 +718,14 @@ def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
     if RAPIDOCR_PURPLE_FILL_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
         return None
     return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+
+
+def rapidocr_engine_backend_for_extraction_style(style: str) -> str | None:
+    if RAPIDOCR_ENGINE == "modern":
+        return "modern"
+    if RAPIDOCR_ENGINE in {"modern-bright-blue", "bright-blue"} and style == "bright-blue":
+        return "modern"
+    return None
 
 
 def low_resolution_shape_catalog_match(
