@@ -3867,3 +3867,29 @@ OCR/georeference rather than returning outdated fast-path polygons.
   smoke `out/default-det608-changed-smoke-20260529/full-report.json` passed 6/6
   in 0.391s total while keeping those changed markets as `reference_mismatch`
   rather than stale-ground-truth accuracy scores.
+- Rejected region-cropped OCR as a general no-catalog speed path. The probe in
+  `out/region-ocr-probe-20260529/summary.jsonl` ran OCR on the extracted
+  service-area neighborhood plus margins and shifted labels back to original
+  image coordinates. It sometimes saved OCR time, but it was not robust enough:
+  Los Angeles at the 15% margin dropped IoU to 0.848883, Orlando lost a control
+  point and confidence at narrower margins, and Phoenix's OCR timing was not
+  consistently better. This is too risky for arbitrary screenshots unless a
+  later version can prove label coverage before cropping.
+- Added a reliability guard for sparse, high-rotation OCR label fits without
+  road evidence. The motivating arbitrary stress image
+  `/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp` returned
+  a 3-control Dallas no-catalog fit with 17.591872 degrees of rotation,
+  1071.6m median residual, 1335.8m p90 residual, confidence 0.709, and only
+  0.468814 IoU against the current verified Avride Dallas catalog geometry.
+  After the guard, `out/stress-local-avride-sparse-guard-20260529/` correctly
+  fails with the existing "Could not infer a reliable map location" error
+  instead of returning a misleading GeoJSON. A separate arbitrary Austin stress
+  image, `/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg`, still
+  succeeds with 13 controls, confidence 0.991, and 0.846676s local total in
+  `out/stress-local-robotaxi-sparse-guard-20260529/`. Formal gates stayed green:
+  `out/sparse-guard-nocatalog-20260529/full-report.json` passed 8/8 scored with
+  avg IoU 0.961733, min IoU 0.931476, total 3.792437s, and max active duration
+  0.899790s; `out/sparse-guard-default-20260529/full-report.json` passed 8/8
+  scored with avg IoU 0.992917, min IoU 0.943345, and max active duration
+  0.097847s; and `out/sparse-guard-changed-smoke-20260529/full-report.json`
+  passed all six Houston/Miami/Bay Area `reference_mismatch` smokes in 0.385s.

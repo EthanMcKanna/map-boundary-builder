@@ -733,6 +733,22 @@ def is_credible_context_hint_georeference(result: GeoreferenceResult | None) -> 
     )
 
 
+def sparse_rotated_fit_without_road_evidence(
+    inlier_count: int,
+    rotation_radians: float,
+    residual_median_m: float,
+    residual_p90_m: float,
+    road_match: object | None,
+) -> bool:
+    if road_match is not None:
+        return False
+    if inlier_count > 3:
+        return False
+    if abs(rotation_radians) < 0.24:
+        return False
+    return residual_median_m >= 800.0 and residual_p90_m >= 1200.0
+
+
 def georeference_control_spread_m(controls: list[ControlPoint]) -> float:
     if len(controls) < 2:
         return 0.0
@@ -841,6 +857,14 @@ def georeference_from_label_context(
                         else:
                             road_refinement = None
                             road_refinement_elapsed_s = None
+                    if sparse_rotated_fit_without_road_evidence(
+                        len(inliers),
+                        rotation,
+                        residual_median,
+                        residual_p90,
+                        road_refinement,
+                    ):
+                        return None
                     return GeoreferenceResult(
                         transform=geo_transform,
                         control_points=[controls[i] for i in inliers],

@@ -32,6 +32,7 @@ from map_boundary_builder.georeference import (
     residual_median_p90,
     should_try_road_refinement,
     single_tokens_supported_by_fuller_labels,
+    sparse_rotated_fit_without_road_evidence,
 )
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
@@ -1520,6 +1521,44 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                     height=551,
                 )
             )
+
+    def test_sparse_rotated_fit_requires_road_or_stronger_label_evidence(self) -> None:
+        self.assertTrue(
+            sparse_rotated_fit_without_road_evidence(
+                inlier_count=3,
+                rotation_radians=0.307,
+                residual_median_m=1080.0,
+                residual_p90_m=1350.0,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            sparse_rotated_fit_without_road_evidence(
+                inlier_count=3,
+                rotation_radians=0.307,
+                residual_median_m=1080.0,
+                residual_p90_m=1350.0,
+                road_match=object(),
+            )
+        )
+        self.assertFalse(
+            sparse_rotated_fit_without_road_evidence(
+                inlier_count=3,
+                rotation_radians=0.109,
+                residual_median_m=110.0,
+                residual_p90_m=140.0,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            sparse_rotated_fit_without_road_evidence(
+                inlier_count=5,
+                rotation_radians=0.307,
+                residual_median_m=1080.0,
+                residual_p90_m=1350.0,
+                road_match=None,
+            )
+        )
 
     def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
