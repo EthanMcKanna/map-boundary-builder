@@ -401,6 +401,50 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertEqual(second_labels[0].x, 13)
             self.assertEqual(second_labels[0].y, 12)
 
+    def test_trimmed_canonical_ocr_cache_hit_skips_near_and_coarse_keys(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "bordered.png"
+            image = Image.new("RGB", (26, 24), (255, 255, 255))
+            for x in range(10, 16):
+                for y in range(9, 14):
+                    image.putpixel((x, y), (0, 0, 0))
+            image.save(image_path)
+            bgr = rgb_to_bgr(np.array(image, dtype=np.uint8))
+            canonical_bgr, origin = canonical_ocr_bgr(bgr)
+            canonical_key = ocr_canonical_visual_cache_key(canonical_bgr, use_tesseract=False)
+            cached_label = OcrLabel("Dallas", x=0, y=0, width=6, height=5, confidence=99)
+
+            assert bgr is not None
+            assert canonical_key is not None
+            self.assertEqual(origin, (10.0, 9.0))
+            with (
+                patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir) / "ocr"),
+                patch.object(ocr_module, "tesseract_available", return_value=False),
+                patch.object(
+                    ocr_module,
+                    "ocr_near_visual_cache_key",
+                    side_effect=AssertionError("trimmed canonical hit should skip near visual key"),
+                ),
+                patch.object(
+                    ocr_module,
+                    "ocr_coarse_visual_cache_key",
+                    side_effect=AssertionError("trimmed canonical hit should skip coarse visual key"),
+                ),
+                patch.object(
+                    ocr_module,
+                    "run_rapidocr_words",
+                    side_effect=AssertionError("trimmed canonical hit should avoid OCR"),
+                ),
+            ):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    write_ocr_cache(canonical_key, [cached_label])
+                    labels = extract_ocr_labels(image_path, prepared_bgr=bgr)
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
+            self.assertEqual(labels, [OcrLabel("Dallas", x=10.0, y=9.0, width=6, height=5, confidence=99)])
+
     def test_rapidocr_input_image_downscales_when_configured(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"

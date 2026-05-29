@@ -3207,3 +3207,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   follow-up PP-OCRv5 MNN detector-limit 736 probe did not recover accuracy
   (avg IoU 0.934366, min IoU 0.857246), so this is not just a detector
   resolution issue.
+- Trimmed canonical OCR cache hits now check the canonical key before near and
+  coarse whole-image visual keys. This does not change first-pass OCR output; it
+  only avoids unnecessary full-image hash work once a uniform border/padding
+  trim is detected. Focused tests prove the trimmed canonical hit skips near,
+  coarse, and OCR calls. OCR-only Avride Dallas proof with one fresh cache:
+  original base populated 56 labels, the 2px bordered variant returned those
+  labels from cache in 0.0496s, and exact repeat returned in 0.00145s. Full
+  validation passed 173/173 pytest, `compileall`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  In-process default benchmark
+  `out/canonical-reorder-default-20260529/full-report.json` passed 8/8 scored,
+  skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU 0.943.
+  In-process no-catalog benchmark
+  `out/canonical-reorder-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.962, min IoU 0.931. Changed-market smoke
+  `out/canonical-reorder-changed-smoke-20260529/full-report.json` smoke-checked
+  Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo with zero
+  failures while keeping them unscored as user-confirmed data debt.

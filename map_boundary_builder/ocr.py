@@ -81,6 +81,7 @@ def extract_ocr_labels(
     coarse_visual_cache_key: str | None = None
     canonical_visual_cache_key: str | None = None
     canonical_origin = (0.0, 0.0)
+    canonical_cache_checked = False
     if cache_key is not None:
         if prepared_bgr is not None:
             prepared_bgr = np.ascontiguousarray(prepared_bgr)
@@ -92,6 +93,25 @@ def extract_ocr_labels(
             if cached is not None:
                 write_ocr_cache(cache_key, list(cached))
                 return list(cached)
+        canonical_bgr, canonical_origin = canonical_ocr_bgr(prepared_bgr)
+        canonical_visual_cache_key = ocr_canonical_visual_cache_key(
+            canonical_bgr,
+            use_tesseract=use_tesseract,
+        )
+        canonical_trimmed = canonical_ocr_bgr_trimmed(prepared_bgr, canonical_bgr, canonical_origin)
+        if (
+            canonical_trimmed
+            and canonical_visual_cache_key is not None
+            and canonical_visual_cache_key not in {cache_key, visual_cache_key}
+        ):
+            canonical_cache_checked = True
+            cached = read_ocr_cache(canonical_visual_cache_key)
+            if cached is not None:
+                labels = shift_ocr_labels(cached, canonical_origin[0], canonical_origin[1])
+                write_ocr_cache(cache_key, labels)
+                if visual_cache_key is not None:
+                    write_ocr_cache(visual_cache_key, labels)
+                return labels
         near_visual_cache_key = ocr_near_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
         if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
             cached = read_ocr_cache(near_visual_cache_key)
@@ -116,17 +136,16 @@ def extract_ocr_labels(
                 if near_visual_cache_key is not None:
                     write_ocr_cache(near_visual_cache_key, labels)
                 return labels
-        canonical_bgr, canonical_origin = canonical_ocr_bgr(prepared_bgr)
-        canonical_visual_cache_key = ocr_canonical_visual_cache_key(
-            canonical_bgr,
-            use_tesseract=use_tesseract,
-        )
-        if canonical_visual_cache_key is not None and canonical_visual_cache_key not in {
-            cache_key,
-            visual_cache_key,
-            near_visual_cache_key,
-            coarse_visual_cache_key,
-        }:
+        if (
+            not canonical_cache_checked
+            and canonical_visual_cache_key is not None
+            and canonical_visual_cache_key not in {
+                cache_key,
+                visual_cache_key,
+                near_visual_cache_key,
+                coarse_visual_cache_key,
+            }
+        ):
             cached = read_ocr_cache(canonical_visual_cache_key)
             if cached is not None:
                 labels = shift_ocr_labels(cached, canonical_origin[0], canonical_origin[1])
@@ -286,6 +305,16 @@ def canonical_ocr_bgr(bgr: np.ndarray | None) -> tuple[np.ndarray | None, tuple[
     if top == 0 and left == 0 and bottom == height and right == width:
         return contiguous, (0.0, 0.0)
     return np.ascontiguousarray(contiguous[top:bottom, left:right]), (float(left), float(top))
+
+
+def canonical_ocr_bgr_trimmed(
+    original_bgr: np.ndarray | None,
+    canonical_bgr: np.ndarray | None,
+    origin: tuple[float, float],
+) -> bool:
+    if original_bgr is None or canonical_bgr is None:
+        return False
+    return origin != (0.0, 0.0) or original_bgr.shape[:2] != canonical_bgr.shape[:2]
 
 
 def canonical_border_mask(bgr: np.ndarray) -> np.ndarray | None:
