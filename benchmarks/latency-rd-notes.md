@@ -1624,6 +1624,22 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   slowed to 0.535s average and 1.115s max; forcing the current overlap behavior
   passed with the same outputs at 0.467s average and 0.971s max. Keep the
   overlap scheduler for stale/no-catalog paths.
+- General OCR/georeference extraction now caps the extraction raster at 1600px
+  while keeping OCR at the existing safe 1600px input cap. This targets the
+  non-catalog production path where full-resolution extraction was still costing
+  0.9-1.3s on Vercel before OCR/georeference. A production-like RapidOCR-only
+  no-catalog baseline with no Tesseract passed 8/8 scored fixtures at avg IoU
+  0.961733, min IoU 0.930778, total 4.223s, max 0.958s; with the 1600px
+  extraction cap as the code default it passed 8/8 at avg IoU 0.961670, min IoU
+  0.931476, total 3.648s, max 0.984s. Active catalog benchmark stayed green at
+  8/8 scored fixtures, avg IoU 0.992917, min IoU 0.943345, total 0.443s.
+- Lower extraction caps at 1200px, 900px, 700px, and 500px also passed the
+  scored local suite, but 1600px is the conservative default because it captures
+  most of the timing win with the smallest geometry delta. The changed-market
+  no-network smoke `out/generalextract1600-stale-no-network-20260529/report.json`
+  kept Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo on
+  OCR/georeference with `catalog_slug: null`, zero attempted network calls, and
+  local generation from 0.067s to 0.702s.
 
 ## Remaining Bottlenecks
 

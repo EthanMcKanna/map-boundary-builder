@@ -41,6 +41,7 @@ from .ocr import extract_ocr_labels
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
 CATALOG_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION", "300")))
+GENERAL_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION", "1600")))
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
@@ -143,7 +144,9 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
-        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else 0
+        extraction_max_dimension = (
+            CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else GENERAL_EXTRACT_MAX_DIMENSION
+        )
         used_catalog_scaled_extraction = (
             allow_pre_ocr_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
         )
