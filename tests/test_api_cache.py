@@ -20,8 +20,12 @@ from api.index import (
     inline_overlay,
     json_response_body,
     normalized_image_sha256,
+    _RUN_RESULT_MEMORY_CACHE,
     raw_run_result_cache_key,
+    remember_run_result_cache,
     read_run_result_cache,
+    RUN_RESULT_MEMORY_CACHE_MAX_BYTES,
+    RUN_RESULT_MEMORY_CACHE_MAX,
     run_result_cache_key,
     write_run_result_cache,
 )
@@ -35,6 +39,9 @@ from map_boundary_builder.runner import (
 
 
 class ApiRunCacheTests(unittest.TestCase):
+    def setUp(self) -> None:
+        _RUN_RESULT_MEMORY_CACHE.clear()
+
     def test_catalog_matching_defaults_on_for_api_options_namespace(self) -> None:
         self.assertTrue(catalog_matching_enabled(SimpleNamespace()))
         self.assertFalse(catalog_matching_enabled(SimpleNamespace(allow_catalog=False)))
@@ -208,6 +215,43 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["filename"], "Miami.png")
         self.assertEqual(payload["events"][-1]["message"], "Boundary export ready from cache")
+
+    def test_run_cache_uses_memory_cache_before_disk(self) -> None:
+        cached = {
+            "city": "Dallas",
+            "summary": {"city": "Dallas", "combined_confidence": 0.84},
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+
+        remember_run_result_cache("memory-only", cached)
+        restored = read_run_result_cache("memory-only")
+
+        self.assertEqual(restored, cached)
+        assert restored is not None
+        restored["summary"]["city"] = "Changed"
+        self.assertEqual(read_run_result_cache("memory-only"), cached)
+
+    def test_run_memory_cache_evicts_oldest_entries(self) -> None:
+        for index in range(RUN_RESULT_MEMORY_CACHE_MAX + 1):
+            remember_run_result_cache(
+                f"key-{index}",
+                {"city": str(index), "summary": {}, "artifacts": {}},
+            )
+
+        self.assertNotIn("key-0", _RUN_RESULT_MEMORY_CACHE)
+        self.assertIn(f"key-{RUN_RESULT_MEMORY_CACHE_MAX}", _RUN_RESULT_MEMORY_CACHE)
+
+    def test_run_memory_cache_skips_oversized_entries(self) -> None:
+        remember_run_result_cache(
+            "large-overlay",
+            {
+                "city": "Dallas",
+                "summary": {},
+                "artifacts": {"overlay_svg": "x" * RUN_RESULT_MEMORY_CACHE_MAX_BYTES},
+            },
+        )
+
+        self.assertNotIn("large-overlay", _RUN_RESULT_MEMORY_CACHE)
 
     def test_cached_run_payload_can_include_request_profile(self) -> None:
         cached = {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from collections import OrderedDict
 import gzip
 import hashlib
 import hmac
@@ -36,6 +37,9 @@ INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation"
 RUN_RESULT_CACHE_VERSION = "run-result-v4"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
+RUN_RESULT_MEMORY_CACHE_MAX = 64
+RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
+_RUN_RESULT_MEMORY_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 
 
@@ -521,6 +525,10 @@ def normalized_image_sha256(image_bytes: bytes) -> str:
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
+    cached = _RUN_RESULT_MEMORY_CACHE.get(cache_key)
+    if cached is not None:
+        _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
+        return json.loads(json.dumps(cached))
     cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
     if not cache_path.exists():
         return None
@@ -528,7 +536,10 @@ def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
         payload = json.loads(cache_path.read_text())
     except Exception:
         return None
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return None
+    remember_run_result_cache(cache_key, payload)
+    return json.loads(json.dumps(payload))
 
 
 def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
@@ -537,6 +548,7 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
         "summary": payload.get("summary"),
         "artifacts": payload.get("artifacts"),
     }
+    remember_run_result_cache(cache_key, cached)
     try:
         RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
@@ -545,6 +557,17 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
         tmp_path.replace(cache_path)
     except OSError:
         return
+
+
+def remember_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
+    encoded = json.dumps(payload, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > RUN_RESULT_MEMORY_CACHE_MAX_BYTES:
+        _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
+        return
+    _RUN_RESULT_MEMORY_CACHE[cache_key] = json.loads(encoded)
+    _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
+    while len(_RUN_RESULT_MEMORY_CACHE) > RUN_RESULT_MEMORY_CACHE_MAX:
+        _RUN_RESULT_MEMORY_CACHE.popitem(last=False)
 
 
 def cached_run_payload(

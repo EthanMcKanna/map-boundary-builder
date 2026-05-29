@@ -2589,6 +2589,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   regressions before accepting the low-res result; confidence/source metadata
   alone is not enough because some lower-IoU cases still report high
   confidence.
+- Run-result cache hits now have an instance-local memory layer in front of the
+  existing `/tmp` JSON cache. This does not change extraction, OCR, geocoding,
+  GeoJSON, or cache keys; it only avoids repeated filesystem reads for exact
+  raw/normalized cache hits on a warm function instance. Focused unit coverage
+  checks memory-first reads, defensive payload copies, oldest-entry eviction at
+  64 cached payloads, and a 512 KB per-entry skip for overlay-heavy API
+  responses. Full pytest passed 139 tests plus 9 subtests. A local microbench
+  restored the same cached payload, confirmed oversized overlays are skipped,
+  and measured 1000 memory reads at 0.0026s versus 1000 forced disk reads at
+  0.0270s (10.5x faster).
 
 ## Remaining Bottlenecks
 
