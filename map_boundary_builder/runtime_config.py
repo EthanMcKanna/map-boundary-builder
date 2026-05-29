@@ -32,6 +32,10 @@ TESSERACT_FALLBACK_MIN_USEFUL_LABELS = env_int(
     "MAP_BOUNDARY_TESSERACT_FALLBACK_MIN_USEFUL_LABELS",
     3,
 )
+RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION",
+    0,
+)
 
 
 def rapidocr_warm_detector_limit() -> int:
@@ -51,4 +55,5 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
+        "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
     }

@@ -247,6 +247,21 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertAlmostEqual(scale_x, 0.5)
             self.assertAlmostEqual(scale_y, 0.5)
 
+    def test_rapidocr_input_array_can_return_loaded_array_for_native_moderate_images(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with (
+                patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 40),
+                patch.object(ocr_module, "RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION", 10),
+            ):
+                ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
+
+            self.assertIsInstance(ocr_input, np.ndarray)
+            self.assertEqual(scale_x, 1.0)
+            self.assertEqual(scale_y, 1.0)
+
     def test_rapidocr_input_array_composites_transparent_png(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"

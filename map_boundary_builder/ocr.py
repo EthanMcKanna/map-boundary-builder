@@ -23,6 +23,7 @@ from .runtime_config import (
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_MAX_DIMENSION,
+    RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
     rapidocr_warm_detector_limit,
@@ -348,6 +349,11 @@ def rapidocr_input_array(
     height, width = bgr.shape[:2]
     max_dimension = max(width, height)
     if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+        if (
+            RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION > 0
+            and max_dimension >= RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION
+        ):
+            return bgr, 1.0, 1.0
         if composited_alpha:
             return bgr, 1.0, 1.0
         return source_path, 1.0, 1.0

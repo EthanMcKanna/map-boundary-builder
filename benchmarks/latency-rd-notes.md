@@ -2544,6 +2544,20 @@ OCR/georeference rather than returning outdated fast-path polygons.
   penalty, adding a charged remote cache dependency is not justified until a
   controlled production probe proves a cross-instance hit rate or first-user
   benefit large enough to offset package size and lookup overhead.
+- Moderate-size native RapidOCR array input is now available behind
+  `MAP_BOUNDARY_RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION`. The default remains off
+  because older gray-fill fixture experiments regressed when every native-size
+  image bypassed RapidOCR's original file path, but production can opt in for
+  images at or above a proven size threshold. With the production env set to
+  `1000`, `/api/health?warm=ocr` confirmed deployment
+  `pipeline-fa11531193f625dc` was using the native-array gate. Two fresh
+  cache-busted Avride Dallas uploads preserved `Dallas`,
+  `ocr-georeference:nominatim-label-fit`, and confidence 0.847 while reducing
+  warmed production OCR/server work from the prior rejected-detector baseline
+  of `ocr` 2.424s and server-before-send 2.837s to `ocr` 2.256s/server 2.692s
+  and then `ocr` 1.936s/server 2.214s. This is not the sub-second breakthrough
+  for arbitrary OCR-heavy maps, but it is a validated production win with the
+  safer default-path fallback still available.
 
 ## Remaining Bottlenecks
 
