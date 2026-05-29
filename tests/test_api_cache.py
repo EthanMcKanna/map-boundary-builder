@@ -273,6 +273,7 @@ class ApiRunCacheTests(unittest.TestCase):
         assert restored is not None
         restored["summary"]["city"] = "Changed"
         self.assertEqual(read_run_result_cache("memory-only"), cached)
+        self.assertIsInstance(_RUN_RESULT_MEMORY_CACHE["memory-only"], str)
 
     def test_run_memory_cache_evicts_oldest_entries(self) -> None:
         for index in range(RUN_RESULT_MEMORY_CACHE_MAX + 1):
@@ -295,6 +296,12 @@ class ApiRunCacheTests(unittest.TestCase):
         )
 
         self.assertNotIn("large-overlay", _RUN_RESULT_MEMORY_CACHE)
+
+    def test_run_memory_cache_drops_corrupt_memory_entries(self) -> None:
+        _RUN_RESULT_MEMORY_CACHE["bad"] = "{"
+
+        self.assertIsNone(read_run_result_cache("bad"))
+        self.assertNotIn("bad", _RUN_RESULT_MEMORY_CACHE)
 
     def test_cached_run_payload_can_include_request_profile(self) -> None:
         cached = {

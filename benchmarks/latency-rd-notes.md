@@ -2623,6 +2623,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   the first text-metadata variant missed at 2.913s server time, while the second
   different-metadata/same-image-stream variant returned `cache_hit:
   "png-visual"` in 0.0053s server time.
+- The in-memory run-result cache now stores compact JSON strings instead of
+  decoded dicts. Cache hits still return fresh decoded payloads, but they avoid
+  re-serializing inline GeoJSON on every read, and writes reuse the same compact
+  JSON string for memory plus `/tmp` persistence. Focused cache tests cover
+  memory hits, oversized-entry skips, and corrupt-memory eviction. A synthetic
+  135 KB inline-GeoJSON payload benchmark showed `json.loads(encoded)` for
+  1000 reads at 1.496s versus the previous dict `json.dumps`+`json.loads`
+  deep-copy path at 3.920-4.537s, a 2.6-3.0x CPU reduction on warm cache hits.
 
 ## Remaining Bottlenecks
 
