@@ -33,6 +33,7 @@ OCR_CACHE_VERSION = "ocr-labels-v3"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
 RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
+RAPIDOCR_REC_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", "12")))
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS", "2")),
@@ -84,6 +85,7 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
+            f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
             f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:{digest}"
         ).encode("utf-8")
@@ -293,7 +295,7 @@ def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
 def rapidocr_engine():
     from rapidocr_onnxruntime import RapidOCR
 
-    kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM}
+    kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM, "rec_batch_num": RAPIDOCR_REC_BATCH_NUM}
     if RAPIDOCR_DET_LIMIT_SIDE_LEN > 0:
         kwargs["det_limit_side_len"] = RAPIDOCR_DET_LIMIT_SIDE_LEN
     return RapidOCR(**kwargs)

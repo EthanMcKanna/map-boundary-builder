@@ -1650,6 +1650,19 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   extraction 0.571s, OCR 2.503s, georeference 0.029s. The extraction cap
   reduces the non-catalog extraction component, but production OCR/model work
   remains the larger cold-path bottleneck.
+- RapidOCR recognition batching is now explicit and included in the OCR cache
+  key. A direct split-profile sweep rejected `rec_batch_num=24` because the
+  production-like no-catalog benchmark preserved pass/fail status but dropped
+  avg IoU to 0.961170 and moved San Antonio confidence/IoU lower. The
+  conservative `rec_batch_num=12` default preserved byte-for-byte GeoJSON
+  outputs against the old batch-6 setting across all 8 scored no-catalog
+  fixtures, while improving the clean sequential no-catalog gate from 3.542s
+  total / 1.034s max to 3.462s total / 0.977s max. The default catalog gate
+  stayed green at 8/8 scored fixtures, 7 skipped reference mismatches, avg IoU
+  0.992917, min IoU 0.943345, and total 0.408s. A fresh no-network drift smoke
+  at `out/recbatch12-stale-no-network-20260529/report.json` kept Bay Area
+  Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo on OCR/georeference
+  with `catalog_slug: null` and zero attempted network calls.
 
 ## Remaining Bottlenecks
 
