@@ -1293,6 +1293,19 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   fast-classifier evidence of 5.504s / 3.379s. Cache-busted Bay Area Waymo also
   stayed off the stale catalog with the expected bbox, confidence 0.877, no
   refine event, and 5.382s wall / 3.250s event span.
+- Production Tesseract fallback gate deployment `dpl_GWjYgSAcYnWvFTz14PE5EtfxFnRb`
+  is Ready and aliased to `https://mapboundary.app`; health reports
+  `pipeline-504afa6e15bc7956`, runtime `vercel-python`, and `tesseract: null`.
+  As expected, the Tesseract-specific speedup does not accelerate this Vercel
+  runtime because Tesseract is absent there. Cache-busted stale-market smokes
+  still preserved output: Miami stayed on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` with `catalog_slug:
+  null`, bbox `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`,
+  confidence 0.864, and no dead catalog-refine event; warm uncached repeats
+  measured 6.641s and 7.007s wall / 4.610s and 4.696s event span. Bay Area
+  Waymo stayed on `ocr-georeference:nominatim-label-fit` with `catalog_slug:
+  null`, bbox `[-122.4978873, 37.3073419, -121.8576229, 37.7981634]`,
+  confidence 0.877, and 5.697s wall / 3.387s event span.
 
 ## Failed Or Rejected Experiments
 
