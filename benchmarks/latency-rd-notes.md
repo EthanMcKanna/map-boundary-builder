@@ -20,10 +20,11 @@ Area Zoox, Houston Tesla, Houston Waymo, Miami Waymo, and Las Vegas Zoox are
 therefore visible in benchmark reports but excluded from scored
 model-regression gates.
 
-The changed-market variants are marked stale in the production service-area
-catalog and excluded from catalog matching until refreshed. Their JSON files
-remain in the bundle for audit/history, but production inference must fall back
-to OCR/georeference rather than returning an outdated fast-path polygon.
+The benchmark skip is specifically about stale saved screenshot/reference
+pairs. Production catalog entries may still be active when they come from
+current external references or current-verified OCR outputs, but old drifted
+screenshots must either fail catalog shape matching or fall back to
+OCR/georeference rather than returning outdated fast-path polygons.
 
 ## Shipped Changes
 
@@ -1888,6 +1889,22 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/reference-only-catalog-production-smoke-20260529/report.json` confirmed
   Atlanta Waymo and Austin Waymo now use `catalog-shape-match` with 0.213s and
   0.111s server build spans.
+- User drift correction: Houston, Miami, and Bay Area are all treated as
+  changed from the saved base ground truth. Restored the conservative fixture
+  gate so Bay Area Tesla, Bay Area Waymo, Bay Area Zoox, Houston Tesla,
+  Houston Waymo, Miami Waymo, and Las Vegas Zoox are `reference_mismatch`
+  fixtures. This keeps stale screenshot/reference pairs out of scored model
+  regression gates while preserving active current catalog entries that were
+  separately validated against current references. Focused benchmark/catalog
+  tests passed 21/21, full pytest passed 107 tests plus 9 subtests, and
+  `compileall`, `node --check`, and `git diff --check` passed. The corrected
+  production-shaped catalog benchmark
+  `out/user-drift-correction-default-20260529/full-report.json` passed 8/8
+  scored fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min
+  IoU 0.943, total 0.44s. The corrected no-catalog generalization gate
+  `out/user-drift-correction-no-catalog-20260529/full-report.json` passed 8/8
+  scored fixtures, skipped the same 7 drifted pairs, avg IoU 0.962, min IoU
+  0.931, and total 3.71s.
 
 ## Remaining Bottlenecks
 

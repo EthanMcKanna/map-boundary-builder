@@ -36,6 +36,12 @@ KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
     "miami-waymo",
 }
 
+KNOWN_CURRENT_EXTERNAL_CHANGED_WAYMO_SLUGS = {
+    "bay-area-waymo",
+    "houston-waymo",
+    "miami-waymo",
+}
+
 STYLE_BY_PROVIDER = {
     "tesla": "gray-fill",
     "waymo": "bright-blue",
@@ -245,8 +251,8 @@ def test_changed_reference_mismatch_waymo_catalog_entries_use_current_external_r
     }
     entries = {item.slug: item for item in load_catalog_entries()}
 
-    assert changed_slugs == KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS - {"atlanta-waymo", "austin-waymo"}
-    for slug in changed_slugs:
+    assert changed_slugs == KNOWN_CURRENT_CHANGED_CATALOG_SLUGS
+    for slug in KNOWN_CURRENT_EXTERNAL_CHANGED_WAYMO_SLUGS:
         entry = entries[slug]
         assert entry.is_active
         assert entry.status == "active"
