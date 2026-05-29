@@ -3385,3 +3385,9 @@ OCR/georeference rather than returning outdated fast-path polygons.
   total) but still reduced IoU to 0.976 Nashville and 0.980 Phoenix. Keep the
   full road-refinement search because those last passes are buying real
   alignment, not just score churn.
+- Rejected crop-after-extraction OCR for arbitrary no-catalog screenshots. A
+  custom pipeline cropped RapidOCR to the extracted service-area bbox plus
+  margin, then shifted labels back before georeferencing. It gave up OCR/extract
+  overlap, raised active total time to 5.44s, and regressed Orlando to 0.864 IoU
+  and Phoenix to 0.894 IoU. The missing outer labels are important enough that
+  this cannot be the default general path.
