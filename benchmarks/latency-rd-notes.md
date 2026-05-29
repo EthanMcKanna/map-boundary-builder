@@ -3719,3 +3719,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   point that the warm arbitrary OCR/georeference road-refine path can run
   sub-second without changing geometry/confidence, while cold platform routing
   still needs separate mitigation.
+- Rejected early road-feature precompute before full extraction refine for
+  bright-blue catalog misses. The hypothesis was that starting
+  `image_feature_distance` immediately after the coarse/retry catalog miss
+  could hide road-feature work under the high-resolution extraction/refine
+  pass. A narrow prototype preserved geometry and passed focused runner tests,
+  but targeted Miami changed-market smokes were noisy and not convincingly
+  faster: `out/road-precompute-miami-smoke-20260529/full-report.json` completed
+  Miami Waymo in 1.334953s with OCR 0.634092s/georeference 0.344687s, and
+  `out/road-precompute-miami-smoke-repeat-20260529/full-report.json` completed
+  in 1.030963s with OCR 0.441535s/georeference 0.332775s. Since the already
+  deployed baseline had a live warmed cache-busted production proof at
+  0.911042s without this extra concurrency, the prototype was removed rather
+  than risking CPU contention or wasted background work on later catalog hits.
