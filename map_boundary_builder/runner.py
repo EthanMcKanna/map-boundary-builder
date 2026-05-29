@@ -101,6 +101,7 @@ def build_boundary(
     debug_path = Path(debug_dir) if debug_dir else None
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
     allow_catalog = catalog_matching_enabled(opts)
+    allow_pre_ocr_catalog = should_try_pre_ocr_catalog(city_input=city_input, allow_catalog=allow_catalog)
 
     emit_progress(
         progress,
@@ -131,9 +132,9 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
-        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_catalog else 0
+        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else 0
         used_catalog_scaled_extraction = (
-            allow_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
+            allow_pre_ocr_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
         )
         extraction = extract_service_area(
             image_path,
@@ -154,7 +155,7 @@ def build_boundary(
             },
         )
 
-        if allow_catalog:
+        if allow_pre_ocr_catalog:
             catalog_match = match_service_area_catalog(
                 extraction.pixel_geometry,
                 style=extraction.style,
@@ -204,25 +205,26 @@ def build_boundary(
                     "confidence": extraction.confidence,
                 },
             )
-            catalog_match = match_service_area_catalog(
-                extraction.pixel_geometry,
-                style=extraction.style,
-                area_hint_texts=[city_input] if city_input is not None else None,
-            )
-            if catalog_match is not None:
-                return finish_catalog_boundary_result(
-                    extraction,
-                    catalog_match,
-                    width=width,
-                    height=height,
-                    image_path=image_path,
-                    city_input=city_input or "Auto",
-                    output_path=output_path,
-                    debug_path=debug_path,
-                    opts=opts,
-                    rgb=rgb,
-                    progress=progress,
+            if allow_pre_ocr_catalog:
+                catalog_match = match_service_area_catalog(
+                    extraction.pixel_geometry,
+                    style=extraction.style,
+                    area_hint_texts=[city_input] if city_input is not None else None,
                 )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                    )
 
         label_y_max = (
             extraction.pixel_geometry.bounds[3] + max(24.0, height * 0.04)
@@ -399,6 +401,12 @@ def should_overlap_ocr_with_extraction(*, city_input: str | None, allow_catalog:
     if city_input is None:
         return False
     return not has_active_catalog_area_hint(city_input)
+
+
+def should_try_pre_ocr_catalog(*, city_input: str | None, allow_catalog: bool) -> bool:
+    if not allow_catalog:
+        return False
+    return city_input is None or has_active_catalog_area_hint(city_input)
 
 
 def catalog_matching_enabled(options: Any) -> bool:

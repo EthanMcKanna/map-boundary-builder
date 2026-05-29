@@ -272,6 +272,24 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/fast-cls-stale-no-network-20260528-continue5/` preserved
   `catalog_slug: null`, current sources, and current bboxes for Bay Area
   Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo.
+- Current dead-catalog-probe skip head: city-provided requests now only run the
+  pre-OCR catalog probe when the provided city can match an active catalog area.
+  This keeps active-city catalog fast paths intact while avoiding guaranteed
+  failed scaled extraction for stale/unsupported cities such as Miami, Houston,
+  and Bay Area. Focused API/catalog/OCR/benchmark tests passed 66 tests, and the
+  full suite passed 96 tests plus 9 subtests; `compileall`, `node --check`, and
+  `git diff --check` passed. Fresh-cache default and city-overrides full
+  benchmarks `out/skip-dead-catalog-default-full-20260528-continue6/full-report.json`
+  and `out/skip-dead-catalog-city-full-20260528-continue6/full-report.json`
+  both passed 8/8 scored fixtures, skipped 7 reference mismatches, avg IoU
+  0.993, min IoU 0.943, total 2.73s. A fresh-cache no-network stale-market
+  smoke `out/skip-dead-catalog-stale-no-network-20260528-continue6/` preserved
+  `catalog_slug: null`, current bboxes, and current OCR/georeference sources for
+  Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo while proving
+  the dead "Refining service-area pixels" catalog miss path did not run.
+  Local Miami with `city=Miami` now has a 0.201s extract stage and no refine
+  event while preserving bbox `[-80.3230924, 25.6880246, -80.1184998,
+  25.9396977]`, confidence 0.864, and road-refined source.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
@@ -1320,6 +1338,12 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Phoenix to 0.895 while confidence/residuals were not decisive enough to
   guarantee a safe fallback. Rejected unless a stronger geometry validator is
   added.
+- Lowering the OCR input cap remained unsafe after the fast-classifier retry.
+  At 1500px the no-catalog suite still passed thresholds but average IoU dropped
+  to 0.944 with Phoenix 0.895 and Dallas Waymo 0.912. At 1400px Nashville
+  failed with 0.759 IoU, and at 1200px Orlando barely passed the threshold at
+  0.781 while confidence stayed high enough that a simple guard would miss the
+  regression. Rejected.
 
 ## Remaining Bottlenecks
 

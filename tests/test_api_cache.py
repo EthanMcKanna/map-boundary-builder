@@ -21,7 +21,12 @@ from api.index import (
     write_run_result_cache,
 )
 from map_boundary_builder.asset_response import web_asset_response
-from map_boundary_builder.runner import BoundaryBuildOptions, catalog_matching_enabled, should_overlap_ocr_with_extraction
+from map_boundary_builder.runner import (
+    BoundaryBuildOptions,
+    catalog_matching_enabled,
+    should_overlap_ocr_with_extraction,
+    should_try_pre_ocr_catalog,
+)
 
 
 class ApiRunCacheTests(unittest.TestCase):
@@ -38,6 +43,15 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Atlantis", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
+
+    def test_pre_ocr_catalog_only_runs_when_it_can_match(self) -> None:
+        self.assertTrue(should_try_pre_ocr_catalog(city_input=None, allow_catalog=True))
+        self.assertTrue(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Miami", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Atlantis", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=False))
 
     def test_run_cache_key_depends_on_image_and_options(self) -> None:
         base = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
