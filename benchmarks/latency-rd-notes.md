@@ -1738,6 +1738,39 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `PYTHONPATH=. .venv/bin/python -m pytest -q` passed 106 tests plus 9
   subtests, `PYTHONPATH=. .venv/bin/python -m compileall -q api
   map_boundary_builder` passed, and `git diff --check` passed.
+- Current continuation baseline: fresh-cache in-process no-catalog profile
+  `out/current-nocatalog-continue-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.962, min IoU
+  0.931, total 4.02s, average 0.502s, max 0.999s. The default catalog path
+  `out/current-default-continue-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.993, min IoU 0.943, total 0.49s.
+- Rejected skipping road refinement as a default latency shortcut. With
+  `should_try_road_refinement` patched false, the fresh no-catalog benchmark
+  still crossed coarse thresholds but lowered avg IoU to 0.928, dropped
+  Nashville from 0.986 to 0.799, and dropped Phoenix from 0.983 to 0.898. This
+  violates the no-accuracy-regression constraint, so road refinement remains on
+  for sparse cases that need it.
+- RapidOCR classifier initialization is now lazy. The successful map path first
+  runs RapidOCR with `use_cls=False`, and a fresh trace showed all eight active
+  no-catalog fixtures completed without invoking the classifier pass. The
+  constructor now avoids the classifier ONNX session on that fast path and only
+  builds the full classifier-capable engine for sparse-label retry. Focused
+  OCR/benchmark/catalog tests passed 60 tests. Fresh-cache no-catalog
+  validation `out/lazy-classifier-no-catalog-20260529/full-report.json` passed
+  8/8 scored fixtures, skipped 7 `reference_mismatch` fixtures, preserved avg
+  IoU 0.962 and min IoU 0.931, and improved total duration from 4.02s to 3.83s
+  with max fixture time 0.964s. The default catalog gate
+  `out/lazy-classifier-default-20260529/full-report.json` stayed green at 8/8
+  scored, avg IoU 0.993, min IoU 0.943, total 0.45s.
+- Fresh-cache changed-service-area no-network smoke
+  `out/lazy-classifier-stale-no-network-20260529/report.json` kept Bay Area
+  Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo on OCR/georeference
+  with `catalog_slug: null` and zero attempted geocoder/OSM network calls.
+- Full local regression after lazy classifier initialization stayed green:
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` passed 106 tests plus 9
+  subtests, `PYTHONPATH=. .venv/bin/python -m compileall -q api
+  map_boundary_builder` passed, `node --check map_boundary_builder/web_assets/app.js`
+  passed, and `git diff --check` passed.
 
 ## Remaining Bottlenecks
 

@@ -250,21 +250,21 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
-        engine = FakeRapidOcrEngine(
-            {
-                False: [],
-                True: [[unit_ocr_box(), "Southchase", 0.99]],
-            }
+        fast_engine = FakeRapidOcrEngine({False: []})
+        classifier_engine = FakeRapidOcrEngine(
+            {True: [[unit_ocr_box(), "Southchase", 0.99]]}
         )
 
         with (
             patch.object(ocr_module, "rapidocr_input_array", return_value=("image", 1.0, 1.0)),
-            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "rapidocr_engine", return_value=fast_engine),
+            patch.object(ocr_module, "rapidocr_classifier_engine", return_value=classifier_engine),
             patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 2),
         ):
             labels = ocr_module.run_rapidocr_words("unused.png")
 
-        self.assertEqual(engine.use_cls_calls, [False, True])
+        self.assertEqual(fast_engine.use_cls_calls, [False])
+        self.assertEqual(classifier_engine.use_cls_calls, [True])
         self.assertEqual([label.text for label in labels], ["Southchase"])
 
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:

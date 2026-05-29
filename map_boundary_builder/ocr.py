@@ -196,7 +196,7 @@ def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
         labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
         if not should_retry_rapidocr_with_classifier(labels):
             return labels
-        result, _elapsed = engine(ocr_input, use_cls=True)
+        result, _elapsed = rapidocr_classifier_engine()(ocr_input, use_cls=True)
     except Exception:
         return []
     labels = rapidocr_items_to_labels(result)
@@ -293,12 +293,55 @@ def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
 
 @lru_cache(maxsize=1)
 def rapidocr_engine():
+    return rapidocr_engine_without_classifier(**rapidocr_engine_kwargs())
+
+
+@lru_cache(maxsize=1)
+def rapidocr_classifier_engine():
     from rapidocr_onnxruntime import RapidOCR
 
+    return RapidOCR(**rapidocr_engine_kwargs())
+
+
+def rapidocr_engine_kwargs() -> dict[str, int]:
     kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM, "rec_batch_num": RAPIDOCR_REC_BATCH_NUM}
     if RAPIDOCR_DET_LIMIT_SIDE_LEN > 0:
         kwargs["det_limit_side_len"] = RAPIDOCR_DET_LIMIT_SIDE_LEN
-    return RapidOCR(**kwargs)
+    return kwargs
+
+
+def rapidocr_engine_without_classifier(**kwargs):
+    from rapidocr_onnxruntime.cal_rec_boxes import CalRecBoxes
+    from rapidocr_onnxruntime.ch_ppocr_det import TextDetector
+    from rapidocr_onnxruntime.ch_ppocr_rec import TextRecognizer
+    from rapidocr_onnxruntime.main import DEFAULT_CFG_PATH, RapidOCR
+    from rapidocr_onnxruntime.utils import LoadImage, UpdateParameters, read_yaml, update_model_path
+
+    class RapidOCRWithoutClassifier(RapidOCR):
+        def __init__(self, **engine_kwargs):
+            config = update_model_path(read_yaml(DEFAULT_CFG_PATH))
+            if engine_kwargs:
+                config = UpdateParameters()(config, **engine_kwargs)
+
+            global_config = config["Global"]
+            self.print_verbose = global_config["print_verbose"]
+            self.text_score = global_config["text_score"]
+            self.min_height = global_config["min_height"]
+            self.width_height_ratio = global_config["width_height_ratio"]
+            self.use_det = global_config["use_det"]
+            self.text_det = TextDetector(config["Det"])
+            # The map pipeline first runs RapidOCR with use_cls=False. Avoid
+            # initializing the classifier ONNX session unless the sparse-label
+            # fallback asks for it through rapidocr_classifier_engine().
+            self.use_cls = False
+            self.use_rec = global_config["use_rec"]
+            self.text_rec = TextRecognizer(config["Rec"])
+            self.load_img = LoadImage()
+            self.max_side_len = global_config["max_side_len"]
+            self.min_side_len = global_config["min_side_len"]
+            self.cal_rec_boxes = CalRecBoxes()
+
+    return RapidOCRWithoutClassifier(**kwargs)
 
 
 def rapidocr_items_to_labels(items: object) -> list[OcrLabel]:
