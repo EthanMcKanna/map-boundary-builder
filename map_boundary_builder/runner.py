@@ -42,6 +42,10 @@ from .osm_roads import image_feature_distance
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
 CATALOG_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION", "300")))
+CATALOG_RETRY_EXTRACT_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_CATALOG_RETRY_EXTRACT_MAX_DIMENSION", "400")),
+)
 GENERAL_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION", "1600")))
 CATALOG_MISS_REFINE_MAX_DIMENSION = max(
     0,
@@ -222,6 +226,46 @@ def build_boundary(
                     rgb=rgb,
                     progress=progress,
                     georeference_source="catalog-shape-match:low-res-shape",
+                )
+
+        if should_retry_pre_ocr_catalog(
+            city_input=city_input,
+            filename_hint=filename_hint,
+            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+            used_catalog_scaled_extraction=used_catalog_scaled_extraction,
+        ):
+            emit_progress(
+                progress,
+                stage="extract",
+                message="Retrying known service-area shape",
+                percent=37,
+                details={"width": width, "height": height},
+            )
+            retry_extraction = extract_service_area(
+                image_path,
+                simplify_px=opts.simplify_px,
+                rgb=rgb,
+                max_dimension=CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+            )
+            catalog_match = match_service_area_catalog(
+                retry_extraction.pixel_geometry,
+                style=retry_extraction.style,
+                area_hint_texts=[city_input] if city_input is not None else None,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
+                    retry_extraction,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:retry",
                 )
 
         if used_catalog_scaled_extraction:
@@ -535,6 +579,22 @@ def should_try_pre_ocr_catalog(
     if city_input is None:
         return not is_stale_only_catalog_hint(filename_hint)
     return has_active_catalog_area_hint(city_input)
+
+
+def should_retry_pre_ocr_catalog(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    allow_pre_ocr_catalog: bool,
+    used_catalog_scaled_extraction: bool,
+) -> bool:
+    if not allow_pre_ocr_catalog or not used_catalog_scaled_extraction:
+        return False
+    if CATALOG_RETRY_EXTRACT_MAX_DIMENSION <= CATALOG_EXTRACT_MAX_DIMENSION:
+        return False
+    if CATALOG_RETRY_EXTRACT_MAX_DIMENSION >= CATALOG_MISS_REFINE_MAX_DIMENSION:
+        return False
+    return has_active_catalog_area_hint(city_input) or has_active_catalog_area_hint(filename_hint)
 
 
 def is_stale_only_catalog_hint(text: str | None) -> bool:

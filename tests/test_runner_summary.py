@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image
@@ -154,3 +155,84 @@ def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -
     ]
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
+
+
+def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Tesla Bay Area.png"
+    Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((1000, 2000, 3), 245, dtype=np.uint8)
+    mask = np.zeros((1000, 2000), dtype=bool)
+    mask[200:700, 500:1500] = True
+    coarse_extraction = ExtractionResult(
+        mask=mask,
+        style="gray-fill",
+        pixel_geometry=Polygon([(500, 200), (1500, 200), (1500, 700), (500, 700)]),
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=1.0,
+    )
+    retry_extraction = ExtractionResult(
+        mask=mask,
+        style="gray-fill",
+        pixel_geometry=Polygon([(510, 210), (1490, 210), (1490, 690), (510, 690)]),
+        coverage_ratio=0.24,
+        contour_count=1,
+        confidence=1.0,
+    )
+    max_dimensions: list[int] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
+        max_dimensions.append(max_dimension)
+        if max_dimension == runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION:
+            return retry_extraction
+        return coarse_extraction
+
+    def fake_match_service_area_catalog(pixel_geometry, *_args, **_kwargs):
+        if pixel_geometry is retry_extraction.pixel_geometry:
+            return SimpleNamespace(
+                entry=SimpleNamespace(slug="bay-area-tesla"),
+                iou=0.969651,
+                confidence=0.99,
+                margin=0.3,
+                area_ratio=1.0,
+            )
+        return None
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("OCR should not start before the hinted catalog retry succeeds")
+
+    def fake_finish_catalog_boundary_result(
+        extraction,
+        catalog_match,
+        *,
+        output_path,
+        georeference_source="catalog-shape-match",
+        **_kwargs,
+    ):
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": georeference_source,
+                "style": extraction.style,
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(image_path, "Tesla Bay Area", output_path)
+
+    assert max_dimensions == [
+        runner.CATALOG_EXTRACT_MAX_DIMENSION,
+        runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+    ]
+    assert result.summary["catalog_slug"] == "bay-area-tesla"
+    assert result.summary["georeference_source"] == "catalog-shape-match:retry"

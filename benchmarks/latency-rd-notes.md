@@ -2899,6 +2899,27 @@ OCR/georeference rather than returning outdated fast-path polygons.
   min IoU 0.943, total 0.50s. The no-catalog gate
   `out/current-external-reactivation-nocatalog-20260529/full-report.json`
   preserved 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total 4.62s.
+- A narrow known-hint catalog retry restored Bay Area Tesla without lowering
+  the current-reference guard. The runner now tries a 400px extraction only
+  after a 300px catalog miss when an active catalog hint is present in the city
+  input or filename, and still falls through to the full OCR/georeference path
+  on miss. Bay Area Tesla was updated from the current external
+  `av-coverage-checker` service-area polygon with `catalog_min_shape_iou:
+  0.965`; the saved screenshot clears that guard at 0.969651 only on the 400px
+  retry, so arbitrary uploads do not pay the extra extraction. Focused
+  runner/API/catalog tests passed 50 tests, full pytest passed 161 tests plus 9
+  subtests, `compileall` passed, and `git diff --check` passed. The targeted
+  smoke `out/bay-area-tesla-catalog-retry-smoke-20260529/full-report.json`
+  returned `catalog_slug: bay-area-tesla`, `catalog-shape-match:retry`, and
+  0.034s. The changed-market smoke
+  `out/changed-markets-current-catalog-smoke-20260529/full-report.json` ran the
+  six Houston/Miami/Bay Area changed screenshots successfully, with Bay Area
+  Tesla at 0.032s, Houston Tesla at 0.011s, and Bay Area Zoox at 0.055s. The
+  default active benchmark `out/bay-tesla-retry-default-20260529/full-report.json`
+  preserved 8/8 scored accuracy, avg IoU 0.993, min IoU 0.943, and total
+  0.504s. The no-catalog gate `out/bay-tesla-retry-nocatalog-20260529/full-report.json`
+  preserved 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total
+  1.108s.
 - Production deployment `dpl_3D78rU6SYKCXhh78X7azf5wSQ4pg` is aliased to
   `https://mapboundary.app` and reports `pipeline-bc4e6569be9dcfdd`. Fresh
   one-pixel changed production uploads confirmed the restored current-reference

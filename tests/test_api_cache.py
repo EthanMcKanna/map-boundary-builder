@@ -92,7 +92,7 @@ class ApiRunCacheTests(unittest.TestCase):
                 filename_hint="Zoox San Francisco",
             )
         )
-        self.assertTrue(
+        self.assertFalse(
             should_overlap_ocr_with_extraction(
                 city_input=None,
                 allow_catalog=True,
@@ -104,7 +104,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Tesla Houston", allow_catalog=True))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Zoox San Francisco", allow_catalog=True))
-        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Tesla Bay Area", allow_catalog=True))
+        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Tesla Bay Area", allow_catalog=True))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Miami", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Atlantis", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
@@ -139,7 +139,7 @@ class ApiRunCacheTests(unittest.TestCase):
                 filename_hint="Zoox San Francisco",
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             should_try_pre_ocr_catalog(
                 city_input=None,
                 allow_catalog=True,
@@ -151,7 +151,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Tesla Houston", allow_catalog=True))
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Zoox San Francisco", allow_catalog=True))
-        self.assertFalse(should_try_pre_ocr_catalog(city_input="Tesla Bay Area", allow_catalog=True))
+        self.assertTrue(should_try_pre_ocr_catalog(city_input="Tesla Bay Area", allow_catalog=True))
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Miami", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Atlantis", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=False))

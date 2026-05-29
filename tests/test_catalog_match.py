@@ -21,6 +21,7 @@ from map_boundary_builder.runner import low_resolution_shape_catalog_match
 
 
 KNOWN_CURRENT_CHANGED_CATALOG_SLUGS = {
+    "bay-area-tesla",
     "bay-area-waymo",
     "bay-area-zoox",
     "houston-tesla",
@@ -28,13 +29,12 @@ KNOWN_CURRENT_CHANGED_CATALOG_SLUGS = {
     "miami-waymo",
 }
 
-KNOWN_STALE_DERIVED_CHANGED_CATALOG_SLUGS = {
-    "bay-area-tesla",
-}
+KNOWN_STALE_DERIVED_CHANGED_CATALOG_SLUGS: set[str] = set()
 
 KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
     "atlanta-waymo",
     "austin-waymo",
+    "bay-area-tesla",
     "bay-area-waymo",
     "bay-area-zoox",
     "houston-tesla",
@@ -43,6 +43,7 @@ KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
 }
 
 KNOWN_CURRENT_EXTERNAL_CHANGED_SLUGS = {
+    "bay-area-tesla",
     "bay-area-zoox",
     "bay-area-waymo",
     "houston-tesla",
@@ -111,15 +112,15 @@ def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
     assert has_active_catalog_area_hint("Bay Area")
     assert has_active_catalog_area_hint("Tesla Houston")
     assert has_active_catalog_area_hint("Zoox San Francisco")
-    assert not has_active_catalog_area_hint("Tesla Bay Area")
+    assert has_active_catalog_area_hint("Tesla Bay Area")
     assert not has_stale_catalog_area_hint("Waymo Miami")
     assert not has_stale_catalog_area_hint("Waymo Houston")
     assert not has_stale_catalog_area_hint("Waymo Bay Area")
     assert not has_stale_catalog_area_hint("Houston")
-    assert has_stale_catalog_area_hint("Bay Area")
+    assert not has_stale_catalog_area_hint("Bay Area")
     assert not has_stale_catalog_area_hint("Tesla Houston")
     assert not has_stale_catalog_area_hint("Zoox San Francisco")
-    assert has_stale_catalog_area_hint("Tesla Bay Area")
+    assert not has_stale_catalog_area_hint("Tesla Bay Area")
 
 
 def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
