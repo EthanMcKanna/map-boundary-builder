@@ -2337,7 +2337,9 @@ OCR/georeference rather than returning outdated fast-path polygons.
   improvement over the previous catalog-miss deployment. Cache-busted Houston
   regressed versus the prior production smoke, with server `build_boundary_s`
   4.369s versus 3.327s before. The change was reverted and the known-good tiny
-  warmup path redeployed.
+  warmup path redeployed as `dpl_Eo2tEYqgD8nWD1y4q8VfSawnGmGk`; live
+  `/api/health?warm=ocr` returned pipeline `pipeline-c0a1b5f5f20e38fe`,
+  `rapidocr_inference_warmed: true`, `rapidocr_s` 1.794s, and total 2.635s.
 
 ## Remaining Bottlenecks
 
