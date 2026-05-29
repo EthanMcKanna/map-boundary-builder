@@ -57,6 +57,24 @@ with zero failures in 0.531s.
   batch sizes 8 and 24 were both slower than the current 12; and a larger
   synthetic OCR warmup only moved LA OCR from 0.506s to 0.501s after adding
   extra warmup cost.
+- ONNX Runtime OCR sessions now use time-bounded thread spinning
+  (`spin_duration_us=1000`) with exponential spin backoff (`spin_backoff_max=8`)
+  by default, matching the upstream ONNX Runtime tuning guidance while keeping
+  env overrides. This only changes session scheduling, not OCR preprocessing,
+  thresholds, labels, georeferencing, or geometry. Sequential LA OCR
+  micro-benchmark median improved from 0.606837s with the old open-ended spin
+  config to 0.597544s; Phoenix OCR median was effectively flat at 0.781818s to
+  0.781189s with a slightly better mean. The production-shaped default gate
+  `out/ort-spin-backoff-default-20260529/full-report.json` passed 8/8 scored
+  with avg IoU 0.992917/min 0.943345 in 0.47s, the no-catalog gate
+  `out/ort-spin-backoff-nocatalog-20260529/full-report.json` passed 8/8 with
+  avg IoU 0.961733/min 0.931476 in 3.62s, the old-config control
+  `out/ort-spin-control-nocatalog-20260529/full-report.json` passed in 3.70s,
+  and `out/ort-spin-backoff-regression-nocatalog-20260529/full-report.json`
+  found zero active IoU regressions against that control. The changed-area smoke
+  `out/ort-spin-backoff-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area smoke checks; focused tests passed 112, full pytest
+  passed 219, and `compileall`, `node --check`, and `git diff --check` passed.
 - Georeference seed preloading now starts when the runner commits to the
   OCR/georeference path, overlapping geocoder, OSM place, and road seed loading
   with OCR/extraction and waiting immediately before the transform fit. This

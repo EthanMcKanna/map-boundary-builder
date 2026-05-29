@@ -58,6 +58,14 @@ ONNXRUNTIME_ALLOW_SPINNING = env_bool(
     "MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING",
     True,
 )
+ONNXRUNTIME_SPIN_DURATION_US = env_int(
+    "MAP_BOUNDARY_ONNXRUNTIME_SPIN_DURATION_US",
+    1000,
+)
+ONNXRUNTIME_SPIN_BACKOFF_MAX = env_int(
+    "MAP_BOUNDARY_ONNXRUNTIME_SPIN_BACKOFF_MAX",
+    8,
+)
 
 
 def rapidocr_warm_detector_limit() -> int:
@@ -91,4 +99,6 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,
+        "onnxruntime_spin_duration_us": ONNXRUNTIME_SPIN_DURATION_US,
+        "onnxruntime_spin_backoff_max": ONNXRUNTIME_SPIN_BACKOFF_MAX,
     }

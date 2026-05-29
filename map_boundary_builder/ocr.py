@@ -21,6 +21,8 @@ from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
+    ONNXRUNTIME_SPIN_BACKOFF_MAX,
+    ONNXRUNTIME_SPIN_DURATION_US,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
@@ -819,6 +821,14 @@ def configure_rapidocr_onnxruntime_session_options() -> None:
         allow_spinning = "1" if ONNXRUNTIME_ALLOW_SPINNING else "0"
         sess_opt.add_session_config_entry("session.intra_op.allow_spinning", allow_spinning)
         sess_opt.add_session_config_entry("session.inter_op.allow_spinning", allow_spinning)
+        if ONNXRUNTIME_ALLOW_SPINNING and ONNXRUNTIME_SPIN_DURATION_US > 0:
+            spin_duration = str(ONNXRUNTIME_SPIN_DURATION_US)
+            sess_opt.add_session_config_entry("session.intra_op.spin_duration_us", spin_duration)
+            sess_opt.add_session_config_entry("session.inter_op.spin_duration_us", spin_duration)
+        if ONNXRUNTIME_ALLOW_SPINNING and ONNXRUNTIME_SPIN_BACKOFF_MAX > 1:
+            spin_backoff = str(ONNXRUNTIME_SPIN_BACKOFF_MAX)
+            sess_opt.add_session_config_entry("session.intra_op.spin_backoff_max", spin_backoff)
+            sess_opt.add_session_config_entry("session.inter_op.spin_backoff_max", spin_backoff)
         return sess_opt
 
     OrtInferSession._init_sess_opts = staticmethod(init_sess_opts)
