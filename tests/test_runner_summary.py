@@ -119,7 +119,7 @@ def test_summary_exposes_road_refinement_elapsed_time() -> None:
     assert summary["road_match_elapsed_s"] == 0.312345
 
 
-def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -> None:
+def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unknown-waymo.png"
     Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
     output_path = tmp_path / "boundary.geojson"
@@ -176,7 +176,8 @@ def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -
         runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
-    assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.GENERAL_EXTRACT_MAX_DIMENSION
+    assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
+    assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
 
 

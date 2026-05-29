@@ -3732,3 +3732,26 @@ OCR/georeference rather than returning outdated fast-path polygons.
   deployed baseline had a live warmed cache-busted production proof at
   0.911042s without this extra concurrency, the prototype was removed rather
   than risking CPU contention or wasted background work on later catalog hits.
+- Catalog-miss high-resolution extraction/refine now defaults to a 1400px cap,
+  bounded by the general extraction cap, instead of always using the 1600px
+  general cap. This only affects active-hint catalog misses that fall through
+  to OCR/georeference after the 300px catalog probe and optional 400px hinted
+  retry; the no-catalog arbitrary benchmark still uses the 1600px general
+  extraction cap. A fresh back-to-back changed-market A/B showed the six
+  Houston/Miami/Bay Area smoke total moving from
+  `out/catalog-miss-refine-ab-current1600-20260529/full-report.json` at 2.024s
+  to `out/catalog-miss-refine-ab-candidate1400-20260529/full-report.json` at
+  1.935s, with unchanged georeference sources and confidences. Geometry
+  comparisons against the 1600px baseline stayed tight for the OCR/georeference
+  drift cases: Houston Waymo 0.998156 IoU, Miami Waymo 0.995335 IoU, and Bay
+  Area Waymo 0.990514 IoU, all with identical confidence. Validation passed
+  193/193 pytest, compileall, `node --check`, and `git diff --check`; default
+  active benchmark `out/catalog-refine1400-default-20260529/full-report.json`
+  passed 8/8 scored with avg IoU 0.992917/min 0.943345/max duration 0.094846s;
+  no-catalog benchmark `out/catalog-refine1400-nocatalog-20260529/full-report.json`
+  preserved 8/8 scored accuracy with avg IoU 0.961670/min 0.931476, though its
+  max duration was 1.073602s from OCR timing noise in unaffected Los Angeles
+  and Phoenix paths; and changed-market smoke
+  `out/catalog-refine1400-changed-smoke-20260529/full-report.json` smoke-checked
+  all six Houston/Miami/Bay Area `reference_mismatch` fixtures with zero
+  failures while preserving current external catalog fast paths.
