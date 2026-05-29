@@ -1197,7 +1197,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         token = next(iter(tokens))
         if token in GENERIC_SINGLE_TOKENS or token in CITY_INFERENCE_STOP_TOKENS:
             continue
-        if tokens <= single_token_fragments and label.width * label.height < 8000:
+        if tokens <= single_token_fragments and not is_strong_standalone_context_label(label):
             continue
         standalone_queries.add(token.title())
 
@@ -1210,7 +1210,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
             continue
         if len(tokens) == 1 and next(iter(tokens)) in GENERIC_SINGLE_TOKENS:
             continue
-        if len(tokens) == 1 and tokens <= single_token_fragments and label.width * label.height < 8000:
+        if len(tokens) == 1 and tokens <= single_token_fragments and not is_strong_standalone_context_label(label):
             continue
         position_key = (" ".join(sorted(tokens)), round(label.x / 16), round(label.y / 16))
         if position_key in used_positions:
@@ -1273,6 +1273,14 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
 
 def direct_context_label_score(label: OcrLabel) -> float:
     return label.confidence + min(35.0, (label.width * label.height) / 650.0)
+
+
+def is_strong_standalone_context_label(label: OcrLabel) -> bool:
+    if label.confidence < 90.0:
+        return False
+    if label.width < 40.0 or label.height < 14.0:
+        return False
+    return direct_context_label_score(label) >= PROMOTED_DIRECT_CONTEXT_LABEL_SCORE
 
 
 def promoted_direct_context_queries(

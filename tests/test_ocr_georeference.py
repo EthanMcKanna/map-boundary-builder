@@ -845,6 +845,46 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(contexts[0].query, "Orlando")
         self.assertIn("Orlando", calls)
 
+    def test_strong_standalone_fragment_promotes_cached_city_context(self) -> None:
+        labels = [
+            OcrLabel("UPTOWN-KNOX Dallas", x=409, y=269, width=208, height=76, confidence=97),
+            OcrLabel("Dallas HARWOOD", x=299.5, y=316, width=163, height=68, confidence=99),
+            OcrLabel("Maplelawn", x=129.5, y=103, width=99, height=20, confidence=99),
+            OcrLabel("Scyener", x=577.5, y=452.5, width=77, height=25, confidence=99),
+            OcrLabel("Dallas", x=343, y=294.5, width=76, height=25, confidence=99),
+        ]
+        calls: list[tuple[str, str]] = []
+
+        def fake_cached(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append(("cached", query))
+            if query == "Dallas":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-96.7970,
+                        lat=32.7767,
+                        display_name="Dallas, Dallas County, Texas, United States",
+                        bbox=(-97.0000, 32.6000, -96.5500, 33.0500),
+                        importance=0.72,
+                        place_type="city",
+                    )
+                ]
+            return []
+
+        def fake_live(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append(("live", query))
+            return []
+
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_cached),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_live),
+        ):
+            contexts = direct_city_contexts_from_labels(labels)
+
+        self.assertEqual(contexts[0].query, "Dallas")
+        self.assertIn(("cached", "Dallas"), calls)
+        self.assertFalse([query for provider, query in calls if provider == "live"])
+
     def test_clean_city_label_survives_noisy_road_context_labels(self) -> None:
         labels = [
             OcrLabel("W-Flamingo R Cameron St", x=170, y=88, width=245, height=100, confidence=97),

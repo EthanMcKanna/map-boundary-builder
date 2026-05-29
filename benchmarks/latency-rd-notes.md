@@ -3102,3 +3102,27 @@ OCR/georeference rather than returning outdated fast-path polygons.
   and runtime dependency installation, so cold start/runtime install remains a
   production latency risk to monitor even though warm near-variant generation is
   now sub-second.
+- Anonymous no-hint Avride Dallas profiling showed the remaining first-run
+  latency was not OCR itself but premature live direct-context geocoding. With
+  a neutral filename, the pre-change local CLI took 1.505s total with OCR
+  0.423s and georeference 0.927s; cProfile attributed 0.829s to
+  `direct_city_contexts_from_labels`, which live-geocoded noisy labels such as
+  `Maplelawn` and `Scyener` before the later cached prominent-context fallback
+  found `Dallas`. Strong standalone place labels now survive the
+  single-token-fragment guard when their confidence/size score is high enough,
+  allowing repeated labels such as `UPTOWN-KNOX Dallas`, `Dallas HARWOOD`, and
+  `Dallas` to promote a cached direct city context before live geocoding. The
+  same neutral Avride image now resolves `Dallas` with no live geocode calls and
+  runs in 0.357s total, with georeference down to 0.0366s and the exact same
+  bbox `[-96.8303708,32.7654593,-96.7709423,32.8249834]`, confidence 0.709,
+  and source `ocr-georeference:nominatim-label-fit`.
+- Validation for the strong-standalone context change passed 170/170 pytest,
+  `compileall`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. With live network blocked, the default production-shaped
+  benchmark `out/strong-standalone-default-20260529/full-report.json` passed 8/8
+  scored fixtures, skipped the seven `reference_mismatch` fixtures, avg IoU
+  0.993, min IoU 0.943, total 0.43s; the no-catalog generalization benchmark
+  `out/strong-standalone-nocatalog-20260529/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.962 and min IoU 0.931. The targeted changed-market
+  smoke `out/strong-standalone-changed-smoke-20260529/full-report.json`
+  smoke-checked Houston/Miami/Bay Area drift fixtures with zero failures.
