@@ -109,6 +109,23 @@ with zero failures in 0.531s.
   `https://mapboundary.app/api/health?warm=ocr` also returned HTTP 200 with
   warm `status: ok`; no production deploy was made because the new work was
   benchmark tooling plus rejected/noisy probes, not a validated runtime speedup.
+- Probed available local "current" assets before promoting stale
+  Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
+  `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
+  0.941416 against
+  `/Users/ethanmckanna/Downloads/Houston boundary more accurate.geojson`, with
+  confidence 0.885, 10 controls, and `ocr-georeference:nominatim-label-fit`;
+  this is a good benchmark pass but still below the 0.965 current-catalog guard,
+  and explicit `--city Houston` produced the same result. The local
+  `/Users/ethanmckanna/Downloads/miami.png` pair scored IoU 0.851050 against
+  `/Users/ethanmckanna/Downloads/new miami boundary.geojson`, with only 0.716
+  confidence and 5 controls. The Bay Area probe using
+  `/Users/ethanmckanna/Downloads/bay-area-waymo.png` versus
+  `/Users/ethanmckanna/Downloads/waymo bay area expanded.geojson` still scored
+  only IoU 0.706834 with area ratio 0.735575. Keep these as stress evidence in
+  `out/refreshed-fixture-probe-20260529/`; do not reactivate them as clean
+  scored fixtures until fresher screenshots or human-verified overlays close
+  the current-reference gap.
 - Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
   upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
   OCR median moved from 0.606837s to 0.597544s, but production did not validate
