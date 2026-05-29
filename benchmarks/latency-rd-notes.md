@@ -3193,3 +3193,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   bbox/confidence/source with server `build_boundary_s: 0.234s`, OCR 0.0176s,
   and `total_before_send_s: 0.241s`. Repeating that bordered filename hit raw
   run cache in 0.00217s server time.
+- Rejected RapidOCR 3.8.1 + MNN as a drop-in first-pass backend despite good
+  speed. Official RapidOCR docs list MNN and TensorRT as current backend options
+  and GitHub shows RapidOCR v3.8.1 as the latest release, so MNN was probed in
+  the ignored local venv only. PP-OCRv4 MNN was fast at roughly 0.41s raw OCR on
+  Avride Dallas but produced too few/different labels and failed the no-catalog
+  Avride georeference. PP-OCRv5 MNN with English recognition was much faster:
+  Avride Dallas generated in 0.368s locally with OCR around 0.256s and four
+  controls. However, the bbox changed materially from the current pipeline, and
+  the in-process no-catalog active benchmark dropped to avg IoU 0.933767 and min
+  IoU 0.857246 versus the current 0.962/0.931 baseline. Keep MNN as a research
+  branch only unless a hybrid validator can prove no accuracy regression. A
+  follow-up PP-OCRv5 MNN detector-limit 736 probe did not recover accuracy
+  (avg IoU 0.934366, min IoU 0.857246), so this is not just a detector
+  resolution issue.
