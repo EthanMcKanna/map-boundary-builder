@@ -3647,3 +3647,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   total and roughly 10.5x faster than the pre-adaptive production miss at 2.584s,
   while returning the same accepted geometry/confidence. Repeating the exact
   upload hit raw cache at `total_before_send_s: 0.00245s`.
+- Benchmark timing reports now keep microsecond-level duration precision instead
+  of rounding active fixture durations to milliseconds before absolute latency
+  budgets run. This closes a measurement reliability gap where a strict
+  `--max-duration-s 1.0` check could pass if a fixture barely exceeded 1s but
+  rounded down to `1.0`. The benchmark image parser also recognizes `avride`
+  provider filenames so future Avride fixtures do not disappear from benchmark
+  inventory. Validation passed 192/192 pytest, compileall, `node --check`, and
+  `git diff --check`; default active benchmark
+  `out/precise-default-20260529/full-report.json` passed 8/8 scored with avg
+  IoU 0.992917/min 0.943345/max duration 0.094153s; no-catalog benchmark
+  `out/precise-nocatalog-20260529/full-report.json` passed 8/8 scored with avg
+  IoU 0.961670/min 0.931476/max duration 1.070879s; changed-market smoke
+  `out/precise-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures. The
+  strict no-catalog 1s latency gate
+  `out/precise-1s-nocatalog-20260529/full-report.json` now correctly fails on
+  Phoenix Waymo at 1.457435s, identifying Phoenix OCR plus road refinement as
+  the current arbitrary-path tail. Fresh `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION`
+  sweeps at 1500 and 1550 were rejected: both made Phoenix slower and less
+  accurate, while 1600 still preserves the accuracy floor but can miss the
+  one-second gate under noisy cold timing.

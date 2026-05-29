@@ -10,6 +10,7 @@ from map_boundary_builder.benchmark import (
     check_report_latency_budgets,
     compare_report_regressions,
     load_fixture_config,
+    parse_image_name,
     run_benchmark,
     score_full_fixture_in_process,
 )
@@ -34,6 +35,32 @@ def test_known_stale_reference_fixtures_are_reference_mismatches() -> None:
     for slug in KNOWN_REFERENCE_MISMATCH_FIXTURES:
         assert fixtures[slug]["status"] == "reference_mismatch"
         assert "changed" in fixtures[slug]["note"] or "different shapes" in fixtures[slug]["note"]
+
+
+def test_parse_image_name_supports_avride_provider() -> None:
+    provider, area_slug, area_name = parse_image_name(Path("Avride Dallas.png"))
+
+    assert provider == "avride"
+    assert area_slug == "dallas"
+    assert area_name == "Dallas"
+
+
+def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
+    row = BenchmarkScore(
+        slug="phoenix-waymo",
+        image="Waymo Phoenix.png",
+        mode="full",
+        passed=True,
+        iou=0.98,
+        area_ratio=1.0,
+        centroid_distance_m=0.0,
+        vertices=42,
+        style="bright-blue",
+        duration_s=1.00049,
+    ).as_dict()
+
+    assert row["duration_s"] == 1.00049
+
 
 def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"

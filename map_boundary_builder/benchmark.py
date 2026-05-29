@@ -33,6 +33,7 @@ AREA_ALIASES = {
     "los angeles": "los-angeles",
     "san antonio": "san-antonio",
 }
+PROVIDERS = ("avride", "tesla", "waymo", "zoox")
 
 @dataclass(frozen=True)
 class BenchmarkFixture:
@@ -76,7 +77,7 @@ class BenchmarkScore:
             "centroid_distance_m": round(self.centroid_distance_m, 1) if self.centroid_distance_m is not None else None,
             "vertices": self.vertices,
             "style": self.style,
-            "duration_s": round(self.duration_s, 3) if self.duration_s is not None else None,
+            "duration_s": round(self.duration_s, 6) if self.duration_s is not None else None,
             "georeference_source": self.georeference_source,
             "combined_confidence": round(self.combined_confidence, 6) if self.combined_confidence is not None else None,
             "catalog_slug": self.catalog_slug,
@@ -386,9 +387,9 @@ def run_benchmark(
             "failed_fixtures": failed_count,
             "average_iou": round(average_iou, 6),
             "min_iou": round(min_seen_iou, 6),
-            "total_duration_s": round(sum(durations), 3),
-            "average_duration_s": round(float(mean(durations)), 3) if durations else None,
-            "max_duration_s": round(max(durations), 3) if durations else None,
+            "total_duration_s": round(sum(durations), 6),
+            "average_duration_s": round(float(mean(durations)), 6) if durations else None,
+            "max_duration_s": round(max(durations), 6) if durations else None,
         },
         "inventory": inventory,
         "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
@@ -453,7 +454,7 @@ def discover_fixtures(
 def parse_image_name(path: Path) -> tuple[str, str, str]:
     text = normalized_words(path.stem)
     provider = ""
-    for candidate in ("tesla", "waymo", "zoox"):
+    for candidate in PROVIDERS:
         if candidate in text.split():
             provider = candidate
             text = " ".join(word for word in text.split() if word != candidate)
