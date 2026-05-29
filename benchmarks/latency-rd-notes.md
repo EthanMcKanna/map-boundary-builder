@@ -4370,4 +4370,11 @@ with zero failures in 0.531s.
   at 8/8 scored, avg IoU 0.962/min 0.931 against the native-array baseline; and
   the catalog-enabled gate
   `out/probe-miss-ocr-overlap-default-20260529/full-report.json` stayed green
-  at 8/8 scored, avg IoU 0.993/min 0.943.
+  at 8/8 scored, avg IoU 0.993/min 0.943. Production deployment
+  `dpl_4en7jJd7PPgATKaW63XujyPMWqnE` is aliased to `https://mapboundary.app`
+  and reports `pipeline-2fda704672b1844c`. Two live generic Bay Area
+  probe-miss smokes preserved `catalogSlug: null`,
+  `ocr-georeference:nominatim-label-fit`, and confidence 0.877, but production
+  timing remained OCR-cold/instance-variance dominated at 5.36s and 3.98s
+  `build_boundary_s`; this is correctness proof for the deploy, not a clean
+  production speed proof.
