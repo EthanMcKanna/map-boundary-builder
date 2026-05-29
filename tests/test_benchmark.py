@@ -7,6 +7,7 @@ import map_boundary_builder.benchmark as benchmark_module
 from map_boundary_builder.benchmark import (
     BenchmarkFixture,
     BenchmarkScore,
+    check_report_latency_budgets,
     compare_report_regressions,
     load_fixture_config,
     run_benchmark,
@@ -417,6 +418,52 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
         max_total_duration_increase_ratio=0.01,
         max_total_duration_increase_s=0.25,
     )
+
+    assert check["passed"] is True
+    assert check["issues"] == []
+
+
+def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
+    report = {
+        "summary": {"total_duration_s": 4.2},
+        "scores": [
+            {"slug": "phoenix-waymo", "status": "active", "duration_s": 1.21},
+            {"slug": "miami-waymo", "status": "reference_mismatch", "duration_s": 6.0},
+            {"slug": "dallas-tesla", "status": "active", "duration_s": 0.19},
+        ],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_duration_s=1.0,
+        max_total_duration_s=4.0,
+    )
+
+    assert check["passed"] is False
+    assert check["issues"] == [
+        {
+            "slug": "phoenix-waymo",
+            "kind": "duration_budget_exceeded",
+            "duration_s": 1.21,
+            "max_duration_s": 1.0,
+            "excess_s": 0.21,
+        },
+        {
+            "kind": "total_duration_budget_exceeded",
+            "total_duration_s": 4.2,
+            "max_total_duration_s": 4.0,
+            "excess_s": 0.2,
+        },
+    ]
+
+
+def test_report_latency_budget_check_passes_when_within_budget() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.9},
+        "scores": [{"slug": "dallas-tesla", "status": "active", "duration_s": 0.19}],
+    }
+
+    check = check_report_latency_budgets(report, max_duration_s=1.0, max_total_duration_s=3.0)
 
     assert check["passed"] is True
     assert check["issues"] == []

@@ -202,6 +202,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Allowed absolute total-duration increase before ratio checks fail.",
     )
+    parser.add_argument(
+        "--max-duration-s",
+        type=float,
+        default=None,
+        help="Optional absolute maximum active-fixture duration budget.",
+    )
+    parser.add_argument(
+        "--max-total-duration-s",
+        type=float,
+        default=None,
+        help="Optional absolute maximum total active-fixture duration budget.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -244,6 +256,15 @@ def main(argv: list[str] | None = None) -> int:
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
         report["summary"]["passed"] = bool(report["summary"]["passed"] and regression_check["passed"])
+    if args.max_duration_s is not None or args.max_total_duration_s is not None:
+        latency_budget_check = check_report_latency_budgets(
+            report,
+            max_duration_s=args.max_duration_s,
+            max_total_duration_s=args.max_total_duration_s,
+        )
+        report["latency_budget_check"] = latency_budget_check
+        report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
+        report["summary"]["passed"] = bool(report["summary"]["passed"] and latency_budget_check["passed"])
     report_path.write_text(json.dumps(report, indent=2) + "\n")
 
     if args.json:
@@ -882,6 +903,50 @@ def compare_report_regressions(
     }
 
 
+def check_report_latency_budgets(
+    report: dict[str, Any],
+    *,
+    max_duration_s: float | None = None,
+    max_total_duration_s: float | None = None,
+) -> dict[str, Any]:
+    duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
+    total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
+    issues: list[dict[str, Any]] = []
+    if duration_budget is not None:
+        for row in report.get("scores", []):
+            if not isinstance(row, dict) or row.get("status") != "active":
+                continue
+            duration = parse_report_duration(row.get("duration_s"))
+            if duration is not None and duration > duration_budget:
+                slug = row.get("slug")
+                issues.append(
+                    {
+                        "slug": slug if isinstance(slug, str) else "",
+                        "kind": "duration_budget_exceeded",
+                        "duration_s": round(duration, 6),
+                        "max_duration_s": duration_budget,
+                        "excess_s": round(duration - duration_budget, 6),
+                    }
+                )
+    if total_budget is not None:
+        total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
+        if total_duration is not None and total_duration > total_budget:
+            issues.append(
+                {
+                    "kind": "total_duration_budget_exceeded",
+                    "total_duration_s": round(total_duration, 6),
+                    "max_total_duration_s": total_budget,
+                    "excess_s": round(total_duration - total_budget, 6),
+                }
+            )
+    return {
+        "passed": not issues,
+        "max_duration_s": duration_budget,
+        "max_total_duration_s": total_budget,
+        "issues": issues,
+    }
+
+
 def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     scores: dict[str, dict[str, Any]] = {}
     for row in report.get("scores", []):
@@ -991,6 +1056,27 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 )
             else:
                 print(f"       {issue['slug']}: missing candidate score")
+    latency_budget_check = report.get("latency_budget_check")
+    if latency_budget_check:
+        print("")
+        latency_status = "PASS" if latency_budget_check["passed"] else "FAIL"
+        print(
+            f"{latency_status} latency budget: "
+            f"{len(latency_budget_check['issues'])} issues"
+        )
+        for issue in latency_budget_check["issues"][:12]:
+            if issue["kind"] == "duration_budget_exceeded":
+                print(
+                    f"       {issue['slug']}: duration {issue['duration_s']:.3f}s "
+                    f"> budget {issue['max_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "total_duration_budget_exceeded":
+                print(
+                    f"       total duration {issue['total_duration_s']:.3f}s "
+                    f"> budget {issue['max_total_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
 
 
 def format_duration(value: Any) -> str:

@@ -2413,6 +2413,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   latency-gated run failed only duration checks from local contention while
   preserving every active IoU, so the blocked-network gate should be treated as
   a correctness/robustness proof unless run serially for timing.
+- Absolute latency budgets are now benchmark-enforceable. `--max-duration-s`
+  fails active fixtures that exceed a fixed per-fixture target, and
+  `--max-total-duration-s` can fail a whole run that exceeds a fixed total
+  budget. This is separate from baseline-relative latency regression checks and
+  gives the sub-one-second goal a hard gate. The current strict no-network
+  `--max-duration-s 1.0` probe in
+  `out/absolute-latency-budget-1s-no-catalog-20260529/full-report.json`
+  preserved 8/8 active IoUs with zero accuracy-regression issues, but failed
+  the latency budget on six OCR-heavy fixtures in that cold/noisy run:
+  Orlando, Los Angeles, San Antonio, Dallas Waymo, Phoenix, and Nashville.
+  This report is a target list, not a regression; it proves the arbitrary
+  OCR/georeference path still needs real OCR/road-refine latency wins before
+  the full active no-catalog suite can honestly claim sub-second generation.
 
 ## Remaining Bottlenecks
 
