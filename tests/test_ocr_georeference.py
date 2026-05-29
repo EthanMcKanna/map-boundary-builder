@@ -33,7 +33,9 @@ from map_boundary_builder.georeference import (
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.ocr import (
+    OCR_MEMORY_CACHE_MAX,
     OcrLabel,
+    _OCR_MEMORY_CACHE,
     extract_ocr_labels,
     group_stacked_labels,
     load_rapidocr_bgr,
@@ -125,6 +127,40 @@ class OcrGroupingTests(unittest.TestCase):
         write_ocr_cache("unit-test-ocr-cache", [label])
 
         self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
+
+    def test_ocr_memory_cache_evicts_oldest_entries(self) -> None:
+        label = OcrLabel("Dallas", x=60, y=37, width=100, height=34, confidence=96)
+
+        with TemporaryDirectory() as workdir:
+            with patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir)):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    for index in range(OCR_MEMORY_CACHE_MAX + 1):
+                        write_ocr_cache(f"key-{index}", [label])
+
+                    self.assertNotIn("key-0", _OCR_MEMORY_CACHE)
+                    self.assertIn(f"key-{OCR_MEMORY_CACHE_MAX}", _OCR_MEMORY_CACHE)
+                    self.assertEqual(len(_OCR_MEMORY_CACHE), OCR_MEMORY_CACHE_MAX)
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
+    def test_ocr_memory_cache_refreshes_recent_reads(self) -> None:
+        label = OcrLabel("Dallas", x=60, y=37, width=100, height=34, confidence=96)
+
+        with TemporaryDirectory() as workdir:
+            with patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir)):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    for index in range(OCR_MEMORY_CACHE_MAX):
+                        write_ocr_cache(f"key-{index}", [label])
+                    self.assertEqual(read_ocr_cache("key-0"), (label,))
+                    write_ocr_cache("new-key", [label])
+
+                    self.assertIn("key-0", _OCR_MEMORY_CACHE)
+                    self.assertNotIn("key-1", _OCR_MEMORY_CACHE)
+                    self.assertIn("new-key", _OCR_MEMORY_CACHE)
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
 
     def test_ocr_visual_cache_key_ignores_png_metadata(self) -> None:
         with TemporaryDirectory() as workdir:

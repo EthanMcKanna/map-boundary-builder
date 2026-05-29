@@ -8,7 +8,9 @@ import numpy as np
 import map_boundary_builder.osm_roads as osm_roads
 from map_boundary_builder.georef_transform import GeoreferenceTransform, mercator_to_lonlat
 from map_boundary_builder.osm_roads import (
+    ROAD_REFINE_MEMORY_CACHE_MAX,
     RoadMatchResult,
+    _ROAD_REFINE_MEMORY_CACHE,
     feature_score_image,
     image_feature_distance,
     load_road_points_seed,
@@ -21,6 +23,25 @@ from map_boundary_builder.osm_roads import (
     seed_road_points,
     write_road_refine_cache,
 )
+
+
+def unit_road_match_result() -> RoadMatchResult:
+    return RoadMatchResult(
+        transform=GeoreferenceTransform(
+            city="Miami",
+            lon=-80.2,
+            lat=25.8,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=18.0,
+            rotation_radians=0.01,
+            confidence=0.91,
+            source="ocr-georeference:nominatim-label-fit+osm-road-refine",
+        ),
+        score=0.7,
+        sampled_points=1234,
+        base_score=0.42,
+    )
 
 
 class RoadScoringTests(unittest.TestCase):
@@ -87,6 +108,40 @@ class RoadScoringTests(unittest.TestCase):
         write_road_refine_cache("unit-test-road-cache", result)
 
         self.assertEqual(read_road_refine_cache("unit-test-road-cache"), result)
+
+    def test_road_refine_memory_cache_evicts_oldest_entries(self) -> None:
+        result = unit_road_match_result()
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            with patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)):
+                _ROAD_REFINE_MEMORY_CACHE.clear()
+                try:
+                    for index in range(ROAD_REFINE_MEMORY_CACHE_MAX + 1):
+                        write_road_refine_cache(f"key-{index}", result)
+
+                    self.assertNotIn("key-0", _ROAD_REFINE_MEMORY_CACHE)
+                    self.assertIn(f"key-{ROAD_REFINE_MEMORY_CACHE_MAX}", _ROAD_REFINE_MEMORY_CACHE)
+                    self.assertEqual(len(_ROAD_REFINE_MEMORY_CACHE), ROAD_REFINE_MEMORY_CACHE_MAX)
+                finally:
+                    _ROAD_REFINE_MEMORY_CACHE.clear()
+
+    def test_road_refine_memory_cache_refreshes_recent_reads(self) -> None:
+        result = unit_road_match_result()
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            with patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)):
+                _ROAD_REFINE_MEMORY_CACHE.clear()
+                try:
+                    for index in range(ROAD_REFINE_MEMORY_CACHE_MAX):
+                        write_road_refine_cache(f"key-{index}", result)
+                    self.assertEqual(read_road_refine_cache("key-0"), result)
+                    write_road_refine_cache("new-key", result)
+
+                    self.assertIn("key-0", _ROAD_REFINE_MEMORY_CACHE)
+                    self.assertNotIn("key-1", _ROAD_REFINE_MEMORY_CACHE)
+                    self.assertIn("new-key", _ROAD_REFINE_MEMORY_CACHE)
+                finally:
+                    _ROAD_REFINE_MEMORY_CACHE.clear()
 
     def test_road_refine_cache_key_ignores_non_feature_pixel_noise(self) -> None:
         rgb = np.full((80, 80, 3), 245, dtype=np.uint8)

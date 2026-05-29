@@ -2670,6 +2670,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   the visual OCR cache, returning the same result in 0.248s server time.
   Houston, Miami, and Bay Area fixtures remain `reference_mismatch` data debt
   rather than scored regressions.
+- OCR label and OSM road-refinement memory caches are now bounded LRU caches so
+  long-lived production workers do not grow memory unbounded on cache-busted or
+  novel uploads. Disk caches still preserve reusable results beyond the in-
+  process cap, while repeated hot reads refresh recency. Focused unit coverage
+  proves oldest-entry eviction and read-refresh behavior for both caches. Full
+  pytest passed 150 tests plus 9 subtests. The drift-aware default catalog gate
+  still passed 8/8 scored fixtures with avg IoU 0.993, min IoU 0.943, and
+  average duration 0.111s; the no-catalog gate passed 8/8 scored fixtures with
+  avg IoU 0.962, min IoU 0.931, and average duration 1.391s. Houston, Miami,
+  and Bay Area fixtures remain explicitly skipped as `reference_mismatch`
+  because their service areas have changed since the saved screenshot/reference
+  pairing.
+- Rejected ONNX Runtime thread pinning for RapidOCR after a local A/B on four
+  focused active fixtures. The default runtime finished in 7.290s total, while
+  `intra=1/inter=1` took 12.229s, `intra=2/inter=1` took 9.128s, and
+  `intra=4/inter=1` took 7.145s. Outputs remained accurate, but the tiny
+  `intra=4` total-time edge was not durable enough to justify adding a runtime
+  configuration knob or risking production variance.
 
 ## Remaining Bottlenecks
 

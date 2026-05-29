@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
@@ -44,7 +45,8 @@ _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
-_OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
+OCR_MEMORY_CACHE_MAX = 128
+_OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 
 
 def extract_ocr_labels(
@@ -176,6 +178,7 @@ def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bo
 def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
     cached = _OCR_MEMORY_CACHE.get(cache_key)
     if cached is not None:
+        _OCR_MEMORY_CACHE.move_to_end(cache_key)
         return cached
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
     if not cache_path.exists():
@@ -185,13 +188,13 @@ def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
         labels = tuple(OcrLabel(**item) for item in data if isinstance(item, dict))
     except Exception:
         return None
-    _OCR_MEMORY_CACHE[cache_key] = labels
+    remember_ocr_memory_cache(cache_key, labels)
     return labels
 
 
 def write_ocr_cache(cache_key: str, labels: list[OcrLabel]) -> None:
     cached = tuple(labels)
-    _OCR_MEMORY_CACHE[cache_key] = cached
+    remember_ocr_memory_cache(cache_key, cached)
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,6 +204,13 @@ def write_ocr_cache(cache_key: str, labels: list[OcrLabel]) -> None:
         tmp_path.replace(cache_path)
     except OSError:
         return
+
+
+def remember_ocr_memory_cache(cache_key: str, labels: tuple[OcrLabel, ...]) -> None:
+    _OCR_MEMORY_CACHE[cache_key] = labels
+    _OCR_MEMORY_CACHE.move_to_end(cache_key)
+    while len(_OCR_MEMORY_CACHE) > OCR_MEMORY_CACHE_MAX:
+        _OCR_MEMORY_CACHE.popitem(last=False)
 
 
 def tesseract_available() -> bool:

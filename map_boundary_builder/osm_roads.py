@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
@@ -32,8 +33,9 @@ ROAD_REFINE_FULL_FALLBACK_MIN_SCORE = max(
 )
 ROAD_SCORE_SIGMA_PX = np.float32(6.0)
 ROAD_REFINE_CACHE_VERSION = "road-refine-v5"
+ROAD_REFINE_MEMORY_CACHE_MAX = 64
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
-_ROAD_REFINE_MEMORY_CACHE: dict[str, RoadMatchResult | None] = {}
+_ROAD_REFINE_MEMORY_CACHE: OrderedDict[str, RoadMatchResult] = OrderedDict()
 _ROAD_POINTS_SEED: dict[str, np.ndarray] | None = None
 
 
@@ -341,6 +343,7 @@ def unscale_transform_for_feature_distance(
 
 def read_road_refine_cache(cache_key: str) -> RoadMatchResult | None:
     if cache_key in _ROAD_REFINE_MEMORY_CACHE:
+        _ROAD_REFINE_MEMORY_CACHE.move_to_end(cache_key)
         return _ROAD_REFINE_MEMORY_CACHE[cache_key]
     cache_path = ROAD_REFINE_CACHE_DIR / f"{cache_key}.json"
     if not cache_path.exists():
@@ -356,12 +359,12 @@ def read_road_refine_cache(cache_key: str) -> RoadMatchResult | None:
         )
     except Exception:
         return None
-    _ROAD_REFINE_MEMORY_CACHE[cache_key] = result
+    remember_road_refine_memory_cache(cache_key, result)
     return result
 
 
 def write_road_refine_cache(cache_key: str, result: RoadMatchResult) -> None:
-    _ROAD_REFINE_MEMORY_CACHE[cache_key] = result
+    remember_road_refine_memory_cache(cache_key, result)
     cache_path = ROAD_REFINE_CACHE_DIR / f"{cache_key}.json"
     payload = {
         "transform": {
@@ -386,6 +389,13 @@ def write_road_refine_cache(cache_key: str, result: RoadMatchResult) -> None:
         tmp_path.replace(cache_path)
     except OSError:
         return
+
+
+def remember_road_refine_memory_cache(cache_key: str, result: RoadMatchResult) -> None:
+    _ROAD_REFINE_MEMORY_CACHE[cache_key] = result
+    _ROAD_REFINE_MEMORY_CACHE.move_to_end(cache_key)
+    while len(_ROAD_REFINE_MEMORY_CACHE) > ROAD_REFINE_MEMORY_CACHE_MAX:
+        _ROAD_REFINE_MEMORY_CACHE.popitem(last=False)
 
 
 def search_near_transform(
