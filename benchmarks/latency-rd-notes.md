@@ -4605,3 +4605,18 @@ with zero failures in 0.531s.
   average IoU dropped to 0.954368 and Orlando fell to 0.885989. Pre-upload
   raster resizing is therefore not a safe default without a new equivalence
   strategy.
+- Accepted seeded road-source digest caching for the road-refined arbitrary
+  path. Road refinement hashes the immutable bundled road seed to separate
+  cache entries when the source road data changes; the same seeded digest was
+  recomputed during a single refinement and on repeated requests in the same
+  process. The new helper caches only bundled seed digests by overpass cache
+  key, leaving dynamic overpass-file digests uncached so local/network road
+  cache changes are still detected. Microbenchmarks over 100 digest reads
+  improved Phoenix from 0.00528s to 0.00052s, Nashville from 0.00521s to
+  0.00040s, and Miami from 0.01572s to 0.00053s. Focused tests passed 104/104,
+  full pytest passed 215 tests plus 9 subtests, compileall passed, and
+  `git diff --check` passed. Drift-aware default
+  `out/road-digest-cache-default-20260529/full-report.json` and no-catalog
+  `out/road-digest-cache-nocatalog-20260529/full-report.json` both passed with
+  zero active IoU drops, while Houston/Miami/Bay Area stayed unscored
+  `reference_mismatch` smoke checks.

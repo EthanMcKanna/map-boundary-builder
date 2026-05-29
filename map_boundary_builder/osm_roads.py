@@ -217,18 +217,26 @@ def road_points_source_digest(bbox: tuple[float, float, float, float] | None) ->
     if bbox is None:
         return "none"
     key = overpass_cache_file(bbox).stem
-    seeded = seed_road_points(key)
-    if seeded is not None:
-        contiguous = np.ascontiguousarray(seeded)
-        digest = hashlib.sha256()
-        digest.update(b"seed")
-        digest.update(key.encode("ascii"))
-        digest.update(str(tuple(contiguous.shape)).encode("ascii"))
-        digest.update(str(contiguous.dtype).encode("ascii"))
-        digest.update(contiguous.data)
-        return digest.hexdigest()
+    seeded_digest = seeded_road_points_source_digest(key)
+    if seeded_digest is not None:
+        return seeded_digest
 
     return overpass_source_digest(bbox)
+
+
+@lru_cache(maxsize=256)
+def seeded_road_points_source_digest(key: str) -> str | None:
+    seeded = seed_road_points(key)
+    if seeded is None:
+        return None
+    contiguous = np.ascontiguousarray(seeded)
+    digest = hashlib.sha256()
+    digest.update(b"seed")
+    digest.update(key.encode("ascii"))
+    digest.update(str(tuple(contiguous.shape)).encode("ascii"))
+    digest.update(str(contiguous.dtype).encode("ascii"))
+    digest.update(contiguous.data)
+    return digest.hexdigest()
 
 
 def overpass_source_digest(bbox: tuple[float, float, float, float]) -> str:

@@ -303,6 +303,7 @@ class RoadScoringTests(unittest.TestCase):
         bbox = (-10.0, -10.0, -9.9, -9.9)
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            osm_roads.seeded_road_points_source_digest.cache_clear()
             with (
                 patch.object(osm_roads, "CACHE_DIR", Path(tmpdir)),
                 patch.object(osm_roads, "seed_road_points", return_value=None),
@@ -315,6 +316,21 @@ class RoadScoringTests(unittest.TestCase):
                 second = road_points_source_digest(bbox)
 
         self.assertNotEqual(first, second)
+
+    def test_seeded_road_points_source_digest_reuses_seed_hash(self) -> None:
+        bbox = (-112.2, 33.2, -111.8, 33.7)
+        seed = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=float)
+
+        try:
+            osm_roads.seeded_road_points_source_digest.cache_clear()
+            with patch.object(osm_roads, "seed_road_points", return_value=seed) as seeded:
+                first = road_points_source_digest(bbox)
+                second = road_points_source_digest(bbox)
+        finally:
+            osm_roads.seeded_road_points_source_digest.cache_clear()
+
+        self.assertEqual(first, second)
+        seeded.assert_called_once()
 
     def test_load_road_points_cache_depends_on_road_source_digest(self) -> None:
         bbox = (-10.0, -10.0, -9.9, -9.9)
