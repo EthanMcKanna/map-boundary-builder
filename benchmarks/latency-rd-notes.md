@@ -1553,6 +1553,17 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   critical path without changing extraction, georeference, or GeoJSON output;
   recompression-tolerant normalized cache remains available to callers that do
   not send `normalized_cache_lookup=0`.
+- Production deployment `dpl_51WuqxXvEsPo7HA7FoSkyr2AVKbx` verified the UI
+  hidden field on `https://mapboundary.app/` and fresh API profiles with
+  `normalized_cache_lookup_enabled: false` / `normalized_cache_lookup_s: 0.0`.
+  Cache-busted Houston Tesla preserved the stale-market guard
+  (`catalog_slug: null`) and reported 2.298s server `total_before_send_s` on a
+  cold OCR path, compared with the immediately prior normalized-lookup smoke at
+  2.550s. Cache-busted Miami Waymo also skipped normalized lookup and preserved
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864, and
+  `catalog_slug: null`; that cold-ish production instance still spent 6.576s
+  inside generation, dominated by OCR and georeference, so the broader
+  arbitrary-image sub-second goal remains active.
 
 ## Remaining Bottlenecks
 
