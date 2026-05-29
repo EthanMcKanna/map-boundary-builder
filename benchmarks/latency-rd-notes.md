@@ -2818,6 +2818,15 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/crop-citymiss-stale-smoke-20260529/full-report.json` needed 3.57s for
   the same three OCR/georeference smoke successes. The crop path was removed
   before shipping.
+- Rejected pre-serialized ONNX optimized models as a production change. ORT
+  documents offline graph optimization as a startup optimization, but also
+  warns optimized models should be generated with the same options, execution
+  providers, and hardware as the target runtime. A local RapidOCR detector and
+  recognizer serialization probe preserved labels on Avride Dallas, but
+  construction moved only 0.0485s to 0.0361s and repeated inference stayed
+  inside noise. Because Vercel's build hardware and Fluid Compute runtime are
+  not a reliable exact match for locally generated optimized models, and runtime
+  generation would make the first cold request slower, this stays unshipped.
 
 ## Remaining Bottlenecks
 
