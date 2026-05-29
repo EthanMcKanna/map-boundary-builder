@@ -3225,3 +3225,15 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/canonical-reorder-changed-smoke-20260529/full-report.json` smoke-checked
   Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo with zero
   failures while keeping them unscored as user-confirmed data debt.
+- Production canonical-reorder deployment `dpl_EGjBTWcQm8diMcvsFDpqMDypsguG`
+  is aliased to `https://mapboundary.app` and reports
+  `pipeline-e93748d26ea38ded`. Vercel still used the 308.04 MB bundle with
+  runtime dependency installation. After `/api/health?warm=ocr`, a fresh
+  neutral Avride Dallas base upload (`img-1780063001.webp`) missed the
+  run-result cache and preserved bbox/confidence/source with server
+  `build_boundary_s: 3.517s`, OCR 3.260s, and georeference 0.064s. A fresh 2px
+  white-border upload with a different filename (`img-1780063002.png`) also
+  missed the run-result cache but hit canonical OCR early, preserving the exact
+  bbox/confidence/source with server `build_boundary_s: 0.271s`, OCR 0.0026s,
+  georeference 0.023s, and `total_before_send_s: 0.279s`. Repeating that
+  bordered filename hit raw run cache in 0.00177s server time.
