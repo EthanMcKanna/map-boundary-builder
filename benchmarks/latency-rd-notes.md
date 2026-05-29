@@ -3126,3 +3126,13 @@ OCR/georeference rather than returning outdated fast-path polygons.
   fixtures with avg IoU 0.962 and min IoU 0.931. The targeted changed-market
   smoke `out/strong-standalone-changed-smoke-20260529/full-report.json`
   smoke-checked Houston/Miami/Bay Area drift fixtures with zero failures.
+- Production strong-standalone-context deployment
+  `dpl_HzYyupbVeLBcmteASXXRkoh2V3Ji` is aliased to
+  `https://mapboundary.app` and reports `pipeline-51aa2c8c045504c4`. A fresh
+  neutral-filename Avride Dallas upload (`img-1780061001.png`) returned the same
+  Dallas bbox/confidence/source with `cache_hit: miss`; cold-ish server timing
+  was dominated by OCR at 2.964s, while georeference was 0.232s. A second fresh
+  neutral filename (`img-1780061002.png`) missed the run-result cache but reused
+  the OCR cache and completed in 0.132s server time with OCR 0.0035s,
+  georeference 0.0168s, and the same output. Repeating that exact filename hit
+  raw run cache in 0.0020s server time.
