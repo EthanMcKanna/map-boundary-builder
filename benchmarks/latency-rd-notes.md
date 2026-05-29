@@ -3772,3 +3772,28 @@ OCR/georeference rather than returning outdated fast-path polygons.
   cache-busted Miami proof was 0.911042s, so the live best sample improved
   while retaining confidence/source/road score. A raw-cache repeat of the same
   upload returned at `total_before_send_s: 0.00322`.
+- Rejected an adaptive 1300px RapidOCR default with a 1600px high-detail retry
+  fallback. It produced attractive no-catalog repeats at
+  `out/ocr1300-nocatalog-repeat-a-20260529/full-report.json` and
+  `out/ocr1300-nocatalog-repeat-b-20260529/full-report.json` (8/8 scored,
+  max active durations 0.859309s and 0.878806s), but the same idea failed the
+  strict serial gate at
+  `out/adaptive-ocr-hintaware-nocatalog-serial-20260529/full-report.json`
+  because Phoenix reached 1.094129s. It also lowered active no-catalog average
+  IoU from 0.961670 to 0.961001 and Phoenix confidence from 0.908 to 0.805,
+  which violates the no-accuracy-reduction bar. The earlier changed-market
+  smoke without hint-aware fallback also showed why this is unsafe for current
+  Miami/Houston/Bay Area drift checks: Miami could fall back to plain label-fit
+  at lower confidence. The prototype was removed.
+- Re-checked the 3500 road-point cap after the corrected Houston/Miami/Bay Area
+  drift policy. With `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1600` and
+  `MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=3500`,
+  `out/road3500-current-nocatalog-20260529/full-report.json` passed 8/8 scored
+  fixtures with identical avg/min IoU to the 4000-point baseline and a strict
+  max active duration of 0.975797s. However, the back-to-back 4000-point control
+  `out/road4000-current-nocatalog-20260529/full-report.json` was still faster
+  overall (3.864978s total versus 4.280721s) with the same max-duration pass,
+  so 3500 is not a clear production speed win. The changed-market smoke
+  `out/road3500-current-changed-smoke-20260529/full-report.json` did pass all
+  six Houston/Miami/Bay Area `reference_mismatch` smokes, but the default stays
+  at 4000 until a repeated A/B proves a real latency improvement.
