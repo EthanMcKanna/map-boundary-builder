@@ -519,7 +519,7 @@ def should_overlap_ocr_with_extraction(
         return True
     if city_input is None:
         return is_stale_only_catalog_hint(filename_hint)
-    if has_stale_catalog_area_hint(city_input):
+    if is_stale_only_catalog_hint(city_input):
         return True
     return not has_active_catalog_area_hint(city_input)
 

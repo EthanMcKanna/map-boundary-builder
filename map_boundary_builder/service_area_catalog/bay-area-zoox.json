@@ -5,8 +5,9 @@
       "type": "Feature",
       "properties": {
         "catalog_source": "current-verified-ocr-output",
-        "catalog_status": "active",
-        "catalog_refresh_evidence": "Reactivated after matching the current external reference polygon at 0.992894 IoU.",
+        "catalog_status": "stale",
+        "catalog_stale_reason": "The Bay Area service area changed after this OCR-derived catalog entry was created from the saved fixture; keep it out of production fast paths until refreshed from a current source.",
+        "catalog_refresh_evidence": "Previously reactivated after matching an external reference polygon at 0.992894 IoU, but later user confirmation marked the saved Bay Area fixture family as stale.",
         "catalog_reference_iou": 0.992894,
         "slug": "bay-area-zoox",
         "georeference_source": "ocr-georeference:nominatim-label-fit",

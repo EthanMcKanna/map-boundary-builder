@@ -2864,6 +2864,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/road-source-cache-current-ab-20260529/full-report.json` at 7.40s with
   identical 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and preserved
   Phoenix/Nashville road-refined sources.
+- The changed-market smoke gate caught three stale fast-path risks after the
+  May 29 user correction: Bay Area Tesla, Houston Tesla, and Bay Area Zoox
+  still returned OCR-derived catalog entries even though their saved fixture
+  families are now known stale. Those catalog entries are now marked `stale`,
+  provider-specific stale hints such as `Tesla Houston` and `Zoox San
+  Francisco` force OCR overlap, and generic mixed hints such as `Houston` can
+  still use active current Waymo catalog entries. Focused catalog/API/benchmark
+  tests passed 58 tests, full pytest passed 160 tests plus 9 subtests,
+  `compileall` passed, and `git diff --check` passed. The targeted smoke
+  `out/changed-market-smoke-stale-derived-90861bb/full-report.json` ran six
+  Houston/Miami/Bay Area `reference_mismatch` screenshots with zero catalog
+  fast-path returns. The default active benchmark
+  `out/stale-derived-catalog-default-20260529/full-report.json` passed 8/8
+  scored fixtures, skipped the seven known stale references, avg IoU 0.993, min
+  IoU 0.943, total 0.55s. The no-catalog gate
+  `out/stale-derived-catalog-nocatalog-20260529/full-report.json` preserved
+  8/8 scored accuracy, avg IoU 0.962, and min IoU 0.931; its 8.57s total was
+  OCR-noise only because the no-catalog path bypasses the changed catalog code.
 
 ## Remaining Bottlenecks
 
