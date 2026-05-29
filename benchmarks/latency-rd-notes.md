@@ -1663,6 +1663,22 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   at `out/recbatch12-stale-no-network-20260529/report.json` kept Bay Area
   Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo on OCR/georeference
   with `catalog_slug: null` and zero attempted network calls.
+- Production deployment `dpl_Fd8sD98h3YASjdzZ5qLpsMhY7Hdn` was aliased to
+  `https://mapboundary.app`, reported `pipeline-ce9eaa4d13a595dc`,
+  `tesseract: null`, and kept `api/index.py` at 92.83 MB. Cache-busted smokes
+  now use pixel-identical PNG metadata changes; a one-pixel content mutation
+  was discarded after it perturbed Houston Tesla OCR labels and forced a slow
+  road-search fallback. The corrected production smoke
+  `out/prod-recbatch12-metadata-smoke-20260529/report.json` kept Phoenix on
+  `catalog-shape-match` with 0.267s server generation and kept all six
+  Houston/Miami/Bay Area changed-market screenshots on OCR/georeference with
+  `catalog_slug: null`: Bay Area Tesla 0.633s, Bay Area Waymo 4.248s, Bay Area
+  Zoox 3.278s, Houston Tesla 0.569s, Houston Waymo 4.499s, and Miami Waymo
+  4.123s server generation. Compared with the previous production evidence,
+  Phoenix improved from 0.310s and Miami improved from 5.023s; Bay Area Zoox
+  remained OCR-bound and noisy at roughly 3.3s. Warm repeat probes preserved the
+  same stale-market catalog guard and confirmed production OCR/runtime remains
+  the current bottleneck for larger no-catalog screenshots.
 
 ## Remaining Bottlenecks
 
