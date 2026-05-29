@@ -2028,6 +2028,20 @@ OCR/georeference rather than returning outdated fast-path polygons.
   gate `out/road-array-winner-default-20260529/full-report.json` passed 11/11,
   skipped the same 4 reference mismatches, avg IoU 0.985, min IoU 0.943, total
   0.68s.
+- Production road-refine batch deployment `dpl_6F1j3yK9FR3rK2kf7Fjm9LjZ1ydt`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-12dc3430dae9726a` with
+  `tesseract: null`. The prebuilt bundle stayed at 296.59 MB. Cache-busted
+  production smokes at `out/prod-road-batch-smoke-20260529/report.json`
+  exercised the stale Miami screenshot on the intended non-catalog
+  OCR/georeference path with source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, `catalog_slug: null`,
+  confidence 0.864, and road score 0.681518. The first run was cold/noisy at
+  7.499s server build time with OCR 4.036s and georeference 1.845s; a same-pixel
+  cache-busted warm repeat returned the same bbox with 3.691s server build time,
+  OCR 2.678s, and georeference 0.226s. OCR remains the production bottleneck,
+  but the road-refine portion is now much smaller on the warmed non-catalog
+  path.
 
 ## Remaining Bottlenecks
 
