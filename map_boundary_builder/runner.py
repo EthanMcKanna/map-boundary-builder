@@ -157,6 +157,16 @@ def build_boundary(
     ocr_executor: ThreadPoolExecutor | None = None
     road_feature_future: Future[Any] | None = None
     road_feature_executor: ThreadPoolExecutor | None = None
+    georef_resource_future: Future[Any] | None = None
+    georef_resource_executor: ThreadPoolExecutor | None = None
+
+    def ensure_georeference_resource_preload() -> None:
+        nonlocal georef_resource_future, georef_resource_executor
+        if georef_resource_future is not None:
+            return
+        georef_resource_executor = ThreadPoolExecutor(max_workers=1)
+        georef_resource_future = georef_resource_executor.submit(preload_georeference_resources)
+
     if should_overlap_ocr_with_extraction(
         city_input=city_input,
         allow_catalog=allow_catalog,
@@ -164,6 +174,7 @@ def build_boundary(
     ):
         ocr_executor = ThreadPoolExecutor(max_workers=1)
         labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+        ensure_georeference_resource_preload()
 
     try:
         emit_progress(
@@ -292,6 +303,7 @@ def build_boundary(
                     rgb,
                     style=extraction.style,
                 )
+                ensure_georeference_resource_preload()
             emit_progress(
                 progress,
                 stage="extract",
@@ -377,6 +389,7 @@ def build_boundary(
                 rgb,
                 style=extraction.style,
             )
+            ensure_georeference_resource_preload()
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
             road_feature_future = road_feature_executor.submit(image_feature_distance, rgb)
@@ -392,6 +405,8 @@ def build_boundary(
             ocr_executor.shutdown(wait=False, cancel_futures=True)
         if road_feature_executor is not None:
             road_feature_executor.shutdown(wait=False, cancel_futures=True)
+        if georef_resource_executor is not None:
+            georef_resource_executor.shutdown(wait=False, cancel_futures=False)
     road_feature_distance = ready_future_result(road_feature_future)
     emit_progress(
         progress,
@@ -457,6 +472,7 @@ def build_boundary(
                 rgb=rgb,
                 progress=progress,
             )
+    wait_future_result(georef_resource_future)
     georef = fit_georeference(
         labels,
         image_path,
@@ -554,6 +570,27 @@ def ready_future_result(future: Future[Any] | None) -> Any | None:
         return future.result()
     except Exception:
         return None
+
+
+def wait_future_result(future: Future[Any] | None) -> Any | None:
+    if future is None or future.cancelled():
+        return None
+    try:
+        return future.result()
+    except Exception:
+        return None
+
+
+def preload_georeference_resources() -> dict[str, int]:
+    from .geocoder import load_geocoder_seed
+    from .osm_places import load_osm_places_seed
+    from .osm_roads import load_road_points_seed
+
+    return {
+        "geocoder_seed_entries": len(load_geocoder_seed()),
+        "osm_place_seed_entries": len(load_osm_places_seed()),
+        "road_seed_entries": len(load_road_points_seed()),
+    }
 
 
 def submit_ocr_labels_from_rgb(

@@ -371,3 +371,62 @@ def test_unsupported_style_catalog_miss_skips_catalog_retry(tmp_path, monkeypatc
         runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
+
+
+def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown-map.png"
+    Image.new("RGB", (1200, 800), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((800, 1200, 3), 245, dtype=np.uint8)
+    mask = np.zeros((800, 1200), dtype=bool)
+    mask[160:640, 300:900] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(300, 160), (900, 160), (900, 640), (300, 640)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    order: list[str] = []
+
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Testville",
+            lon=-80.0,
+            lat=25.0,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=20.0,
+            rotation_radians=0.0,
+            confidence=0.9,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+
+    def fake_preload_georeference_resources():
+        order.append("preload")
+        return {"geocoder_seed_entries": 1, "osm_place_seed_entries": 1, "road_seed_entries": 1}
+
+    def fake_fit_georeference(*_args, **_kwargs):
+        order.append("fit")
+        assert "preload" in order
+        return georef
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "preload_georeference_resources", fake_preload_georeference_resources)
+    monkeypatch.setattr(runner, "fit_georeference", fake_fit_georeference)
+
+    build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+    )
+
+    assert order == ["preload", "fit"]

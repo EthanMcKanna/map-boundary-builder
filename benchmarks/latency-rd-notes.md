@@ -42,6 +42,25 @@ avg IoU 0.961733, min IoU 0.931476, max duration 0.988s. The targeted changed
 market smoke `out/changed-area-config-smoke-20260529/full-report.json` ran all
 six Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` smoke checks
 with zero failures in 0.531s.
+- Georeference seed preloading now starts when the runner commits to the
+  OCR/georeference path, overlapping geocoder, OSM place, and road seed loading
+  with OCR/extraction and waiting immediately before the transform fit. This
+  does not change labels, geocoding, road matching, or output geometry; it only
+  avoids paying first-use seed load after OCR on direct unprewarmed arbitrary
+  runs. Targeted cold-process stress improved `zoox-sf.webp` from
+  `out/fresh-stress-20260529/zoox-sf.webp.summary.json` at 1.576s total /
+  1.005s georeference to `out/georef-preload-stress-20260529/zoox-sf.webp.summary.json`
+  at 0.760s total / 0.139s georeference, with IoU 1.0 against the previous
+  output and unchanged confidence/source. `bay-area-waymo.png` improved from
+  1.568s / 0.748s georeference to 1.029s / 0.092s georeference, also with IoU
+  1.0 and unchanged confidence/source. The formal gates remained accuracy-green:
+  default `out/georef-preload-default-20260529/full-report.json` passed 8/8
+  scored with avg IoU 0.992917/min 0.943345, no-catalog
+  `out/georef-preload-nocatalog-clean-20260529/full-report.json` passed 8/8
+  scored with avg IoU 0.961733/min 0.931476, and changed-area smoke
+  `out/georef-preload-smoke-20260529/full-report.json` passed all six smoke
+  checks. This is specifically a cold/unprewarmed seed-load reliability win;
+  the broader arbitrary path remains OCR-bound.
 
 ## Shipped Changes
 
