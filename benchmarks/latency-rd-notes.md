@@ -2236,6 +2236,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   A second same-pixel/different-metadata Miami upload reused the visual OCR
   cache and returned the same bbox/confidence/road score with server
   `build_boundary_s` 0.960s, OCR 0.000066s, and georeference 0.195s.
+- Rejected city-hint OCR downscaling as a default or stale-market shortcut.
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1300` passed the active city-overrides
+  no-catalog gate faster than 1600, but it changed individual outputs and
+  lowered the average IoU slightly. On user-confirmed stale markets it was
+  worse: Miami lost road refinement, confidence fell from 0.864 to 0.723, and
+  the bbox shifted materially; Houston/Bay Area outputs also shifted or slowed.
+- Rejected skipping the road-refinement polish pass. Focused
+  Phoenix/Nashville/Miami probes stayed road-refined without polish, but bboxes
+  and road scores changed: Miami road score fell from 0.681518 to 0.650780,
+  Phoenix fell from 0.706233 to 0.698490, and the coordinate bounds shifted.
+  Coarse-only shifted more. The polish pass remains part of the reliability
+  budget despite its cost.
+- Rejected migrating to the newer `rapidocr` package for now. Official RapidOCR
+  docs show selectable English recognition and PP-OCRv5 model families, and a
+  disposable probe found English det/rec could OCR a resized Miami image quickly
+  in isolation. A monkey-patched full no-catalog benchmark did not hold up:
+  active fixtures still passed, but total time rose to 5.928s, average IoU fell
+  to 0.935, min IoU to 0.865, and Phoenix lost the road-refined source. The
+  current `rapidocr_onnxruntime` stack remains the production OCR engine.
 
 ## Remaining Bottlenecks
 
