@@ -3263,3 +3263,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   smoke-checked Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo
   with zero failures while keeping those user-confirmed changed service areas
   unscored as data debt.
+- Production canonical-extraction deployment `dpl_ECE8L9aHWp9aDb4zE6HhUsgKD9Rj`
+  is aliased to `https://mapboundary.app` and reports
+  `pipeline-8eefb890652bb757`. Vercel still used the 308.05 MB bundle with
+  runtime dependency installation. After `/api/health?warm=ocr`, a fresh
+  neutral Avride Dallas base upload (`img-e7ef8ed-base-1780064001.webp`)
+  missed the run-result cache and preserved bbox/source with server
+  `build_boundary_s: 2.665s`, extract 0.140s, OCR 2.470s, georeference
+  0.043s, and `total_before_send_s: 2.742s`. A fresh 2px white-border upload
+  with a different filename (`img-e7ef8ed-border-1780064002.png`) also missed
+  the run-result cache but reused canonical extraction plus OCR, preserved the
+  exact bbox/source, and returned with server `build_boundary_s: 0.142s`,
+  extract 0.032s, OCR 0.062s, georeference 0.020s, and
+  `total_before_send_s: 0.147s`. This is faster than the prior production
+  canonical-OCR-only bordered proof at 0.279s server time. Repeating the
+  bordered filename hit raw run cache in 0.00203s server time.
