@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import os
+from importlib.metadata import PackageNotFoundError, version
 from importlib import resources
 
 from . import __version__
 
 PIPELINE_VERSION_ENV = "MAP_BOUNDARY_PIPELINE_VERSION"
+PIPELINE_VERSION_PACKAGES = (
+    "numpy",
+    "onnxruntime",
+    "opencv-python-headless",
+    "pillow",
+    "rapidocr-onnxruntime",
+    "shapely",
+)
 PIPELINE_VERSION_FILES = (
     "catalog_match.py",
     "extract.py",
@@ -43,6 +52,9 @@ def get_pipeline_version() -> str:
     for filename, source in pipeline_version_sources():
         digest.update(filename.encode("utf-8"))
         digest.update(source.read_bytes())
+    for package, package_version in pipeline_version_dependency_versions():
+        digest.update(package.encode("utf-8"))
+        digest.update(package_version.encode("utf-8"))
     _PIPELINE_VERSION = f"pipeline-{digest.hexdigest()[:16]}"
     return _PIPELINE_VERSION
 
@@ -55,3 +67,12 @@ def pipeline_version_sources():
     for source in sorted(catalog_dir.iterdir(), key=lambda item: item.name):
         if source.name.endswith(".json"):
             yield f"service_area_catalog/{source.name}", source
+
+
+def pipeline_version_dependency_versions():
+    for package in PIPELINE_VERSION_PACKAGES:
+        try:
+            package_version = version(package)
+        except PackageNotFoundError:
+            package_version = "missing"
+        yield package, package_version

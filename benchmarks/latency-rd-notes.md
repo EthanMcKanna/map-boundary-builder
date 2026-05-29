@@ -2698,11 +2698,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   completed in 4.082s with the same output metrics. The default catalog gate
   stayed fast and accurate: 8/8 scored, avg IoU 0.993, min IoU 0.943, max
   0.099s. Linux cp312 wheel size increases from 12.56 MB to 17.34 MB, small
-  enough to justify a production deploy test. Full pytest passed 150 tests plus
-  9 subtests, `compileall` passed, and `pip check` reported no broken
-  requirements. Houston, Miami, and Bay Area remain `reference_mismatch` data
-  debt in these gates because their service areas have changed since the saved
-  screenshot/reference pairs.
+  enough to justify a production deploy test. After adding dependency-aware
+  pipeline hashing, full pytest passed 151 tests plus 9 subtests, `compileall`
+  passed, and `pip check` reported no broken requirements. The pipeline version
+  hash now also includes key runtime
+  dependency versions (`onnxruntime`, `rapidocr-onnxruntime`, OpenCV, NumPy,
+  Pillow, and Shapely), so run/OCR caches invalidate when an inference engine
+  upgrade can change speed or outputs. A post-hash no-catalog gate preserved
+  8/8 scored accuracy with the same avg/min IoU despite a noisy 23.691s local
+  timing run, and the default catalog gate stayed fast at 0.567s total with avg
+  IoU 0.993/min 0.943. Houston, Miami, and Bay Area remain `reference_mismatch`
+  data debt in these gates because their service areas have changed since the
+  saved screenshot/reference pairs.
 - Rejected road-search batch and feature-scale tuning as a durable win. Focused
   Phoenix/Nashville probes with `ROAD_SEARCH_BATCH_SIZE` at 512, 2048, and 4096
   preserved accuracy but were slower or too noisy than the current default.
