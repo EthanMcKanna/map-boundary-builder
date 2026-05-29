@@ -1344,6 +1344,28 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
 - Raising RapidOCR recognition batch size changed a sampled Phoenix label from
   `TPC Scottsdale` to `TPCScottsdale` and did not improve Phoenix timing.
   Rejected; only classifier batching was kept.
+- Passing the runner's already-loaded RGB image into RapidOCR avoided one image
+  decode in theory, but did not clear the no-regression bar. Applying it to all
+  screenshots changed small Tesla OCR inputs from file-path mode to ndarray mode
+  and nudged Austin Tesla IoU from 0.974 to 0.966. Restricting reuse to large
+  images preserved the active-suite IoUs, but the production-equivalent
+  no-Tesseract no-catalog benchmark was flat/noisy at 7.37s versus the 7.36s
+  baseline. Rejected to avoid carrying code complexity without a real measured
+  speed win.
+- Vercel Fluid Compute memory tuning is not a safe code-level lever here:
+  current Vercel docs say `memory` cannot be set in `vercel.json` with Fluid
+  Compute enabled, so no function-size/CPU config change was shipped.
+- Direct RapidOCR ONNX thread caps were slower on the local multi-core probe:
+  one thread made Phoenix 2.157s, two threads 1.043s, four threads 0.748s, and
+  library default 0.505s with identical sampled labels. Rejected until there is
+  production evidence that Vercel's instance CPU topology benefits from a cap.
+- Road-search batch-size sweeps did not beat the current default. Focused
+  no-catalog Phoenix/Nashville runs with `MAP_BOUNDARY_ROAD_SEARCH_BATCH_SIZE`
+  2048 and 512 took 4.31s and 4.29s, while the default 1024 run took 2.69s with
+  the same IoUs. Rejected.
+- Server normalized-image cache-key hashing is not a meaningful first-run wall:
+  it costs roughly 0.02-0.05s on the 2400px PNG fixtures, so skipping it would
+  trade away recompression-tolerant cache hits for too little latency.
 - Forcing every RapidOCR input through an OpenCV-loaded array broke small
   gray-fill fixtures: Houston Tesla fell to 0.000 IoU and Bay Area Tesla to
   0.859. Rejected; the array shortcut is limited to resized inputs only.
