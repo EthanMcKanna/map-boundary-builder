@@ -650,6 +650,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
     Antonio from 0.944136 to 0.943220. The next viable path is not plain
     low-res acceptance; it needs either a stronger self-check for road-refined
     cases or a cheaper correction path for sparse/imbalanced label support.
+- Benchmark regression gating now covers both accuracy and optional latency
+  checks. `--baseline-report` rejects active-fixture IoU drops and average-IoU
+  drops by default; latency experiments can additionally set
+  `--max-duration-increase-ratio` / `--max-total-duration-increase-ratio` plus
+  absolute jitter tolerances with `--max-duration-increase-s` and
+  `--max-total-duration-increase-s`. This turns the rejected low-res OCR and
+  road-refinement probes into machine-checkable gates instead of manual JSON
+  diffs. A current no-catalog CLI run with zero IoU-drop tolerance and 0.5s
+  per-fixture/total duration jitter allowance passed with zero regression
+  issues in `out/latency-regression-gate-current-no-catalog-pass-20260529/`.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

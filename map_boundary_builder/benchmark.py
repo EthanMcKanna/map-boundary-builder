@@ -154,6 +154,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Maximum allowed average IoU drop when --baseline-report is provided.",
     )
+    parser.add_argument(
+        "--max-duration-increase-ratio",
+        type=float,
+        default=None,
+        help="Optional maximum per-fixture duration increase ratio against --baseline-report.",
+    )
+    parser.add_argument(
+        "--max-duration-increase-s",
+        type=float,
+        default=0.0,
+        help="Allowed absolute per-fixture duration increase before ratio checks fail.",
+    )
+    parser.add_argument(
+        "--max-total-duration-increase-ratio",
+        type=float,
+        default=None,
+        help="Optional maximum total-duration increase ratio against --baseline-report.",
+    )
+    parser.add_argument(
+        "--max-total-duration-increase-s",
+        type=float,
+        default=0.0,
+        help="Allowed absolute total-duration increase before ratio checks fail.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -185,6 +209,10 @@ def main(argv: list[str] | None = None) -> int:
             baseline_path=args.baseline_report,
             max_iou_drop=args.max_iou_drop,
             max_mean_iou_drop=args.max_mean_iou_drop,
+            max_duration_increase_ratio=args.max_duration_increase_ratio,
+            max_duration_increase_s=args.max_duration_increase_s,
+            max_total_duration_increase_ratio=args.max_total_duration_increase_ratio,
+            max_total_duration_increase_s=args.max_total_duration_increase_s,
         )
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
@@ -656,11 +684,21 @@ def compare_report_regressions(
     baseline_path: Path | None = None,
     max_iou_drop: float = 0.0,
     max_mean_iou_drop: float = 0.0,
+    max_duration_increase_ratio: float | None = None,
+    max_duration_increase_s: float = 0.0,
+    max_total_duration_increase_ratio: float | None = None,
+    max_total_duration_increase_s: float = 0.0,
 ) -> dict[str, Any]:
     candidate_scores = active_iou_scores_by_slug(report)
     baseline_scores = active_iou_scores_by_slug(baseline_report)
     issues: list[dict[str, Any]] = []
     tolerance = max(0.0, float(max_iou_drop))
+    duration_tolerance = (
+        None
+        if max_duration_increase_ratio is None
+        else max(0.0, float(max_duration_increase_ratio))
+    )
+    duration_tolerance_s = max(0.0, float(max_duration_increase_s))
     for slug, baseline_score in sorted(baseline_scores.items()):
         candidate_score = candidate_scores.get(slug)
         if candidate_score is None:
@@ -683,6 +721,23 @@ def compare_report_regressions(
                     "drop": round(drop, 6),
                 }
             )
+        if duration_tolerance is not None:
+            baseline_duration = parse_report_duration(baseline_score.get("duration_s"))
+            candidate_duration = parse_report_duration(candidate_score.get("duration_s"))
+            if baseline_duration is not None and candidate_duration is not None and baseline_duration > 0:
+                increase_s = candidate_duration - baseline_duration
+                increase_ratio = candidate_duration / baseline_duration - 1.0
+                if increase_s > duration_tolerance_s and increase_ratio > duration_tolerance:
+                    issues.append(
+                        {
+                            "slug": slug,
+                            "kind": "duration_increase",
+                            "baseline_duration_s": round(baseline_duration, 6),
+                            "candidate_duration_s": round(candidate_duration, 6),
+                            "increase_s": round(increase_s, 6),
+                            "increase_ratio": round(increase_ratio, 6),
+                        }
+                    )
 
     baseline_mean = float(baseline_report.get("summary", {}).get("average_iou", 0.0))
     candidate_mean = float(report.get("summary", {}).get("average_iou", 0.0))
@@ -697,12 +752,38 @@ def compare_report_regressions(
                 "drop": round(mean_drop, 6),
             }
         )
+    total_duration_tolerance = (
+        None
+        if max_total_duration_increase_ratio is None
+        else max(0.0, float(max_total_duration_increase_ratio))
+    )
+    total_duration_tolerance_s = max(0.0, float(max_total_duration_increase_s))
+    if total_duration_tolerance is not None:
+        baseline_total = parse_report_duration(baseline_report.get("summary", {}).get("total_duration_s"))
+        candidate_total = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
+        if baseline_total is not None and candidate_total is not None and baseline_total > 0:
+            total_increase_s = candidate_total - baseline_total
+            total_increase_ratio = candidate_total / baseline_total - 1.0
+            if total_increase_s > total_duration_tolerance_s and total_increase_ratio > total_duration_tolerance:
+                issues.append(
+                    {
+                        "kind": "total_duration_increase",
+                        "baseline_total_duration_s": round(baseline_total, 6),
+                        "candidate_total_duration_s": round(candidate_total, 6),
+                        "increase_s": round(total_increase_s, 6),
+                        "increase_ratio": round(total_increase_ratio, 6),
+                    }
+                )
 
     return {
         "passed": not issues,
         "baseline_report": str(baseline_path) if baseline_path is not None else None,
         "max_iou_drop": tolerance,
         "max_mean_iou_drop": mean_tolerance,
+        "max_duration_increase_ratio": duration_tolerance,
+        "max_duration_increase_s": duration_tolerance_s,
+        "max_total_duration_increase_ratio": total_duration_tolerance,
+        "max_total_duration_increase_s": total_duration_tolerance_s,
         "compared_fixtures": len(baseline_scores),
         "issues": issues,
     }
@@ -719,6 +800,16 @@ def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any
         if isinstance(slug, str) and slug:
             scores[slug] = row
     return scores
+
+
+def parse_report_duration(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        duration = float(value)
+    except (TypeError, ValueError):
+        return None
+    return duration if duration >= 0.0 else None
 
 
 def print_table(report: dict[str, Any], report_path: Path) -> None:
@@ -784,6 +875,18 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(
                     f"       average IoU {issue['baseline_average_iou']:.6f} -> "
                     f"{issue['candidate_average_iou']:.6f} (drop {issue['drop']:.6f})"
+                )
+            elif issue["kind"] == "duration_increase":
+                print(
+                    f"       {issue['slug']}: duration {issue['baseline_duration_s']:.3f}s -> "
+                    f"{issue['candidate_duration_s']:.3f}s "
+                    f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
+                )
+            elif issue["kind"] == "total_duration_increase":
+                print(
+                    f"       total duration {issue['baseline_total_duration_s']:.3f}s -> "
+                    f"{issue['candidate_total_duration_s']:.3f}s "
+                    f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
                 )
             else:
                 print(f"       {issue['slug']}: missing candidate score")

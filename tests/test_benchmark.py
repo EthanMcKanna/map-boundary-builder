@@ -153,6 +153,72 @@ def test_report_regression_check_allows_configured_tolerance() -> None:
     assert check["issues"] == []
 
 
+def test_report_regression_check_can_flag_duration_increase() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.0},
+        "scores": [
+            {"slug": "phoenix-waymo", "status": "active", "iou": 0.98332, "duration_s": 1.0},
+            {"slug": "nashville-waymo", "status": "active", "iou": 0.986282, "duration_s": 0.8},
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.8},
+        "scores": [
+            {"slug": "phoenix-waymo", "status": "active", "iou": 0.98332, "duration_s": 1.35},
+            {"slug": "nashville-waymo", "status": "active", "iou": 0.986282, "duration_s": 0.82},
+        ],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_duration_increase_ratio=0.1,
+        max_total_duration_increase_ratio=0.1,
+    )
+
+    assert check["passed"] is False
+    assert check["issues"] == [
+        {
+            "slug": "phoenix-waymo",
+            "kind": "duration_increase",
+            "baseline_duration_s": 1.0,
+            "candidate_duration_s": 1.35,
+            "increase_s": 0.35,
+            "increase_ratio": 0.35,
+        },
+        {
+            "kind": "total_duration_increase",
+            "baseline_total_duration_s": 4.0,
+            "candidate_total_duration_s": 4.8,
+            "increase_s": 0.8,
+            "increase_ratio": 0.2,
+        },
+    ]
+
+
+def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.0},
+        "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.1}],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.2},
+        "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.19}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_duration_increase_ratio=0.25,
+        max_duration_increase_s=0.1,
+        max_total_duration_increase_ratio=0.01,
+        max_total_duration_increase_s=0.25,
+    )
+
+    assert check["passed"] is True
+    assert check["issues"] == []
+
+
 def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:
     polygon = {
         "type": "FeatureCollection",
