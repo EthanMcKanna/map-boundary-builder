@@ -4546,3 +4546,21 @@ with zero failures in 0.531s.
   0.068/0.064/0.064s vs baseline 0.067/0.066/0.069s, and Dallas
   0.071/0.071/0.072s vs baseline 0.071/0.072/0.071s. Reverted because it was
   not a measurable latency win.
+- Accepted catalog-probe miss result caching for deploy. Previously a
+  deterministic `catalog_miss` API response was returned without being written
+  to the raw, visual PNG, JPEG-commentless, or normalized run-result caches, so
+  repeated 520px probe misses still paid extraction/catalog-probe cost before
+  the full upload could fall back to OCR. The new cache representation stores
+  just `status: catalog_miss` plus the stable error, rehydrates the API payload
+  with `cached: true`, and returns the same HTTP 200 semantics as the uncached
+  probe miss. Focused cache tests passed 32/32, runner summary tests passed
+  12/12, full pytest passed 214 tests plus 9 subtests, `compileall` passed, and
+  `git diff --check` passed. Drift-aware benchmark gates also passed:
+  `out/catalog-miss-cache-default-20260529/full-report.json` scored 8 stable
+  fixtures with avg IoU 0.992917 / min IoU 0.943345 / zero active IoU drops and
+  smoked all seven changed/data-debt fixtures; strict no-catalog
+  `out/catalog-miss-cache-nocatalog-20260529/full-report.json` scored 8 stable
+  fixtures with avg IoU 0.961733 / min IoU 0.931476 / zero active IoU drops and
+  smoked the same seven changed/data-debt fixtures. Houston, Miami, and Bay
+  Area remain excluded from scored accuracy proof until refreshed ground truth
+  is adopted.

@@ -311,6 +311,13 @@ class handler(BaseHTTPRequestHandler):
                 "events": events[-20:],
                 "profile": profile,
             }
+            if cache_key is not None:
+                write_run_result_cache(cache_key, payload)
+            if png_visual_cache_key is not None:
+                write_run_result_cache(png_visual_cache_key, payload)
+            if jpeg_commentless_cache_key is not None:
+                write_run_result_cache(jpeg_commentless_cache_key, payload)
+            write_run_result_cache(raw_cache_key, payload)
             self.send_json(payload, status=HTTPStatus.OK)
             return
         except Exception as exc:
@@ -881,6 +888,11 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
             "status": "failed",
             "error": payload.get("error"),
         }
+    elif payload.get("status") == "catalog_miss":
+        cached = {
+            "status": "catalog_miss",
+            "error": payload.get("error"),
+        }
     else:
         cached = {
             "city": payload.get("city"),
@@ -921,10 +933,12 @@ def cached_run_payload(
 ) -> dict[str, Any]:
     payload = json.loads(json.dumps(cached))
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
-    status = payload.get("status") if payload.get("status") == "failed" else "complete"
-    event_message = (
-        "Generation failure ready from cache" if status == "failed" else "Boundary export ready from cache"
-    )
+    raw_status = payload.get("status")
+    status = raw_status if raw_status in {"catalog_miss", "failed"} else "complete"
+    event_message = {
+        "catalog_miss": "Catalog miss ready from cache",
+        "failed": "Generation failure ready from cache",
+    }.get(status, "Boundary export ready from cache")
     payload.update(
         {
             "id": run_id,
@@ -954,4 +968,6 @@ def cached_run_payload(
 def cached_run_response_status(payload: dict[str, Any]) -> HTTPStatus:
     if payload.get("status") == "failed":
         return HTTPStatus.UNPROCESSABLE_ENTITY
+    if payload.get("status") == "catalog_miss":
+        return HTTPStatus.OK
     return HTTPStatus.CREATED

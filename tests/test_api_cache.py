@@ -416,6 +416,43 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["events"][-1]["message"], "Generation failure ready from cache")
         self.assertEqual(cached_run_response_status(payload), HTTPStatus.UNPROCESSABLE_ENTITY)
 
+    def test_catalog_miss_cache_round_trip_and_payload_rehydration(self) -> None:
+        cache_key = raw_run_result_cache_key(
+            b"unit-cache-image",
+            "Bay Area",
+            BoundaryBuildOptions(catalog_probe_only=True),
+        )
+        miss_payload = {
+            "status": "catalog_miss",
+            "error": "No known service-area shape matched the catalog probe.",
+            "profile": {"build_boundary_s": 0.05},
+            "events": [{"stage": "extract"}],
+        }
+
+        write_run_result_cache(cache_key, miss_payload)
+        restored = read_run_result_cache(cache_key)
+        payload = cached_run_payload(
+            restored or {},
+            "1234-miss",
+            "Bay Area probe.jpg",
+            [{"stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}],
+        )
+
+        self.assertEqual(
+            restored,
+            {
+                "status": "catalog_miss",
+                "error": "No known service-area shape matched the catalog probe.",
+            },
+        )
+        self.assertEqual(payload["id"], "1234-miss")
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["status"], "catalog_miss")
+        self.assertEqual(payload["filename"], "Bay Area probe.jpg")
+        self.assertIn("No known service-area shape", payload["error"])
+        self.assertEqual(payload["events"][-1]["message"], "Catalog miss ready from cache")
+        self.assertEqual(cached_run_response_status(payload), HTTPStatus.OK)
+
     def test_run_cache_uses_memory_cache_before_disk(self) -> None:
         cached = {
             "city": "Dallas",
