@@ -79,6 +79,36 @@ with zero failures in 0.531s.
   Area, Zoox Bay Area, and Zoox Las Vegas scored 1.0 against their current
   catalog references. Keep the default skip/smoke behavior for the old Waymo
   images until refreshed screenshots or refreshed benchmark pairs exist.
+- Rejected two follow-up tuning lanes after fresh sweeps. A per-fixture
+  RapidOCR resolution sweep (`out/ocr-dim-sweep-20260529/`) showed why the
+  earlier global 1300px/1500px attempts were unsafe: 1200px preserved or
+  improved Los Angeles/Dallas/San Antonio in one run, but dropped Orlando IoU by
+  0.150173, and 1100px dropped Los Angeles by 0.043846. Lowering both RapidOCR
+  base and large-image detector limits to 544/512/480/448 preserved the Waymo
+  paths but regressed the small Tesla fixtures by 0.008280 Dallas and 0.001340
+  Austin (`out/det-limit-sweep-20260529/`). Keeping the base detector at 608
+  while lowering only the large-image detector to 544/512/480/448/416 and even
+  384/352/320 preserved active IoU, but did not beat the current 608 path in a
+  meaningful repeated way (`out/large-det-sweep-20260529/` and
+  `out/large-det-low-20260529/`): the best safe low-detector totals stayed
+  around 3.76-3.83s versus the current no-catalog gate at 3.77s. Separately,
+  coarser road-refine feature scales were only noise-level wins until they
+  regressed accuracy. `MAP_BOUNDARY_ROAD_REFINE_COARSE_FEATURE_SCALE=8` and
+  `MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE=4` preserved active IoU across a
+  sweep and three-run A/B
+  (`out/road-scale-sweep-20260529/`, `out/road-scale-ab-20260529/`), but the
+  average total only moved about 0.3%, while 10/12 coarse scales regressed
+  Phoenix by 0.003503 and some fine scales also regressed Nashville by 0.013320
+  (`out/road-scale-wide-20260529/`). Keep the current OCR dimension, detector,
+  and road-refine scale defaults unless a production A/B proves a larger win.
+- Live production was rechecked after the benchmark-only catalog-audit commit
+  and remained on the prior deployed runtime: `https://mapboundary.app/api/health`
+  returned HTTP 200 with `pipeline-904c134671cd17e5`,
+  `rapidocr_max_dimension: 1600`, detector limits `608`, and runtime deps
+  `onnxruntime 1.26.0`, `rapidocr-onnxruntime 1.4.4`, and `cv2 4.10.0`.
+  `https://mapboundary.app/api/health?warm=ocr` also returned HTTP 200 with
+  warm `status: ok`; no production deploy was made because the new work was
+  benchmark tooling plus rejected/noisy probes, not a validated runtime speedup.
 - Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
   upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
   OCR median moved from 0.606837s to 0.597544s, but production did not validate
