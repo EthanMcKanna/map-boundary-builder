@@ -2186,6 +2186,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   restored from browser cache in 28 ms, made zero additional generation POSTs,
   saved both pixel and raw cache keys, and reported embedded pipeline
   `pipeline-fefccd337975ad3b`.
+- OCR crop hypothesis, not shipped: `out/crop-ocr-hypothesis-20260529/report.json`
+  compared full-image OCR with extraction-bounds crops on Miami, Houston, Bay
+  Area, Phoenix, Nashville, and Los Angeles. A 0.10 geometry-margin crop
+  preserved successful georeferencing across the sampled set and reduced OCR
+  timing on several 2400px screenshots: Miami 0.431s to 0.292s, Houston 0.422s
+  to 0.269s, Phoenix 0.637s to 0.523s, Nashville 0.384s to 0.336s, and Los
+  Angeles 0.442s to 0.387s. This is not enough to ship yet because the runner
+  already overlaps OCR with extraction in many no-catalog/stale paths, so
+  extraction-then-crop can be slower wall-clock despite lower OCR CPU; also a
+  0.20 Phoenix crop changed the source from road-refined to plain label-fit and
+  reduced confidence from 0.908 to 0.854. Keep crop OCR as a possible guarded
+  CPU-saving path only after proving net wall-clock improvement against the full
+  drift-aware benchmark and production-shaped stale/general uploads.
 
 ## Remaining Bottlenecks
 
