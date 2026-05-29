@@ -253,17 +253,22 @@ def run_rapidocr_words(
 def warm_rapidocr_runtime() -> bool:
     try:
         engine = rapidocr_engine()
-        sample = np.full((128, 384, 3), 255, dtype=np.uint8)
-        cv2.putText(
-            sample,
-            "Miami",
-            (18, 78),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            2.0,
-            (0, 0, 0),
-            4,
-            cv2.LINE_AA,
-        )
+        side = 1600 if RAPIDOCR_MAX_DIMENSION <= 0 else max(384, min(1600, RAPIDOCR_MAX_DIMENSION))
+        sample = np.full((side, side, 3), 255, dtype=np.uint8)
+        scale = max(1.2, side / 620.0)
+        thickness = max(3, round(side / 220.0))
+        y_step = max(120, round(side * 0.18))
+        for index, text in enumerate(("Miami", "Miami Beach", "Coral Gables", "Downtown")):
+            cv2.putText(
+                sample,
+                text,
+                (round(side * 0.05), round(side * 0.12) + index * y_step),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                scale,
+                (0, 0, 0),
+                thickness,
+                cv2.LINE_AA,
+            )
         engine(sample, use_cls=False)
     except Exception:
         return False
