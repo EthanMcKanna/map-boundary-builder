@@ -4356,3 +4356,18 @@ with zero failures in 0.531s.
   `out/native-array-default-code-default-20260529/full-report.json` also stayed
   green at 8/8 scored, avg IoU 0.993/min 0.943, total 0.46s, with the same
   seven drift-aware smoke checks.
+- Generic probe-miss OCR overlap: after the browser has already received a
+  tiny-probe `catalog_miss`, generic no-city full uploads now start OCR in
+  parallel with the 1400px extraction/full catalog retry. Provider/city-hinted
+  probe misses still avoid this speculative OCR so full catalog matches remain
+  cheap. A fresh-cache, network-blocked targeted A/B on Houston/Miami/Bay Area
+  generic filenames preserved exact bboxes, `catalogSlug: null`, source, and
+  confidence while improving Houston from 0.719022s to 0.580474s, Miami from
+  0.718273s to 0.584275s, and Bay Area from 0.457928s to 0.392595s. Focused
+  runner/API tests passed 43 tests. Full pytest passed 213 tests plus 9
+  subtests; the no-catalog gate
+  `out/probe-miss-ocr-overlap-nocatalog-20260529/full-report.json` stayed green
+  at 8/8 scored, avg IoU 0.962/min 0.931 against the native-array baseline; and
+  the catalog-enabled gate
+  `out/probe-miss-ocr-overlap-default-20260529/full-report.json` stayed green
+  at 8/8 scored, avg IoU 0.993/min 0.943.

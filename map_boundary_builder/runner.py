@@ -201,6 +201,14 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
+        if should_overlap_probe_miss_ocr(
+            skip_redundant_probe=skip_redundant_probe,
+            city_input=city_input,
+            filename_hint=filename_hint,
+        ):
+            ocr_executor = ThreadPoolExecutor(max_workers=1)
+            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+            ensure_georeference_resource_preload()
         extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else (
             CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
         )
@@ -762,6 +770,18 @@ def should_overlap_ocr_with_extraction(
     if is_stale_only_catalog_hint(city_input):
         return True
     return not has_active_catalog_area_hint(city_input)
+
+
+def should_overlap_probe_miss_ocr(
+    *,
+    skip_redundant_probe: bool,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> bool:
+    if not skip_redundant_probe or city_input is not None:
+        return False
+    hint_text = filename_hint or ""
+    return not catalog_provider_hint(hint_text) and not has_active_catalog_area_hint(hint_text)
 
 
 def should_try_pre_ocr_catalog(
