@@ -8,7 +8,7 @@ from tempfile import NamedTemporaryFile
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PIL import Image, features
+from PIL import Image, PngImagePlugin, features
 
 from api.index import (
     INLINE_OVERLAY_OPTIMIZE_BYTES,
@@ -20,6 +20,8 @@ from api.index import (
     inline_overlay,
     json_response_body,
     normalized_image_sha256,
+    png_visual_run_result_cache_key,
+    png_visual_sha256,
     _RUN_RESULT_MEMORY_CACHE,
     raw_run_result_cache_key,
     remember_run_result_cache,
@@ -192,6 +194,47 @@ class ApiRunCacheTests(unittest.TestCase):
             raw_run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
             raw_run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
         )
+
+    def test_png_visual_hash_ignores_text_metadata_only(self) -> None:
+        first = BytesIO()
+        second = BytesIO()
+        changed_pixel = BytesIO()
+        first_metadata = PngImagePlugin.PngInfo()
+        first_metadata.add_text("probe", "first")
+        second_metadata = PngImagePlugin.PngInfo()
+        second_metadata.add_text("probe", "second")
+        Image.new("RGBA", (3, 2), (12, 34, 56, 255)).save(first, format="PNG", pnginfo=first_metadata)
+        Image.new("RGBA", (3, 2), (12, 34, 56, 255)).save(second, format="PNG", pnginfo=second_metadata)
+        Image.new("RGBA", (3, 2), (12, 34, 57, 255)).save(changed_pixel, format="PNG", pnginfo=first_metadata)
+
+        self.assertNotEqual(first.getvalue(), second.getvalue())
+        self.assertEqual(png_visual_sha256(first.getvalue()), png_visual_sha256(second.getvalue()))
+        self.assertNotEqual(png_visual_sha256(first.getvalue()), png_visual_sha256(changed_pixel.getvalue()))
+        self.assertIsNone(png_visual_sha256(b"not a png"))
+
+    def test_png_visual_run_cache_key_ignores_text_metadata_but_keeps_options(self) -> None:
+        first = BytesIO()
+        second = BytesIO()
+        metadata = PngImagePlugin.PngInfo()
+        metadata.add_text("cache_bust", "a")
+        Image.new("RGBA", (3, 2), (12, 34, 56, 255)).save(first, format="PNG", pnginfo=metadata)
+        metadata = PngImagePlugin.PngInfo()
+        metadata.add_text("cache_bust", "b")
+        Image.new("RGBA", (3, 2), (12, 34, 56, 255)).save(second, format="PNG", pnginfo=metadata)
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            png_visual_run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
+            png_visual_run_result_cache_key(second.getvalue(), None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            png_visual_run_result_cache_key(first.getvalue(), None, BoundaryBuildOptions()),
+            png_visual_run_result_cache_key(first.getvalue(), "Dallas", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(png_visual_run_result_cache_key(b"not a png", None, BoundaryBuildOptions()))
 
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:
         cache_key = run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())

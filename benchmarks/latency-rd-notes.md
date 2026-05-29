@@ -2607,6 +2607,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   observed as failed/aborted, the run still posted once, and the page completed
   the cache-busted Avride Dallas upload as `Dallas boundary`. `node --check`
   and the full pytest suite passed.
+- PNG uploads now get a cheap metadata-insensitive run-cache namespace before
+  the expensive decoded normalized-cache path. The key hashes the PNG signature
+  and all chunks except text/time metadata (`tEXt`, `zTXt`, `iTXt`, `tIME`), so
+  screenshots with identical image streams but different cache-busting text
+  chunks can reuse the prior GeoJSON result without trusting a browser-provided
+  hash or decoding pixels on the server. Focused unit coverage proves text-only
+  metadata changes share the key, pixel changes do not, raw cache keys still
+  differ, and city/options remain part of the run-cache key. A local Avride
+  Dallas microbench restored the same cached payload across two metadata
+  variants and measured the PNG visual hash at 0.197 ms per call versus 8.649 ms
+  for the decoded normalized hash (44.0x cheaper).
 
 ## Remaining Bottlenecks
 

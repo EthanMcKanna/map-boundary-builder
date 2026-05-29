@@ -40,6 +40,8 @@ RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
 _RUN_RESULT_MEMORY_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_NON_VISUAL_CHUNKS = {b"tEXt", b"zTXt", b"iTXt", b"tIME"}
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 
 
@@ -148,6 +150,23 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        png_visual_cache_started = time.perf_counter()
+        png_visual_cache_key = png_visual_run_result_cache_key(image_bytes, city, options)
+        if png_visual_cache_key is not None:
+            cached = read_run_result_cache(png_visual_cache_key)
+        profile["png_visual_cache_lookup_s"] = elapsed_seconds(png_visual_cache_started)
+        if png_visual_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "png-visual"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            self.send_json(
+                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
+                status=HTTPStatus.CREATED,
+            )
+            return
+
         cache_key: str | None = None
         profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         if normalized_cache_lookup:
@@ -215,6 +234,8 @@ class handler(BaseHTTPRequestHandler):
         cache_write_started = time.perf_counter()
         if cache_key is not None:
             write_run_result_cache(cache_key, payload)
+        if png_visual_cache_key is not None:
+            write_run_result_cache(png_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
         profile["cache_hit"] = "miss"
@@ -487,6 +508,13 @@ def raw_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any)
     return run_result_cache_key_for_hash("image_raw_sha256", hashlib.sha256(image_bytes).hexdigest(), city, options)
 
 
+def png_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = png_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash("png_visual_sha256", visual_hash, city, options)
+
+
 def run_result_cache_key_for_hash(
     image_hash_name: str,
     image_hash: str,
@@ -522,6 +550,35 @@ def normalized_image_sha256(image_bytes: bytes) -> str:
             return digest.hexdigest()
     except Exception:
         return hashlib.sha256(image_bytes).hexdigest()
+
+
+def png_visual_sha256(image_bytes: bytes) -> str | None:
+    if not image_bytes.startswith(PNG_SIGNATURE):
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"png-visual-v1")
+    digest.update(PNG_SIGNATURE)
+    offset = len(PNG_SIGNATURE)
+    seen_iend = False
+    while offset + 12 <= len(image_bytes):
+        chunk_length = int.from_bytes(image_bytes[offset : offset + 4], "big")
+        chunk_type = image_bytes[offset + 4 : offset + 8]
+        data_start = offset + 8
+        data_end = data_start + chunk_length
+        crc_end = data_end + 4
+        if crc_end > len(image_bytes):
+            return None
+        if chunk_type not in PNG_NON_VISUAL_CHUNKS:
+            digest.update(chunk_type)
+            digest.update(chunk_length.to_bytes(4, "big"))
+            digest.update(image_bytes[data_start:data_end])
+        offset = crc_end
+        if chunk_type == b"IEND":
+            seen_iend = True
+            break
+    if not seen_iend:
+        return None
+    return digest.hexdigest()
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
