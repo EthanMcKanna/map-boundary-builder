@@ -4038,3 +4038,29 @@ with zero failures in 0.531s.
   structured profile too: total 1.327525s, extract 0.119634s, OCR 0.319147s,
   georeference 0.797748s, and the stable "could not infer a reliable map
   location" error.
+- Added a filename-hinted catalog rescue for current Avride Dallas web maps
+  that extract as `light-fill` even though the verified provider catalog style
+  is `purple-fill`. The guard is intentionally narrow: it requires a light-fill
+  extraction, an Avride provider token in the filename hint, an active catalog
+  area hint such as Dallas, and a 0.92+ shape IoU against the Avride catalog
+  entry before returning exact catalog geometry. This avoided a tempting OCR
+  alias fix that made the same screenshot "succeed" with only three controls
+  but produced a bbox with just 0.139 IoU against the verified Avride catalog.
+  The real `/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp`
+  smoke improved from a reliable failure at about 1.2-1.3s to
+  `catalog-shape-match:filename-hint` in 0.020971s, with `catalog_slug:
+  dallas-avride`, exact catalog bbox `[-96.8183506, 32.7681501, -96.7551594,
+  32.83758]`, shape IoU 0.926926, area ratio 0.982535, and confidence 0.922.
+  Focused runner/catalog/API tests passed 64/64, full pytest passed 208/208,
+  compileall, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check` passed. The active gate
+  `out/avride-hint-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with seven `reference_mismatch` skips, avg IoU 0.992917, min IoU
+  0.943345, and max active duration 0.132754s; the no-catalog gate
+  `out/avride-hint-nocatalog-20260529/full-report.json` stayed independent and
+  passed 8/8 with avg IoU 0.961733 and min IoU 0.931476; and
+  `out/avride-hint-changed-smoke-20260529/full-report.json` smoke-checked all
+  six Houston/Miami/Bay Area `reference_mismatch` fixtures with zero failures.
+  Rejected probe: disabling road-feature precompute preserved IoU but slowed
+  no-catalog total duration to 4.559698s and pushed Phoenix to 1.084823s, so
+  the overlapping precompute remains useful.

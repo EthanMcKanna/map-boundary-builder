@@ -13,6 +13,7 @@ from shapely.geometry import shape
 
 from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
+    catalog_provider_hint,
     catalog_style_supported,
     catalog_feature_collection,
     has_active_catalog_area_hint,
@@ -72,6 +73,8 @@ LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
 LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO = 0.92
 LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
+FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
+FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 
 
@@ -252,6 +255,25 @@ def build_boundary(
                     progress=progress,
                     georeference_source="catalog-shape-match:low-res-shape",
                 )
+            catalog_match = filename_hinted_avride_light_fill_catalog_match(
+                extraction,
+                filename_hint=filename_hint,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
+                    extraction,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:filename-hint",
+                )
 
         if should_retry_pre_ocr_catalog(
             city_input=city_input,
@@ -369,6 +391,25 @@ def build_boundary(
                         rgb=rgb,
                         progress=progress,
                         georeference_source="catalog-shape-match:low-res-shape",
+                    )
+                catalog_match = filename_hinted_avride_light_fill_catalog_match(
+                    extraction,
+                    filename_hint=filename_hint,
+                )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:filename-hint",
                     )
 
         label_y_max = (
@@ -644,6 +685,28 @@ def low_resolution_shape_catalog_match(
     if not (LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO <= match.area_ratio <= LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO):
         return None
     return match
+
+
+def filename_hinted_avride_light_fill_catalog_match(
+    extraction,
+    *,
+    filename_hint: str | None,
+):
+    if extraction.style != "light-fill":
+        return None
+    if not filename_hint:
+        return None
+    if catalog_provider_hint(filename_hint) != "avride":
+        return None
+    if not has_active_catalog_area_hint(filename_hint):
+        return None
+    return match_service_area_catalog(
+        extraction.pixel_geometry,
+        style="purple-fill",
+        min_iou=FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU,
+        min_margin=FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN,
+        area_hint_texts=[filename_hint],
+    )
 
 
 def should_overlap_ocr_with_extraction(

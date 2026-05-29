@@ -262,6 +262,83 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
     assert result.summary["georeference_source"] == "catalog-shape-match:retry"
 
 
+def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "uber-avride-operating-map-dallas.png"
+    Image.new("RGB", (680, 551), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((551, 680, 3), 245, dtype=np.uint8)
+    mask = np.zeros((551, 680), dtype=bool)
+    mask[120:450, 60:630] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="light-fill",
+        pixel_geometry=Polygon([(60, 120), (630, 120), (630, 450), (60, 450)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    match_calls: list[dict] = []
+
+    def fake_match_service_area_catalog(pixel_geometry, *, style, min_iou=None, min_margin=None, area_hint_texts=None):
+        match_calls.append(
+            {
+                "style": style,
+                "min_iou": min_iou,
+                "min_margin": min_margin,
+                "area_hint_texts": area_hint_texts,
+            }
+        )
+        if style == "purple-fill":
+            return SimpleNamespace(
+                entry=SimpleNamespace(slug="dallas-avride"),
+                iou=0.926,
+                confidence=0.922,
+                margin=0.3,
+                area_ratio=0.98,
+            )
+        return None
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("filename-hinted Avride catalog match should avoid OCR")
+
+    def fake_finish_catalog_boundary_result(
+        extraction,
+        catalog_match,
+        *,
+        output_path,
+        georeference_source="catalog-shape-match",
+        **_kwargs,
+    ):
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": georeference_source,
+                "style": extraction.style,
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(image_path, None, output_path)
+
+    assert result.summary["catalog_slug"] == "dallas-avride"
+    assert result.summary["georeference_source"] == "catalog-shape-match:filename-hint"
+    assert match_calls[-1] == {
+        "style": "purple-fill",
+        "min_iou": runner.FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU,
+        "min_margin": runner.FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN,
+        "area_hint_texts": ["uber-avride-operating-map-dallas"],
+    }
+
+
 def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "avride dallas.png"
     Image.new("RGB", (1400, 933), (245, 245, 245)).save(image_path)
