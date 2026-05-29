@@ -626,6 +626,30 @@ OCR/georeference rather than returning outdated fast-path polygons.
   source surface, and the reported bundle size nudged from 298.10 MB to
   297.92 MB. The bundle still exceeds Vercel's inline limit because OpenCV/ONNX
   dominate the package; this is a hygiene win, not the cold-start breakthrough.
+- Low-resolution RapidOCR interpolation probe after the 1600px default and
+  large-upload detector work:
+  - `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200` with the current
+    `INTER_AREA` resize is not safe as a fast default. It passed the coarse
+    fixture threshold but Orlando Waymo fell from the 1600px baseline IoU
+    0.931476 to 0.781303 because OCR missed the spatially important
+    `Williamsburg` label. The label-only robust fit had seven inliers,
+    confidence 0.899, median residual 692.9m, and p90 1075.0m, so residuals and
+    confidence alone are too weak as fast-pass acceptance guards.
+  - At the same 1200px cap, manually feeding RapidOCR an `INTER_CUBIC` resized
+    image recovered `Williamsburg` and improved Orlando to IoU 0.933628;
+    `INTER_LANCZOS4` similarly reached 0.932279. A broad production-code
+    experiment that used cubic for all moderate OCR downscales was rejected
+    because the default 1600px no-catalog benchmark dropped from avg IoU 0.962
+    to 0.958, with Dallas Waymo falling to 0.941.
+  - A tighter experimental rule that only uses cubic for aggressive resizes
+    (`scale <= 0.55`) left the default 1600px active-suite outputs exactly
+    unchanged and made the 1200px stress path much healthier: Orlando 0.934328,
+    Dallas Waymo 0.957137, Los Angeles 0.944933. It is still not enough to
+    ship a 1200px default because Nashville moved from 0.986282 to 0.978665,
+    Phoenix from 0.983320 to 0.982806 with a large confidence drop, and San
+    Antonio from 0.944136 to 0.943220. The next viable path is not plain
+    low-res acceptance; it needs either a stronger self-check for road-refined
+    cases or a cheaper correction path for sparse/imbalanced label support.
 - Current non-catalog benchmark observability head: `PATH=/usr/bin:/bin
   PYTHONPATH=. .venv/bin/python -m pytest -q` passed 81 tests and 9 subtests;
   `compileall`, `node --check`, and `git diff --check` passed. The default

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from map_boundary_builder.benchmark import (
     BenchmarkFixture,
+    compare_report_regressions,
     load_fixture_config,
     run_benchmark,
     score_full_fixture_in_process,
@@ -92,6 +93,64 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "note": "changed live service area",
         }
     ]
+
+
+def test_report_regression_check_flags_fixture_iou_drop() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {"slug": "orlando-waymo", "status": "active", "iou": 0.931476},
+            {"slug": "miami-waymo", "status": "reference_mismatch", "iou": None},
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.94},
+        "scores": [
+            {"slug": "orlando-waymo", "status": "active", "iou": 0.781303},
+            {"slug": "miami-waymo", "status": "reference_mismatch", "iou": None},
+        ],
+    }
+
+    check = compare_report_regressions(candidate, baseline)
+
+    assert check["passed"] is False
+    assert check["compared_fixtures"] == 1
+    assert check["issues"] == [
+        {
+            "slug": "orlando-waymo",
+            "kind": "iou_drop",
+            "baseline_iou": 0.931476,
+            "candidate_iou": 0.781303,
+            "drop": 0.150173,
+        },
+        {
+            "kind": "average_iou_drop",
+            "baseline_average_iou": 0.95,
+            "candidate_average_iou": 0.94,
+            "drop": 0.01,
+        },
+    ]
+
+
+def test_report_regression_check_allows_configured_tolerance() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332}],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.949},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.982806}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_iou_drop=0.001,
+        max_mean_iou_drop=0.002,
+    )
+
+    assert check["passed"] is True
+    assert check["issues"] == []
 
 
 def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:

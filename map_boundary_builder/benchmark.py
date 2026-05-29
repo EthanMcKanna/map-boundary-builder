@@ -137,6 +137,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="For --mode full, skip mask/overlay debug artifacts to mirror the production web API path.",
     )
+    parser.add_argument(
+        "--baseline-report",
+        type=Path,
+        help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
+    )
+    parser.add_argument(
+        "--max-iou-drop",
+        type=float,
+        default=0.0,
+        help="Maximum allowed per-fixture IoU drop when --baseline-report is provided.",
+    )
+    parser.add_argument(
+        "--max-mean-iou-drop",
+        type=float,
+        default=0.0,
+        help="Maximum allowed average IoU drop when --baseline-report is provided.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -160,6 +177,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
+    if args.baseline_report is not None:
+        baseline_report = json.loads(args.baseline_report.read_text())
+        regression_check = compare_report_regressions(
+            report,
+            baseline_report,
+            baseline_path=args.baseline_report,
+            max_iou_drop=args.max_iou_drop,
+            max_mean_iou_drop=args.max_mean_iou_drop,
+        )
+        report["regression_check"] = regression_check
+        report["summary"]["regression_check_passed"] = regression_check["passed"]
+        report["summary"]["passed"] = bool(report["summary"]["passed"] and regression_check["passed"])
     report_path.write_text(json.dumps(report, indent=2) + "\n")
 
     if args.json:
@@ -620,6 +649,78 @@ def summarize_statuses(scores: list[BenchmarkScore]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def compare_report_regressions(
+    report: dict[str, Any],
+    baseline_report: dict[str, Any],
+    *,
+    baseline_path: Path | None = None,
+    max_iou_drop: float = 0.0,
+    max_mean_iou_drop: float = 0.0,
+) -> dict[str, Any]:
+    candidate_scores = active_iou_scores_by_slug(report)
+    baseline_scores = active_iou_scores_by_slug(baseline_report)
+    issues: list[dict[str, Any]] = []
+    tolerance = max(0.0, float(max_iou_drop))
+    for slug, baseline_score in sorted(baseline_scores.items()):
+        candidate_score = candidate_scores.get(slug)
+        if candidate_score is None:
+            issues.append(
+                {
+                    "slug": slug,
+                    "kind": "missing_candidate_score",
+                    "baseline_iou": baseline_score["iou"],
+                }
+            )
+            continue
+        drop = float(baseline_score["iou"]) - float(candidate_score["iou"])
+        if drop > tolerance:
+            issues.append(
+                {
+                    "slug": slug,
+                    "kind": "iou_drop",
+                    "baseline_iou": baseline_score["iou"],
+                    "candidate_iou": candidate_score["iou"],
+                    "drop": round(drop, 6),
+                }
+            )
+
+    baseline_mean = float(baseline_report.get("summary", {}).get("average_iou", 0.0))
+    candidate_mean = float(report.get("summary", {}).get("average_iou", 0.0))
+    mean_drop = baseline_mean - candidate_mean
+    mean_tolerance = max(0.0, float(max_mean_iou_drop))
+    if mean_drop > mean_tolerance:
+        issues.append(
+            {
+                "kind": "average_iou_drop",
+                "baseline_average_iou": round(baseline_mean, 6),
+                "candidate_average_iou": round(candidate_mean, 6),
+                "drop": round(mean_drop, 6),
+            }
+        )
+
+    return {
+        "passed": not issues,
+        "baseline_report": str(baseline_path) if baseline_path is not None else None,
+        "max_iou_drop": tolerance,
+        "max_mean_iou_drop": mean_tolerance,
+        "compared_fixtures": len(baseline_scores),
+        "issues": issues,
+    }
+
+
+def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    scores: dict[str, dict[str, Any]] = {}
+    for row in report.get("scores", []):
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") != "active" or row.get("iou") is None:
+            continue
+        slug = row.get("slug")
+        if isinstance(slug, str) and slug:
+            scores[slug] = row
+    return scores
+
+
 def print_table(report: dict[str, Any], report_path: Path) -> None:
     summary = report["summary"]
     if summary["passed"]:
@@ -665,6 +766,27 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     if references_without_images:
         print("")
         print("references without screenshots: " + ", ".join(references_without_images))
+    regression_check = report.get("regression_check")
+    if regression_check:
+        print("")
+        regression_status = "PASS" if regression_check["passed"] else "FAIL"
+        print(
+            f"{regression_status} regression check: "
+            f"{len(regression_check['issues'])} issues against {regression_check['baseline_report']}"
+        )
+        for issue in regression_check["issues"][:12]:
+            if issue["kind"] == "iou_drop":
+                print(
+                    f"       {issue['slug']}: IoU {issue['baseline_iou']:.6f} -> "
+                    f"{issue['candidate_iou']:.6f} (drop {issue['drop']:.6f})"
+                )
+            elif issue["kind"] == "average_iou_drop":
+                print(
+                    f"       average IoU {issue['baseline_average_iou']:.6f} -> "
+                    f"{issue['candidate_average_iou']:.6f} (drop {issue['drop']:.6f})"
+                )
+            else:
+                print(f"       {issue['slug']}: missing candidate score")
 
 
 def format_duration(value: Any) -> str:
