@@ -4075,3 +4075,11 @@ with zero failures in 0.531s.
   `georeference_source: catalog-shape-match:filename-hint`, shape IoU
   0.926926, area ratio 0.982535, and confidence 0.922. A repeat live upload
   returned from raw cache in 0.397116s HTTP with `total_before_send_s: 0.00055`.
+- After the user stepped in again on May 29 to confirm Houston, Miami, and Bay
+  Area have changed from the base saved ground truth, the targeted smoke
+  `out/user-correction-smoke-20260529/full-report.json` reran those six
+  fixtures with `--smoke-skipped --block-network`. It passed with all six as
+  unscored `reference_mismatch` cases, zero smoke failures, and 0.409s total
+  smoked duration. Current catalog-backed hits remain allowed only because the
+  catalog metadata is refreshed or current-verified; the stale saved
+  screenshot/reference pairs are still excluded from model-regression scoring.
