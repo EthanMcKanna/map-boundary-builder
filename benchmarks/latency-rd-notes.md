@@ -3181,3 +3181,15 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/canonical-border-changed-smoke-20260529/full-report.json` smoke-checked
   Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo with zero
   failures while keeping them unscored as user-confirmed data debt.
+- Production canonical-border deployment `dpl_7SAbzZK8Qeph58pD8MEQG2hSNe5j`
+  is aliased to `https://mapboundary.app` and reports
+  `pipeline-a6f3d87e653592c0`. The build still used the 308.03 MB bundle with
+  runtime dependency installation. After `/api/health?warm=ocr`, a fresh
+  neutral Avride Dallas base upload (`img-1780062001.webp`) missed the
+  run-result cache and preserved the Dallas bbox/confidence/source with server
+  `build_boundary_s: 3.583s`, OCR 3.340s, and georeference 0.043s. A fresh 2px
+  white-border upload with a different filename (`img-1780062002.png`) also
+  missed the run-result cache but reused canonical OCR, returning the exact same
+  bbox/confidence/source with server `build_boundary_s: 0.234s`, OCR 0.0176s,
+  and `total_before_send_s: 0.241s`. Repeating that bordered filename hit raw
+  run cache in 0.00217s server time.
