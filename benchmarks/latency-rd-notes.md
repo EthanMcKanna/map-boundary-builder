@@ -4736,7 +4736,9 @@ with zero failures in 0.531s.
   `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617` in
   0.377935s total with OCR wait 0.231850s. Focused OCR/API/runner tests passed
   123/123, full pytest passed 219 tests plus 9 subtests, compileall passed, and
-  `git diff --check` passed. Drift-aware default
+  `git diff --check` passed. The production warmup configuration now primes
+  both RapidOCR detector limits `[608, 256]` so the first provider-UI prepass
+  does not pay a separate detector-session initialization. Drift-aware default
   `out/provider-ui-det256-default-20260529/full-report.json` and no-catalog
   `out/provider-ui-det256-nocatalog-20260529/full-report.json` both passed with
   zero active IoU drops; Houston, Miami, and Bay Area remain smoke-only

@@ -69,7 +69,11 @@ def rapidocr_warm_detector_limit() -> int:
 
 def rapidocr_warm_detector_limits() -> list[int]:
     limits: list[int] = []
-    for limit in (rapidocr_warm_detector_limit(), RAPIDOCR_DET_LIMIT_SIDE_LEN):
+    for limit in (
+        rapidocr_warm_detector_limit(),
+        RAPIDOCR_DET_LIMIT_SIDE_LEN,
+        PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
+    ):
         if limit > 0 and limit not in limits:
             limits.append(limit)
     return limits
