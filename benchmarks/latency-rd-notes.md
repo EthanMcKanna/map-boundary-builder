@@ -3006,6 +3006,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   avg IoU 0.962, min IoU 0.931, total 3.90s, and changed-fixture smoke
   `out/context-hint-roadskip-changed-smoke-20260529/full-report.json` with
   6/6 smoke-checked and 0 failures.
+- Production deployment `dpl_GnpkxG6ctYt6VfNipHGcDH68wW7b` is aliased to
+  `https://mapboundary.app` and reports `pipeline-fc17e5a909383cda`. Live
+  `/api/health?warm=ocr` completed with `rapidocr_inference_warmed: true` and
+  total 5.117s. Fresh no-city, no-normalized-cache Avride Dallas production
+  uploads confirmed the fix: the first fresh variant returned the same Dallas
+  bbox `[-96.8303708,32.7654593,-96.7709423,32.8249834]`, confidence 0.709,
+  3 controls, p90 1335.8m, `Trying filename map context` with candidate
+  `Dallas`, and no road match. Its georeference stage dropped from 16.368s on
+  the previous deploy to 0.041s, server `build_boundary_s` dropped from
+  18.885s to 3.667s, and `total_before_send_s` dropped from 18.961s to
+  3.797s. A second fresh visual variant repeated the same output with
+  georeference 0.024s, `build_boundary_s` 3.383s, and `total_before_send_s`
+  3.402s. OCR is now the dominant stage at roughly 3.1-3.3s for this image.
 
 ## Remaining Bottlenecks
 
