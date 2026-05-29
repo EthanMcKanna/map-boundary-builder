@@ -3608,3 +3608,27 @@ OCR/georeference rather than returning outdated fast-path polygons.
   than the prior 800px-cap production miss at `1.803s` build and `1.867s`
   total, with the same bbox/control count/confidence. Repeating the exact same
   upload hit raw cache at `total_before_send_s: 0.002927s`.
+- Avride Dallas now has a current-verified OCR catalog entry under
+  `dallas-avride`, with `purple-fill` registered as Avride's provider style.
+  The entry uses the accepted five-control OCR/georeference output, caps
+  confidence at 0.922, and still requires the strict pre-OCR catalog guard. The
+  300px extraction of `/Users/ethanmckanna/Downloads/avride dallas.png` scores
+  0.981536 shape IoU against the catalog geometry with area ratio 1.004516, so
+  it clears the existing 0.97 threshold and returns exact current geometry
+  without OCR. Fresh-cache local proof `out/avride-catalog-20260529/out.geojson`
+  preserved bbox `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`,
+  confidence 0.922, and source `catalog-shape-match` at 0.058s total.
+  Unsupported styles still skip impossible catalog retries, covered by the
+  renamed unit test. Validation passed 190/190 pytest, compileall,
+  `node --check`, and `git diff --check`; default active benchmark
+  `out/avride-catalog-default-20260529/full-report.json` passed 8/8 scored
+  with avg IoU 0.992917/min 0.943345 and max active duration 0.093s;
+  no-catalog benchmark `out/avride-catalog-nocatalog-20260529/full-report.json`
+  passed 8/8 scored with avg IoU 0.961670/min 0.931476; changed-market smoke
+  `out/avride-catalog-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures.
+  Recognition batch increases, OCR cropping around the purple polygon, and
+  larger synthetic OCR warmups were rejected for now: batch increases reduced
+  Avride controls/confidence, crop-based OCR lost the accepted five-control fit,
+  and warmup shape improved local process-start behavior but cannot guarantee
+  same-instance Vercel routing for `/api/runs`.

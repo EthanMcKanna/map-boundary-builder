@@ -28,6 +28,7 @@ CATALOG_EXACT_MIN_POINTS = 10
 CATALOG_EXACT_MIN_IOU = 0.985
 CATALOG_LABEL_HINT_MIN_IOU = 0.94
 PROVIDER_STYLES = {
+    "avride": {"purple-fill"},
     "tesla": {"gray-fill"},
     "waymo": {"bright-blue"},
     "zoox": {"dark-teal", "light-fill"},

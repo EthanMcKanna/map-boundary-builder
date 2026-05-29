@@ -62,6 +62,7 @@ KNOWN_CHANGED_REFERENCE_MISMATCH_SLUGS = {
 }
 
 STYLE_BY_PROVIDER = {
+    "avride": "purple-fill",
     "tesla": "gray-fill",
     "waymo": "bright-blue",
     "zoox": "dark-teal",
@@ -73,7 +74,8 @@ def test_catalog_style_supported_only_accepts_catalog_provider_styles() -> None:
     assert catalog_style_supported("gray-fill")
     assert catalog_style_supported("dark-teal")
     assert catalog_style_supported("light-fill")
-    assert not catalog_style_supported("purple-fill")
+    assert catalog_style_supported("purple-fill")
+    assert not catalog_style_supported("orange-fill")
 
 
 def test_catalog_shape_match_accepts_current_high_confidence_shape() -> None:
@@ -85,6 +87,18 @@ def test_catalog_shape_match_accepts_current_high_confidence_shape() -> None:
     assert match is not None
     assert match.entry.slug == "phoenix-waymo"
     assert match.iou > 0.99
+
+
+def test_catalog_shape_match_accepts_current_avride_purple_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "dallas-avride")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    match = match_service_area_catalog(pixel_geometry, style="purple-fill", area_hint_texts=["Avride Dallas"])
+
+    assert match is not None
+    assert match.entry.slug == "dallas-avride"
+    assert match.entry.use_exact_geometry
+    assert match.confidence == 0.922
 
 
 def test_catalog_shape_match_rejects_wrong_style() -> None:

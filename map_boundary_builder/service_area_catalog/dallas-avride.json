@@ -1,0 +1,102 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "catalog_source": "current-verified-ocr-output",
+        "catalog_status": "active",
+        "catalog_refresh_evidence": "Generated from the accepted Avride Dallas OCR/georeference output on 2026-05-29 after it passed the five-control production proof.",
+        "catalog_min_shape_iou": 0.97,
+        "slug": "dallas-avride",
+        "provider": "avride",
+        "name": "Dallas",
+        "georeference_source": "ocr-georeference:nominatim-label-fit",
+        "georeference_confidence": 0.922
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.8152616,
+              32.83758
+            ],
+            [
+              -96.7776598,
+              32.8375179
+            ],
+            [
+              -96.7881079,
+              32.8160977
+            ],
+            [
+              -96.7836368,
+              32.8150742
+            ],
+            [
+              -96.7551594,
+              32.7909416
+            ],
+            [
+              -96.7630233,
+              32.7888201
+            ],
+            [
+              -96.7705382,
+              32.7808024
+            ],
+            [
+              -96.7823913,
+              32.7789923
+            ],
+            [
+              -96.7827574,
+              32.7775697
+            ],
+            [
+              -96.7862694,
+              32.7751358
+            ],
+            [
+              -96.7973989,
+              32.772511
+            ],
+            [
+              -96.8038171,
+              32.7681501
+            ],
+            [
+              -96.8070816,
+              32.7681555
+            ],
+            [
+              -96.8116687,
+              32.7713147
+            ],
+            [
+              -96.8124945,
+              32.7800586
+            ],
+            [
+              -96.8110382,
+              32.7823942
+            ],
+            [
+              -96.8128501,
+              32.7831087
+            ],
+            [
+              -96.8183506,
+              32.8092379
+            ],
+            [
+              -96.8152616,
+              32.83758
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

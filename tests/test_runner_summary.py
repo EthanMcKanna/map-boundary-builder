@@ -293,8 +293,8 @@ def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypat
     assert ocr_kwargs == [{"rapidocr_max_dimension": 800}]
 
 
-def test_purple_fill_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> None:
-    image_path = tmp_path / "avride dallas.png"
+def test_unsupported_style_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "waymo dallas.png"
     Image.new("RGB", (1400, 933), (245, 245, 245)).save(image_path)
     output_path = tmp_path / "boundary.geojson"
     rgb = np.full((933, 1400, 3), 245, dtype=np.uint8)
@@ -302,7 +302,7 @@ def test_purple_fill_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> 
     mask[150:835, 470:995] = True
     extraction = ExtractionResult(
         mask=mask,
-        style="purple-fill",
+        style="orange-fill",
         pixel_geometry=Polygon([(470, 150), (995, 150), (995, 835), (470, 835)]),
         coverage_ratio=0.27,
         contour_count=1,
@@ -315,7 +315,7 @@ def test_purple_fill_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> 
         return extraction
 
     def unexpected_catalog(*_args, **_kwargs):
-        raise AssertionError("purple-fill cannot match the current catalog provider styles")
+        raise AssertionError("unsupported styles cannot match the current catalog provider styles")
 
     georef = GeoreferenceResult(
         transform=GeoreferenceTransform(
