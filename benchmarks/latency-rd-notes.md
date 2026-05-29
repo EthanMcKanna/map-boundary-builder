@@ -2641,7 +2641,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   JPEGs do not enter the namespace, raw keys still differ, and city/options
   remain part of the run-cache key. A synthetic 1600x1000 JPEG microbench
   measured 100 lookups at 0.041s for the commentless stream hash versus 0.766s
-  for the decoded normalized hash, about 18x cheaper.
+  for the decoded normalized hash, about 18x cheaper. Production deployment
+  `dpl_2mT9ERBSLURqMQxtuXTntsaZdjMj` preserved the JPEG-converted Avride
+  Dallas result (`Dallas`, confidence 0.847): the first comment variant missed
+  at 4.366s server time, while the second different-comment/same-image variant
+  returned `cache_hit: "jpeg-commentless"` in 0.0027s server time and 0.831s
+  wall time with normalized cache lookup disabled.
 
 ## Remaining Bottlenecks
 
