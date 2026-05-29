@@ -2899,6 +2899,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   min IoU 0.943, total 0.50s. The no-catalog gate
   `out/current-external-reactivation-nocatalog-20260529/full-report.json`
   preserved 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total 4.62s.
+- Production deployment `dpl_3D78rU6SYKCXhh78X7azf5wSQ4pg` is aliased to
+  `https://mapboundary.app` and reports `pipeline-bc4e6569be9dcfdd`. Fresh
+  one-pixel changed production uploads confirmed the restored current-reference
+  fast paths: `Tesla Houston` returned `catalog_slug: houston-tesla`,
+  `catalog-shape-match`, current bbox
+  `[-95.624939,29.8584766,-95.5238266,29.971941]`, and 0.945s server time
+  before send; `Zoox San Francisco` returned `catalog_slug: bay-area-zoox`,
+  `catalog-shape-match`, current bbox
+  `[-122.4445213,37.7471075,-122.3829064,37.8110961]`, and 0.254s server time
+  before send. `Tesla Bay Area` correctly stayed off catalog with
+  `catalog_slug: null` and `ocr-georeference:nominatim-label-fit`.
 
 ## Remaining Bottlenecks
 
