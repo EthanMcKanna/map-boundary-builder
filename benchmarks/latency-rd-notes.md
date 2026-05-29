@@ -3294,3 +3294,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   the user-confirmed changed Bay Area/Houston/Miami fixtures with zero failures.
   Local in-process Avride Dallas padded-hit proof preserved the exact bbox/source
   and returned canonical OCR labels in 0.0005s for the bordered variant.
+- Production OCR edge-trim deployment `dpl_4KG4fj4y5R6KPYiC9sp9B2ugemt4` is
+  aliased to `https://mapboundary.app` and reports
+  `pipeline-348e0bb062ab4e08`. Vercel still used the 308.06 MB bundle with
+  runtime dependency installation. After `/api/health?warm=ocr`, a fresh
+  neutral Avride Dallas base upload (`img-eb46117-base-1780065001.webp`)
+  missed the run-result cache and preserved bbox/source with server
+  `build_boundary_s: 2.780s`, extract 0.169s, OCR 2.551s, georeference 0.045s,
+  and `total_before_send_s: 2.873s`. A fresh 2px white-border upload with a
+  different filename (`img-eb46117-border-1780065002.png`) also missed the
+  run-result cache but reused canonical extraction/OCR, preserved the exact
+  bbox/source, and returned with server `build_boundary_s: 0.100s`, extract
+  0.038s, OCR 0.010s, georeference 0.021s, and `total_before_send_s: 0.105s`.
+  This improves the previous production bordered proof at 0.147s and the
+  earlier canonical-OCR-only proof at 0.279s. Repeating the bordered filename
+  hit raw run cache in 0.00484s server time.
