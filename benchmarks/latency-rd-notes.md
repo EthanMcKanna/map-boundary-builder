@@ -4063,4 +4063,15 @@ with zero failures in 0.531s.
   six Houston/Miami/Bay Area `reference_mismatch` fixtures with zero failures.
   Rejected probe: disabling road-feature precompute preserved IoU but slowed
   no-catalog total duration to 4.559698s and pushed Phoenix to 1.084823s, so
-  the overlapping precompute remains useful.
+  the overlapping precompute remains useful. Deployed commit `65224e1` to
+  Vercel production as `dpl_2PJGDtX3AypAcV8mW1VnVp2nh2Nk`, aliased
+  `mapboundary.app` to
+  `map-boundary-builder-hywatqwiv-ethanmckannas-projects.vercel.app`, and
+  verified production health on pipeline `pipeline-76d80650a3073456`.
+  A first live `mapboundary.app` upload of the Avride Dallas web screenshot
+  with overlay off and normalized cache lookup disabled was a cache miss,
+  returned HTTP 201 in 0.543020s, and reported `build_boundary_s: 0.044283`,
+  `total_before_send_s: 0.13051`, `catalog_slug: dallas-avride`,
+  `georeference_source: catalog-shape-match:filename-hint`, shape IoU
+  0.926926, area ratio 0.982535, and confidence 0.922. A repeat live upload
+  returned from raw cache in 0.397116s HTTP with `total_before_send_s: 0.00055`.
