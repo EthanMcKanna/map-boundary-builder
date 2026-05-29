@@ -16,6 +16,7 @@ from map_boundary_builder.osm_roads import (
     load_road_points_seed,
     read_road_refine_cache,
     refine_transform_with_osm_roads,
+    road_refine_search_grids,
     road_refine_cache_key,
     road_points_source_digest,
     score_georeference_transform,
@@ -48,6 +49,24 @@ def unit_road_match_result() -> RoadMatchResult:
 
 
 class RoadScoringTests(unittest.TestCase):
+    def test_unlocked_road_refinement_grid_uses_tight_coarse_search(self) -> None:
+        grid = road_refine_search_grids(lock_scale=False)
+
+        self.assertEqual(len(grid["coarse_scale_multipliers"]), 9)
+        self.assertAlmostEqual(float(grid["coarse_scale_multipliers"][0]), 0.86)
+        self.assertAlmostEqual(float(grid["coarse_scale_multipliers"][-1]), 1.10)
+        self.assertEqual(len(grid["coarse_rotation_offsets"]), 7)
+        self.assertAlmostEqual(float(np.rad2deg(grid["coarse_rotation_offsets"][0])), -3.0)
+        self.assertAlmostEqual(float(np.rad2deg(grid["coarse_rotation_offsets"][-1])), 3.0)
+        self.assertEqual(len(grid["coarse_offset_meters"]), 9)
+
+    def test_locked_road_refinement_grid_keeps_scale_fixed(self) -> None:
+        grid = road_refine_search_grids(lock_scale=True)
+
+        np.testing.assert_array_equal(grid["coarse_scale_multipliers"], np.array([1.0]))
+        np.testing.assert_array_equal(grid["fine_scale_multipliers"], np.array([1.0]))
+        np.testing.assert_array_equal(grid["polish_scale_multipliers"], np.array([1.0]))
+
     def test_batch_scoring_matches_scalar_scoring(self) -> None:
         feature_distance = np.zeros((80, 90), dtype=np.float32)
         feature_distance[20:25, 30:55] = 2.5

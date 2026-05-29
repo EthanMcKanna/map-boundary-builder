@@ -3797,3 +3797,23 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/road3500-current-changed-smoke-20260529/full-report.json` did pass all
   six Houston/Miami/Bay Area `reference_mismatch` smokes, but the default stays
   at 4000 until a repeated A/B proves a real latency improvement.
+- Road refinement now uses a tighter unlocked coarse search grid: 9 scale
+  multipliers from 0.86-1.10 and 7 rotation offsets from -3 to 3 degrees,
+  instead of 13 scale multipliers from 0.82-1.12 and 9 rotation offsets from
+  -4 to 4 degrees. Fine and polish grids are unchanged, and locked-scale road
+  refinement remains scale-fixed. The road-refine cache version was bumped to
+  `road-refine-v6` so old wider-grid cache entries cannot mask the new search.
+  Focused probes kept Phoenix/Nashville road-refined and cut road elapsed from
+  roughly 0.267s/0.261s to 0.210s/0.198s in the warmed grid sweep. The committed
+  gate `out/roadgrid-current-nocatalog-20260529/full-report.json` passed 8/8
+  scored fixtures with 7 `reference_mismatch` skips, avg IoU 0.961733, min IoU
+  0.931476, and no active IoU drops versus
+  `out/road-elapsed-nocatalog-20260529/full-report.json`; Phoenix improved from
+  0.983320 to 0.983820 IoU while Nashville stayed exact. Changed-market smoke
+  `out/roadgrid-current-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area smokes with Miami still road-refined at confidence
+  0.864 and georeference 0.197374s. Default catalog gate
+  `out/roadgrid-current-default-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.992917, min IoU 0.943345, max active duration 0.093544s. Validation
+  passed 195/195 pytest, compileall, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`.

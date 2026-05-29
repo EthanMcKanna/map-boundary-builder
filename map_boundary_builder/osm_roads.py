@@ -31,7 +31,7 @@ ROAD_REFINE_FULL_FALLBACK_MIN_SCORE = max(
     float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE", "0.60")),
 )
 ROAD_SCORE_SIGMA_PX = np.float32(6.0)
-ROAD_REFINE_CACHE_VERSION = "road-refine-v5"
+ROAD_REFINE_CACHE_VERSION = "road-refine-v6"
 ROAD_REFINE_MEMORY_CACHE_MAX = 64
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: OrderedDict[str, RoadMatchResult] = OrderedDict()
@@ -260,8 +260,8 @@ def road_refine_search_grids(*, lock_scale: bool) -> dict[str, np.ndarray]:
             "polish_offset_meters": np.linspace(-200.0, 200.0, 5),
         }
     return {
-        "coarse_scale_multipliers": np.linspace(0.82, 1.12, 13),
-        "coarse_rotation_offsets": np.deg2rad(np.linspace(-4.0, 4.0, 9)),
+        "coarse_scale_multipliers": np.linspace(0.86, 1.10, 9),
+        "coarse_rotation_offsets": np.deg2rad(np.linspace(-3.0, 3.0, 7)),
         "coarse_offset_meters": np.linspace(-1600.0, 1600.0, 9),
         "fine_scale_multipliers": np.linspace(0.97, 1.03, 7),
         "fine_rotation_offsets": np.deg2rad(np.linspace(-1.0, 1.0, 7)),
