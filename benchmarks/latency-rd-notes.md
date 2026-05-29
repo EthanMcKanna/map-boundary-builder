@@ -1582,6 +1582,11 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/filename-stale-hint-no-network-20260529/report.json` kept all six
   Houston/Miami/Bay Area variants on OCR/georeference with `catalog_slug: null`
   and zero attempted network calls; Miami completed in 0.881s locally.
+  A follow-up API-shaped local smoke copied `Waymo Miami.png` to `input.png`
+  and proved the API must pass the original upload filename as a runner
+  `filename_hint`: without the hint the run still emitted the preflight
+  `Refining service-area pixels` sequence, while with `filename_hint` it skipped
+  that sequence and preserved the same bbox/source/confidence.
 
 ## Remaining Bottlenecks
 

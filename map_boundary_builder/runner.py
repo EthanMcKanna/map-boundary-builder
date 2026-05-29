@@ -54,6 +54,7 @@ class BoundaryBuildOptions:
     preview_max_dimension: int | None = None
     write_mask_artifact: bool = True
     allow_catalog: bool = True
+    filename_hint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,7 @@ def build_boundary(
     debug_path = Path(debug_dir) if debug_dir else None
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
     allow_catalog = catalog_matching_enabled(opts)
-    filename_hint = image_path.stem
+    filename_hint = opts.filename_hint or image_path.stem
     allow_pre_ocr_catalog = should_try_pre_ocr_catalog(
         city_input=city_input,
         allow_catalog=allow_catalog,

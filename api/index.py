@@ -122,6 +122,7 @@ class handler(BaseHTTPRequestHandler):
             include_overlay=include_overlay,
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
             write_mask_artifact=False,
+            filename_hint=original_filename,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_started = time.perf_counter()
