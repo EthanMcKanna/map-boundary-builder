@@ -1858,6 +1858,28 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Miami Waymo `catalog-shape-match` with 0.089s. The old drifted screenshots
   for those same markets still bypassed the current catalog entries and
   returned `catalog_slug: null` through OCR/georeference.
+- Rejected more road-refinement shortcuts. Lowering
+  `MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE` to 0.40 preserved
+  Phoenix/Nashville IoU in a focused run but did not improve the full no-catalog
+  gate, and instrumentation showed `full_resolution_road_search` did not fire
+  for Phoenix, Nashville, or the old Miami screenshot. Reducing road-match
+  points to 3000 or 2500 improved focused timing but dropped Nashville IoU from
+  0.986 to 0.917; 2000 points failed the focused mean-IoU gate. A 3500-point
+  cap preserved focused IoU but did not improve the full no-catalog gate, so the
+  4000-point default remains the safer setting. Skipping OCR cache writes was
+  slower, and disabling OCR cache keys was only timing noise, so the OCR cache
+  path stays unchanged.
+- Added current external catalog entries for the two remaining registry markets
+  without saved screenshot fixtures: Atlanta Waymo and Austin Waymo. Synthetic
+  current-reference local smokes at
+  `out/reference-only-catalog-synthetic-local-20260529/report.json` matched
+  `atlanta-waymo` and `austin-waymo` through `catalog-shape-match` in 0.023s
+  and 0.018s. Focused catalog/API/benchmark tests passed 35/35. The default
+  catalog benchmark `out/reference-only-catalog-default-20260529/full-report.json`
+  passed 11/11 scored fixtures, skipped 4 reference mismatches, avg IoU 0.985,
+  min IoU 0.943, total 0.58s. The no-catalog gate
+  `out/reference-only-catalog-no-catalog-20260529/full-report.json` passed
+  11/11 with unchanged avg IoU 0.962 and min IoU 0.931.
 
 ## Remaining Bottlenecks
 

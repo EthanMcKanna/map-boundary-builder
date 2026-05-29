@@ -29,6 +29,8 @@ KNOWN_CURRENT_CHANGED_CATALOG_SLUGS = {
 }
 
 KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
+    "atlanta-waymo",
+    "austin-waymo",
     "bay-area-waymo",
     "houston-waymo",
     "miami-waymo",
@@ -243,13 +245,29 @@ def test_changed_reference_mismatch_waymo_catalog_entries_use_current_external_r
     }
     entries = {item.slug: item for item in load_catalog_entries()}
 
-    assert changed_slugs == KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS
+    assert changed_slugs == KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS - {"atlanta-waymo", "austin-waymo"}
     for slug in changed_slugs:
         entry = entries[slug]
         assert entry.is_active
         assert entry.status == "active"
         assert entry.stale_reason is None
         assert entry.min_iou == 0.965
+
+
+def test_reference_only_waymo_catalog_entries_are_active() -> None:
+    entries = {item.slug: item for item in load_catalog_entries()}
+
+    for slug in ("atlanta-waymo", "austin-waymo"):
+        entry = entries[slug]
+        pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+        match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+
+        assert entry.is_active
+        assert entry.status == "active"
+        assert entry.stale_reason is None
+        assert entry.min_iou == 0.965
+        assert match is not None
+        assert match.entry.slug == slug
 
 
 def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:
