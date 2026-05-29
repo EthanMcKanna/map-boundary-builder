@@ -196,6 +196,26 @@ def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> N
     assert runner.provider_ui_label_catalog_match(extraction, labels) is None
 
 
+def test_runner_ocr_cache_defaults_off_without_disk_cache(monkeypatch) -> None:
+    monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
+    monkeypatch.delenv("MAP_BOUNDARY_OCR_DISK_CACHE", raising=False)
+
+    assert runner.runner_ocr_cache_enabled() is False
+
+
+def test_runner_ocr_cache_can_be_enabled_for_disk_or_override(monkeypatch) -> None:
+    monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
+    monkeypatch.setenv("MAP_BOUNDARY_OCR_DISK_CACHE", "1")
+    assert runner.runner_ocr_cache_enabled() is True
+
+    monkeypatch.setenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", "0")
+    assert runner.runner_ocr_cache_enabled() is False
+
+    monkeypatch.setenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", "true")
+    monkeypatch.delenv("MAP_BOUNDARY_OCR_DISK_CACHE", raising=False)
+    assert runner.runner_ocr_cache_enabled() is True
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 
@@ -262,9 +282,11 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
         return extraction
 
     ocr_rgb_shapes: list[tuple[int, ...]] = []
+    ocr_kwargs: list[dict] = []
 
-    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb):
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
         ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        ocr_kwargs.append(kwargs)
         return []
 
     georef = GeoreferenceResult(
@@ -301,6 +323,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
+    assert ocr_kwargs == [{"cache": False}]
 
 
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
@@ -676,7 +699,7 @@ def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypat
 
     build_boundary(image_path, None, output_path)
 
-    assert ocr_kwargs == [{"rapidocr_max_dimension": 800}]
+    assert ocr_kwargs == [{"rapidocr_max_dimension": 800, "cache": False}]
 
 
 def test_unsupported_style_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> None:
@@ -779,9 +802,11 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
         return georef
 
     ocr_rgb_shapes: list[tuple[int, ...]] = []
+    ocr_kwargs: list[dict] = []
 
-    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb):
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
         ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        ocr_kwargs.append(kwargs)
         return []
 
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
@@ -799,3 +824,4 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
 
     assert order == ["preload", "fit"]
     assert ocr_rgb_shapes == [(800, 1200, 3)]
+    assert ocr_kwargs == [{"cache": False}]

@@ -91,6 +91,7 @@ LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
+RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 
 
 @dataclass(frozen=True)
@@ -215,7 +216,12 @@ def build_boundary(
             filename_hint=filename_hint,
         ):
             ocr_executor = ThreadPoolExecutor(max_workers=1)
-            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+            labels_future = ocr_executor.submit(
+                extract_ocr_labels_from_rgb,
+                str(image_path),
+                rgb,
+                cache=runner_ocr_cache_enabled(),
+            )
             ensure_georeference_resource_preload()
         if should_overlap_probe_miss_ocr(
             skip_redundant_probe=skip_redundant_probe,
@@ -223,7 +229,12 @@ def build_boundary(
             filename_hint=filename_hint,
         ):
             ocr_executor = ThreadPoolExecutor(max_workers=1)
-            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+            labels_future = ocr_executor.submit(
+                extract_ocr_labels_from_rgb,
+                str(image_path),
+                rgb,
+                cache=runner_ocr_cache_enabled(),
+            )
             ensure_georeference_resource_preload()
         extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else (
             CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
@@ -398,6 +409,7 @@ def build_boundary(
                         str(image_path),
                         rgb,
                         rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                        cache=runner_ocr_cache_enabled(),
                     )
                 else:
                     labels_future = submit_ocr_labels_from_rgb(
@@ -521,6 +533,7 @@ def build_boundary(
                     str(image_path),
                     rgb,
                     rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                    cache=runner_ocr_cache_enabled(),
                 )
             else:
                 provider_ui_labels = provider_ui_labels_future.result()
@@ -790,14 +803,28 @@ def submit_ocr_labels_from_rgb(
     style: str,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    use_cache = runner_ocr_cache_enabled()
     if rapidocr_max_dimension is None:
-        return executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+        return executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb, cache=use_cache)
     return executor.submit(
         extract_ocr_labels_from_rgb,
         str(image_path),
         rgb,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        cache=use_cache,
     )
+
+
+def runner_ocr_cache_enabled() -> bool:
+    value = os.environ.get(RUNNER_OCR_CACHE_ENV)
+    if value is not None:
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("MAP_BOUNDARY_OCR_DISK_CACHE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:

@@ -144,6 +144,39 @@ with zero failures in 0.531s.
   240px, 400px, 800px, 1200px, 1600px, or full resolution, so keeping it on
   OCR/georeference is correct. This is evidence of current local sub-second
   robustness, not a new runtime change.
+- Runner-owned prepared-RGB OCR calls now skip OCR label cache-key and
+  visual-cache hashing by default unless `MAP_BOUNDARY_OCR_DISK_CACHE=1` or
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=1` is set. Direct OCR/georeference APIs keep
+  their existing cache behavior; the production runner already has the higher
+  level run-result cache above it, so per-generation OCR hash work was
+  redundant on cache misses. Warm isolated OCR timing with the cache-key probe
+  disabled preserved label counts and saved about 3-37ms per active fixture.
+  The formal no-catalog gate
+  `out/runner-ocr-cache-skip-nocatalog-20260529/full-report.json` passed 8/8
+  scored fixtures with zero IoU regression against
+  `out/subsecond-latency-budget-nocatalog-20260529/full-report.json`, avg IoU
+  0.961733, min IoU 0.931476, total 3.600896s versus the prior 3.819069s, max
+  active duration 0.868272s, and zero latency-budget issues. Default
+  catalog-enabled regression
+  `out/runner-ocr-cache-skip-default-20260529/full-report.json` passed 8/8 with
+  zero IoU regression, avg IoU 0.992917, min IoU 0.943345, total 0.478776s.
+  Changed-market smoke
+  `out/runner-ocr-cache-skip-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area smoke checks, and the stricter Waymo-only stale-image
+  catalog-miss smoke
+  `out/runner-ocr-cache-skip-waymo-miss-smoke-20260529/full-report.json`
+  passed all three. Real-image stress
+  `out/runner-ocr-cache-skip-stress-20260529/summary.json` completed all nine
+  out-of-fixture images under one second, including arbitrary OCR/georeference
+  `zoox-sf.webp` at 0.830752s and `robotaxi-service-area-map.jpg` at
+  0.697659s. Focused tests passed 125 tests; full pytest passed 224 tests plus
+  9 subtests; `compileall`, `node --check`, and `git diff --check` passed.
+- Rejected switching the default connected-components backend to a named OpenCV
+  CCL algorithm. `CCL_GRANA`, `CCL_SPAGHETTI`, and `CCL_BBDT` produced
+  identical active/stress extraction geometry, but the best repeated scaled
+  extraction probe only moved total extraction time from 2.454702s to 2.429200s
+  across 19 images and five processing sizes. Keep OpenCV's default until a
+  larger production-visible extraction win appears.
 - Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
   upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
   OCR median moved from 0.606837s to 0.597544s, but production did not validate

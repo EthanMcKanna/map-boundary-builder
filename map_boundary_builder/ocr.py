@@ -74,12 +74,17 @@ def extract_ocr_labels(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
+    cache: bool = True,
 ) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
-    cache_key = ocr_cache_key(
-        image_path,
-        use_tesseract=use_tesseract,
-        rapidocr_max_dimension=rapidocr_max_dimension,
+    cache_key = (
+        ocr_cache_key(
+            image_path,
+            use_tesseract=use_tesseract,
+            rapidocr_max_dimension=rapidocr_max_dimension,
+        )
+        if cache
+        else None
     )
     if cache_key is not None:
         cached = read_ocr_cache(cache_key)
@@ -240,11 +245,13 @@ def extract_ocr_labels_from_rgb(
     rgb: np.ndarray,
     *,
     rapidocr_max_dimension: int | None = None,
+    cache: bool = True,
 ) -> list[OcrLabel]:
     return extract_ocr_labels(
         image_path,
         prepared_bgr=rgb_to_bgr(rgb),
         rapidocr_max_dimension=rapidocr_max_dimension,
+        cache=cache,
     )
 
 
