@@ -588,7 +588,6 @@ class ApiRunCacheTests(unittest.TestCase):
         dependencies = [
             ("numpy", "2.4.6"),
             ("onnxruntime", "1.26.0"),
-            ("opencv-python", "missing"),
             ("opencv-python-headless", "4.10.0.84"),
             ("pillow", "12.2.0"),
             ("rapidocr-onnxruntime", "1.4.4"),

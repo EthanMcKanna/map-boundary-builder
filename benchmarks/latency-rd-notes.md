@@ -4576,3 +4576,21 @@ with zero failures in 0.531s.
   `total_before_send_s: 0.000397`, wall 0.146653s. This is a 365.9x reduction
   in server time before send for repeat probe misses with no GeoJSON or
   accuracy-path change.
+- Accepted a headless-only OpenCV dependency cleanup for production deploy.
+  The server imports `cv2` and only needs the headless wheel, while
+  `opencv-python` was redundantly listed alongside `opencv-python-headless`.
+  The change removes the GUI wheel from direct dependencies and from pipeline,
+  extraction, and OCR cache dependency signatures, while keeping `cv2` and
+  `opencv-python-headless` in runtime health/version checks. Focused local
+  tests passed 119/119, compileall passed, and `git diff --check` passed. A
+  temporary clean Python 3.12 runtime was then forced to `opencv-python=missing`,
+  `opencv-python-headless=4.10.0.84`, and `cv2=4.10.0`; RapidOCR warmed and a
+  Dallas no-catalog build preserved the same bbox/source/confidence. The same
+  headless-only runtime passed the full suite with 214 tests plus 9 subtests.
+  Drift-aware benchmark gates also passed with no active IoU drops:
+  `out/headless-only-default-20260529/full-report.json` scored 8 stable fixtures
+  at avg IoU 0.992917 / min IoU 0.943345 and smoked all seven changed/data-debt
+  fixtures; `out/headless-only-nocatalog-20260529/full-report.json` scored 8
+  stable fixtures at avg IoU 0.961733 / min IoU 0.931476 and smoked the same
+  seven changed/data-debt fixtures. This is an infra-size/cold-start candidate,
+  not a geometry-path change.
