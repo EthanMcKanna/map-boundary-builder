@@ -4,6 +4,7 @@ import hashlib
 import os
 from importlib.metadata import PackageNotFoundError, version
 from importlib import resources
+from pathlib import Path
 
 from . import __version__
 
@@ -34,6 +35,9 @@ PIPELINE_VERSION_FILES = (
     "osm_roads.py",
     "pipeline_version.py",
     "runner.py",
+)
+PIPELINE_VERSION_REPO_FILES = (
+    "api/index.py",
 )
 
 _PIPELINE_VERSION: str | None = None
@@ -68,6 +72,11 @@ def pipeline_version_sources():
     for source in sorted(catalog_dir.iterdir(), key=lambda item: item.name):
         if source.name.endswith(".json"):
             yield f"service_area_catalog/{source.name}", source
+    repo_root = Path(__file__).resolve().parents[1]
+    for filename in PIPELINE_VERSION_REPO_FILES:
+        source = repo_root / filename
+        if source.exists():
+            yield filename, source
 
 
 def pipeline_version_dependency_versions():

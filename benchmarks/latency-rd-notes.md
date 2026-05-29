@@ -3448,3 +3448,9 @@ OCR/georeference rather than returning outdated fast-path polygons.
   while Bay Area Tesla, Bay Area Zoox, and Houston Tesla still returned their
   separately verified current catalog shapes. None of the six are scored against
   stale saved references.
+- Tightened cache-version reliability by including the Vercel API handler
+  source (`api/index.py`) in `pipeline_version` when present. This closes the
+  deployment gap where API behavior, run-cache semantics, or health behavior
+  could change while browser/server cache keys still reported the previous
+  pipeline hash. Focused cache/version tests passed 31/31, and full validation
+  passed 182/182 pytest, compileall, `node --check`, and `git diff --check`.
