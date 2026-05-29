@@ -372,7 +372,6 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
     monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
 
@@ -415,7 +414,6 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
 
     with pytest.raises(runner.CatalogProbeMiss):
@@ -483,7 +481,6 @@ def test_catalog_probe_missed_skips_low_res_probes_but_keeps_full_catalog_match(
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
-    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
     monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
 
@@ -612,7 +609,6 @@ def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monke
     monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
     monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
     monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
 
@@ -782,9 +778,15 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
         assert "preload" in order
         return georef
 
+    ocr_rgb_shapes: list[tuple[int, ...]] = []
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb):
+        ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        return []
+
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
-    monkeypatch.setattr(runner, "extract_ocr_labels", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
     monkeypatch.setattr(runner, "preload_georeference_resources", fake_preload_georeference_resources)
     monkeypatch.setattr(runner, "fit_georeference", fake_fit_georeference)
 
@@ -796,3 +798,4 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
     )
 
     assert order == ["preload", "fit"]
+    assert ocr_rgb_shapes == [(800, 1200, 3)]

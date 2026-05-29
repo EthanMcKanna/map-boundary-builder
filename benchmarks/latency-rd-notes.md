@@ -4748,3 +4748,22 @@ with zero failures in 0.531s.
   from `build_boundary_s: 1.504360` and `total_before_send_s: 1.571622`, and
   replaces the original slow production path that spent `build_boundary_s:
   6.249073` with `ocr-georeference:nominatim-label-fit` on the same screenshot.
+- Accepted prepared-RGB OCR overlap for arbitrary/no-catalog runs. Previously
+  no-catalog requests started OCR before `load_rgb`, preserving overlap but
+  forcing OCR to decode the same image that extraction would load immediately
+  afterward. The runner now starts the OCR future right after `load_rgb` with
+  `extract_ocr_labels_from_rgb`, so OCR and extraction still overlap while OCR
+  reuses the prepared array. This does not change RapidOCR resolution,
+  georeferencing, extraction settings, or output logic. Focused runner/API/OCR
+  tests passed 123/123; full pytest passed 219 tests plus 9 subtests;
+  compileall and `git diff --check` passed. The strict no-catalog gate
+  `out/prepared-ocr-overlap-nocatalog-20260529/full-report.json` preserved avg
+  IoU 0.961733, min IoU 0.931476, and zero active IoU drops while reducing
+  scored active total duration from the accepted 4.605711s prepass baseline to
+  3.506997s and max active duration from 1.266321s to 0.699490s. The default
+  catalog gate `out/prepared-ocr-overlap-default-20260529/full-report.json`
+  also passed with avg IoU 0.992917, min IoU 0.943345, and zero active IoU
+  drops. A pre-change production cache-miss arbitrary proof using the LA
+  screenshot with `city=Santa Monica` and no catalog slug measured
+  `build_boundary_s: 2.517070`, OCR 2.185205s, and `total_before_send_s:
+  2.524661`.

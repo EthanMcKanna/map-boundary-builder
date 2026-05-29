@@ -44,7 +44,7 @@ from .georeference import (
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
-from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
+from .ocr import extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
 from .runtime_config import (
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
@@ -200,15 +200,6 @@ def build_boundary(
         georef_resource_executor = ThreadPoolExecutor(max_workers=1)
         georef_resource_future = georef_resource_executor.submit(preload_georeference_resources)
 
-    if should_overlap_ocr_with_extraction(
-        city_input=city_input,
-        allow_catalog=allow_catalog,
-        filename_hint=filename_hint,
-    ):
-        ocr_executor = ThreadPoolExecutor(max_workers=1)
-        labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
-        ensure_georeference_resource_preload()
-
     try:
         emit_progress(
             progress,
@@ -218,6 +209,14 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
+        if should_overlap_ocr_with_extraction(
+            city_input=city_input,
+            allow_catalog=allow_catalog,
+            filename_hint=filename_hint,
+        ):
+            ocr_executor = ThreadPoolExecutor(max_workers=1)
+            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+            ensure_georeference_resource_preload()
         if should_overlap_probe_miss_ocr(
             skip_redundant_probe=skip_redundant_probe,
             city_input=city_input,
