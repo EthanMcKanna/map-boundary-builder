@@ -331,6 +331,27 @@ def test_low_resolution_shape_catalog_match_accepts_high_margin_sparse_shape() -
     assert large_match is None
 
 
+def test_low_resolution_shape_catalog_match_accepts_downsampled_sparse_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    simplified_reference = entry.mercator_geometry.simplify(580, preserve_topology=True)
+    pixel_geometry = mercator_geometry_to_pixel(simplified_reference)
+    extraction = ExtractionResult(
+        mask=np.zeros((202, 360), dtype=np.uint8),
+        style="bright-blue",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.22,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    match = low_resolution_shape_catalog_match(extraction, width=360, height=202, city_input=None)
+
+    assert match is not None
+    assert match.entry.slug == "nashville-waymo"
+    assert 0.94 <= match.iou < 0.945
+    assert match.margin >= 0.24
+
+
 def test_label_hint_accepts_single_edit_ocr_area_typo() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
     simplified_reference = entry.mercator_geometry.simplify(500, preserve_topology=True)

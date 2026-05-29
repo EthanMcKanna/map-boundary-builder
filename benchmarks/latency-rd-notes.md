@@ -1959,6 +1959,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Waymo, and Miami Waymo remained off catalog shortcuts with `catalog_slug:
   null` and OCR/georeference sources, preserving the user-confirmed
   stale-ground-truth guard.
+- Low-resolution shape threshold hardening: relaxed the guarded low-res
+  near-match threshold from 0.945 to 0.94 while keeping the 0.24 runner-up
+  margin and 0.92-1.08 area-ratio guard. This recovers degraded issue #5
+  variants that previously fell just below the fast path: a 360px downsample
+  now matches Nashville at shape IoU 0.942 with margin 0.262, and a -1 degree
+  rotation matches at IoU 0.941 with margin 0.258. More damaged 300px/240px/
+  180px downscales and +/-2 degree-or-worse rotations still fall through to
+  slower OCR/georeference logic instead of forcing a catalog answer. Downscaled
+  stale-ground-truth Bay Area, Houston, and Miami Waymo screenshots at
+  520/420/360/300px still produced no low-res catalog matches. Focused catalog
+  tests passed 20/20; full pytest passed 110 tests plus 9 subtests. The
+  drift-aware catalog benchmark
+  `out/lowres-shape-094-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 reference mismatches, avg IoU 0.993, min IoU 0.943,
+  total 0.47s. The no-catalog gate
+  `out/lowres-shape-094-no-catalog-20260529/full-report.json` passed 8/8,
+  skipped the same 7 reference mismatches, avg IoU 0.962, min IoU 0.931, total
+  4.32s. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check` passed.
 
 ## Remaining Bottlenecks
 
