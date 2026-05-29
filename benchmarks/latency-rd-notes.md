@@ -3995,3 +3995,24 @@ with zero failures in 0.531s.
   0.931476, total 4.805836s, and max active duration 1.074409s; and
   `out/extraction-warm-changed-smoke-20260529/full-report.json` passed all six
   Houston/Miami/Bay Area `reference_mismatch` smokes in 0.411s.
+- Lowered the pre-OCR catalog extraction cap from 300px to 240px after a cap
+  sweep showed it preserved exact catalog-backed outputs while reducing the
+  common known-service-area path. More aggressive caps still passed but caused
+  extra retries on several fixtures, so 240px is the conservative point on the
+  curve. The actual default gate
+  `out/catalog-cap-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with the same avg IoU 0.992917 and min IoU 0.943345 while lowering
+  max active duration to 0.094841s and total duration to 0.523555s. The
+  arbitrary no-catalog gate was unaffected:
+  `out/catalog-cap-nocatalog-20260529/full-report.json` passed 8/8 with avg
+  IoU 0.961733, min IoU 0.931476, total 3.870493s, and max active duration
+  0.877486s. The user-confirmed changed-market smoke
+  `out/catalog-cap-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` fixtures in 0.371s, with Houston
+  Waymo at 0.085285s, Miami Waymo at 0.077271s, and Bay Area Waymo retry at
+  0.119027s. Rejected nearby probes: disabling road refinement made no-catalog
+  fast but dropped Nashville IoU from 0.986282 to 0.799036; reducing road
+  points to 3000/2500 dropped Nashville to 0.906937; reducing RapidOCR max
+  dimension to 1100 cut max duration to 0.531966s but changed Los Angeles IoU
+  from about 0.9425 to 0.898690; and forcing native RapidOCR arrays changed
+  Austin Tesla IoU from about 0.9739 to 0.965638.
