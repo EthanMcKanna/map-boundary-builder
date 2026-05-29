@@ -3,7 +3,7 @@
   "regions": ["sfo1"],
   "crons": [
     {
-      "path": "/api/cron/warm-generation",
+      "path": "/api/cron/warm-generation-v2",
       "schedule": "* * * * *"
     }
   ],

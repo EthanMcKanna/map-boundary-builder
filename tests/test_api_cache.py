@@ -11,6 +11,9 @@ from unittest.mock import patch
 from PIL import Image, PngImagePlugin, features
 
 from api.index import (
+    CRON_WARM_PATH,
+    CRON_WARM_PATHS,
+    LEGACY_CRON_WARM_PATH,
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     authorized_cron_request,
     cached_run_payload,
@@ -568,6 +571,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(health_response_status(warm), HTTPStatus.SERVICE_UNAVAILABLE)
 
     def test_cron_warm_generation_requires_bearer_secret(self) -> None:
+        self.assertEqual(CRON_WARM_PATH, "/api/cron/warm-generation-v2")
+        self.assertIn(LEGACY_CRON_WARM_PATH, CRON_WARM_PATHS)
+        self.assertIn(CRON_WARM_PATH, CRON_WARM_PATHS)
+
         with patch.dict("os.environ", {}, clear=True):
             self.assertFalse(authorized_cron_request("Bearer secret"))
 

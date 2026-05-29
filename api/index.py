@@ -34,7 +34,9 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
-CRON_WARM_PATH = "/api/cron/warm-generation"
+CRON_WARM_PATH = "/api/cron/warm-generation-v2"
+LEGACY_CRON_WARM_PATH = "/api/cron/warm-generation"
+CRON_WARM_PATHS = frozenset({CRON_WARM_PATH, LEGACY_CRON_WARM_PATH})
 RUN_RESULT_CACHE_VERSION = "run-result-v6"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
@@ -124,7 +126,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
-            if parsed.path == CRON_WARM_PATH:
+            if parsed.path in CRON_WARM_PATHS:
                 payload, status = cron_warm_generation_payload(
                     authorization_header=self.headers.get("Authorization")
                 )
