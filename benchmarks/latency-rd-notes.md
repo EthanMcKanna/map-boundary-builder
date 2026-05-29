@@ -1771,6 +1771,19 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   subtests, `PYTHONPATH=. .venv/bin/python -m compileall -q api
   map_boundary_builder` passed, `node --check map_boundary_builder/web_assets/app.js`
   passed, and `git diff --check` passed.
+- Production deployment `dpl_BDNPzsqD5QQuSHedSVwei9X8PE27` was built with
+  Vercel CLI 54.6.1 through `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-27f232f55b59b3e6`.
+  The local prebuilt output reported a 300.73 MB pre-runtime-installation bundle
+  and preserved the package exclusions for benchmarks, tests, `promo-video`,
+  caches, and generated output. Cache-busted live smokes with
+  `include_overlay=false` and normalized cache disabled kept Phoenix on
+  `catalog-shape-match` with 0.493s server generation, and kept changed-market
+  Waymo screenshots off stale catalog entries: first pass Houston 5.368s,
+  Miami 5.069s, Bay Area 3.631s; second fresh pass Houston 3.056s, Miami
+  3.405s, Bay Area 3.500s. The second pass is faster than the immediate
+  pre-change production drift smoke for all three hard OCR cases: Houston
+  4.65s, Miami 11.61s, and Bay Area 9.95s.
 
 ## Remaining Bottlenecks
 
