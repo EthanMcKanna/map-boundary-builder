@@ -3454,3 +3454,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   could change while browser/server cache keys still reported the previous
   pipeline hash. Focused cache/version tests passed 31/31, and full validation
   passed 182/182 pytest, compileall, `node --check`, and `git diff --check`.
+- Production deployment `dpl_EsWC3Q1fRvBu9MNYg4QE4o4wJGwN` is explicitly
+  aliased to `https://mapboundary.app` with the API-handler-aware pipeline hash
+  `pipeline-2919308e769a002e`. Protected-deployment warm health and public
+  `/api/health?warm=ocr` both returned HTTP 200 with `ok: true`, `cv2 4.10.0`,
+  and warm `status: ok`; public `HEAD /api/health` returned HTTP 200, and the
+  root HTML embeds the new pipeline hash. A fresh Avride Dallas PNG miss with
+  normalized cache disabled preserved the Dallas bbox/source at
+  `build_boundary_s: 2.553s` and `total_before_send_s: 2.873s`; repeating the
+  same raw upload hit the run cache at `total_before_send_s: 0.003s`.
