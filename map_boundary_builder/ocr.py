@@ -42,6 +42,7 @@ class OcrLabel:
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
+OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -56,6 +57,7 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     prepared_bgr: np.ndarray | None = None
     prepared_composited_alpha = False
     visual_cache_key: str | None = None
+    near_visual_cache_key: str | None = None
     if cache_key is not None:
         prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
         visual_cache_key = ocr_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
@@ -64,6 +66,15 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
             if cached is not None:
                 write_ocr_cache(cache_key, list(cached))
                 return list(cached)
+        near_visual_cache_key = ocr_near_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
+        if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
+            cached = read_ocr_cache(near_visual_cache_key)
+            if cached is not None:
+                labels = list(cached)
+                write_ocr_cache(cache_key, labels)
+                if visual_cache_key is not None:
+                    write_ocr_cache(visual_cache_key, labels)
+                return labels
 
     rapid_words: list[OcrLabel] = run_rapidocr_words(
         image_path,
@@ -93,6 +104,8 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         write_ocr_cache(cache_key, labels)
     if visual_cache_key is not None and visual_cache_key != cache_key:
         write_ocr_cache(visual_cache_key, labels)
+    if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
+        write_ocr_cache(near_visual_cache_key, labels)
     return labels
 
 
@@ -112,6 +125,17 @@ def ocr_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str 
     digest.update(str(tuple(bgr.shape)).encode("ascii"))
     digest.update(np.ascontiguousarray(bgr).data)
     return ocr_cache_key_for_digest("visual-bgr-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
+
+
+def ocr_near_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+    if bgr is None:
+        return None
+    quantized = np.bitwise_and(np.ascontiguousarray(bgr), OCR_VISUAL_CACHE_QUANTIZATION_MASK)
+    digest = hashlib.sha256()
+    digest.update(b"bgr-quantized")
+    digest.update(str(tuple(quantized.shape)).encode("ascii"))
+    digest.update(quantized.data)
+    return ocr_cache_key_for_digest("visual-bgr6-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
 
 
 def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bool) -> str:

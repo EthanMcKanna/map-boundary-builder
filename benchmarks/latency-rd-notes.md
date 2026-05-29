@@ -2514,6 +2514,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   after warmup still spent 2.424s in OCR and 2.837s server time before send.
   The code was reverted; keep the cheaper single-detector warmup until there is
   stronger evidence of instance-local benefit.
+- OCR visual caching now has a conservative near-exact key in addition to the
+  raw and exact-pixel keys. The near key hashes the same BGR pixels with only
+  the two lowest color bits masked, so PNG metadata, one-bit pixel jitter, or
+  tiny encoder noise can reuse OCR labels while resized or materially different
+  maps still miss. Local Avride Dallas proof with a one-bit pixel mutation:
+  the first uncached build took 0.939s with 0.603s in OCR, while the near-cache
+  retry took 0.083s with OCR skipped and preserved city `Dallas`, source
+  `ocr-georeference:nominatim-label-fit`, and confidence 0.847. Unit coverage
+  checks the near key and raw/exact backfill behavior. Full no-catalog
+  regression proof `out/near-visual-cache-full-20260529/full-report.json`
+  passed 8/8 scored fixtures, skipped the seven known Houston/Miami/Bay Area
+  and related reference mismatches, kept avg IoU 0.962/min IoU 0.931, and
+  reported zero regression issues against the blocked-network baseline.
+  Production deploy `dpl_3kv7DmdbFyVsB6zSA3zXEEyKnjmY` confirmed the real
+  `/api/runs` behavior: the first one-bit Avride seed was cold and slow
+  (`ocr` 4.156s, server before send 6.093s), while the second image with only
+  one pixel's low bit toggled skipped OCR (`ocr` 0.000083s), completed server
+  work in 0.283s before send, and preserved `Dallas`,
+  `ocr-georeference:nominatim-label-fit`, and confidence 0.847.
 
 ## Remaining Bottlenecks
 
