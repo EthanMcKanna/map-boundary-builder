@@ -9,6 +9,8 @@ from map_boundary_builder.catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_area_matches_text,
     catalog_feature_collection,
+    has_active_catalog_area_hint,
+    has_stale_catalog_area_hint,
     load_catalog_entries,
     match_service_area_catalog,
 )
@@ -64,6 +66,17 @@ def test_catalog_shape_match_respects_area_hints() -> None:
 def test_catalog_area_aliases_understand_bay_area_text() -> None:
     assert catalog_area_matches_text("Bay Area", "San Francisco")
     assert catalog_area_matches_text("Bay Area", "SF")
+
+
+def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
+    assert has_active_catalog_area_hint("Waymo Phoenix")
+    assert not has_stale_catalog_area_hint("Waymo Phoenix")
+    assert has_stale_catalog_area_hint("Waymo Miami")
+    assert has_stale_catalog_area_hint("Tesla Houston")
+    assert has_stale_catalog_area_hint("Zoox San Francisco")
+    assert not has_active_catalog_area_hint("Waymo Miami")
+    assert not has_active_catalog_area_hint("Tesla Houston")
+    assert not has_active_catalog_area_hint("Zoox San Francisco")
 
 
 def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:

@@ -38,6 +38,20 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
+        self.assertFalse(
+            should_overlap_ocr_with_extraction(
+                city_input=None,
+                allow_catalog=True,
+                filename_hint="Waymo Phoenix",
+            )
+        )
+        self.assertTrue(
+            should_overlap_ocr_with_extraction(
+                city_input=None,
+                allow_catalog=True,
+                filename_hint="Waymo Miami",
+            )
+        )
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
@@ -47,6 +61,20 @@ class ApiRunCacheTests(unittest.TestCase):
 
     def test_pre_ocr_catalog_only_runs_when_it_can_match(self) -> None:
         self.assertTrue(should_try_pre_ocr_catalog(city_input=None, allow_catalog=True))
+        self.assertTrue(
+            should_try_pre_ocr_catalog(
+                city_input=None,
+                allow_catalog=True,
+                filename_hint="Waymo Phoenix",
+            )
+        )
+        self.assertFalse(
+            should_try_pre_ocr_catalog(
+                city_input=None,
+                allow_catalog=True,
+                filename_hint="Waymo Miami",
+            )
+        )
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))

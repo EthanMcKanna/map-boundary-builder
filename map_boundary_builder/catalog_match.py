@@ -140,6 +140,15 @@ def has_active_catalog_area_hint(text: str | None) -> bool:
     )
 
 
+def has_stale_catalog_area_hint(text: str | None) -> bool:
+    if text is None or not text.strip():
+        return False
+    return any(
+        not entry.is_active and catalog_area_matches_text(entry.area, text)
+        for entry in load_catalog_entries()
+    )
+
+
 def catalog_feature_collection(
     extraction: ExtractionResult,
     match: ServiceAreaCatalogMatch,
@@ -298,10 +307,9 @@ def area_from_slug(slug: str, provider: str) -> str:
 def catalog_area_matches_text(area: str, text: str) -> bool:
     area_tokens = normalize_catalog_area_tokens(area)
     text_tokens = normalize_catalog_area_tokens(text)
-    if area_tokens == ("bay", "area") and text_tokens in {
-        ("san", "francisco"),
-        ("sf",),
-    }:
+    if area_tokens == ("bay", "area") and (
+        text_tokens == ("sf",) or {"san", "francisco"} <= set(text_tokens)
+    ):
         return True
     return bool(area_tokens) and all(
         any(catalog_area_token_matches(area_token, text_token) for text_token in text_tokens)

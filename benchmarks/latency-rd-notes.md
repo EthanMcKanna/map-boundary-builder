@@ -1564,6 +1564,24 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `catalog_slug: null`; that cold-ish production instance still spent 6.576s
   inside generation, dominated by OCR and georeference, so the broader
   arbitrary-image sub-second goal remains active.
+- Filename-aware stale-market scheduling now skips active-catalog preflight only
+  when an auto-mode filename points to a stale-only catalog market, such as
+  `Waymo Miami`, `Tesla Houston`, or `Zoox San Francisco`. Generic filenames
+  and active hints such as `Waymo Phoenix` keep the catalog path. A clean
+  worktree A/B against `9c780e8` under
+  `out/filename-stale-hint-ab-20260529/report.json` preserved bbox, source,
+  confidence, controls, and catalog metadata while moving Miami Waymo from
+  1.169s to 0.907s local generation; Houston Tesla moved 0.224s to 0.209s,
+  Bay Area Tesla 0.227s to 0.220s, and Phoenix Waymo catalog stayed effectively
+  unchanged at about 0.075s. Fresh production-shaped default benchmark
+  `out/filename-stale-hint-prodshape-default-20260529/full-report.json` passed
+  8/8 scored fixtures at avg IoU 0.993 and total 0.48s. No-catalog rerun
+  `out/filename-stale-hint-prodshape-no-catalog-rerun-20260529/full-report.json`
+  passed 8/8 at avg IoU 0.962, min IoU 0.931, total 3.58s, max fixture 0.97s.
+  The changed-market no-network smoke
+  `out/filename-stale-hint-no-network-20260529/report.json` kept all six
+  Houston/Miami/Bay Area variants on OCR/georeference with `catalog_slug: null`
+  and zero attempted network calls; Miami completed in 0.881s locally.
 
 ## Remaining Bottlenecks
 

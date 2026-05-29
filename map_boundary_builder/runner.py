@@ -15,6 +15,7 @@ from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_feature_collection,
     has_active_catalog_area_hint,
+    has_stale_catalog_area_hint,
     match_service_area_catalog,
 )
 from .extract import (
@@ -101,7 +102,12 @@ def build_boundary(
     debug_path = Path(debug_dir) if debug_dir else None
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
     allow_catalog = catalog_matching_enabled(opts)
-    allow_pre_ocr_catalog = should_try_pre_ocr_catalog(city_input=city_input, allow_catalog=allow_catalog)
+    filename_hint = image_path.stem
+    allow_pre_ocr_catalog = should_try_pre_ocr_catalog(
+        city_input=city_input,
+        allow_catalog=allow_catalog,
+        filename_hint=filename_hint,
+    )
 
     emit_progress(
         progress,
@@ -119,7 +125,11 @@ def build_boundary(
 
     labels_future: Future[list[Any]] | None = None
     ocr_executor: ThreadPoolExecutor | None = None
-    if should_overlap_ocr_with_extraction(city_input=city_input, allow_catalog=allow_catalog):
+    if should_overlap_ocr_with_extraction(
+        city_input=city_input,
+        allow_catalog=allow_catalog,
+        filename_hint=filename_hint,
+    ):
         ocr_executor = ThreadPoolExecutor(max_workers=1)
         labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
 
@@ -395,18 +405,34 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
     return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
 
 
-def should_overlap_ocr_with_extraction(*, city_input: str | None, allow_catalog: bool) -> bool:
+def should_overlap_ocr_with_extraction(
+    *,
+    city_input: str | None,
+    allow_catalog: bool,
+    filename_hint: str | None = None,
+) -> bool:
     if not allow_catalog:
         return True
     if city_input is None:
-        return False
+        return is_stale_only_catalog_hint(filename_hint)
     return not has_active_catalog_area_hint(city_input)
 
 
-def should_try_pre_ocr_catalog(*, city_input: str | None, allow_catalog: bool) -> bool:
+def should_try_pre_ocr_catalog(
+    *,
+    city_input: str | None,
+    allow_catalog: bool,
+    filename_hint: str | None = None,
+) -> bool:
     if not allow_catalog:
         return False
-    return city_input is None or has_active_catalog_area_hint(city_input)
+    if city_input is None:
+        return not is_stale_only_catalog_hint(filename_hint)
+    return has_active_catalog_area_hint(city_input)
+
+
+def is_stale_only_catalog_hint(text: str | None) -> bool:
+    return has_stale_catalog_area_hint(text) and not has_active_catalog_area_hint(text)
 
 
 def catalog_matching_enabled(options: Any) -> bool:
