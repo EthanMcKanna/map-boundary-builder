@@ -2749,7 +2749,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `ocr-georeference:nominatim-label-fit+osm-road-refine`; the default catalog
   gate passed 8/8 scored with avg IoU 0.993/min 0.943. The no-catalog timing run
   was contention-noisy because it ran in parallel with the default gate, so the
-  focused no-cache A/B is the cleaner speed signal for this patch.
+  focused no-cache A/B is the cleaner speed signal for this patch. Production
+  deployment `dpl_Ewa89LrL9V1mn8ECoqZknnwWE8TP` reported pipeline
+  `pipeline-922f4916bf65aea4`; a fresh `Waymo Miami.png` upload exercised the
+  OCR/road-refine path with `catalog_slug: null`, preserved `Miami`, confidence
+  0.864, six controls, road score 0.681518, and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`; the georeference
+  stage was 0.900s and total server time before send was 8.491s, dominated by
+  5.818s of OCR rather than road search.
 
 ## Remaining Bottlenecks
 
