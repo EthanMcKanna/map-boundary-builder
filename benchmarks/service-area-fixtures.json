@@ -1,4 +1,18 @@
 {
+  "changed_areas": {
+    "bay-area": {
+      "status": "reference_mismatch",
+      "note": "The Bay Area service area has changed since the saved screenshot/reference pairing, so fixtures in this area are tracked as data debt instead of scored as model accuracy."
+    },
+    "houston": {
+      "status": "reference_mismatch",
+      "note": "The Houston service area has changed since the saved screenshot/reference pairing, so fixtures in this area are tracked as data debt instead of scored as model accuracy."
+    },
+    "miami": {
+      "status": "reference_mismatch",
+      "note": "The Miami service area has changed since the saved screenshot/reference pairing, so fixtures in this area are tracked as data debt instead of scored as model accuracy."
+    }
+  },
   "fixtures": {
     "bay-area-tesla": {
       "status": "reference_mismatch",

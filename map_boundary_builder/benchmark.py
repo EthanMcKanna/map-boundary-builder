@@ -398,10 +398,13 @@ def run_benchmark(
 
 def load_fixture_config(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"path": str(path), "fixtures": {}}
+        return {"path": str(path), "changed_areas": {}, "fixtures": {}}
     data = json.loads(path.read_text())
     if not isinstance(data, dict):
         raise ValueError(f"Fixture config must be a JSON object: {path}")
+    changed_areas = data.setdefault("changed_areas", {})
+    if not isinstance(changed_areas, dict):
+        raise ValueError(f"Fixture config 'changed_areas' must be an object: {path}")
     fixtures = data.setdefault("fixtures", {})
     if not isinstance(fixtures, dict):
         raise ValueError(f"Fixture config 'fixtures' must be an object: {path}")
@@ -418,6 +421,7 @@ def discover_fixtures(
     images = [path for path in sorted(image_dir.iterdir()) if path.suffix.lower() in IMAGE_SUFFIXES]
     fixtures: list[BenchmarkFixture] = []
     missing_references: list[str] = []
+    changed_area_config = config.get("changed_areas", {})
     fixture_config = config.get("fixtures", {})
     for image_path in images:
         provider, area_slug, area_name = parse_image_name(image_path)
@@ -426,9 +430,13 @@ def discover_fixtures(
         if reference_path is None:
             missing_references.append(image_path.name)
             continue
+        area_override = changed_area_config.get(area_slug, {})
+        if not isinstance(area_override, dict):
+            raise ValueError(f"Changed-area override for {area_slug} must be an object")
         override = fixture_config.get(slug, {})
         if not isinstance(override, dict):
             raise ValueError(f"Fixture override for {slug} must be an object")
+        merged_override = {**area_override, **override}
         fixtures.append(
             BenchmarkFixture(
                 slug=slug,
@@ -436,8 +444,8 @@ def discover_fixtures(
                 area=area_name,
                 image_path=image_path,
                 reference_path=reference_path,
-                status=str(override.get("status", "active")),
-                note=str(override["note"]) if override.get("note") else None,
+                status=str(merged_override.get("status", "active")),
+                note=str(merged_override["note"]) if merged_override.get("note") else None,
             )
         )
     covered = {fixture.slug for fixture in fixtures}

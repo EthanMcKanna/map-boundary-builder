@@ -9,6 +9,7 @@ from map_boundary_builder.benchmark import (
     BenchmarkScore,
     check_report_latency_budgets,
     compare_report_regressions,
+    discover_fixtures,
     load_fixture_config,
     parse_image_name,
     run_benchmark,
@@ -30,7 +31,12 @@ KNOWN_REFERENCE_MISMATCH_FIXTURES = {
 def test_known_stale_reference_fixtures_are_reference_mismatches() -> None:
     config = load_fixture_config(Path("benchmarks/service-area-fixtures.json"))
     fixtures = config["fixtures"]
+    changed_areas = config["changed_areas"]
 
+    assert {"bay-area", "houston", "miami"} <= set(changed_areas)
+    for area_slug in ("bay-area", "houston", "miami"):
+        assert changed_areas[area_slug]["status"] == "reference_mismatch"
+        assert "changed" in changed_areas[area_slug]["note"]
     assert KNOWN_REFERENCE_MISMATCH_FIXTURES <= set(fixtures)
     for slug in KNOWN_REFERENCE_MISMATCH_FIXTURES:
         assert fixtures[slug]["status"] == "reference_mismatch"
@@ -123,6 +129,47 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "status": "reference_mismatch",
             "note": "changed live service area",
         }
+    ]
+
+
+def test_changed_area_config_marks_new_provider_fixture_reference_mismatch(tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "houston-avride.json").write_text("{}\n")
+    (image_dir / "Avride Houston.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "changed_areas": {
+                    "houston": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                },
+                "fixtures": {},
+            }
+        )
+        + "\n"
+    )
+
+    config = load_fixture_config(config_path)
+    fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
+
+    assert inventory["matched_images"] == 1
+    assert fixtures == [
+        BenchmarkFixture(
+            slug="houston-avride",
+            provider="avride",
+            area="Houston",
+            image_path=image_dir / "Avride Houston.png",
+            reference_path=polygon_dir / "houston-avride.json",
+            status="reference_mismatch",
+            note="changed live service area",
+        )
     ]
 
 

@@ -123,6 +123,8 @@ def test_catalog_shape_match_respects_area_hints() -> None:
 def test_catalog_area_aliases_understand_bay_area_text() -> None:
     assert catalog_area_matches_text("Bay Area", "San Francisco")
     assert catalog_area_matches_text("Bay Area", "SF")
+    assert catalog_area_matches_text("Bay Area", "Zoox SF")
+    assert catalog_area_matches_text("Bay Area", "zoox-sf.webp")
 
 
 def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
@@ -135,6 +137,8 @@ def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
     assert has_active_catalog_area_hint("Bay Area")
     assert has_active_catalog_area_hint("Tesla Houston")
     assert has_active_catalog_area_hint("Zoox San Francisco")
+    assert has_active_catalog_area_hint("Zoox SF")
+    assert has_active_catalog_area_hint("zoox-sf.webp")
     assert has_active_catalog_area_hint("Tesla Bay Area")
     assert not has_stale_catalog_area_hint("Waymo Miami")
     assert not has_stale_catalog_area_hint("Waymo Houston")
@@ -143,6 +147,8 @@ def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
     assert not has_stale_catalog_area_hint("Bay Area")
     assert not has_stale_catalog_area_hint("Tesla Houston")
     assert not has_stale_catalog_area_hint("Zoox San Francisco")
+    assert not has_stale_catalog_area_hint("Zoox SF")
+    assert not has_stale_catalog_area_hint("zoox-sf.webp")
     assert not has_stale_catalog_area_hint("Tesla Bay Area")
 
 

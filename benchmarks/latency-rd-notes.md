@@ -26,6 +26,23 @@ current external references or current-verified OCR outputs, but old drifted
 screenshots must either fail catalog shape matching or fall back to
 OCR/georeference rather than returning outdated fast-path polygons.
 
+May 29 user correction: Houston, Miami, and Bay Area service areas have changed
+from the base saved ground-truth pairs. The fixture config now has area-level
+`reference_mismatch` overrides for `houston`, `miami`, and `bay-area` so new
+provider fixtures in those markets inherit smoke-only/data-debt handling
+instead of silently becoming scored stale-reference accuracy tests. Existing
+current catalog entries for those markets can still be used when separately
+refreshed or externally verified; this change only protects benchmark scoring.
+Focused benchmark/catalog/API tests passed 70 tests, and the full suite passed
+202 tests. `out/changed-area-config-default-20260529/full-report.json` passed
+8/8 scored active fixtures with 7 `reference_mismatch` skips, avg IoU 0.992917,
+min IoU 0.943345, max active duration 0.131s. The no-catalog benchmark
+`out/changed-area-config-nocatalog-20260529/full-report.json` passed 8/8 with
+avg IoU 0.961733, min IoU 0.931476, max duration 0.988s. The targeted changed
+market smoke `out/changed-area-config-smoke-20260529/full-report.json` ran all
+six Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` smoke checks
+with zero failures in 0.531s.
+
 ## Shipped Changes
 
 - `5c69590`: cache-only exploratory geocoder fanout, decisive OSM-place fast

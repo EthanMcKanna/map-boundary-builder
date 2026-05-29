@@ -320,7 +320,7 @@ def catalog_area_matches_text(area: str, text: str) -> bool:
     area_tokens = normalize_catalog_area_tokens(area)
     text_tokens = normalize_catalog_area_tokens(text)
     if area_tokens == ("bay", "area") and (
-        text_tokens == ("sf",) or {"san", "francisco"} <= set(text_tokens)
+        "sf" in text_tokens or {"san", "francisco"} <= set(text_tokens)
     ):
         return True
     return bool(area_tokens) and all(
