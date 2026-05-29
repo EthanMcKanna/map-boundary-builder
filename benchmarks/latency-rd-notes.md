@@ -2840,6 +2840,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/ocr-cache-key-nocatalog-20260529/full-report.json` passed 8/8 scored,
   skipped the same 7 stale pairs, avg IoU 0.962, min IoU 0.931, total 5.17s,
   preserving the Phoenix/Nashville road-refined sources.
+- Production deployment `dpl_43VmQ4b1ZczHvv9Tc4FPJ9JDSnTp` is aliased to
+  `https://mapboundary.app`, reports `pipeline-97c5934caa67bae7`, and confirms
+  `rapidocr_native_array_min_dimension: 1000`, ONNX Runtime `1.26.0`, OpenCV
+  `4.10.0.84`, Pillow `12.2.0`, and RapidOCR `1.4.4` from `/api/health`.
+  `/api/health?warm=ocr` completed successfully with `rapidocr_inference_warmed:
+  true` and total 2.615s. A fresh one-pixel Avride Dallas variant preserved
+  `catalog_slug: null`, `Dallas`, confidence 0.847, four controls, bbox
+  `[-96.8183764,32.7679509,-96.7549157,32.8376675]`, and
+  `ocr-georeference:nominatim-label-fit`; server time before send was 2.364s
+  with 1.984s OCR.
 
 ## Remaining Bottlenecks
 
