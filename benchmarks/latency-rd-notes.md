@@ -4670,3 +4670,15 @@ with zero failures in 0.531s.
   plus 9 subtests, compileall passed, and both drift-aware catalog/no-catalog
   regression gates passed with zero active IoU drops. This changes cache lookup
   policy only, not extraction, OCR, georeferencing, or generated GeoJSON.
+- Production deploy `dpl_AKStRG5md1wztVDhjdYi4UpnUuB1` is aliased to
+  `https://mapboundary.app`, reports `pipeline-8b7820e05dc70621`, is Ready, and
+  `/api/health?warm=ocr` returned HTTP 200 with `cv2: 4.10.0` plus
+  `road_seed_digest_entries: 3`. A cache-busted direct API Phoenix upload
+  without any `normalized_cache_lookup` field now reports
+  `normalized_cache_lookup_enabled: false`, `normalized_cache_lookup_s: 0.0`,
+  `build_boundary_s: 0.290648`, and `total_before_send_s: 0.301048` while
+  preserving the exact Phoenix catalog bbox, `phoenix-waymo` slug, confidence
+  `0.97690980826434`, and `catalog-shape-match` source. Compared with the
+  pre-change direct API default proof above, server time before send improved
+  from `0.741824` to `0.301048`, a 2.46x speedup for direct fresh PNG API
+  cache misses with no GeoJSON change.
