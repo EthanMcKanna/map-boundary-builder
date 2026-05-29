@@ -81,6 +81,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(summary, indent=2))
         return 0
     except Exception as exc:
+        if args.print_summary:
+            summary: dict[str, Any] = {
+                "status": "failed",
+                "error": str(exc),
+            }
+            if args.profile_events:
+                summary["event_profile"] = {
+                    "total_elapsed_s": round(time.perf_counter() - started, 6),
+                    "stage_elapsed_s": stage_elapsed_seconds(events),
+                    "events": events,
+                }
+            print(json.dumps(summary, indent=2))
         print(f"map-boundary-builder: error: {exc}", file=sys.stderr)
         return 1
 

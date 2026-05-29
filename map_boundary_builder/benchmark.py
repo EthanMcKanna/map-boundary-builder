@@ -591,12 +591,24 @@ def score_full_fixture(
         return failed_full_score(fixture, f"timed out after {timeout_seconds}s", duration_s=time.perf_counter() - started)
     duration_s = time.perf_counter() - started
     if completed.returncode != 0:
-        error = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
-        return failed_full_score(fixture, error, duration_s=duration_s)
+        summary = parse_cli_summary(completed.stdout)
+        error = (
+            summary.get("error")
+            if isinstance(summary.get("error"), str)
+            else completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        )
+        event_profile = summary.get("event_profile")
+        stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
+        return failed_full_score(
+            fixture,
+            error,
+            duration_s=duration_s,
+            stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
+        )
 
     try:
         output = json.loads(output_path.read_text())
-        summary = json.loads(completed.stdout)
+        summary = parse_cli_summary(completed.stdout)
         event_profile = summary.get("event_profile") if isinstance(summary, dict) else None
         stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
         properties = output["features"][0].get("properties", {})
@@ -622,6 +634,14 @@ def score_full_fixture(
         )
     except Exception as exc:
         return failed_full_score(fixture, str(exc), duration_s=duration_s)
+
+
+def parse_cli_summary(stdout: str) -> dict[str, Any]:
+    try:
+        summary = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {}
+    return summary if isinstance(summary, dict) else {}
 
 
 def score_full_fixture_in_process(
@@ -692,7 +712,13 @@ def score_output_geometry(output_geometry, reference_path: Path, min_iou: float)
     }
 
 
-def failed_full_score(fixture: BenchmarkFixture, error: str, *, duration_s: float | None = None) -> BenchmarkScore:
+def failed_full_score(
+    fixture: BenchmarkFixture,
+    error: str,
+    *,
+    duration_s: float | None = None,
+    stage_elapsed_s: dict[str, float] | None = None,
+) -> BenchmarkScore:
     return BenchmarkScore(
         slug=fixture.slug,
         image=fixture.image_path.name,
@@ -704,6 +730,7 @@ def failed_full_score(fixture: BenchmarkFixture, error: str, *, duration_s: floa
         vertices=None,
         style=None,
         duration_s=duration_s,
+        stage_elapsed_s=stage_elapsed_s,
         error=error,
         status=fixture.status,
         note=fixture.note,

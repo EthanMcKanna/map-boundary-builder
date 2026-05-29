@@ -4016,3 +4016,25 @@ with zero failures in 0.531s.
   dimension to 1100 cut max duration to 0.531966s but changed Los Angeles IoU
   from about 0.9425 to 0.898690; and forcing native RapidOCR arrays changed
   Austin Tesla IoU from about 0.9739 to 0.965638.
+- Added structured CLI failure summaries so failed arbitrary-map stress probes
+  keep machine-readable timing evidence instead of collapsing into stderr-only
+  text. With `--print-summary --profile-events`, failed CLI runs now emit
+  `status: failed`, the stable error string, total elapsed time, per-stage
+  elapsed seconds, and raw progress events to stdout while preserving the
+  existing nonzero exit and stderr message. The subprocess benchmark path also
+  parses that failure JSON and stores `stage_elapsed_s` on failed rows, which
+  makes rejected hypotheses cheaper to compare without changing successful
+  generation behavior. Validation: focused CLI/benchmark tests passed 19/19,
+  full pytest passed 207/207, compileall, `node --check
+  map_boundary_builder/web_assets/app.js`, and `git diff --check` passed. A
+  successful subprocess smoke
+  `out/cli-profile-subprocess-smoke-20260529/full-report.json` kept Dallas
+  Tesla green at IoU 0.999999 with a 0.196885s wall duration and structured
+  stage timing, and the active in-process gate
+  `out/cli-profile-full-20260529/full-report.json` passed 8/8 scored fixtures
+  with seven `reference_mismatch` skips, avg IoU 0.992917, min IoU 0.943345,
+  total active duration 0.525281s, and max active duration 0.092693s. A real
+  no-catalog, no-network Avride Dallas web screenshot failure now returns the
+  structured profile too: total 1.327525s, extract 0.119634s, OCR 0.319147s,
+  georeference 0.797748s, and the stable "could not infer a reliable map
+  location" error.

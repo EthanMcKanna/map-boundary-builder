@@ -543,6 +543,57 @@ def test_report_latency_budget_check_passes_when_within_budget() -> None:
     assert check["issues"] == []
 
 
+def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Phoenix.png"
+    reference_path = tmp_path / "phoenix-waymo.json"
+    image_path.write_bytes(b"unused by patched subprocess")
+    reference_path.write_text("{}\n")
+    fixture = BenchmarkFixture(
+        slug="phoenix-waymo",
+        provider="waymo",
+        area="Phoenix",
+        image_path=image_path,
+        reference_path=reference_path,
+    )
+    seen_commands = []
+
+    def fake_run(command, *, text, capture_output, timeout, check):
+        seen_commands.append(command)
+        return SimpleNamespace(
+            returncode=1,
+            stdout=json.dumps(
+                {
+                    "status": "failed",
+                    "error": "could not infer a reliable map location",
+                    "event_profile": {
+                        "stage_elapsed_s": {"inspect": 0.01, "ocr": 0.2},
+                        "events": [],
+                    },
+                }
+            ),
+            stderr="map-boundary-builder: error: could not infer a reliable map location\n",
+        )
+
+    monkeypatch.setattr(benchmark_module.subprocess, "run", fake_run)
+
+    score = benchmark_module.score_full_fixture(
+        fixture,
+        out_dir=tmp_path / "out",
+        min_iou=0.99,
+        timeout_seconds=30,
+        city_overrides=False,
+        no_catalog=True,
+        execution="subprocess",
+        debug_artifacts=False,
+    )
+
+    assert "--print-summary" in seen_commands[0]
+    assert "--profile-events" in seen_commands[0]
+    assert score.passed is False
+    assert score.error == "could not infer a reliable map location"
+    assert score.stage_elapsed_s == {"inspect": 0.01, "ocr": 0.2}
+
+
 def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:
     polygon = {
         "type": "FeatureCollection",
