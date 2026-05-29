@@ -4378,3 +4378,37 @@ with zero failures in 0.531s.
   timing remained OCR-cold/instance-variance dominated at 5.36s and 3.98s
   `build_boundary_s`; this is correctness proof for the deploy, not a clean
   production speed proof.
+- May 29 intervention follow-up: the user re-confirmed that Houston, Miami,
+  and Bay Area have changed from the base saved ground truth. Focused
+  catalog/benchmark tests passed 40 tests, and the targeted no-network smoke
+  `out/user-drift-confirmation-smoke-20260529/full-report.json` ran all six
+  Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` checks with
+  zero failures. Do not use the stale reference polygons as accuracy evidence
+  for those markets until refreshed; they are latency/current-output smokes
+  only.
+- Production cron investigation: `CRON_SECRET` is present and unauthorized
+  public cron calls return 401, but Vercel logs show the scheduled cron still
+  invokes the older immutable `dpl_9wpsvkbhK4Gm58aE9G6BiPnSxmWy` deployment
+  every minute. The source now accepts both `/api/cron/warm-generation` and
+  `/api/cron/warm-generation-v2`, and `vercel.json` points at the v2 path, but
+  fresh remote-built deployments continued to show the legacy cron firing on
+  the old deployment. A local prebuilt attempt correctly emitted crons in
+  `.vercel/output/config.json` but produced an unhealthy production artifact
+  with `cv2: missing`; it was immediately removed from public aliases. Public
+  production was restored and then redeployed via normal remote build as
+  `dpl_9eTUBFSt7E5FNaPHW4nSTwRGhqJH`, aliased to `https://mapboundary.app`,
+  with health 200, `pipeline-ce284dc37ba33fcc`, and `cv2: 4.10.0`. Treat Vercel
+  cron as not warming current production until the project Cron Jobs setting is
+  manually disabled/updated or API-managed.
+- Current production drift smokes on `pipeline-ce284dc37ba33fcc`: cache-busted,
+  no-normalized-cache, `catalog_probe_missed=true` uploads kept Bay Area,
+  Houston, and Miami on OCR/georeference with `catalog_slug: null`. Cold-ish
+  runs were Bay Area 7.022s wall / 5.193s build / 3.849s OCR, Houston 5.303s /
+  3.487s / 3.011s OCR, and Miami 5.002s / 3.736s / 2.778s OCR. After manual
+  `/api/health?warm=ocr`, Houston improved to 2.104s wall / 0.482s build /
+  0.250s OCR and Miami to 2.159s / 0.949s / 0.238s OCR; Bay Area remained the
+  outlier at 4.874s / 3.316s / 2.726s OCR. A low-dimension OCR sweep showed
+  Bay Area can be much faster at 1000px with 0.925 IoU against its 1600px
+  output, but a full no-catalog active benchmark at 1000px dropped avg IoU from
+  0.962 to 0.915 and Orlando/Phoenix fell near the floor, so a global bright-blue
+  OCR cap is still rejected.
