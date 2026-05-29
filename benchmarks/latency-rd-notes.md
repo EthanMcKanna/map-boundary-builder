@@ -3632,3 +3632,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Avride controls/confidence, crop-based OCR lost the accepted five-control fit,
   and warmup shape improved local process-start behavior but cannot guarantee
   same-instance Vercel routing for `/api/runs`.
+- Production deployment `dpl_55zPDgkiqYVRLhQRr1jFqKgaXB5q` is explicitly
+  aliased to `https://mapboundary.app` with pipeline hash
+  `pipeline-08ff7baeceffdb00`. Protected and public warm health checks returned
+  HTTP 200 with `ok: true`, `cv2 4.10.0`, warm `status: ok`, and
+  `catalog_entries: 18`; public `HEAD /api/health` returned HTTP 200, and the
+  root HTML embeds the new hash. Fresh production Avride Dallas PNG generation
+  with `include_overlay=0` and `normalized_cache_lookup=0` missed cache and
+  returned from `catalog-shape-match` via `dallas-avride`, preserving bbox
+  `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`, confidence 0.922,
+  `catalog_shape_iou: 0.981536`, and `catalog_area_ratio: 1.004516` at
+  `build_boundary_s: 0.158s` and `total_before_send_s: 0.247s`. That is
+  roughly 7.2x faster than the immediately prior production miss at 1.786s
+  total and roughly 10.5x faster than the pre-adaptive production miss at 2.584s,
+  while returning the same accepted geometry/confidence. Repeating the exact
+  upload hit raw cache at `total_before_send_s: 0.00245s`.
