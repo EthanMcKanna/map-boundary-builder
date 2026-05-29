@@ -47,7 +47,12 @@ OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
-def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
+def extract_ocr_labels(
+    image_path: str | Path,
+    *,
+    prepared_bgr: np.ndarray | None = None,
+    composited_alpha: bool = False,
+) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
     cache_key = ocr_cache_key(image_path, use_tesseract=use_tesseract)
     if cache_key is not None:
@@ -55,12 +60,14 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
         if cached is not None:
             return list(cached)
 
-    prepared_bgr: np.ndarray | None = None
-    prepared_composited_alpha = False
+    prepared_composited_alpha = composited_alpha
     visual_cache_key: str | None = None
     near_visual_cache_key: str | None = None
     if cache_key is not None:
-        prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
+        if prepared_bgr is not None:
+            prepared_bgr = np.ascontiguousarray(prepared_bgr)
+        else:
+            prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
         visual_cache_key = ocr_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
         if visual_cache_key is not None and visual_cache_key != cache_key:
             cached = read_ocr_cache(visual_cache_key)
@@ -108,6 +115,16 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
         write_ocr_cache(near_visual_cache_key, labels)
     return labels
+
+
+def extract_ocr_labels_from_rgb(image_path: str | Path, rgb: np.ndarray) -> list[OcrLabel]:
+    return extract_ocr_labels(image_path, prepared_bgr=rgb_to_bgr(rgb))
+
+
+def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        return None
+    return np.ascontiguousarray(rgb[:, :, ::-1])
 
 
 def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:

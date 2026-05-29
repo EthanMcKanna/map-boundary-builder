@@ -2647,6 +2647,23 @@ OCR/georeference rather than returning outdated fast-path polygons.
   at 4.366s server time, while the second different-comment/same-image variant
   returned `cache_hit: "jpeg-commentless"` in 0.0027s server time and 0.831s
   wall time with normalized cache lookup disabled.
+- Default catalog-miss uploads now reuse the RGB array that extraction already
+  loaded when starting OCR after a failed pre-OCR catalog match. The overlapped
+  no-catalog path still starts OCR from the file immediately, but arbitrary UI
+  uploads that first try catalog matching avoid a second image decode before
+  RapidOCR/native-array processing. Focused tests prove the runner passes the
+  decoded RGB into OCR on catalog misses and that prepared OCR BGR input can hit
+  the visual cache without calling the image loader again. A fresh-cache Avride
+  Dallas default-path probe preserved `Dallas`, confidence 0.847, and
+  `ocr-georeference:nominatim-label-fit` while moving local total time from
+  0.609s to 0.482s and OCR stage time from 0.440s to 0.222s. A paired A/B that
+  monkey-patched the helper back to path-based OCR preserved the same output and
+  measured 0.644s -> 0.406s cold-ish, then 0.423s -> 0.415s warm-ish. Full
+  pytest passed 146 tests plus 9 subtests. The drift-aware active no-catalog
+  gate passed 8/8 scored fixtures with avg IoU 0.962 and min IoU 0.931, and the
+  default active catalog gate passed 8/8 scored fixtures with avg IoU 0.993 and
+  min IoU 0.943. Houston, Miami, and Bay Area fixtures remain
+  `reference_mismatch` data debt rather than scored regressions.
 
 ## Remaining Bottlenecks
 

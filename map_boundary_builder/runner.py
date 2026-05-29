@@ -36,7 +36,7 @@ from .georeference import (
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
-from .ocr import extract_ocr_labels
+from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -227,7 +227,7 @@ def build_boundary(
         if used_catalog_scaled_extraction:
             if labels_future is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
-                labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+                labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
             emit_progress(
                 progress,
                 stage="extract",
@@ -307,7 +307,7 @@ def build_boundary(
         )
         if labels_future is None:
             ocr_executor = ThreadPoolExecutor(max_workers=1)
-            labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
             road_feature_future = road_feature_executor.submit(image_feature_distance, rgb)

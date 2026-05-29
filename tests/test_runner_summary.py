@@ -116,6 +116,12 @@ def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -
         max_dimensions.append(max_dimension)
         return extraction
 
+    ocr_rgb_shapes: list[tuple[int, ...]] = []
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb):
+        ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        return []
+
     georef = GeoreferenceResult(
         transform=GeoreferenceTransform(
             city="Testville",
@@ -137,7 +143,7 @@ def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runner, "extract_ocr_labels", lambda _path: [])
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
     monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
 
     build_boundary(image_path, None, output_path)
@@ -147,3 +153,4 @@ def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.GENERAL_EXTRACT_MAX_DIMENSION
+    assert ocr_rgb_shapes == [(1000, 2000, 3)]

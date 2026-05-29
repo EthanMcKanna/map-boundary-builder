@@ -45,6 +45,7 @@ from map_boundary_builder.ocr import (
     rapidocr_input_image,
     rapidocr_items_to_labels,
     read_ocr_cache,
+    rgb_to_bgr,
     warm_rapidocr_runtime,
     write_ocr_cache,
 )
@@ -161,6 +162,39 @@ class OcrGroupingTests(unittest.TestCase):
                 ocr_near_visual_cache_key(first_bgr, use_tesseract=False),
                 ocr_near_visual_cache_key(second_bgr, use_tesseract=False),
             )
+
+    def test_rgb_to_bgr_converts_rgb_channels_for_prepared_ocr_input(self) -> None:
+        rgb = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.uint8)
+
+        bgr = rgb_to_bgr(rgb)
+
+        assert bgr is not None
+        self.assertTrue(bgr.flags.c_contiguous)
+        self.assertEqual(bgr.tolist(), [[[3, 2, 1], [6, 5, 4]]])
+
+    def test_prepared_ocr_bgr_avoids_second_image_decode_on_visual_cache_hit(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "image.png"
+            Image.new("RGB", (20, 10), (12, 34, 56)).save(image_path)
+            prepared_bgr = rgb_to_bgr(np.array(Image.open(image_path).convert("RGB"), dtype=np.uint8))
+            visual_key = ocr_visual_cache_key(prepared_bgr, use_tesseract=False)
+            label = OcrLabel("Dallas", x=60, y=37, width=100, height=34, confidence=96)
+
+            assert prepared_bgr is not None
+            assert visual_key is not None
+            write_ocr_cache(visual_key, [label])
+            with patch.object(ocr_module, "tesseract_available", return_value=False), patch.object(
+                ocr_module,
+                "load_rapidocr_bgr",
+                side_effect=AssertionError("prepared OCR input should avoid re-decoding the image"),
+            ), patch.object(
+                ocr_module,
+                "run_rapidocr_words",
+                side_effect=AssertionError("visual cache hit should avoid OCR"),
+            ):
+                labels = extract_ocr_labels(image_path, prepared_bgr=prepared_bgr)
+
+            self.assertEqual(labels, [label])
 
     def test_ocr_visual_cache_hit_backfills_raw_key(self) -> None:
         with TemporaryDirectory() as workdir:
