@@ -1994,6 +1994,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   0.94 threshold returned the same Nashville bbox through the low-res shape path
   in 0.0165s. The -1 degree rotation moved from the slower OCR-label hint path
   at 0.5421s to the low-res shape path at 0.0267s.
+- Reactivated clean current-reference fixtures after the user-confirmed
+  Houston/Miami/Bay Area drift audit. Bay Area Tesla, Houston Tesla, and Bay
+  Area Zoox now score again because the current av-coverage-checker polygons and
+  robotaxi-service-areas polygons are identical for those slugs, and fresh
+  benchmark runs still pass them against the saved screenshots. The genuinely
+  stale pairs remain skipped as data debt: Bay Area Waymo, Houston Waymo, Miami
+  Waymo, and Las Vegas Zoox. Focused benchmark/catalog tests passed 23/23. The
+  stricter default gate `out/reactivated-clean-default-20260529/full-report.json`
+  passed 11/11 scored fixtures, skipped 4 reference mismatches, avg IoU 0.985,
+  min IoU 0.943, total 0.84s. The stricter no-catalog gate
+  `out/reactivated-clean-no-catalog-20260529/full-report.json` passed 11/11,
+  skipped the same 4 reference mismatches, avg IoU 0.962, min IoU 0.931, total
+  4.35s.
+- Rejected a 900px general extraction cap under the stricter 11-fixture
+  no-catalog gate. It reduced total time from 4.35s to 4.12s in
+  `out/reactivated-extract900-no-catalog-20260529/full-report.json`, but it
+  lowered per-fixture IoU for San Antonio, Dallas, Phoenix, Nashville, and Bay
+  Area Zoox. Because the goal forbids accuracy regressions, the default stays at
+  the safer 1600px extraction cap.
 
 ## Remaining Bottlenecks
 
