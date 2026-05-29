@@ -2280,6 +2280,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   from 1.049s to 0.992s, and Houston Tesla catalog-hit extraction from 0.139s
   to 0.090s; Bay Area Waymo was noisy/slower locally, so production proof is
   still required before treating this as a broad first-run latency win.
+- Production catalog-miss extraction deployment `dpl_Ej2wR9GVPRj6Xkryv6oDKn8NQyri`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports pipeline
+  `pipeline-c0a1b5f5f20e38fe`. Live `/api/health?warm=ocr` returned
+  `rapidocr_inference_warmed: true`. A cache-busted Miami stale-area upload
+  stayed uncached with `catalog_slug: null`, preserved the expected
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` source, confidence
+  0.864, and road score 0.681518; extraction dropped to 0.597s versus the
+  earlier production stale-run extraction span of 0.891s, but total server
+  `build_boundary_s` was still 6.684s because OCR took 4.458s. A cache-busted
+  Houston Waymo stale-area upload returned `catalog_slug: null`,
+  confidence 0.865, source `ocr-georeference:nominatim-label-fit`, and server
+  `build_boundary_s` 3.327s with extraction 0.603s, OCR 2.636s, and
+  georeference 0.085s. This shipped a measured extraction-stage speedup, not a
+  first-run sub-second breakthrough; OCR remains the production wall.
 
 ## Remaining Bottlenecks
 
