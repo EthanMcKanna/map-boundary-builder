@@ -3755,3 +3755,20 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/catalog-refine1400-changed-smoke-20260529/full-report.json` smoke-checked
   all six Houston/Miami/Bay Area `reference_mismatch` fixtures with zero
   failures while preserving current external catalog fast paths.
+- Production deployment `dpl_3FPnGfNbrLS6ruTWr82bhPPMrtDb` is aliased to
+  `https://mapboundary.app` and reports `pipeline-e5d8421a8054114d` from both
+  `/api/health` and the root HTML. Warm health returned
+  `rapidocr_inference_warmed: true`, `catalog_entries: 18`, and
+  `total_s: 3.247904`. Cache-busted production Miami Waymo smokes confirmed the
+  1400px catalog-miss refine geometry and live latency: the first cold-ish miss
+  preserved confidence 0.864, `ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  `road_match_score: 0.681518`, and bbox
+  `[-80.3230936,25.6879821,-80.1190589,25.939806]` at
+  `total_before_send_s: 4.798824`; the warmed miss returned the same summary at
+  `total_before_send_s: 0.928633`; and the next warmed miss returned the same
+  summary at `total_before_send_s: 0.87847`, with build 0.872058s, extraction
+  0.509123s, OCR 0.12382s, georeference 0.236727s, and
+  `road_match_elapsed_s: 0.195375`. The prior deployment's best warmed
+  cache-busted Miami proof was 0.911042s, so the live best sample improved
+  while retaining confidence/source/road score. A raw-cache repeat of the same
+  upload returned at `total_before_send_s: 0.00322`.
