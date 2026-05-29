@@ -13,6 +13,7 @@ from api.index import (
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     cached_run_payload,
     event_stage_elapsed_seconds,
+    health_payload,
     inline_overlay,
     json_response_body,
     normalized_image_sha256,
@@ -246,6 +247,15 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
+
+    def test_health_payload_can_prewarm_generation_runtime(self) -> None:
+        with patch("api.index.prewarm_generation_runtime", return_value={"status": "ok", "total_s": 0.1}) as prewarm:
+            cold = health_payload()
+            warm = health_payload(warm="ocr")
+
+        self.assertNotIn("warm", cold)
+        self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
+        prewarm.assert_called_once_with()
 
     def test_index_asset_embeds_pipeline_version_for_local_cache(self) -> None:
         html, mime = web_asset_response("index.html")

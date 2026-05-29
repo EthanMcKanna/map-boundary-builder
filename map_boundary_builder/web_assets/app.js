@@ -79,6 +79,8 @@ let pendingRunCacheKey = null;
 let activeReportStatus = "completed";
 let copyFeedbackTimeout = null;
 let activeImageMode = "original";
+let generationRuntimePrewarm = null;
+let generationRuntimePrewarmScheduled = false;
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -609,8 +611,32 @@ function setSelectedFile(file) {
   setStatus("Image ready", 0, "idle", {
     note: "Review settings, then run the boundary export.",
   });
+  scheduleGenerationRuntimePrewarm();
   renderHistory();
   activateTab("input");
+}
+
+function scheduleGenerationRuntimePrewarm() {
+  if (generationRuntimePrewarm || generationRuntimePrewarmScheduled || isRunButtonRunning()) return;
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData) return;
+  generationRuntimePrewarmScheduled = true;
+
+  const start = () => {
+    generationRuntimePrewarm = fetch("/api/health?warm=ocr", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .catch((error) => {
+        console.warn("Could not prewarm generation runtime", error);
+        generationRuntimePrewarm = null;
+        generationRuntimePrewarmScheduled = false;
+      });
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(start, { timeout: 1500 });
+  } else {
+    window.setTimeout(start, 400);
+  }
 }
 
 async function prepareRunImage(file) {

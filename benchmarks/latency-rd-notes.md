@@ -2078,6 +2078,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   remains best locally. Lowering RapidOCR max dimension to 1400 was rejected:
   `out/ocr-maxdim1400-drift-full-20260529/full-report.json` failed 7/8 scored
   fixtures, dropping Nashville to 0.759 IoU and degrading Phoenix/Orlando.
+- Runtime prewarm prototype: `/api/health?warm=ocr` now warms catalog entries,
+  bundled geocoder/place/road seeds, and the default RapidOCR engine; the shared
+  web UI triggers it in the background after a user selects a file, avoiding
+  wasted OCR initialization on passive page views. Local health prewarm returned
+  `status: ok` in 0.128s from the threaded local server and 0.208s through the
+  Vercel handler helper on this Mac. An isolated uncached Miami build improved
+  from 0.957s without prewarm to 0.876s after explicitly warming RapidOCR first,
+  with the same `ocr-georeference:nominatim-label-fit+osm-road-refine` source
+  and 0.864 confidence. Validation stayed clean: full pytest passed 111 tests
+  plus 9 subtests, `compileall`, `node --check`, and `git diff --check` passed,
+  the corrected default gate
+  `out/prewarm-runtime-default2-20260529/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.993 and total 0.40s, and the corrected no-catalog gate
+  `out/prewarm-runtime-no-catalog2-20260529/full-report.json` passed 8/8 with
+  avg IoU 0.962, min IoU 0.931, and total 3.59s. Browser-plugin validation was
+  not available in this tool turn and Node REPL lacked Playwright, so the local
+  server was checked directly with curl for the warm health payload and served
+  JS wiring.
 
 ## Remaining Bottlenecks
 

@@ -13,7 +13,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .asset_response import web_asset_response
 from .extract import DEFAULT_SIMPLIFY_PX
@@ -21,6 +21,7 @@ from .github_reports import FailureReport, GithubReportError, create_failure_iss
 from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, build_boundary
+from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 TERMINAL_STATUSES = {"complete", "error"}
@@ -74,13 +75,15 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
-                self.send_json(
-                    {
-                        "ok": True,
-                        "runtime": "local-python",
-                        "pipeline_version": get_pipeline_version(),
-                    }
-                )
+                payload: dict[str, Any] = {
+                    "ok": True,
+                    "runtime": "local-python",
+                    "pipeline_version": get_pipeline_version(),
+                }
+                warm = first_query_value(parse_qs(parsed.query), "warm")
+                if should_prewarm_generation_runtime(warm):
+                    payload["warm"] = prewarm_generation_runtime()
+                self.send_json(payload)
                 return
             if parsed.path == "/":
                 self.send_asset("index.html")
@@ -410,6 +413,13 @@ def sse_event(event: dict[str, Any]) -> bytes:
 
 def safe_extension(filename: str) -> str:
     return safe_image_extension(filename)
+
+
+def first_query_value(query: dict[str, list[str]], name: str) -> str | None:
+    values = query.get(name)
+    if not values:
+        return None
+    return values[0]
 
 
 def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:

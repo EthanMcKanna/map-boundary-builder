@@ -15,12 +15,16 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
 from map_boundary_builder.asset_response import web_asset_response
 from map_boundary_builder.pipeline_version import get_pipeline_version
+from map_boundary_builder.runtime_warmup import (
+    prewarm_generation_runtime,
+    should_prewarm_generation_runtime,
+)
 
 DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -54,15 +58,8 @@ class handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
-                self.send_json(
-                    {
-                        "ok": True,
-                        "runtime": "vercel-python",
-                        "tesseract": shutil.which("tesseract"),
-                        "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
-                        "pipeline_version": get_pipeline_version(),
-                    }
-                )
+                query = parse_qs(parsed.query)
+                self.send_json(health_payload(warm=first_query_value(query, "warm")))
                 return
             if parsed.path == "/":
                 self.send_asset("index.html")
@@ -411,6 +408,26 @@ def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") ->
         "Content-Encoding": "gzip",
         "Vary": "Accept-Encoding",
     }
+
+
+def first_query_value(query: dict[str, list[str]], name: str) -> str | None:
+    values = query.get(name)
+    if not values:
+        return None
+    return values[0]
+
+
+def health_payload(*, warm: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": True,
+        "runtime": "vercel-python",
+        "tesseract": shutil.which("tesseract"),
+        "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
+        "pipeline_version": get_pipeline_version(),
+    }
+    if should_prewarm_generation_runtime(warm):
+        payload["warm"] = prewarm_generation_runtime()
+    return payload
 
 
 def elapsed_seconds(started: float) -> float:
