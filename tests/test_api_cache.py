@@ -18,6 +18,8 @@ from api.index import (
     event_stage_elapsed_seconds,
     health_payload,
     inline_overlay,
+    jpeg_commentless_run_result_cache_key,
+    jpeg_commentless_sha256,
     json_response_body,
     normalized_image_sha256,
     png_visual_run_result_cache_key,
@@ -38,6 +40,17 @@ from map_boundary_builder.runner import (
     should_overlap_ocr_with_extraction,
     should_try_pre_ocr_catalog,
 )
+
+
+def jpeg_bytes(image: Image.Image, **save_options: object) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", **save_options)
+    return buffer.getvalue()
+
+
+def insert_jpeg_segment(image_bytes: bytes, marker: int, payload: bytes) -> bytes:
+    segment_length = len(payload) + 2
+    return image_bytes[:2] + bytes((0xFF, marker)) + segment_length.to_bytes(2, "big") + payload + image_bytes[2:]
 
 
 class ApiRunCacheTests(unittest.TestCase):
@@ -235,6 +248,44 @@ class ApiRunCacheTests(unittest.TestCase):
             png_visual_run_result_cache_key(first.getvalue(), "Dallas", BoundaryBuildOptions()),
         )
         self.assertIsNone(png_visual_run_result_cache_key(b"not a png", None, BoundaryBuildOptions()))
+
+    def test_jpeg_commentless_hash_ignores_comments_only(self) -> None:
+        base = jpeg_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), quality=95)
+        first = insert_jpeg_segment(base, 0xFE, b"first comment")
+        second = insert_jpeg_segment(base, 0xFE, b"second comment")
+        changed_pixel = insert_jpeg_segment(
+            jpeg_bytes(Image.new("RGB", (4, 3), (200, 34, 57)), quality=95),
+            0xFE,
+            b"first comment",
+        )
+        first_exif = insert_jpeg_segment(base, 0xE1, b"Exif\x00\x00first")
+        second_exif = insert_jpeg_segment(base, 0xE1, b"Exif\x00\x00second")
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(jpeg_commentless_sha256(first), jpeg_commentless_sha256(second))
+        self.assertNotEqual(jpeg_commentless_sha256(first), jpeg_commentless_sha256(changed_pixel))
+        self.assertNotEqual(jpeg_commentless_sha256(first_exif), jpeg_commentless_sha256(second_exif))
+        self.assertIsNone(jpeg_commentless_sha256(b"not a jpeg"))
+        self.assertIsNone(jpeg_commentless_sha256(base[:-2]))
+
+    def test_jpeg_commentless_run_cache_key_ignores_comments_but_keeps_options(self) -> None:
+        base = jpeg_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), quality=95)
+        first = insert_jpeg_segment(base, 0xFE, b"cache bust a")
+        second = insert_jpeg_segment(base, 0xFE, b"cache bust b")
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            jpeg_commentless_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            jpeg_commentless_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            jpeg_commentless_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            jpeg_commentless_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(jpeg_commentless_run_result_cache_key(b"not a jpeg", None, BoundaryBuildOptions()))
 
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:
         cache_key = run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())

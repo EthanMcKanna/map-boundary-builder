@@ -12,12 +12,12 @@ screenshot/reference pairing is known to have drifted. They remain visible in
 reports but are not scored as model regressions until the reference polygons and
 screenshots are refreshed.
 
-May 28 user confirmation, repeated during the continuation: Houston, Miami,
-and Bay Area have changed from the saved ground truth. Even variants that still
-score cleanly against the external reference repo are treated as data debt until
-the provider/source polygons are refreshed. Bay Area Tesla, Bay Area Waymo, Bay
-Area Zoox, Houston Tesla, Houston Waymo, Miami Waymo, and Las Vegas Zoox are
-therefore visible in benchmark reports but excluded from scored
+May 28 user confirmation, repeated on May 29 during the continuation: Houston,
+Miami, and Bay Area have changed from the saved ground truth. Even variants
+that still score cleanly against the external reference repo are treated as
+data debt until the provider/source polygons are refreshed. Bay Area Tesla, Bay
+Area Waymo, Bay Area Zoox, Houston Tesla, Houston Waymo, Miami Waymo, and Las
+Vegas Zoox are therefore visible in benchmark reports but excluded from scored
 model-regression gates.
 
 The benchmark skip is specifically about stale saved screenshot/reference
@@ -2631,6 +2631,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   135 KB inline-GeoJSON payload benchmark showed `json.loads(encoded)` for
   1000 reads at 1.496s versus the previous dict `json.dumps`+`json.loads`
   deep-copy path at 3.920-4.537s, a 2.6-3.0x CPU reduction on warm cache hits.
+- JPEG uploads now get a conservative comment-insensitive run-cache namespace
+  before the decoded normalized-cache path. The parser ignores only `COM`
+  segments and keeps pixels, scan bytes, EXIF/APP metadata, ICC/profile data,
+  city, pipeline version, and output options in the key, so it accelerates
+  repeated JPEG uploads with cache-busting comments without collapsing
+  orientation/profile/pixel differences. Focused cache tests prove comment-only
+  variants share the key, pixel changes do not, EXIF changes do not, malformed
+  JPEGs do not enter the namespace, raw keys still differ, and city/options
+  remain part of the run-cache key. A synthetic 1600x1000 JPEG microbench
+  measured 100 lookups at 0.041s for the commentless stream hash versus 0.766s
+  for the decoded normalized hash, about 18x cheaper.
 
 ## Remaining Bottlenecks
 

@@ -42,6 +42,10 @@ RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
 _RUN_RESULT_MEMORY_CACHE: OrderedDict[str, str] = OrderedDict()
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_NON_VISUAL_CHUNKS = {b"tEXt", b"zTXt", b"iTXt", b"tIME"}
+JPEG_SIGNATURE = b"\xff\xd8"
+JPEG_COMMENT_MARKER = 0xFE
+JPEG_START_OF_SCAN_MARKER = 0xDA
+JPEG_END_OF_IMAGE = b"\xff\xd9"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 
 
@@ -167,6 +171,23 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        jpeg_commentless_cache_started = time.perf_counter()
+        jpeg_commentless_cache_key = jpeg_commentless_run_result_cache_key(image_bytes, city, options)
+        if jpeg_commentless_cache_key is not None:
+            cached = read_run_result_cache(jpeg_commentless_cache_key)
+        profile["jpeg_commentless_cache_lookup_s"] = elapsed_seconds(jpeg_commentless_cache_started)
+        if jpeg_commentless_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "jpeg-commentless"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            self.send_json(
+                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
+                status=HTTPStatus.CREATED,
+            )
+            return
+
         cache_key: str | None = None
         profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         if normalized_cache_lookup:
@@ -236,6 +257,8 @@ class handler(BaseHTTPRequestHandler):
             write_run_result_cache(cache_key, payload)
         if png_visual_cache_key is not None:
             write_run_result_cache(png_visual_cache_key, payload)
+        if jpeg_commentless_cache_key is not None:
+            write_run_result_cache(jpeg_commentless_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
         profile["cache_hit"] = "miss"
@@ -515,6 +538,13 @@ def png_visual_run_result_cache_key(image_bytes: bytes, city: str | None, option
     return run_result_cache_key_for_hash("png_visual_sha256", visual_hash, city, options)
 
 
+def jpeg_commentless_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = jpeg_commentless_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash("jpeg_commentless_sha256", visual_hash, city, options)
+
+
 def run_result_cache_key_for_hash(
     image_hash_name: str,
     image_hash: str,
@@ -579,6 +609,56 @@ def png_visual_sha256(image_bytes: bytes) -> str | None:
     if not seen_iend:
         return None
     return digest.hexdigest()
+
+
+def jpeg_commentless_sha256(image_bytes: bytes) -> str | None:
+    if not image_bytes.startswith(JPEG_SIGNATURE):
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"jpeg-commentless-v1")
+    digest.update(JPEG_SIGNATURE)
+    offset = len(JPEG_SIGNATURE)
+    while offset < len(image_bytes):
+        if image_bytes[offset] != 0xFF:
+            return None
+        while offset < len(image_bytes) and image_bytes[offset] == 0xFF:
+            offset += 1
+        if offset >= len(image_bytes):
+            return None
+        marker = image_bytes[offset]
+        offset += 1
+        if marker == 0x00:
+            return None
+        marker_bytes = bytes((0xFF, marker))
+        if jpeg_marker_has_no_payload(marker):
+            digest.update(marker_bytes)
+            if marker_bytes == JPEG_END_OF_IMAGE:
+                return digest.hexdigest()
+            continue
+        if offset + 2 > len(image_bytes):
+            return None
+        segment_length = int.from_bytes(image_bytes[offset : offset + 2], "big")
+        if segment_length < 2:
+            return None
+        segment_end = offset + segment_length
+        if segment_end > len(image_bytes):
+            return None
+        if marker != JPEG_COMMENT_MARKER:
+            digest.update(marker_bytes)
+            digest.update(image_bytes[offset : offset + 2])
+            digest.update(image_bytes[offset + 2 : segment_end])
+        offset = segment_end
+        if marker == JPEG_START_OF_SCAN_MARKER:
+            scan_bytes = image_bytes[offset:]
+            if JPEG_END_OF_IMAGE not in scan_bytes:
+                return None
+            digest.update(scan_bytes)
+            return digest.hexdigest()
+    return None
+
+
+def jpeg_marker_has_no_payload(marker: int) -> bool:
+    return marker == 0x01 or marker == 0xD8 or marker == 0xD9 or 0xD0 <= marker <= 0xD7
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
