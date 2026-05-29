@@ -4725,3 +4725,19 @@ with zero failures in 0.531s.
   0.992917, min IoU 0.943345, and zero active IoU drops; no-catalog
   `out/provider-ui-fast-prepass-nocatalog-20260529/full-report.json` preserved
   avg IoU 0.961733, min IoU 0.931476, and zero active IoU drops.
+- Tightened the provider-UI prepass further with an uncached RapidOCR-only
+  detector override. The prepass now uses detector side limit 256 while the
+  normal OCR/cache path keeps the production 608 detector and still runs on any
+  prepass miss. Local detector sweeps on `IMG_0071.PNG` kept the same
+  `las-vegas-zoox` catalog boundary at 384, 320, 256, and 192; 128 was slower,
+  so 256 is the conservative speed point. Clean fresh-cache local proof with
+  the default 256 detector returned the same bbox
+  `[-115.3550119,36.0353866,-115.1830059,36.187696]`, confidence 0.72,
+  `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617` in
+  0.377935s total with OCR wait 0.231850s. Focused OCR/API/runner tests passed
+  123/123, full pytest passed 219 tests plus 9 subtests, compileall passed, and
+  `git diff --check` passed. Drift-aware default
+  `out/provider-ui-det256-default-20260529/full-report.json` and no-catalog
+  `out/provider-ui-det256-nocatalog-20260529/full-report.json` both passed with
+  zero active IoU drops; Houston, Miami, and Bay Area remain smoke-only
+  reference mismatches.

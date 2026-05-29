@@ -44,9 +44,10 @@ from .georeference import (
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
-from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
+from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb, extract_rapidocr_labels_from_rgb_uncached
 from .osm_roads import image_feature_distance
 from .runtime_config import (
+    PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
@@ -395,10 +396,9 @@ def build_boundary(
                     and provider_ui_fast_ocr_max_dimension is not None
                 ):
                     provider_ui_labels_future = ocr_executor.submit(
-                        extract_ocr_labels_from_rgb,
+                        extract_provider_ui_ocr_labels_from_rgb,
                         str(image_path),
                         rgb,
-                        rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                     )
                 else:
                     labels_future = submit_ocr_labels_from_rgb(
@@ -515,13 +515,15 @@ def build_boundary(
                 stage="ocr",
                 message="Reading provider area labels",
                 percent=43,
-                details={"rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension},
+                details={
+                    "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
+                    "rapidocr_detector_limit": PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
+                },
             )
             if provider_ui_labels_future is None:
-                provider_ui_labels = extract_ocr_labels_from_rgb(
+                provider_ui_labels = extract_provider_ui_ocr_labels_from_rgb(
                     str(image_path),
                     rgb,
-                    rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                 )
             else:
                 provider_ui_labels = provider_ui_labels_future.result()
@@ -821,6 +823,15 @@ def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, heig
     if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
         return None
     return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+
+
+def extract_provider_ui_ocr_labels_from_rgb(image_path: str | Path, rgb) -> list[Any]:
+    return extract_rapidocr_labels_from_rgb_uncached(
+        image_path,
+        rgb,
+        rapidocr_max_dimension=PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
+        rapidocr_detector_limit=PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
+    )
 
 
 def low_resolution_shape_catalog_match(
