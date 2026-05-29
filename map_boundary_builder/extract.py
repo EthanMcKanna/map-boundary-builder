@@ -214,7 +214,7 @@ def remove_edge_connected_components(mask: np.ndarray) -> np.ndarray:
     edge_labels.discard(0)
     if not edge_labels:
         return mask
-    return mask & ~np.isin(labels, list(edge_labels))
+    return mask & ~select_component_labels(labels, list(edge_labels))
 
 
 def dark_teal_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:

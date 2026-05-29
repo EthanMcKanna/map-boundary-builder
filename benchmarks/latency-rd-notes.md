@@ -1614,6 +1614,16 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   GeoJSON files were byte-for-byte identical between baseline and current.
   Focused extract/benchmark tests passed, full pytest passed 104 tests plus 9
   subtests, and compileall, JS syntax, and `git diff --check` passed.
+- Extended the same direct-label selection helper to light-fill edge-component
+  removal, eliminating the last `np.isin` full-image component pass. Focused
+  extract/catalog/API/benchmark tests passed 36 tests. The extraction benchmark
+  stayed green at 8/8 scored fixtures, 7 skipped reference mismatches, avg IoU
+  0.981, min IoU 0.925, total 0.684s, max fixture 0.128s.
+- Rejected default sequential OCR after a drift-aware A/B. With OCR overlap
+  disabled, the no-catalog in-process benchmark passed with identical IoU but
+  slowed to 0.535s average and 1.115s max; forcing the current overlap behavior
+  passed with the same outputs at 0.467s average and 0.971s max. Keep the
+  overlap scheduler for stale/no-catalog paths.
 
 ## Remaining Bottlenecks
 
