@@ -114,6 +114,7 @@ class handler(BaseHTTPRequestHandler):
             events.append({"timestamp": time.time(), **event})
 
         include_overlay = bool_field(fields, "include_overlay", default=True)
+        normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=True)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -136,21 +137,26 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
-        normalized_cache_started = time.perf_counter()
-        cache_key = run_result_cache_key(image_bytes, city, options)
-        cached = read_run_result_cache(cache_key)
-        profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
-        if cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "normalized"
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
-                status=HTTPStatus.CREATED,
-            )
-            return
+        cache_key: str | None = None
+        profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
+        if normalized_cache_lookup:
+            normalized_cache_started = time.perf_counter()
+            cache_key = run_result_cache_key(image_bytes, city, options)
+            cached = read_run_result_cache(cache_key)
+            profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
+            if cached is not None:
+                raw_cache_write_started = time.perf_counter()
+                write_run_result_cache(raw_cache_key, cached)
+                profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+                profile["cache_hit"] = "normalized"
+                profile["total_before_send_s"] = elapsed_seconds(request_started)
+                self.send_json(
+                    cached_run_payload(cached, run_id, original_filename, events, profile=profile),
+                    status=HTTPStatus.CREATED,
+                )
+                return
+        else:
+            profile["normalized_cache_lookup_s"] = 0.0
 
         run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
         debug_dir = run_dir / "debug" if options.include_overlay else None
@@ -196,7 +202,8 @@ class handler(BaseHTTPRequestHandler):
             "artifacts": artifacts,
         }
         cache_write_started = time.perf_counter()
-        write_run_result_cache(cache_key, payload)
+        if cache_key is not None:
+            write_run_result_cache(cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
         profile["cache_hit"] = "miss"

@@ -1546,6 +1546,13 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   same progress events returned to the client. This keeps production evidence
   self-contained for OCR/georeference/extraction bottleneck comparisons without
   post-processing event timestamps by hand.
+- The web UI now opts out of the normalized-pixel server cache lookup on fresh
+  uploads while preserving exact browser-local cache and exact raw server cache.
+  API callers keep the normalized lookup by default. This removes the measured
+  0.17-0.21s production normalized-cache lookup from the normal UI fresh-run
+  critical path without changing extraction, georeference, or GeoJSON output;
+  recompression-tolerant normalized cache remains available to callers that do
+  not send `normalized_cache_lookup=0`.
 
 ## Remaining Bottlenecks
 

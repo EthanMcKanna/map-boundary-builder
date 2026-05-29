@@ -194,6 +194,11 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"window.__MAP_BOUNDARY_PIPELINE_VERSION__ = \"pipeline-", html)
         self.assertNotIn(b'= "__MAP_BOUNDARY_PIPELINE_VERSION__";', html)
 
+    def test_index_asset_skips_normalized_cache_lookup_for_ui_fresh_uploads(self) -> None:
+        html, _mime = web_asset_response("index.html")
+
+        self.assertIn(b'name="normalized_cache_lookup" value="0"', html)
+
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:
         with NamedTemporaryFile(suffix=".png") as handle:
