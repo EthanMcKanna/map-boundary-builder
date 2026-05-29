@@ -3422,3 +3422,11 @@ OCR/georeference rather than returning outdated fast-path polygons.
   dependency deployments from looking healthy just because the HTTP handler
   itself is still alive. Validation passed 181/181 pytest, compileall, and
   `node --check map_boundary_builder/web_assets/app.js`.
+- Production deployment `dpl_3QSfH2q8Sg56DWxukwbEUZDfQA58` is explicitly
+  aliased to `https://mapboundary.app` with the stricter health code. Live
+  `/api/health?warm=ocr` returned `ok: true`, warm `status: ok`, and `cv2
+  4.10.0`. Fresh Avride WebP generation preserved the Dallas bbox/source at
+  `build_boundary_s: 2.357s` and `total_before_send_s: 2.432s`; a fresh 2px
+  border PNG reused canonical extraction/OCR at `build_boundary_s: 0.089s` and
+  `total_before_send_s: 0.094s`; repeating the identical border filename hit raw
+  run cache at `total_before_send_s: 0.002s`.
