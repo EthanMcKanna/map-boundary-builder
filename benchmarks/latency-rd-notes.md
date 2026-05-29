@@ -2096,6 +2096,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   not available in this tool turn and Node REPL lacked Playwright, so the local
   server was checked directly with curl for the warm health payload and served
   JS wiring.
+- Production runtime prewarm deployment `dpl_E1PXkTGLChCFo1XDPfVvdVFsWUGa`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and kept the expected 296.59 MB bundle path. The
+  user-facing JS served from production contains the `health?warm=ocr` call
+  after file selection. The production pipeline hash remained
+  `pipeline-12dc3430dae9726a` because the change warms runtime/API/UI state
+  without changing core generation code. Cache-busted production evidence is in
+  `out/prod-prewarm-smoke-20260529/report.json`: the first warm-health call
+  completed in 1.724s HTTP / 1.481s server total with catalog, seed, and
+  RapidOCR warmup all `status: ok`; a repeat warm-health call completed in
+  0.258s HTTP with server warmup totals effectively zero, proving instance-local
+  caches were hot. The first post-warm Miami stale-ground-truth run completed
+  with server `build_boundary_s` 6.460s, faster than the earlier 7.499s cold
+  production smoke but still platform-noisy. The repeat cache-busted Miami run
+  returned the same bbox/source/confidence with server `build_boundary_s`
+  3.713s, OCR 2.672s, and georeference 0.211s, matching the prior warmed
+  non-catalog road-refine behavior while moving some model/seed initialization
+  to the background file-selection warmup request when the platform reuses the
+  warmed instance.
 
 ## Remaining Bottlenecks
 
