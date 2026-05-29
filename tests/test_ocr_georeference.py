@@ -39,6 +39,7 @@ from map_boundary_builder.ocr import (
     load_rapidocr_bgr,
     ocr_cache_key,
     ocr_visual_cache_key,
+    rapidocr_detector_limit_for_input,
     rapidocr_input_array,
     rapidocr_input_image,
     rapidocr_items_to_labels,
@@ -229,6 +230,18 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_640, key_736)
 
+    def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", 608):
+                key_608 = ocr_cache_key(image_path, use_tesseract=False)
+            with patch.object(ocr_module, "RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", 640):
+                key_640 = ocr_cache_key(image_path, use_tesseract=False)
+
+        self.assertNotEqual(key_608, key_640)
+
     def test_ocr_cache_key_depends_on_rapidocr_classifier_batch(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -298,6 +311,35 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(engine.use_cls_calls, [False])
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
+    def test_rapidocr_uses_large_detector_limit_for_large_arrays(self) -> None:
+        engine = FakeRapidOcrEngine(
+            {
+                False: [
+                    [unit_ocr_box(), "Orlando", 0.98],
+                    [unit_ocr_box(x=100.0), "Southchase", 0.97],
+                ]
+            }
+        )
+        image = np.zeros((1200, 1600, 3), dtype=np.uint8)
+
+        with (
+            patch.object(ocr_module, "rapidocr_input_array", return_value=(image, 1.0, 1.0)),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine) as rapidocr,
+            patch.object(ocr_module, "RAPIDOCR_DET_LIMIT_SIDE_LEN", 608),
+            patch.object(ocr_module, "RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", 640),
+            patch.object(ocr_module, "RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION", 1000),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png")
+
+        rapidocr.assert_called_once_with(640)
+        self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
+
+    def test_rapidocr_keeps_base_detector_limit_for_small_inputs(self) -> None:
+        self.assertEqual(
+            rapidocr_detector_limit_for_input(np.zeros((400, 800, 3), dtype=np.uint8)),
+            ocr_module.RAPIDOCR_DET_LIMIT_SIDE_LEN,
+        )
+
     def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
         fast_engine = FakeRapidOcrEngine({False: []})
         classifier_engine = FakeRapidOcrEngine(
@@ -324,7 +366,7 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertTrue(warm_rapidocr_runtime())
                 self.assertTrue(warm_rapidocr_runtime())
 
-            rapidocr.assert_called_once_with()
+            rapidocr.assert_called_once_with(ocr_module.RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN)
             self.assertEqual(engine.use_cls_calls, [False])
         finally:
             warm_rapidocr_runtime.cache_clear()

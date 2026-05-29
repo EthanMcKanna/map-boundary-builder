@@ -32,6 +32,14 @@ OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
+RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", "640")),
+)
+RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION", "1000")),
+)
 RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
 RAPIDOCR_REC_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", "12")))
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = max(
@@ -120,6 +128,8 @@ def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bo
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
+            f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
+            f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
             f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
@@ -236,23 +246,37 @@ def run_rapidocr_words(
         prepared_bgr=prepared_bgr,
         composited_alpha=composited_alpha,
     )
+    detector_limit = rapidocr_detector_limit_for_input(ocr_input)
     try:
-        engine = rapidocr_engine()
+        engine = rapidocr_engine(detector_limit)
         result, _elapsed = engine(ocr_input, use_cls=False)
         labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
         if not should_retry_rapidocr_with_classifier(labels):
             return labels
-        result, _elapsed = rapidocr_classifier_engine()(ocr_input, use_cls=True)
+        result, _elapsed = rapidocr_classifier_engine(detector_limit)(ocr_input, use_cls=True)
     except Exception:
         return []
     labels = rapidocr_items_to_labels(result)
     return scale_rapidocr_labels(labels, scale_x, scale_y)
 
 
+def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
+    if (
+        RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN <= 0
+        or RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION <= 0
+        or not isinstance(ocr_input, np.ndarray)
+    ):
+        return RAPIDOCR_DET_LIMIT_SIDE_LEN
+    height, width = ocr_input.shape[:2]
+    if max(width, height) >= RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION:
+        return RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN
+    return RAPIDOCR_DET_LIMIT_SIDE_LEN
+
+
 @lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
     try:
-        engine = rapidocr_engine()
+        engine = rapidocr_engine(rapidocr_warm_detector_limit())
         sample = np.full((128, 384, 3), 255, dtype=np.uint8)
         cv2.putText(
             sample,
@@ -268,6 +292,12 @@ def warm_rapidocr_runtime() -> bool:
     except Exception:
         return False
     return True
+
+
+def rapidocr_warm_detector_limit() -> int:
+    if RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN > 0:
+        return RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN
+    return RAPIDOCR_DET_LIMIT_SIDE_LEN
 
 
 def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:
@@ -366,22 +396,23 @@ def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
     return Path(tmp_path), scale, scale
 
 
-@lru_cache(maxsize=1)
-def rapidocr_engine():
-    return rapidocr_engine_without_classifier(**rapidocr_engine_kwargs())
+@lru_cache(maxsize=2)
+def rapidocr_engine(det_limit_side_len: int | None = None):
+    return rapidocr_engine_without_classifier(**rapidocr_engine_kwargs(det_limit_side_len))
 
 
-@lru_cache(maxsize=1)
-def rapidocr_classifier_engine():
+@lru_cache(maxsize=2)
+def rapidocr_classifier_engine(det_limit_side_len: int | None = None):
     from rapidocr_onnxruntime import RapidOCR
 
-    return RapidOCR(**rapidocr_engine_kwargs())
+    return RapidOCR(**rapidocr_engine_kwargs(det_limit_side_len))
 
 
-def rapidocr_engine_kwargs() -> dict[str, int]:
+def rapidocr_engine_kwargs(det_limit_side_len: int | None = None) -> dict[str, int]:
     kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM, "rec_batch_num": RAPIDOCR_REC_BATCH_NUM}
-    if RAPIDOCR_DET_LIMIT_SIDE_LEN > 0:
-        kwargs["det_limit_side_len"] = RAPIDOCR_DET_LIMIT_SIDE_LEN
+    det_limit = RAPIDOCR_DET_LIMIT_SIDE_LEN if det_limit_side_len is None else max(0, int(det_limit_side_len))
+    if det_limit > 0:
+        kwargs["det_limit_side_len"] = det_limit
     return kwargs
 
 
