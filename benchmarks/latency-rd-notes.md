@@ -2571,6 +2571,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   current native-array baseline at 5.05s. Lower caps were already rejected by
   the prototype because they degraded Phoenix/Los Angeles georeference quality,
   so recognition caps stay out of the runtime.
+- Rejected disabling RapidOCR DB detector dilation. The detector config exposes
+  `use_dilation`, but a fresh no-catalog/block-network sweep with dilation off
+  failed Phoenix at IoU 0.754 and lost the road-refined source; adding a
+  stricter detector threshold still failed Phoenix. The faster-looking 4.50s
+  total from the threshold+dilation-off probe is therefore an accuracy
+  regression, not an acceptable latency win.
 
 ## Remaining Bottlenecks
 
