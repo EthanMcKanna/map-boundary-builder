@@ -203,9 +203,10 @@ class handler(BaseHTTPRequestHandler):
         if cached is not None:
             profile["cache_hit"] = "raw"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
-                status=HTTPStatus.CREATED,
+                payload,
+                status=cached_run_response_status(payload),
             )
             return
 
@@ -220,9 +221,10 @@ class handler(BaseHTTPRequestHandler):
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
             profile["cache_hit"] = "png-visual"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
-                status=HTTPStatus.CREATED,
+                payload,
+                status=cached_run_response_status(payload),
             )
             return
 
@@ -237,9 +239,10 @@ class handler(BaseHTTPRequestHandler):
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
             profile["cache_hit"] = "jpeg-commentless"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
-                status=HTTPStatus.CREATED,
+                payload,
+                status=cached_run_response_status(payload),
             )
             return
 
@@ -256,9 +259,10 @@ class handler(BaseHTTPRequestHandler):
                 profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
                 profile["cache_hit"] = "normalized"
                 profile["total_before_send_s"] = elapsed_seconds(request_started)
+                payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
                 self.send_json(
-                    cached_run_payload(cached, run_id, original_filename, events, profile=profile),
-                    status=HTTPStatus.CREATED,
+                    payload,
+                    status=cached_run_response_status(payload),
                 )
                 return
         else:
@@ -292,8 +296,17 @@ class handler(BaseHTTPRequestHandler):
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
             profile["cache_hit"] = "miss"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = generation_error_payload(exc, run_id, original_filename, events, profile)
+            if generation_error_status(exc) == HTTPStatus.UNPROCESSABLE_ENTITY:
+                if cache_key is not None:
+                    write_run_result_cache(cache_key, payload)
+                if png_visual_cache_key is not None:
+                    write_run_result_cache(png_visual_cache_key, payload)
+                if jpeg_commentless_cache_key is not None:
+                    write_run_result_cache(jpeg_commentless_cache_key, payload)
+                write_run_result_cache(raw_cache_key, payload)
             self.send_json(
-                generation_error_payload(exc, run_id, original_filename, events, profile),
+                payload,
                 status=generation_error_status(exc),
             )
             return
@@ -834,11 +847,17 @@ def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
 
 
 def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
-    cached = {
-        "city": payload.get("city"),
-        "summary": payload.get("summary"),
-        "artifacts": payload.get("artifacts"),
-    }
+    if payload.get("status") == "failed":
+        cached = {
+            "status": "failed",
+            "error": payload.get("error"),
+        }
+    else:
+        cached = {
+            "city": payload.get("city"),
+            "summary": payload.get("summary"),
+            "artifacts": payload.get("artifacts"),
+        }
     encoded = remember_run_result_cache(cache_key, cached)
     try:
         RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -873,22 +892,26 @@ def cached_run_payload(
 ) -> dict[str, Any]:
     payload = json.loads(json.dumps(cached))
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    status = payload.get("status") if payload.get("status") == "failed" else "complete"
+    event_message = (
+        "Generation failure ready from cache" if status == "failed" else "Boundary export ready from cache"
+    )
     payload.update(
         {
             "id": run_id,
             "city": payload.get("city") or summary.get("city"),
             "filename": Path(original_filename).name or "uploaded-image",
-            "status": "complete",
+            "status": status,
             "percent": 100,
             "cached": True,
             "events": [
                 *events,
                 {
                     "timestamp": time.time(),
-                    "stage": "complete",
-                    "message": "Boundary export ready from cache",
+                    "stage": status,
+                    "message": event_message,
                     "percent": 100,
-                    "status": "complete",
+                    "status": status,
                     "details": summary,
                 },
             ],
@@ -897,3 +920,9 @@ def cached_run_payload(
     if profile is not None:
         payload["profile"] = profile
     return payload
+
+
+def cached_run_response_status(payload: dict[str, Any]) -> HTTPStatus:
+    if payload.get("status") == "failed":
+        return HTTPStatus.UNPROCESSABLE_ENTITY
+    return HTTPStatus.CREATED

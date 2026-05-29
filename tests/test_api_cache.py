@@ -14,6 +14,7 @@ from api.index import (
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     authorized_cron_request,
     cached_run_payload,
+    cached_run_response_status,
     cron_warm_generation_payload,
     event_stage_elapsed_seconds,
     generation_error_payload,
@@ -368,6 +369,37 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["filename"], "Miami.png")
         self.assertEqual(payload["events"][-1]["message"], "Boundary export ready from cache")
+        self.assertEqual(cached_run_response_status(payload), HTTPStatus.CREATED)
+
+    def test_failed_run_cache_round_trip_and_payload_rehydration(self) -> None:
+        cache_key = raw_run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())
+        failed_payload = {
+            "status": "failed",
+            "error": "Could not infer a reliable map location.",
+            "profile": {"build_boundary_s": 2.0},
+            "events": [{"stage": "ocr"}],
+        }
+
+        write_run_result_cache(cache_key, failed_payload)
+        restored = read_run_result_cache(cache_key)
+        payload = cached_run_payload(
+            restored or {},
+            "1234-failed",
+            "Bad.png",
+            [{"stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}],
+        )
+
+        self.assertEqual(
+            restored,
+            {"status": "failed", "error": "Could not infer a reliable map location."},
+        )
+        self.assertEqual(payload["id"], "1234-failed")
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["filename"], "Bad.png")
+        self.assertIn("Could not infer", payload["error"])
+        self.assertEqual(payload["events"][-1]["message"], "Generation failure ready from cache")
+        self.assertEqual(cached_run_response_status(payload), HTTPStatus.UNPROCESSABLE_ENTITY)
 
     def test_run_cache_uses_memory_cache_before_disk(self) -> None:
         cached = {

@@ -3930,3 +3930,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   and max active duration 0.095423s; and
   `out/road-context-off-changed-smoke-20260529/full-report.json` passed all six
   Houston/Miami/Bay Area `reference_mismatch` smokes in 0.398s.
+- Added run-result caching for deterministic 422 generation failures while
+  continuing to leave unexpected 500-class errors uncached. The API cache now
+  stores only the stable failure status and error string under the same
+  pipeline-versioned raw, visual, and normalized keys used for successful
+  generations, then rehydrates each cached failure with a fresh run id,
+  filename, event trail, and request profile. This should make repeated uploads
+  of the same unsupported map fail fast instead of paying OCR/georeference
+  again, without masking future code changes because the pipeline version stays
+  in the cache key. Focused API tests passed 31/31, and full validation passed
+  201/201 tests, compileall, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`.
