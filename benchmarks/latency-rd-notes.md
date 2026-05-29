@@ -4644,3 +4644,13 @@ with zero failures in 0.531s.
   road tests passed 51/51, full pytest passed 215 tests plus 9 subtests,
   compileall passed, and `git diff --check` passed. This does not alter OCR,
   extraction, georeferencing, or generated GeoJSON.
+- Production deploy `dpl_HeQemJZX963znzndkPZYvVWzFzGE` is aliased to
+  `https://mapboundary.app`, is Ready, keeps `api/index.py (101.11MB) [sfo1]`,
+  and `/api/health?warm=ocr` returned HTTP 200 with warm status OK. The live
+  warm payload reported `road_seed_entries: 3`, `road_seed_digest_entries: 3`,
+  `seed_s: 0.000019`, and `total_s: 0.004861`, proving the deterministic road
+  source digests are now already present after production warmup. The reported
+  `pipeline_version` remains `pipeline-041918946ebb6726` because the warmup
+  helper is intentionally outside the pipeline hash inputs; generation outputs
+  are unchanged. Houston, Miami, and Bay Area remain drift/reference-mismatch
+  smoke markets until their saved ground truth is refreshed.
