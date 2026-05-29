@@ -4203,3 +4203,29 @@ with zero failures in 0.531s.
   index checks found no newer `rapidocr-onnxruntime` or `onnxruntime` than the
   deployed 1.4.4 / 1.26.0 pair, so there is no drop-in dependency upgrade to
   test in this lane.
+- Tiny-probe miss handoff: after the user re-confirmed that Houston, Miami,
+  and Bay Area have changed from the saved base truth, the validation gates now
+  continue to smoke those markets as `reference_mismatch` instead of scoring
+  stale references. The frontend now marks the full upload with
+  `catalog_probe_missed=1` after an HTTP 200 `catalog_miss` from the 520px
+  known-service-area probe. The backend uses that flag to skip the redundant
+  240px/400px pre-OCR catalog passes, extracts directly at the accepted 1400px
+  catalog-miss refine resolution, and still tries one full-resolution catalog
+  match before falling through to OCR/georeference; generic no-city requests
+  ignore the flag and keep the existing 240px then 1400px fallback. A final
+  fresh-process local A/B on `/Users/ethanmckanna/Downloads/bay-area-waymo.png`
+  preserved the exact output summary and bounds while cutting full fallback
+  generation from 0.877044s to 0.780672s. Playwright verified the local UI
+  sends a 23.5 KB
+  `bay-area-waymo.catalog-probe.jpg`, receives `catalog_miss`, then sends the
+  original 847 KB PNG with `catalog_probe_missed=1` and no console warnings.
+  Full pytest passed 212/212; drift-aware default benchmark
+  `out/probe-miss-flag-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with seven `reference_mismatch` smokes, avg IoU 0.992917, min IoU
+  0.943345, and regression check green against
+  `out/current-catalog-refresh-default-20260529/full-report.json`; no-catalog
+  `out/probe-miss-flag-nocatalog-20260529/full-report.json` stayed green at
+  avg IoU 0.961733/min 0.931476 against the current no-catalog baseline; and
+  targeted Houston/Miami/Bay Area smoke
+  `out/probe-miss-flag-changed-smoke-20260529/full-report.json` passed all six
+  changed fixtures with zero smoke failures.

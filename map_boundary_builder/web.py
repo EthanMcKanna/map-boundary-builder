@@ -218,6 +218,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
+            catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
         )
         record_event(
             state,

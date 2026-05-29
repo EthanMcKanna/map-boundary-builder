@@ -87,6 +87,7 @@ class BoundaryBuildOptions:
     write_mask_artifact: bool = True
     allow_catalog: bool = True
     catalog_probe_only: bool = False
+    catalog_probe_missed: bool = False
     filename_hint: str | None = None
 
 
@@ -141,11 +142,18 @@ def build_boundary(
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
     allow_catalog = catalog_matching_enabled(opts)
     filename_hint = opts.filename_hint or image_path.stem
-    allow_pre_ocr_catalog = should_try_pre_ocr_catalog(
+    would_try_pre_ocr_catalog = should_try_pre_ocr_catalog(
         city_input=city_input,
         allow_catalog=allow_catalog,
         filename_hint=filename_hint,
     )
+    skip_redundant_probe = catalog_probe_missed_handoff_enabled(
+        opts,
+        city_input=city_input,
+        filename_hint=filename_hint,
+        allow_pre_ocr_catalog=would_try_pre_ocr_catalog,
+    )
+    allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
 
     emit_progress(
         progress,
@@ -193,8 +201,8 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
-        extraction_max_dimension = (
-            CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else GENERAL_EXTRACT_MAX_DIMENSION
+        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else (
+            CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
         )
         used_catalog_scaled_extraction = (
             allow_pre_ocr_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
@@ -321,6 +329,28 @@ def build_boundary(
                     rgb=rgb,
                     progress=progress,
                     georeference_source="catalog-shape-match:retry",
+                )
+
+        if skip_redundant_probe and allow_catalog and catalog_style_can_match:
+            catalog_match = match_service_area_catalog(
+                extraction.pixel_geometry,
+                style=extraction.style,
+                area_hint_texts=[city_input] if city_input is not None else None,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
+                    extraction,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:probe-miss-full",
                 )
 
         if catalog_probe_only_enabled(opts):
@@ -776,6 +806,23 @@ def catalog_matching_enabled(options: Any) -> bool:
 
 def catalog_probe_only_enabled(options: Any) -> bool:
     return bool(getattr(options, "catalog_probe_only", False))
+
+
+def catalog_probe_missed_enabled(options: Any) -> bool:
+    return bool(getattr(options, "catalog_probe_missed", False)) and not catalog_probe_only_enabled(options)
+
+
+def catalog_probe_missed_handoff_enabled(
+    options: Any,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    allow_pre_ocr_catalog: bool,
+) -> bool:
+    if not catalog_probe_missed_enabled(options) or not allow_pre_ocr_catalog:
+        return False
+    hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
+    return bool(catalog_provider_hint(hint_text)) or has_active_catalog_area_hint(hint_text)
 
 
 def high_confidence_label_texts(labels: list[Any]) -> list[str]:

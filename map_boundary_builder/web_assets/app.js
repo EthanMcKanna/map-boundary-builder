@@ -380,14 +380,17 @@ form.addEventListener("submit", async (event) => {
       pendingRunCacheKeysPromise = null;
       return;
     }
-    const catalogProbePayload = await tryCatalogProbe(uploadFile, formData);
-    if (catalogProbePayload) {
-      applyInlineRun(catalogProbePayload, {
+    const catalogProbeResult = await tryCatalogProbe(uploadFile, formData);
+    if (catalogProbeResult?.payload) {
+      applyInlineRun(catalogProbeResult.payload, {
         cacheKey: pendingRunCacheKey,
         cacheKeys: pendingRunCacheKeys,
         cacheKeysPromise: pendingRunCacheKeysPromise,
       });
       return;
+    }
+    if (catalogProbeResult?.missed) {
+      formData.set("catalog_probe_missed", "1");
     }
     markProgressStep("prepare", "running", "Uploading image.");
     setStatus("Uploading image", 8, "running", {
@@ -817,7 +820,8 @@ async function tryCatalogProbe(file, formData) {
       body: probeData,
     });
     const payload = await response.json().catch(() => null);
-    if (response.ok && isCatalogRunPayload(payload)) return payload;
+    if (response.ok && isCatalogRunPayload(payload)) return { payload };
+    if (response.ok && payload?.status === "catalog_miss") return { missed: true };
   } catch (error) {
     console.warn("Known service-area probe failed", error);
   }

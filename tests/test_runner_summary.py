@@ -4,13 +4,13 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 import pytest
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, mapping
 
 import map_boundary_builder.runner as runner
 from map_boundary_builder.extract import ExtractionResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.georeference import GeoreferenceResult
-from map_boundary_builder.runner import build_boundary, build_summary
+from map_boundary_builder.runner import BoundaryBuildResult, build_boundary, build_summary
 
 
 def base_feature_collection(properties: dict) -> dict:
@@ -315,6 +315,122 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
     assert max_dimensions == [
         runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+    ]
+
+
+def test_catalog_probe_missed_skips_low_res_probes_but_keeps_full_catalog_match(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Bay Area.png"
+    Image.new("RGB", (2400, 2400), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((2400, 2400, 3), 245, dtype=np.uint8)
+    mask = np.zeros((2400, 2400), dtype=bool)
+    mask[400:2000, 500:1900] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(500, 400), (1900, 400), (1900, 2000), (500, 2000)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    max_dimensions: list[int] = []
+    cache_flags: list[bool] = []
+    match_calls: list[dict] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, cache=True, **_kwargs):
+        max_dimensions.append(max_dimension)
+        cache_flags.append(cache)
+        return extraction
+
+    def fake_match_service_area_catalog(pixel_geometry, *, style, area_hint_texts=None, **_kwargs):
+        match_calls.append({"style": style, "area_hint_texts": area_hint_texts})
+        return SimpleNamespace(entry=SimpleNamespace(slug="bay-area-waymo"), iou=0.98, margin=0.3, area_ratio=1.0)
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("full catalog match after a probe miss must still avoid OCR")
+
+    def fake_finish_catalog_boundary_result(_extraction, _match, **kwargs):
+        return BoundaryBuildResult(
+            geojson={
+                "type": "FeatureCollection",
+                "features": [{"type": "Feature", "properties": {}, "geometry": mapping(extraction.pixel_geometry)}],
+            },
+            summary={
+                "catalog_slug": "bay-area-waymo",
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+    monkeypatch.setattr(runner, "extract_ocr_labels", unexpected_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        "Bay Area",
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            catalog_probe_missed=True,
+            filename_hint="Waymo Bay Area.png",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert max_dimensions == [runner.CATALOG_MISS_REFINE_MAX_DIMENSION]
+    assert cache_flags == [True]
+    assert match_calls == [{"style": "bright-blue", "area_hint_texts": ["Bay Area"]}]
+    assert result.summary["catalog_slug"] == "bay-area-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:probe-miss-full"
+
+
+def test_catalog_probe_missed_is_ignored_for_generic_requests(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unlabeled-map.png"
+    Image.new("RGB", (2400, 2400), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((2400, 2400, 3), 245, dtype=np.uint8)
+    mask = np.zeros((2400, 2400), dtype=bool)
+    mask[400:2000, 500:1900] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(500, 400), (1900, 400), (1900, 2000), (500, 2000)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    max_dimensions: list[int] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
+        max_dimensions.append(max_dimension)
+        return extraction
+
+    def stop_at_ocr(*_args, **_kwargs):
+        raise RuntimeError("stop after generic extraction")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", stop_at_ocr)
+
+    with pytest.raises(RuntimeError, match="stop after generic extraction"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(
+                catalog_probe_missed=True,
+                filename_hint="unlabeled-map.png",
+                write_mask_artifact=False,
+            ),
+        )
+
+    assert max_dimensions == [
+        runner.CATALOG_EXTRACT_MAX_DIMENSION,
+        runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
 
 

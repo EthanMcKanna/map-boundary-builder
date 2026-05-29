@@ -187,6 +187,7 @@ class handler(BaseHTTPRequestHandler):
         include_overlay = bool_field(fields, "include_overlay", default=True)
         normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=True)
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
+        catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -195,6 +196,7 @@ class handler(BaseHTTPRequestHandler):
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
             write_mask_artifact=False,
             catalog_probe_only=catalog_probe_only,
+            catalog_probe_missed=catalog_probe_missed,
             filename_hint=original_filename,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
@@ -705,6 +707,7 @@ def run_result_cache_key_for_hash(
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
         "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
+        "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
