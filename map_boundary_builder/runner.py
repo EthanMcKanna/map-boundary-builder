@@ -72,6 +72,7 @@ LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
 LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO = 0.92
 LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
+ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 
 
 @dataclass(frozen=True)
@@ -475,7 +476,7 @@ def build_boundary(
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
-            "Provide a higher-resolution map crop with readable city labels or visible roads."
+            "Provide a higher-resolution map crop with readable city or neighborhood labels."
         )
 
     geo_transform = georef.transform
@@ -910,7 +911,7 @@ def fit_georeference(
             road_feature_distance=road_feature_distance,
         )
 
-    if georef is None and road_context_candidates:
+    if georef is None and road_context_candidates and road_network_context_fallback_enabled():
         georef = georeference_from_road_contexts(
             image_path,
             pixel_geometry,
@@ -919,6 +920,11 @@ def fit_georeference(
             progress=progress,
         )
     return georef
+
+
+def road_network_context_fallback_enabled() -> bool:
+    value = os.environ.get(ROAD_NETWORK_CONTEXT_FALLBACK_ENV, "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def georeference_from_ranked_label_contexts(

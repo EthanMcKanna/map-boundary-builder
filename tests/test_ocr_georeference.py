@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -1588,6 +1589,73 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
         self.assertIs(result, fallback_result)
         label_fit.assert_called_once()
+
+    def test_road_network_context_fallback_is_disabled_by_default(self) -> None:
+        labels = [OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96)]
+
+        with (
+            patch("map_boundary_builder.runner.georeference_from_labels", return_value=None),
+            patch(
+                "map_boundary_builder.runner.road_contexts_from_labels",
+                return_value=[SimpleNamespace(query="Dallas")],
+            ),
+            patch("map_boundary_builder.runner.road_context_queries", return_value=["Dallas"]),
+            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=False),
+            patch("map_boundary_builder.runner.georeference_from_road_contexts") as road_contexts,
+        ):
+            result = fit_georeference(
+                labels,
+                Path("input.png"),
+                pixel_geometry=object(),
+                rgb=None,
+                city_input=None,
+                width=680,
+                height=551,
+                coverage_ratio=0.27,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=None,
+                progress=None,
+            )
+
+        self.assertIsNone(result)
+        road_contexts.assert_not_called()
+
+    def test_road_network_context_fallback_can_be_enabled_for_experiments(self) -> None:
+        labels = [OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96)]
+        fallback_result = object()
+
+        with (
+            patch.dict(os.environ, {"MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK": "1"}),
+            patch("map_boundary_builder.runner.georeference_from_labels", return_value=None),
+            patch(
+                "map_boundary_builder.runner.road_contexts_from_labels",
+                return_value=[SimpleNamespace(query="Dallas")],
+            ),
+            patch("map_boundary_builder.runner.road_context_queries", return_value=["Dallas"]),
+            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=False),
+            patch(
+                "map_boundary_builder.runner.georeference_from_road_contexts",
+                return_value=fallback_result,
+            ) as road_contexts,
+        ):
+            result = fit_georeference(
+                labels,
+                Path("input.png"),
+                pixel_geometry=object(),
+                rgb=None,
+                city_input=None,
+                width=680,
+                height=551,
+                coverage_ratio=0.27,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=None,
+                progress=None,
+            )
+
+        self.assertIs(result, fallback_result)
+        road_contexts.assert_called_once()
 
     def test_filename_context_queries_extract_city_without_provider_noise(self) -> None:
         queries = filename_context_queries("Avride Dallas df72214 small variant.png")

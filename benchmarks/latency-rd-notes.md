@@ -3909,3 +3909,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   duration coming from Phoenix OCR timing variance; and
   `out/error-status-changed-smoke-20260529/full-report.json` passed all six
   Houston/Miami/Bay Area `reference_mismatch` smokes in 0.406s.
+- Disabled the city-context road-network-only fallback by default after a
+  production Avride Dallas catalog-miss probe showed it was both slow and too
+  weakly supported. The cache-busted production request
+  `out/prod-profile-20260529/avride-failure-1780075613.json` spent 18.903424s
+  in georeference and 21.677343s in `build_boundary_s`, then returned a
+  `city-context:osm-road-search` result with 0 OCR/geocoded controls,
+  confidence 0.66, and a broad Dallas bbox instead of a safe failure. Keeping
+  this path behind `MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK=1` preserves an
+  experiment switch while making production default to evidence-backed
+  OCR/geocode transforms or catalog matches. The same local Avride small
+  variant now refuses in 0.76s with the structured reliability error instead of
+  entering road-only search. Focused tests passed 75/75, and full validation
+  passed 200/200 tests, compileall, `node --check
+  map_boundary_builder/web_assets/app.js`, and `git diff --check`. Accuracy
+  gates stayed green: `out/road-context-off-nocatalog-20260529/full-report.json`
+  passed 8/8 scored fixtures with avg IoU 0.961733 and min IoU 0.931476;
+  `out/road-context-off-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.992917, min IoU 0.943345, total duration 0.539264s,
+  and max active duration 0.095423s; and
+  `out/road-context-off-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes in 0.398s.
