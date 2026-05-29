@@ -3072,3 +3072,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `ocr-georeference:nominatim-label-fit`, and `catalog_slug: null`; server
   `build_boundary_s` was 2.444s, `total_before_send_s` was 2.449s, OCR was
   2.148s, and georeference was 0.036s.
+- Coarse OCR visual-cache hypothesis: the current 6-bit whole-image cache
+  catches low-bit screenshot noise but misses variants that cross a 4-value
+  channel boundary. A second 5-bit (`0xF8`) whole-image key is now used only as
+  an OCR cache fallback and backfilled into raw/exact/6-bit keys on hit; cache
+  misses still run the same OCR/georeference pipeline. This made the current
+  Avride Dallas visual variants share a cache key without changing output. A
+  fresh local two-run proof with one cache directory moved the second
+  pixel-changed Avride variant from a full OCR pass to `0.084s` total, with OCR
+  stage `0.0068s`, identical Dallas bbox
+  `[-96.8303708,32.7654593,-96.7709423,32.8249834]`, and confidence 0.709.
+  Validation passed 169/169 pytest, `compileall`, `node --check`, and
+  `git diff --check`. Default catalog benchmark
+  `out/coarse-ocr-default-full-20260529/full-report.json` passed 8/8 scored,
+  skipped 7 reference mismatches, avg IoU 0.993, min IoU 0.943, total 0.64s.
+  No-catalog benchmark `out/coarse-ocr-nocatalog-full-20260529/full-report.json`
+  passed 8/8 scored, avg IoU 0.962, min IoU 0.931. Changed-market smoke
+  `out/coarse-ocr-changed-smoke-20260529/full-report.json` smoke-checked the
+  six Houston/Miami/Bay Area screenshots with zero failures.

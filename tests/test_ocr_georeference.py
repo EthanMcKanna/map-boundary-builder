@@ -43,6 +43,7 @@ from map_boundary_builder.ocr import (
     group_stacked_labels,
     load_rapidocr_bgr,
     ocr_cache_key,
+    ocr_coarse_visual_cache_key,
     ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
     ocr_visual_cache_key,
@@ -203,6 +204,28 @@ class OcrGroupingTests(unittest.TestCase):
                 ocr_near_visual_cache_key(second_bgr, use_tesseract=False),
             )
 
+    def test_ocr_coarse_visual_cache_key_tolerates_quantization_boundary_noise(self) -> None:
+        with TemporaryDirectory() as workdir:
+            first = Path(workdir) / "first.png"
+            second = Path(workdir) / "second.png"
+            Image.new("RGB", (20, 10), (12, 36, 56)).save(first)
+            Image.new("RGB", (20, 10), (8, 32, 56)).save(second)
+            first_bgr, _ = load_rapidocr_bgr(first)
+            second_bgr, _ = load_rapidocr_bgr(second)
+
+            self.assertNotEqual(
+                ocr_visual_cache_key(first_bgr, use_tesseract=False),
+                ocr_visual_cache_key(second_bgr, use_tesseract=False),
+            )
+            self.assertNotEqual(
+                ocr_near_visual_cache_key(first_bgr, use_tesseract=False),
+                ocr_near_visual_cache_key(second_bgr, use_tesseract=False),
+            )
+            self.assertEqual(
+                ocr_coarse_visual_cache_key(first_bgr, use_tesseract=False),
+                ocr_coarse_visual_cache_key(second_bgr, use_tesseract=False),
+            )
+
     def test_rgb_to_bgr_converts_rgb_channels_for_prepared_ocr_input(self) -> None:
         rgb = np.array([[[1, 2, 3], [4, 5, 6]]], dtype=np.uint8)
 
@@ -290,6 +313,37 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertEqual(labels, [label])
             self.assertEqual(read_ocr_cache(raw_second_key), (label,))
             self.assertEqual(read_ocr_cache(exact_second_key), (label,))
+
+    def test_ocr_coarse_visual_cache_hit_backfills_raw_and_visual_keys(self) -> None:
+        with TemporaryDirectory() as workdir:
+            first = Path(workdir) / "first.png"
+            second = Path(workdir) / "second.png"
+            Image.new("RGB", (20, 10), (12, 36, 56)).save(first)
+            Image.new("RGB", (20, 10), (8, 32, 56)).save(second)
+            first_bgr, _ = load_rapidocr_bgr(first)
+            second_bgr, _ = load_rapidocr_bgr(second)
+            coarse_visual_key = ocr_coarse_visual_cache_key(first_bgr, use_tesseract=False)
+            near_second_key = ocr_near_visual_cache_key(second_bgr, use_tesseract=False)
+            exact_second_key = ocr_visual_cache_key(second_bgr, use_tesseract=False)
+            raw_second_key = ocr_cache_key(second, use_tesseract=False)
+            label = OcrLabel("Miami Beach", x=60, y=37, width=100, height=34, confidence=96)
+
+            assert coarse_visual_key is not None
+            assert near_second_key is not None
+            assert exact_second_key is not None
+            assert raw_second_key is not None
+            write_ocr_cache(coarse_visual_key, [label])
+            with patch.object(ocr_module, "tesseract_available", return_value=False), patch.object(
+                ocr_module,
+                "run_rapidocr_words",
+                side_effect=AssertionError("coarse visual cache hit should avoid OCR"),
+            ):
+                labels = extract_ocr_labels(second)
+
+            self.assertEqual(labels, [label])
+            self.assertEqual(read_ocr_cache(raw_second_key), (label,))
+            self.assertEqual(read_ocr_cache(exact_second_key), (label,))
+            self.assertEqual(read_ocr_cache(near_second_key), (label,))
 
     def test_rapidocr_input_image_downscales_when_configured(self) -> None:
         with TemporaryDirectory() as workdir:
