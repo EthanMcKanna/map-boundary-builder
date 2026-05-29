@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import map_boundary_builder.benchmark as benchmark_module
 from map_boundary_builder.benchmark import (
     BenchmarkFixture,
+    BenchmarkScore,
     compare_report_regressions,
     load_fixture_config,
     run_benchmark,
@@ -93,6 +95,152 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "note": "changed live service area",
         }
     ]
+
+
+def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "houston-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Houston.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "houston-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+    calls = []
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        calls.append((fixture.slug, kwargs["score_reference"]))
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=None,
+            area_ratio=None,
+            centroid_distance_m=None,
+            vertices=42,
+            style="bright-blue",
+            duration_s=0.12,
+            georeference_source="ocr-georeference:nominatim-label-fit",
+            combined_confidence=0.86,
+            catalog_slug=None,
+            stage_elapsed_s={"ocr": 0.08},
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        smoke_skipped=True,
+    )
+
+    assert calls == [("houston-waymo", False)]
+    assert report["summary"]["passed"] is True
+    assert report["summary"]["scored_fixtures"] == 0
+    assert report["summary"]["skipped_fixtures"] == 1
+    assert report["summary"]["smoked_skipped_fixtures"] == 1
+    assert report["summary"]["failed_smoked_skipped_fixtures"] == 0
+    assert report["scores"][0]["status"] == "reference_mismatch"
+    assert report["scores"][0]["iou"] is None
+    assert report["scores"][0]["georeference_source"] == "ocr-georeference:nominatim-label-fit"
+
+
+def test_smoke_skipped_catalog_miss_requirement_fails_catalog_hits(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "miami-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Miami.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "miami-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=None,
+            area_ratio=None,
+            centroid_distance_m=None,
+            vertices=42,
+            style="bright-blue",
+            duration_s=0.12,
+            georeference_source="catalog-shape-match",
+            combined_confidence=0.98,
+            catalog_slug="miami-waymo",
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        smoke_skipped=True,
+        require_smoked_catalog_miss=True,
+    )
+
+    assert report["summary"]["passed"] is False
+    assert report["summary"]["smoked_skipped_fixtures"] == 1
+    assert report["summary"]["failed_smoked_skipped_fixtures"] == 1
+    assert report["scores"][0]["catalog_slug"] == "miami-waymo"
+    assert "expected OCR/georeference catalog miss" in report["scores"][0]["error"]
 
 
 def test_report_regression_check_flags_fixture_iou_drop() -> None:

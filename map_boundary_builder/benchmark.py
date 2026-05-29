@@ -5,7 +5,7 @@ import json
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -138,6 +138,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="For --mode full, skip mask/overlay debug artifacts to mirror the production web API path.",
     )
     parser.add_argument(
+        "--smoke-skipped",
+        action="store_true",
+        help=(
+            "For --mode full, run non-active fixtures without scoring their stale references. "
+            "Useful for reference_mismatch service-area drift checks."
+        ),
+    )
+    parser.add_argument(
+        "--require-smoked-catalog-miss",
+        action="store_true",
+        help=(
+            "With --smoke-skipped, fail smoke-checked fixtures that return a catalog_slug. "
+            "Use with targeted --only filters when those drifted screenshots must stay on OCR/georeference."
+        ),
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -198,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
         fixture_config=args.fixture_config,
         execution=args.execution,
         debug_artifacts=not args.no_debug_artifacts,
+        smoke_skipped=args.smoke_skipped,
+        require_smoked_catalog_miss=args.require_smoked_catalog_miss,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -241,6 +259,8 @@ def run_benchmark(
     no_catalog: bool = False,
     execution: str = "subprocess",
     debug_artifacts: bool = True,
+    smoke_skipped: bool = False,
+    require_smoked_catalog_miss: bool = False,
 ) -> dict[str, Any]:
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
@@ -253,7 +273,30 @@ def run_benchmark(
     scores: list[BenchmarkScore] = []
     for fixture in fixtures:
         if fixture.status != "active":
-            scores.append(skipped_fixture_score(fixture, mode=mode))
+            if mode == "full" and smoke_skipped:
+                score = score_full_fixture(
+                    fixture,
+                    out_dir=out_dir,
+                    min_iou=min_iou,
+                    timeout_seconds=timeout_seconds,
+                    city_overrides=city_overrides,
+                    no_catalog=no_catalog,
+                    execution=execution,
+                    debug_artifacts=debug_artifacts,
+                    score_reference=False,
+                )
+                if require_smoked_catalog_miss and score.catalog_slug:
+                    score = replace(
+                        score,
+                        passed=False,
+                        error=(
+                            f"smoke-checked skipped fixture returned catalog_slug={score.catalog_slug}; "
+                            "expected OCR/georeference catalog miss"
+                        ),
+                    )
+                scores.append(score)
+            else:
+                scores.append(skipped_fixture_score(fixture, mode=mode))
             continue
         if mode == "full":
             scores.append(
@@ -266,6 +309,7 @@ def run_benchmark(
                     no_catalog=no_catalog,
                     execution=execution,
                     debug_artifacts=debug_artifacts,
+                    score_reference=True,
                 )
             )
         else:
@@ -273,13 +317,18 @@ def run_benchmark(
 
     scored = [score for score in scores if score.status == "active"]
     skipped = [score for score in scores if score.status != "active"]
+    smoke_validated = [score for score in skipped if score.duration_s is not None or score.error is not None]
     ious = [score.iou for score in scored if score.iou is not None]
     durations = [score.duration_s for score in scored if score.duration_s is not None]
+    smoke_durations = [score.duration_s for score in smoke_validated if score.duration_s is not None]
     average_iou = float(mean(ious)) if ious else 0.0
     min_seen_iou = float(min(ious)) if ious else 0.0
     passed_count = sum(score.passed for score in scored)
     failed_count = len(scored) - passed_count
-    passed = bool(scored) and failed_count == 0 and average_iou >= mean_iou
+    smoke_failed_count = sum(not score.passed for score in smoke_validated)
+    active_passed = bool(scored) and failed_count == 0 and average_iou >= mean_iou
+    smoke_only_passed = not scored and bool(smoke_validated) and smoke_failed_count == 0
+    passed = (active_passed or smoke_only_passed) and smoke_failed_count == 0
     return {
         "mode": mode,
         "thresholds": {
@@ -288,6 +337,8 @@ def run_benchmark(
             "no_catalog": no_catalog,
             "execution": execution,
             "debug_artifacts": debug_artifacts,
+            "smoke_skipped": smoke_skipped,
+            "require_smoked_catalog_miss": require_smoked_catalog_miss,
         },
         "summary": {
             "passed": passed,
@@ -295,6 +346,9 @@ def run_benchmark(
             "scored_fixtures": len(scored),
             "skipped_fixtures": len(skipped),
             "skipped_by_status": summarize_statuses(skipped),
+            "smoked_skipped_fixtures": len(smoke_validated),
+            "failed_smoked_skipped_fixtures": smoke_failed_count,
+            "smoked_skipped_duration_s": round(sum(smoke_durations), 3),
             "passed_fixtures": passed_count,
             "failed_fixtures": failed_count,
             "average_iou": round(average_iou, 6),
@@ -438,6 +492,7 @@ def score_full_fixture(
     no_catalog: bool,
     execution: str,
     debug_artifacts: bool,
+    score_reference: bool = True,
 ) -> BenchmarkScore:
     output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
     debug_dir = out_dir / "full-debug" / fixture.slug if debug_artifacts else None
@@ -450,6 +505,7 @@ def score_full_fixture(
             city_overrides=city_overrides,
             no_catalog=no_catalog,
             debug_artifacts=debug_artifacts,
+            score_reference=score_reference,
         )
     if execution != "subprocess":
         raise ValueError(f"Unsupported full benchmark execution mode: {execution}")
@@ -482,22 +538,21 @@ def score_full_fixture(
 
     try:
         output = json.loads(output_path.read_text())
-        predicted = project_geometry(shape(output["features"][0]["geometry"]))
-        reference = project_geometry(load_reference_geometry(fixture.reference_path))
-        metrics = compare_geometries(predicted, reference)
         summary = json.loads(completed.stdout)
         event_profile = summary.get("event_profile") if isinstance(summary, dict) else None
         stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
         properties = output["features"][0].get("properties", {})
+        output_geometry = shape(output["features"][0]["geometry"])
+        metrics = score_output_geometry(output_geometry, fixture.reference_path, min_iou) if score_reference else None
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
             mode="full",
-            passed=metrics["iou"] >= min_iou,
-            iou=metrics["iou"],
-            area_ratio=metrics["area_ratio"],
-            centroid_distance_m=metrics["centroid_distance_m"],
-            vertices=count_vertices(shape(output["features"][0]["geometry"])),
+            passed=True if metrics is None else metrics["passed"],
+            iou=None if metrics is None else metrics["iou"],
+            area_ratio=None if metrics is None else metrics["area_ratio"],
+            centroid_distance_m=None if metrics is None else metrics["centroid_distance_m"],
+            vertices=count_vertices(output_geometry),
             style=summary.get("style"),
             duration_s=duration_s,
             georeference_source=summary.get("georeference_source"),
@@ -520,6 +575,7 @@ def score_full_fixture_in_process(
     city_overrides: bool,
     no_catalog: bool,
     debug_artifacts: bool,
+    score_reference: bool = True,
 ) -> BenchmarkScore:
     from .cli import stage_elapsed_seconds
     from .runner import BoundaryBuildOptions, build_boundary
@@ -543,19 +599,18 @@ def score_full_fixture_in_process(
             progress=progress,
         )
         duration_s = time.perf_counter() - started
-        predicted = project_geometry(shape(result.geojson["features"][0]["geometry"]))
-        reference = project_geometry(load_reference_geometry(fixture.reference_path))
-        metrics = compare_geometries(predicted, reference)
+        output_geometry = shape(result.geojson["features"][0]["geometry"])
+        metrics = score_output_geometry(output_geometry, fixture.reference_path, min_iou) if score_reference else None
         properties = result.geojson["features"][0].get("properties", {})
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
             mode="full",
-            passed=metrics["iou"] >= min_iou,
-            iou=metrics["iou"],
-            area_ratio=metrics["area_ratio"],
-            centroid_distance_m=metrics["centroid_distance_m"],
-            vertices=count_vertices(shape(result.geojson["features"][0]["geometry"])),
+            passed=True if metrics is None else metrics["passed"],
+            iou=None if metrics is None else metrics["iou"],
+            area_ratio=None if metrics is None else metrics["area_ratio"],
+            centroid_distance_m=None if metrics is None else metrics["centroid_distance_m"],
+            vertices=count_vertices(output_geometry),
             style=result.summary.get("style"),
             duration_s=duration_s,
             georeference_source=result.summary.get("georeference_source"),
@@ -567,6 +622,16 @@ def score_full_fixture_in_process(
         )
     except Exception as exc:
         return failed_full_score(fixture, str(exc), duration_s=time.perf_counter() - started)
+
+
+def score_output_geometry(output_geometry, reference_path: Path, min_iou: float) -> dict[str, Any]:
+    predicted = project_geometry(output_geometry)
+    reference = project_geometry(load_reference_geometry(reference_path))
+    metrics = compare_geometries(predicted, reference)
+    return {
+        "passed": metrics["iou"] >= min_iou,
+        **metrics,
+    }
 
 
 def failed_full_score(fixture: BenchmarkFixture, error: str, *, duration_s: float | None = None) -> BenchmarkScore:
@@ -825,6 +890,12 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     if skipped_by_status:
         skipped_reasons = ", ".join(f"{reason}={count}" for reason, count in skipped_by_status.items())
         skipped_text = f"{skipped_text} ({skipped_reasons})"
+    if summary.get("smoked_skipped_fixtures"):
+        skipped_text = (
+            f"{skipped_text}, {summary['smoked_skipped_fixtures']} smoke-checked, "
+            f"{summary.get('failed_smoked_skipped_fixtures', 0)} smoke failed, "
+            f"smoke total {format_duration(summary.get('smoked_skipped_duration_s'))}"
+        )
     print(
         f"{status} {report['mode']} benchmark: "
         f"{summary['passed_fixtures']}/{summary['scored_fixtures']} scored fixtures, "
@@ -838,8 +909,10 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     for row in report["scores"]:
         row_status = "PASS" if row["passed"] else "FAIL"
         if row["status"] != "active":
-            row_status = "SKIP"
-        iou = f"{row['iou']:.3f}" if row["iou"] is not None else "err"
+            row_status = "SMOKE" if row.get("duration_s") is not None and row["passed"] else "SKIP"
+            if row.get("error"):
+                row_status = "FAIL"
+        iou = f"{row['iou']:.3f}" if row["iou"] is not None else ("err" if row.get("error") else "-")
         area = f"{row['area_ratio']:.2f}" if row["area_ratio"] is not None else "-"
         duration = format_duration(row.get("duration_s"))
         vertices = str(row["vertices"]) if row["vertices"] is not None else "-"

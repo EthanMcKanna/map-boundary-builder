@@ -2374,6 +2374,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   warmup path redeployed as `dpl_Eo2tEYqgD8nWD1y4q8VfSawnGmGk`; live
   `/api/health?warm=ocr` returned pipeline `pipeline-c0a1b5f5f20e38fe`,
   `rapidocr_inference_warmed: true`, `rapidocr_s` 1.794s, and total 2.635s.
+- Benchmark skipped-fixture smoke mode now lets drifted fixtures run through
+  the full generator without scoring stale screenshot/reference IoU. This turns
+  the repeated manual changed-market smokes into a reusable gate:
+  `--smoke-skipped` records source/confidence/catalog slug and fails on
+  generation errors, while `--require-smoked-catalog-miss` can be applied with
+  targeted `--only` filters when a subset must stay off catalog fast paths.
+  Fresh-cache proof `out/smoke-skipped-drift-all-20260529/full-report.json`
+  smoke-checked the six Houston/Miami/Bay Area drift fixtures with zero smoke
+  failures in 2.90s. The Tesla/Zoox current-verified catalog entries stayed on
+  `catalog-shape-match`, while the three Waymo drift screenshots stayed on
+  OCR/georeference with `catalog_slug: null`. The stricter Waymo-only catalog
+  miss gate `out/smoke-skipped-waymo-catalog-miss-20260529/full-report.json`
+  passed all three in 2.79s. A global catalog-miss requirement is intentionally
+  too blunt because reference-mismatch data debt and valid current-verified
+  catalog entries are separate policy states.
 
 ## Remaining Bottlenecks
 
