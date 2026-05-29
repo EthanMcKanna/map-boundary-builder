@@ -358,7 +358,7 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(classifier_engine.use_cls_calls, [True])
         self.assertEqual([label.text for label in labels], ["Southchase"])
 
-    def test_warm_rapidocr_runtime_runs_one_synthetic_fast_pass(self) -> None:
+    def test_warm_rapidocr_runtime_runs_synthetic_fast_pass_for_common_detectors(self) -> None:
         engine = FakeRapidOcrEngine({False: [[unit_ocr_box(), "Miami", 0.98]]})
         warm_rapidocr_runtime.cache_clear()
         try:
@@ -366,8 +366,11 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertTrue(warm_rapidocr_runtime())
                 self.assertTrue(warm_rapidocr_runtime())
 
-            rapidocr.assert_called_once_with(ocr_module.RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN)
-            self.assertEqual(engine.use_cls_calls, [False])
+            self.assertEqual(
+                [call.args[0] for call in rapidocr.call_args_list],
+                [ocr_module.RAPIDOCR_DET_LIMIT_SIDE_LEN, ocr_module.RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN],
+            )
+            self.assertEqual(engine.use_cls_calls, [False, False])
         finally:
             warm_rapidocr_runtime.cache_clear()
 

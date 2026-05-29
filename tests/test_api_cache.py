@@ -261,6 +261,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_side_len"], 640)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 640)
+        self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608, 640])
         self.assertNotIn("warm", cold)
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
         prewarm.assert_called_once_with()

@@ -25,7 +25,7 @@ from .runtime_config import (
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
-    rapidocr_warm_detector_limit,
+    rapidocr_warm_detector_limits,
 )
 
 
@@ -268,7 +268,6 @@ def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
 @lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
     try:
-        engine = rapidocr_engine(rapidocr_warm_detector_limit())
         sample = np.full((128, 384, 3), 255, dtype=np.uint8)
         cv2.putText(
             sample,
@@ -280,7 +279,8 @@ def warm_rapidocr_runtime() -> bool:
             4,
             cv2.LINE_AA,
         )
-        engine(sample, use_cls=False)
+        for detector_limit in rapidocr_warm_detector_limits():
+            rapidocr_engine(detector_limit)(sample, use_cls=False)
     except Exception:
         return False
     return True
