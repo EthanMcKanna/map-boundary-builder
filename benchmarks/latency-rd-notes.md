@@ -3309,3 +3309,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   This improves the previous production bordered proof at 0.147s and the
   earlier canonical-OCR-only proof at 0.279s. Repeating the bordered filename
   hit raw run cache in 0.00484s server time.
+- Made OCR label caching memory-first by default, with disk JSON persistence
+  opt-in through `MAP_BOUNDARY_OCR_DISK_CACHE=1`. Direct OCR A/Bs on warmed
+  Avride Dallas showed disk writes are small but real on misses, often tens of
+  milliseconds, while the production API already relies on run-result caching
+  plus in-process visual/canonical OCR memory hits for immediate variants.
+  Focused tests prove the default no-disk behavior and opt-in disk round trip.
+  Validation passed 178/178 pytest, `compileall`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  The stable rerun of the in-process default benchmark
+  `out/ocr-memory-default3-20260529/full-report.json` passed 8/8 scored,
+  skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU 0.943, total
+  0.51s. The accepted in-process no-catalog benchmark
+  `out/ocr-memory-nocatalog2-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.962, min IoU 0.931, total 3.79s, max 1.07s. The first no-catalog
+  timing sample was rejected as noisy/slower, so keep watching production proof
+  rather than over-weighting one local run. Changed-market smoke
+  `out/ocr-memory-changed-smoke-20260529/full-report.json` smoke-checked the
+  user-confirmed changed Bay Area/Houston/Miami fixtures with zero failures.

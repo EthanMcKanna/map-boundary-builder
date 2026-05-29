@@ -52,6 +52,11 @@ OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK = 0xF8
 OCR_BORDER_COLOR_TOLERANCE = 6
 OCR_BORDER_ROW_MATCH_RATIO = 0.995
 OCR_MEMORY_CACHE_MAX = 128
+OCR_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_OCR_DISK_CACHE", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 OCR_CACHE_DEPENDENCY_PACKAGES = (
     "onnxruntime",
     "opencv-python-headless",
@@ -405,6 +410,8 @@ def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
     if cached is not None:
         _OCR_MEMORY_CACHE.move_to_end(cache_key)
         return cached
+    if not OCR_DISK_CACHE_ENABLED:
+        return None
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
     if not cache_path.exists():
         return None
@@ -420,6 +427,8 @@ def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
 def write_ocr_cache(cache_key: str, labels: list[OcrLabel]) -> None:
     cached = tuple(labels)
     remember_ocr_memory_cache(cache_key, cached)
+    if not OCR_DISK_CACHE_ENABLED:
+        return
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)

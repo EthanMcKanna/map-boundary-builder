@@ -135,6 +135,42 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
 
+    def test_ocr_cache_does_not_write_disk_by_default(self) -> None:
+        label = OcrLabel("Miami Beach", x=60, y=37, width=100, height=34, confidence=96)
+
+        with TemporaryDirectory() as workdir:
+            with (
+                patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir)),
+                patch.object(ocr_module, "OCR_DISK_CACHE_ENABLED", False),
+            ):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    write_ocr_cache("unit-test-ocr-cache", [label])
+                    self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
+                    _OCR_MEMORY_CACHE.clear()
+                    self.assertIsNone(read_ocr_cache("unit-test-ocr-cache"))
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
+            self.assertEqual(list(Path(workdir).glob("*.json")), [])
+
+    def test_ocr_disk_cache_can_be_enabled(self) -> None:
+        label = OcrLabel("Miami Beach", x=60, y=37, width=100, height=34, confidence=96)
+
+        with TemporaryDirectory() as workdir:
+            with (
+                patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir)),
+                patch.object(ocr_module, "OCR_DISK_CACHE_ENABLED", True),
+            ):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    write_ocr_cache("unit-test-ocr-cache", [label])
+                    self.assertTrue(list(Path(workdir).glob("*.json")))
+                    _OCR_MEMORY_CACHE.clear()
+                    self.assertEqual(read_ocr_cache("unit-test-ocr-cache"), (label,))
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
     def test_ocr_memory_cache_evicts_oldest_entries(self) -> None:
         label = OcrLabel("Dallas", x=60, y=37, width=100, height=34, confidence=96)
 
