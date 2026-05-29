@@ -387,6 +387,20 @@ path again.
   `out/active-current-catalog-stale-no-network-20260529/report.json` kept Bay
   Area Waymo, Houston Waymo, and Miami Waymo on OCR/georeference with
   `catalog_slug: null` and zero attempted geocoder/OSM network calls.
+- Production active-catalog-reactivation deployment
+  `dpl_3Yff1cvnwn3UAbY5xudUQERz4ijw` is Ready and aliased to
+  `https://mapboundary.app`; health reports `pipeline-a493658901ae7386` and
+  `tesseract: null`. Production smokes with `include_overlay=0` returned
+  `catalog-shape-match` for Bay Area Tesla, Bay Area Zoox, and Houston Tesla
+  with no overlay payload. The first uncached post-deploy server event spans
+  were 0.187s, 0.353s, and 0.318s respectively. Cache-busted uncached repeats
+  under `out/prod-active-current-catalog-uncached-repeat-20260529/report.json`
+  preserved the same catalog slugs/confidences and measured 0.116s, 0.268s, and
+  0.284s server generation spans; Bay Area Tesla and Houston Tesla also stayed
+  under 1s end-to-end wall time at 0.967s and 0.990s, while Bay Area Zoox still
+  had 2.660s wall despite a sub-0.3s generation span. The same production smoke
+  kept Bay Area Waymo, Houston Waymo, and Miami Waymo on OCR/georeference with
+  `catalog_slug: null`.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
