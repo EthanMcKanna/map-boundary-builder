@@ -2441,6 +2441,34 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/road-feature-precompute-waymo-catalog-miss-20260529/full-report.json`
   kept the user-confirmed Houston/Miami/Bay Area Waymo screenshots on
   OCR/georeference with `catalog_slug: null`.
+- Current-source audit for the user-confirmed Houston/Miami/Bay Area Waymo
+  drift: the bundled `service_area_catalog` entries are byte-different from
+  the historical fixture JSON files but geometrically identical to the current
+  `av-coverage-checker`, `robotaxi-service-areas`, and newer Downloads GeoJSON
+  sources. The remaining miss is not stale catalog data; it is that the
+  screenshot-extracted pixel shape only scores about 0.57-0.61 IoU against
+  those current references, far below the strict catalog guard. Loosening that
+  into a filename-only fast path would be a source-of-truth shortcut rather than
+  a general image-understanding speedup, so the drifted Waymo markets stay on
+  OCR/georeference until there is stronger current-shape proof.
+- Rejected RapidOCR service-fill neutralization. Replacing highly saturated
+  bright-blue service fill with a pale neutral background reduced some detector
+  clutter, but it also erased almost all useful map labels on Miami, Houston,
+  and Nashville (`['Miami']`, `['Houston']`, and `['Nashville']` only) and was
+  often slower. This is not robust enough for arbitrary map screenshots.
+- Rejected OCR-from-loaded-RGB reuse as a default path. A direct label probe
+  showed similar labels and small wins on several screenshots, but the corrected
+  full pipeline failed the no-catalog regression gate:
+  `out/rgb-ocr-reuse-fixed-full-20260529/full-report.json` dropped Austin Tesla
+  IoU from 0.973925 to 0.965638, lowered average IoU, and increased total time
+  to 7.16s. The earlier env-gated run that preserved accuracy was only deferring
+  OCR until after RGB load and also regressed the non-road slice from 2.06s to
+  2.58s, so the prototype was reverted.
+- Rejected a short grace wait for road-feature precompute. The normal full
+  no-catalog run with a 25ms grace passed accuracy but took 4.16s, while the
+  same code with the grace disabled took 3.81s. Waiting for near-complete
+  feature precompute is not a default latency win; the nonblocking reuse/fallback
+  path remains better.
 
 ## Remaining Bottlenecks
 
