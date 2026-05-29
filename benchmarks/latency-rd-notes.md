@@ -3496,4 +3496,6 @@ OCR/georeference rather than returning outdated fast-path polygons.
   2.584s`, while `avride-dallas-ui-...-ui.png` normalized to the same semantic
   filename hint and hit raw run cache at `total_before_send_s: 0.006s`, returning
   the same Dallas bbox, `ocr-georeference:nominatim-label-fit`, and confidence
-  0.847.
+  0.847. Playwright browser verification loaded the deployed page, found zero
+  console warnings/errors, and confirmed `window.__MAP_BOUNDARY_PIPELINE_VERSION__`
+  is `pipeline-47f7f83c39e970ec`.
