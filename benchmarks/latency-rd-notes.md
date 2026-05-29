@@ -3431,3 +3431,11 @@ OCR/georeference rather than returning outdated fast-path polygons.
   border PNG reused canonical extraction/OCR at `build_boundary_s: 0.089s` and
   `total_before_send_s: 0.094s`; repeating the identical border filename hit raw
   run cache at `total_before_send_s: 0.002s`.
+- Production deployment `dpl_D7vgekwaT8N99V1HLWjuzNi1CKBs` adds HTTP 503 for
+  unhealthy health payloads and is explicitly aliased to `https://mapboundary.app`.
+  Live healthy `/api/health?warm=ocr` and HEAD `/api/health` both returned HTTP
+  200. The generation path was unchanged: a fresh Avride PNG miss preserved the
+  Dallas bbox/source at `build_boundary_s: 2.808s` and `total_before_send_s:
+  2.825s`; a fresh 2px Avride WebP-border variant reused canonical
+  extraction/OCR at `build_boundary_s: 0.114s` and `total_before_send_s:
+  0.123s`.
