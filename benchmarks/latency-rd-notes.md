@@ -2791,6 +2791,33 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `ocr-georeference:nominatim-label-fit+osm-road-refine`; it completed server
   time before send in 4.754s with 3.200s OCR, improved from the prior documented
   Miami production smoke at 8.491s server / 5.818s OCR.
+- Rejected ONNX Runtime spin-duration/backoff tuning as a production latency
+  default. Official ORT threading guidance says spinning can improve inference
+  speed at the cost of CPU cycles, and documents `spin_duration_us` plus
+  `spin_backoff_max` as tuning keys. Direct OCR probes kept text output stable,
+  but the best sampled candidate, 2000us with backoff 8, only moved the direct
+  two-pass sample from 5.150s to 5.069s and the full drift-aware no-catalog
+  gate from `out/spinprobe-current-nocatalog-20260529/full-report.json` at
+  3.62s to `out/spinprobe-duration2000-backoff8-nocatalog-20260529/full-report.json`
+  at 3.59s. Because that delta is inside local timing noise and changes only
+  scheduler behavior, the production default remains the simpler CPU-arena plus
+  normal spinning configuration.
+- Rejected a city-hinted road-only georeference shortcut as a replacement for
+  OCR. With network blocked it returned no result for the eight active fixtures
+  or the Miami/Houston/Bay Area changed-market probes because the city-context
+  road search does not have the right local road seeds and confidence support.
+  With live road fetches enabled for Dallas, Los Angeles, Nashville, and Phoenix
+  it still returned no result and took 3.9-26.9s, making it worse than the
+  current OCR path for latency and reliability.
+- Rejected guarded crop-OCR for city-provided catalog misses. Although the
+  earlier raw OCR crop hypothesis had lower isolated OCR CPU on some screenshots,
+  the runner's current overlap/refine behavior made it slower in the real smoke
+  path. The no-crop targeted changed-area Waymo smoke
+  `out/crop-citymiss-target-baseline-20260529/full-report.json` completed
+  Houston/Miami/Bay Area Waymo in 1.57s total, while the crop implementation
+  `out/crop-citymiss-stale-smoke-20260529/full-report.json` needed 3.57s for
+  the same three OCR/georeference smoke successes. The crop path was removed
+  before shipping.
 
 ## Remaining Bottlenecks
 
