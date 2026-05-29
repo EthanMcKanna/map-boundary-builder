@@ -2136,6 +2136,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/ocr-visual-cache-no-catalog2-20260529/full-report.json` both passed 8/8
   scored fixtures with avg IoU 0.962 and min IoU 0.931 at 3.62s and 3.60s,
   inside the current local timing noise while preserving outputs.
+- Production OCR visual-cache deployment `dpl_C5dgqSrPKF8Uryf5aWU7xiKxjpab`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports the expected changed pipeline hash
+  `pipeline-fefccd337975ad3b`. The prebuilt bundle stayed on the 296.59 MB
+  runtime-installation path. Cache-busted production proof is in
+  `out/prod-ocr-visual-cache-smoke-20260529/report.json`: two Miami PNGs with
+  identical decoded pixels but different metadata both used
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, `catalog_slug: null`,
+  confidence 0.864, road score 0.681518, and the same bbox. The first run was
+  cold/noisy at server `build_boundary_s` 7.305s, OCR 4.483s, and georeference
+  1.709s. The second same-pixel/different-metadata run reused the visual OCR
+  cache, dropping server `build_boundary_s` to 1.056s and OCR to 0.000075s,
+  with georeference at 0.200s. HTTP elapsed also fell from 9.401s to 2.776s.
+  The production warm endpoint reported catalog/seed/RapidOCR prewarm
+  `status: ok` before the generation pair.
 
 ## Remaining Bottlenecks
 
