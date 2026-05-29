@@ -3462,4 +3462,8 @@ OCR/georeference rather than returning outdated fast-path polygons.
   root HTML embeds the new pipeline hash. A fresh Avride Dallas PNG miss with
   normalized cache disabled preserved the Dallas bbox/source at
   `build_boundary_s: 2.553s` and `total_before_send_s: 2.873s`; repeating the
-  same raw upload hit the run cache at `total_before_send_s: 0.003s`.
+  same raw upload hit the run cache at `total_before_send_s: 0.003s`. The
+  real UI-shaped POST (`include_overlay=0`, normalized cache disabled) with a
+  different filename missed the run-result cache but reused warm
+  extraction/OCR caches for the same visual content, preserving the Dallas
+  bbox/source at `build_boundary_s: 0.133s` and `total_before_send_s: 0.140s`.
