@@ -13,9 +13,10 @@ reports but are not scored as model regressions until the reference polygons and
 screenshots are refreshed.
 
 May 28 user confirmation: Houston, Miami, and Bay Area have changed from the
-saved ground truth. The affected local variants are Bay Area Tesla/Waymo/Zoox,
-Houston Tesla/Waymo, and Miami Waymo. Treat them as data debt, not model
-regressions, during latency experiments.
+saved ground truth. After probing the current external reference repo, Bay Area
+Tesla, Bay Area Zoox, and Houston Tesla now score cleanly again and are active
+benchmark fixtures. Bay Area Waymo, Houston Waymo, Miami Waymo, and Las Vegas
+Zoox remain data debt rather than model-regression signals.
 
 The same drifted variants are now marked stale in the production service-area
 catalog and excluded from catalog matching until refreshed. Their JSON files
@@ -333,6 +334,25 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   min IoU 0.943, and total 2.78s. This separates warm algorithmic latency from
   Vercel cold/runtime/package overhead, which remains visible in production
   stale-market OCR smokes.
+- Current fixture-reactivation head: a temporary all-active current-reference
+  probe showed Bay Area Tesla (0.954 IoU), Bay Area Zoox (0.993 IoU), and
+  Houston Tesla (0.945 IoU) now score cleanly against the external reference
+  polygons, while Bay Area Waymo (0.706), Houston Waymo (0.413), Miami Waymo
+  (0.538), and Las Vegas Zoox (0.013) still do not. Those three passing drifted
+  fixtures were removed from `benchmarks/service-area-fixtures.json`, increasing
+  active benchmark coverage without re-enabling their conservative stale
+  production catalog entries. Focused benchmark/catalog tests passed 17 tests;
+  full pytest passed 99 tests and 9 subtests; `compileall`, `node --check`, and
+  `git diff --check` passed. The expanded production-shaped default benchmark
+  `out/reactivated-prodshape-default-20260529/full-report.json` passed 11/11
+  scored fixtures, skipped 4 `reference_mismatch` fixtures, avg IoU 0.985, min
+  IoU 0.943, total 1.63s. The expanded production-shaped no-catalog benchmark
+  `out/reactivated-prodshape-no-catalog-20260529/full-report.json` passed 11/11,
+  avg IoU 0.962, min IoU 0.931, total 4.50s. The historical subprocess default
+  gate `out/reactivated-subprocess-default-20260529/full-report.json` passed
+  11/11, avg IoU 0.985, min IoU 0.943, total 4.35s, and the extraction gate
+  `out/reactivated-extraction-20260529/extraction-report.json` passed 11/11,
+  avg IoU 0.975, min IoU 0.900.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8

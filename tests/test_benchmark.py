@@ -10,24 +10,30 @@ from map_boundary_builder.benchmark import (
 )
 
 
-KNOWN_CHANGED_SERVICE_AREA_FIXTURES = {
-    "bay-area-tesla",
+KNOWN_REFERENCE_MISMATCH_FIXTURES = {
     "bay-area-waymo",
-    "bay-area-zoox",
-    "houston-tesla",
     "houston-waymo",
+    "las-vegas-zoox",
     "miami-waymo",
 }
 
+CURRENT_REFERENCE_BACKED_FIXTURES = {
+    "bay-area-tesla",
+    "bay-area-zoox",
+    "houston-tesla",
+}
 
-def test_known_changed_service_area_fixtures_are_reference_mismatches() -> None:
+
+def test_known_stale_reference_fixtures_are_reference_mismatches() -> None:
     config = load_fixture_config(Path("benchmarks/service-area-fixtures.json"))
     fixtures = config["fixtures"]
 
-    assert KNOWN_CHANGED_SERVICE_AREA_FIXTURES <= set(fixtures)
-    for slug in KNOWN_CHANGED_SERVICE_AREA_FIXTURES:
+    assert KNOWN_REFERENCE_MISMATCH_FIXTURES <= set(fixtures)
+    for slug in KNOWN_REFERENCE_MISMATCH_FIXTURES:
         assert fixtures[slug]["status"] == "reference_mismatch"
-        assert "changed" in fixtures[slug]["note"]
+        assert "changed" in fixtures[slug]["note"] or "different shapes" in fixtures[slug]["note"]
+
+    assert CURRENT_REFERENCE_BACKED_FIXTURES.isdisjoint(fixtures)
 
 
 def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path) -> None:
