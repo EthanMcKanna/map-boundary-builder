@@ -3035,3 +3035,27 @@ OCR/georeference rather than returning outdated fast-path polygons.
   supplied as a city override or catalog match. The filename fast path removes
   the major Avride Dallas class of avoidable context latency, but truly
   anonymous screenshots still need a faster first-principles context resolver.
+- May 29 continuation correction: the user re-confirmed that Houston, Miami,
+  and Bay Area changed from the saved ground-truth screenshot/reference pairs.
+  The fixture config still keeps Bay Area Tesla/Waymo/Zoox, Houston
+  Tesla/Waymo, Miami Waymo, and Las Vegas Zoox as `reference_mismatch`, so they
+  are smoke/data-debt checks rather than hard IoU gates. The active production
+  catalog entries for Houston/Miami/Bay Area were rechecked against the current
+  external `av-coverage-checker` polygons and matched at 1.000000 geometry IoU;
+  focused drift/catalog tests passed 4/4.
+- Reliability hardening after the filename-hint fast path: server run-result
+  cache keys now include the basename filename hint and use cache version
+  `run-result-v5`, while browser local cache keys now include city plus
+  filename hint in a structured settings signature and bumped raw/pixel cache
+  versions. This prevents the same pixels uploaded with different city/filename
+  hints from reusing a context-dependent Auto result. Filename context parsing
+  also ignores common image extensions and the token `hint`, avoiding junk
+  cached geocode probes like `Dallas Png`. Validation passed 167/167 pytest,
+  `compileall`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. Fresh sequential gates preserved accuracy: default
+  catalog benchmark `out/cachehint-default-seq-20260529/full-report.json`
+  passed 8/8 scored fixtures with 7 `reference_mismatch` skips, avg IoU 0.993,
+  min IoU 0.943; no-catalog generalization benchmark
+  `out/cachehint-nocatalog-seq-20260529/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.962, min IoU 0.931. The no-catalog timing was cold
+  and noisy, so it is retained as regression evidence rather than speed proof.

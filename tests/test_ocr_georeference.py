@@ -1296,6 +1296,8 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         self.assertIn("Dallas", queries)
         self.assertNotIn("Avride Dallas", queries)
         self.assertNotIn("Small Variant", queries)
+        self.assertNotIn("Dallas Png", queries)
+        self.assertNotIn("Variant Png", queries)
 
     def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
         dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")

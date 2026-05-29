@@ -92,9 +92,9 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_RAW_VERSION = "image-to-geojson-v2";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v3";
-const RUN_CACHE_SETTING_FIELDS = ["include_overlay", "min_confidence", "min_control_points", "simplify_px"];
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v4";
+const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
@@ -724,9 +724,12 @@ async function buildRunCacheKeys(file, formData) {
   try {
     const pipelineVersion = await fetchRunCachePipelineVersion();
     if (!pipelineVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
-    const settingsSignature = RUN_CACHE_SETTING_FIELDS
-      .map((field) => `${field}=${String(formData.get(field) ?? "")}`)
-      .join("&");
+    const settingsSignature = JSON.stringify({
+      filename_hint: file.name || "",
+      settings: Object.fromEntries(
+        RUN_CACHE_SETTING_FIELDS.map((field) => [field, String(formData.get(field) ?? "")]),
+      ),
+    });
     const [rawImageHash, settingsHash] = await Promise.all([
       rawImageContentHash(file),
       sha256Hex(new TextEncoder().encode(settingsSignature)),

@@ -35,7 +35,7 @@ MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation"
-RUN_RESULT_CACHE_VERSION = "run-result-v4"
+RUN_RESULT_CACHE_VERSION = "run-result-v5"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
@@ -563,9 +563,16 @@ def run_result_cache_key_for_hash(
         "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
+        "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def filename_hint_cache_value(filename_hint: object) -> str:
+    if not filename_hint:
+        return ""
+    return Path(str(filename_hint)).name
 
 
 def normalized_image_sha256(image_bytes: bytes) -> str:

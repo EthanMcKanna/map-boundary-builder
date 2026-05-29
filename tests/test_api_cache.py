@@ -21,6 +21,7 @@ from api.index import (
     jpeg_commentless_run_result_cache_key,
     jpeg_commentless_sha256,
     json_response_body,
+    filename_hint_cache_value,
     normalized_image_sha256,
     png_visual_run_result_cache_key,
     png_visual_sha256,
@@ -165,6 +166,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(min_control_points=4),
         )
+        changed_filename = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(filename_hint="Phoenix.png"),
+        )
         changed_preview_options = run_result_cache_key(
             b"image-a",
             None,
@@ -191,9 +197,25 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_image)
         self.assertNotEqual(base, changed_city)
         self.assertNotEqual(base, changed_options)
+        self.assertNotEqual(base, changed_filename)
         self.assertNotEqual(base, changed_preview_options)
         self.assertNotEqual(base, changed_mask_options)
         self.assertNotEqual(base, changed_overlay_mode)
+
+    def test_run_cache_filename_hint_uses_basename(self) -> None:
+        options = BoundaryBuildOptions(filename_hint="/tmp/uploads/Dallas.png")
+        same_basename = BoundaryBuildOptions(filename_hint="Dallas.png")
+        different_basename = BoundaryBuildOptions(filename_hint="Phoenix.png")
+
+        self.assertEqual(filename_hint_cache_value(options.filename_hint), "Dallas.png")
+        self.assertEqual(
+            run_result_cache_key(b"image-a", None, options),
+            run_result_cache_key(b"image-a", None, same_basename),
+        )
+        self.assertNotEqual(
+            run_result_cache_key(b"image-a", None, options),
+            run_result_cache_key(b"image-a", None, different_basename),
+        )
 
     def test_run_cache_key_depends_on_pipeline_version(self) -> None:
         with patch("api.index.get_pipeline_version", return_value="pipeline-a"):
