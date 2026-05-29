@@ -1978,6 +1978,22 @@ OCR/georeference rather than returning outdated fast-path polygons.
   skipped the same 7 reference mismatches, avg IoU 0.962, min IoU 0.931, total
   4.32s. `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
   and `git diff --check` passed.
+- Production low-res threshold deployment `dpl_B8DoaFf68zGTKweMBpdbXc6Hjt51`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-b7bad464ff6fbfff` with
+  `tesseract: null`. The prebuilt Vercel artifact stayed at the expected
+  296.59 MB bundle size. Cache-busted production smokes at
+  `out/prod-lowres-threshold-094-smoke-20260529/report.json` confirmed the
+  newly recovered degraded cases are now on the fast low-res shape path: the
+  360px issue #5 downsample completed with server `build_boundary_s` 0.121s,
+  source `catalog-shape-match:low-res-shape`, slug `nashville-waymo`, shape IoU
+  0.94394, and margin 0.266327; the -1 degree rotation completed with server
+  `build_boundary_s` 0.750s, source `catalog-shape-match:low-res-shape`, shape
+  IoU 0.941217, and margin 0.258405. Local before/after forcing the old 0.945
+  threshold showed the 360px downsample failed OCR/georeference, while the new
+  0.94 threshold returned the same Nashville bbox through the low-res shape path
+  in 0.0165s. The -1 degree rotation moved from the slower OCR-label hint path
+  at 0.5421s to the low-res shape path at 0.0267s.
 
 ## Remaining Bottlenecks
 
