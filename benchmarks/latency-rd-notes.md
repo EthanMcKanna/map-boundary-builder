@@ -3594,3 +3594,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   544 shifted Avride geometry to IoU 0.962212 versus the accepted 800px-cap
   output, while 480 preserved geometry but reduced controls/confidence and did
   not provide a meaningful speed win.
+- Production deployment `dpl_FxXtXyRbN9yT4ijHHDB54c1C7Afu` is explicitly
+  aliased to `https://mapboundary.app` with pipeline hash
+  `pipeline-dc9ed83256e7ee29`. Protected and public warm health checks returned
+  HTTP 200 with `ok: true`, `cv2 4.10.0`, warm `status: ok`, and
+  `rapidocr_purple_fill_max_dimension: 800`; public `HEAD /api/health` returned
+  HTTP 200, and the root HTML embeds the new hash. Fresh production Avride
+  Dallas PNG generation with `include_overlay=0` and
+  `normalized_cache_lookup=0` missed cache and preserved `Dallas`,
+  `purple-fill`, `ocr-georeference:nominatim-label-fit`, five controls, bbox
+  `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`, and confidence 0.922 at
+  `build_boundary_s: 1.711s` and `total_before_send_s: 1.786s`. That is faster
+  than the prior 800px-cap production miss at `1.803s` build and `1.867s`
+  total, with the same bbox/control count/confidence. Repeating the exact same
+  upload hit raw cache at `total_before_send_s: 0.002927s`.
