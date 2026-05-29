@@ -3840,3 +3840,30 @@ OCR/georeference rather than returning outdated fast-path polygons.
   1.188900s; the higher max was OCR timing variance on the unaffected Phoenix
   no-catalog path. Validation passed 196/196 pytest, compileall,
   `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+- Lowered the default large-image RapidOCR detector limit from 640 to the base
+  608 path after a sequential A/B kept the arbitrary no-catalog outputs
+  identical while trimming latency. The default controls
+  `out/default-control-nocatalog-seq-20260529/full-report.json` and
+  `out/default-control-nocatalog-seq-b-20260529/full-report.json` passed 8/8
+  scored active fixtures with 7 user-confirmed `reference_mismatch` skips, avg
+  IoU 0.961733, min IoU 0.931476, and totals 4.427986s / 4.554180s. The 608
+  candidate runs
+  `out/large-det608-nocatalog-seq-20260529/full-report.json` and
+  `out/large-det608-nocatalog-seq-b-20260529/full-report.json` matched the same
+  avg/min IoU, sources, and confidences, with totals 4.086830s / 3.891317s and
+  max active durations 0.953339s / 0.977468s. This also collapses
+  `/api/health?warm=ocr` from warming detector limits `[640, 608]` to `[608]`,
+  reducing warmup work without changing the OCR cache key dimensions or the
+  high-detail 1600px input cap. After applying the default change, focused
+  tests passed 115/115 and the full suite passed 196/196 with compileall,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  The post-change default catalog gate
+  `out/default-det608-default-20260529/full-report.json` stayed green with 8/8
+  scored, avg IoU 0.992917, min IoU 0.943345, and max active duration
+  0.096960s. The post-change no-catalog arbitrary gate
+  `out/default-det608-nocatalog-20260529/full-report.json` stayed green with
+  8/8 scored, avg IoU 0.961733, min IoU 0.931476, total 3.933296s, and max
+  active duration 0.902181s. The user-confirmed Houston/Miami/Bay Area drift
+  smoke `out/default-det608-changed-smoke-20260529/full-report.json` passed 6/6
+  in 0.391s total while keeping those changed markets as `reference_mismatch`
+  rather than stale-ground-truth accuracy scores.
