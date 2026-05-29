@@ -2224,6 +2224,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/prewarm-no-catalog-20260529/full-report.json` passed 8/8 with avg IoU
   0.962, min IoU 0.931, total 3.54s and preserved the Phoenix/Nashville
   road-refined sources.
+- Production runtime-prewarm deployment `dpl_BSeTYGE1hdqL9UfuYjA9xoT5UB8m`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports pipeline
+  `pipeline-967f1d437998b789`. Live `/api/health?warm=ocr` returned
+  `rapidocr_inference_warmed: true` with `rapidocr_s` 1.818s and total 2.656s.
+  A cache-busted Miami stale-area production upload stayed uncached with
+  `catalog_slug: null` and the expected road-refined OCR/georeference source,
+  but the first server build was still 6.529s (`ocr` 4.081s,
+  `georeference` 1.518s), so this is not a first-run production breakthrough.
+  A second same-pixel/different-metadata Miami upload reused the visual OCR
+  cache and returned the same bbox/confidence/road score with server
+  `build_boundary_s` 0.960s, OCR 0.000066s, and georeference 0.195s.
 
 ## Remaining Bottlenecks
 
