@@ -2709,7 +2709,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   timing run, and the default catalog gate stayed fast at 0.567s total with avg
   IoU 0.993/min 0.943. Houston, Miami, and Bay Area remain `reference_mismatch`
   data debt in these gates because their service areas have changed since the
-  saved screenshot/reference pairs.
+  saved screenshot/reference pairs. Production deployment
+  `dpl_FhMhvD5H2A222A1mokHLymB8WbST` built successfully with a 307.86 MB
+  pre-runtime-installation bundle and reported pipeline
+  `pipeline-18cebaedd4ac9d33` after `/api/health?warm=ocr`. A cache-busted
+  Avride Dallas PNG miss preserved `Dallas`, confidence 0.847, and
+  `ocr-georeference:nominatim-label-fit`; two fresh pixel-changed variants
+  completed at 2.808s server / 2.219s OCR and 2.594s server / 1.998s OCR,
+  improving on the previous documented 2.975s server / 2.500s OCR warmed miss.
+  Exact-repeat cache hits still return from the raw run cache in about 0.003s
+  server time.
 - Rejected road-search batch and feature-scale tuning as a durable win. Focused
   Phoenix/Nashville probes with `ROAD_SEARCH_BATCH_SIZE` at 512, 2048, and 4096
   preserved accuracy but were slower or too noisy than the current default.
