@@ -3543,3 +3543,20 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `total_before_send_s: 1.768s`, faster than the prior filename-cache production
   miss at 2.584s. Repeating the same upload hit raw cache at
   `total_before_send_s: 0.005s`.
+- Tightened the purple-fill cap from 1000px to a conservative 800px after
+  lower-bound probes. Avride Dallas at 800px preserved five controls, confidence
+  0.922, bbox `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`, and IoU
+  0.992590 versus the 1000px output while cutting local total to 0.702s with
+  OCR at 0.421s. A 700px probe was also close (IoU 0.994861), but 600px drifted
+  to IoU 0.956799 versus the 1000px output, so 800px is the safer default. This
+  uncovered a cache-versioning reliability gap: `runtime_config.py` was not in
+  `pipeline_version` sources, so changing an OCR runtime default did not change
+  the pipeline hash. Added `runtime_config.py` to the digest and covered it with
+  a test so future runtime tuning invalidates run caches. Validation passed
+  186/186 pytest, compileall, `node --check`, and `git diff --check`; default
+  active benchmark `out/adaptive-purple800-default-20260529/full-report.json`
+  passed 8/8 scored with avg IoU 0.992917/min 0.943345, no-catalog benchmark
+  `out/adaptive-purple800-nocatalog-20260529/full-report.json` passed 8/8
+  scored with avg IoU 0.961670/min 0.931476, and changed-market smoke
+  `out/adaptive-purple800-changed-smoke-20260529/full-report.json` passed six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures.

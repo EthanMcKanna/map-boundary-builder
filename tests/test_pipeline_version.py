@@ -30,3 +30,9 @@ def test_pipeline_version_tracks_api_handler_when_present() -> None:
 
     if Path("api/index.py").exists():
         assert "api/index.py" in sources
+
+
+def test_pipeline_version_tracks_runtime_config() -> None:
+    sources = dict(pipeline_version_sources())
+
+    assert "runtime_config.py" in sources

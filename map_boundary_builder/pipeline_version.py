@@ -35,6 +35,7 @@ PIPELINE_VERSION_FILES = (
     "osm_roads.py",
     "pipeline_version.py",
     "runner.py",
+    "runtime_config.py",
 )
 PIPELINE_VERSION_REPO_FILES = (
     "api/index.py",

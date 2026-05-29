@@ -280,7 +280,7 @@ def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypat
     )
 
     monkeypatch.setattr(runner, "RAPIDOCR_MAX_DIMENSION", 1600)
-    monkeypatch.setattr(runner, "RAPIDOCR_PURPLE_FILL_MAX_DIMENSION", 1000)
+    monkeypatch.setattr(runner, "RAPIDOCR_PURPLE_FILL_MAX_DIMENSION", 800)
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
@@ -290,4 +290,4 @@ def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypat
 
     build_boundary(image_path, None, output_path)
 
-    assert ocr_kwargs == [{"rapidocr_max_dimension": 1000}]
+    assert ocr_kwargs == [{"rapidocr_max_dimension": 800}]
