@@ -49,6 +49,8 @@ OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK = 0xF8
+OCR_BORDER_COLOR_TOLERANCE = 6
+OCR_BORDER_ROW_MATCH_RATIO = 0.995
 OCR_MEMORY_CACHE_MAX = 128
 OCR_CACHE_DEPENDENCY_PACKAGES = (
     "onnxruntime",
@@ -77,6 +79,8 @@ def extract_ocr_labels(
     visual_cache_key: str | None = None
     near_visual_cache_key: str | None = None
     coarse_visual_cache_key: str | None = None
+    canonical_visual_cache_key: str | None = None
+    canonical_origin = (0.0, 0.0)
     if cache_key is not None:
         if prepared_bgr is not None:
             prepared_bgr = np.ascontiguousarray(prepared_bgr)
@@ -111,6 +115,28 @@ def extract_ocr_labels(
                     write_ocr_cache(visual_cache_key, labels)
                 if near_visual_cache_key is not None:
                     write_ocr_cache(near_visual_cache_key, labels)
+                return labels
+        canonical_bgr, canonical_origin = canonical_ocr_bgr(prepared_bgr)
+        canonical_visual_cache_key = ocr_canonical_visual_cache_key(
+            canonical_bgr,
+            use_tesseract=use_tesseract,
+        )
+        if canonical_visual_cache_key is not None and canonical_visual_cache_key not in {
+            cache_key,
+            visual_cache_key,
+            near_visual_cache_key,
+            coarse_visual_cache_key,
+        }:
+            cached = read_ocr_cache(canonical_visual_cache_key)
+            if cached is not None:
+                labels = shift_ocr_labels(cached, canonical_origin[0], canonical_origin[1])
+                write_ocr_cache(cache_key, labels)
+                if visual_cache_key is not None:
+                    write_ocr_cache(visual_cache_key, labels)
+                if near_visual_cache_key is not None:
+                    write_ocr_cache(near_visual_cache_key, labels)
+                if coarse_visual_cache_key is not None:
+                    write_ocr_cache(coarse_visual_cache_key, labels)
                 return labels
 
     rapid_words: list[OcrLabel] = run_rapidocr_words(
@@ -149,6 +175,16 @@ def extract_ocr_labels(
         near_visual_cache_key,
     }:
         write_ocr_cache(coarse_visual_cache_key, labels)
+    if canonical_visual_cache_key is not None and canonical_visual_cache_key not in {
+        cache_key,
+        visual_cache_key,
+        near_visual_cache_key,
+        coarse_visual_cache_key,
+    }:
+        write_ocr_cache(
+            canonical_visual_cache_key,
+            shift_ocr_labels(labels, -canonical_origin[0], -canonical_origin[1]),
+        )
     return labels
 
 
@@ -216,6 +252,80 @@ def ocr_quantized_visual_cache_key(
     digest.update(str(tuple(quantized.shape)).encode("ascii"))
     digest.update(quantized.data)
     return ocr_cache_key_for_digest(digest_kind, digest.hexdigest(), use_tesseract=use_tesseract)
+
+
+def ocr_canonical_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+    if bgr is None:
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"bgr-canonical-content")
+    digest.update(str(tuple(bgr.shape)).encode("ascii"))
+    digest.update(np.ascontiguousarray(bgr).data)
+    return ocr_cache_key_for_digest("visual-canonical-bgr-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
+
+
+def canonical_ocr_bgr(bgr: np.ndarray | None) -> tuple[np.ndarray | None, tuple[float, float]]:
+    if bgr is None or bgr.ndim != 3 or bgr.shape[0] < 3 or bgr.shape[1] < 3:
+        return bgr, (0.0, 0.0)
+    contiguous = np.ascontiguousarray(bgr)
+    mask = canonical_border_mask(contiguous)
+    if mask is None:
+        return contiguous, (0.0, 0.0)
+
+    height, width = mask.shape
+    row_matches = np.mean(mask, axis=1) >= OCR_BORDER_ROW_MATCH_RATIO
+    col_matches = np.mean(mask, axis=0) >= OCR_BORDER_ROW_MATCH_RATIO
+    top = leading_true_count(row_matches)
+    bottom_trim = leading_true_count(row_matches[::-1])
+    left = leading_true_count(col_matches)
+    right_trim = leading_true_count(col_matches[::-1])
+    bottom = height - bottom_trim
+    right = width - right_trim
+    if top >= bottom or left >= right:
+        return contiguous, (0.0, 0.0)
+    if top == 0 and left == 0 and bottom == height and right == width:
+        return contiguous, (0.0, 0.0)
+    return np.ascontiguousarray(contiguous[top:bottom, left:right]), (float(left), float(top))
+
+
+def canonical_border_mask(bgr: np.ndarray) -> np.ndarray | None:
+    border_samples = np.concatenate(
+        (
+            bgr[0, :, :],
+            bgr[-1, :, :],
+            bgr[:, 0, :],
+            bgr[:, -1, :],
+        ),
+        axis=0,
+    )
+    border_color = np.median(border_samples.astype(np.int16), axis=0)
+    delta = np.max(np.abs(bgr.astype(np.int16) - border_color), axis=2)
+    return delta <= OCR_BORDER_COLOR_TOLERANCE
+
+
+def leading_true_count(values: np.ndarray) -> int:
+    count = 0
+    for value in values:
+        if not bool(value):
+            break
+        count += 1
+    return count
+
+
+def shift_ocr_labels(labels: tuple[OcrLabel, ...] | list[OcrLabel], dx: float, dy: float) -> list[OcrLabel]:
+    if dx == 0.0 and dy == 0.0:
+        return list(labels)
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + dx,
+            y=label.y + dy,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
 
 
 def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bool) -> str:

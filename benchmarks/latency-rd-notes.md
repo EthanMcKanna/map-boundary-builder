@@ -3154,3 +3154,30 @@ OCR/georeference rather than returning outdated fast-path polygons.
   downloaded mobile models on first use, adds another production model-bundling
   concern, and a monkey-patched no-catalog gate was slower at 7.631s with avg
   IoU 0.960857 versus the current 0.962 baseline.
+- Rejected crop-first OCR as a default optimization. A probe that OCRed only a
+  service-area-pixel crop plus margins 0.05, 0.10, 0.15, 0.20, and 0.30 passed
+  the eight active no-catalog fixtures, but it did not beat the current
+  full-image OCR baseline: best crop OCR total was 3.582s at margin 0.30 versus
+  roughly 3.495s for the current no-catalog baseline, and several margins
+  degraded min IoU into the 0.82-0.86 range. Keep full-image OCR as the
+  general path until a crop selector is clearly faster and no less robust.
+- Added canonical OCR visual caching for uniform border/padding variants. The
+  cache key trims only highly uniform outer rows/columns, stores OCR labels
+  relative to the trimmed content, and shifts them back on hit; cache misses
+  still run the same OCR and georeference pipeline. Local Avride Dallas proof
+  with a fresh cache and network blocked: the original 680x551 image took
+  0.802s total with 0.596s in OCR and produced bbox
+  `[-96.8303708,32.7654593,-96.7709423,32.8249834]`, confidence 0.709, source
+  `ocr-georeference:nominatim-label-fit`; a 2px white-border 684x555 variant
+  then reused canonical OCR labels, completed in 0.143s total, and preserved the
+  exact bbox/confidence/source. Validation passed 172/172 pytest,
+  `compileall`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. Default full benchmark
+  `out/canonical-border-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU
+  0.943. No-catalog benchmark
+  `out/canonical-border-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.962, min IoU 0.931. Changed-market smoke
+  `out/canonical-border-changed-smoke-20260529/full-report.json` smoke-checked
+  Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo with zero
+  failures while keeping them unscored as user-confirmed data debt.

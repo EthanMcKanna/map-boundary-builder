@@ -39,10 +39,12 @@ from map_boundary_builder.ocr import (
     OCR_MEMORY_CACHE_MAX,
     OcrLabel,
     _OCR_MEMORY_CACHE,
+    canonical_ocr_bgr,
     extract_ocr_labels,
     group_stacked_labels,
     load_rapidocr_bgr,
     ocr_cache_key,
+    ocr_canonical_visual_cache_key,
     ocr_coarse_visual_cache_key,
     ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
@@ -344,6 +346,60 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertEqual(read_ocr_cache(raw_second_key), (label,))
             self.assertEqual(read_ocr_cache(exact_second_key), (label,))
             self.assertEqual(read_ocr_cache(near_second_key), (label,))
+
+    def test_canonical_ocr_bgr_trims_uniform_border(self) -> None:
+        bgr = np.full((10, 12, 3), 255, dtype=np.uint8)
+        bgr[3:7, 4:9] = (12, 34, 56)
+
+        canonical, origin = canonical_ocr_bgr(bgr)
+
+        self.assertEqual(origin, (4.0, 3.0))
+        self.assertEqual(canonical.shape, (4, 5, 3))
+        np.testing.assert_array_equal(canonical, bgr[3:7, 4:9])
+
+    def test_canonical_ocr_cache_hit_shifts_labels_for_bordered_upload(self) -> None:
+        with TemporaryDirectory() as workdir:
+            first = Path(workdir) / "first.png"
+            second = Path(workdir) / "second.png"
+            base = Image.new("RGB", (20, 16), (255, 255, 255))
+            for x in range(7, 13):
+                for y in range(5, 10):
+                    base.putpixel((x, y), (0, 0, 0))
+            bordered = Image.new("RGB", (26, 24), (255, 255, 255))
+            bordered.paste(base, (3, 4))
+            base.save(first)
+            bordered.save(second)
+            first_bgr = rgb_to_bgr(np.array(base, dtype=np.uint8))
+            second_bgr = rgb_to_bgr(np.array(bordered, dtype=np.uint8))
+            calls: list[str] = []
+
+            def fake_rapidocr(image_path, *, prepared_bgr=None, composited_alpha=False):
+                calls.append(Path(image_path).name)
+                return [OcrLabel("Dallas", x=10, y=8, width=6, height=5, confidence=99)]
+
+            with (
+                patch.object(ocr_module, "OCR_CACHE_DIR", Path(workdir) / "ocr"),
+                patch.object(ocr_module, "tesseract_available", return_value=False),
+                patch.object(ocr_module, "run_rapidocr_words", side_effect=fake_rapidocr),
+            ):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    first_labels = extract_ocr_labels(first, prepared_bgr=first_bgr)
+                    second_labels = extract_ocr_labels(second, prepared_bgr=second_bgr)
+                    canonical_key = ocr_canonical_visual_cache_key(
+                        canonical_ocr_bgr(first_bgr)[0],
+                        use_tesseract=False,
+                    )
+                    self.assertIsNotNone(canonical_key)
+                    self.assertIsNotNone(read_ocr_cache(canonical_key))
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
+            self.assertEqual(calls, ["first.png"])
+            self.assertEqual(first_labels[0].x, 10)
+            self.assertEqual(first_labels[0].y, 8)
+            self.assertEqual(second_labels[0].x, 13)
+            self.assertEqual(second_labels[0].y, 12)
 
     def test_rapidocr_input_image_downscales_when_configured(self) -> None:
         with TemporaryDirectory() as workdir:
