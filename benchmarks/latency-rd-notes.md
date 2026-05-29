@@ -4620,3 +4620,18 @@ with zero failures in 0.531s.
   `out/road-digest-cache-nocatalog-20260529/full-report.json` both passed with
   zero active IoU drops, while Houston/Miami/Bay Area stayed unscored
   `reference_mismatch` smoke checks.
+- Production deploy `dpl_5Z27LSEoBGfbXMSESMwv2ja8miR3` is aliased to
+  `https://mapboundary.app`, reports `pipeline-041918946ebb6726`, keeps
+  `api/index.py (101.11MB) [sfo1]`, and `/api/health?warm=ocr` returned HTTP
+  200 with warm status OK. A cache-busted Miami Waymo road-refine proof
+  preserved bbox `[-80.3246122,25.6874445,-80.1175294,25.9401839]`,
+  confidence 0.864, and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`. The directly affected
+  road-refine metric improved from the immediately preceding production
+  baseline's `road_match_elapsed_s: 0.508251` to `0.485291`; whole-run
+  `total_before_send_s` was noisy/slower at 2.981785 versus 2.822386 because
+  OCR moved from 1.863047s to 1.965354s. A second warm cache-busted candidate
+  sample preserved the same geometry and returned `total_before_send_s:
+  0.429787`, OCR 0.157034s, georeference 0.080827s, and road refine 0.059052s.
+  Keep this as a small deterministic road-refine/cache improvement, not as an
+  overall OCR breakthrough.
