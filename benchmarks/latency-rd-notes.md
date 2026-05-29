@@ -4211,8 +4211,10 @@ with zero failures in 0.531s.
   known-service-area probe. The backend uses that flag to skip the redundant
   240px/400px pre-OCR catalog passes, extracts directly at the accepted 1400px
   catalog-miss refine resolution, and still tries one full-resolution catalog
-  match before falling through to OCR/georeference; generic no-city requests
-  ignore the flag and keep the existing 240px then 1400px fallback. A final
+  match before falling through to OCR/georeference. This shipped variant kept
+  generic no-city requests on the existing 240px then 1400px fallback; the
+  later generic handoff extension below broadens that once the browser has
+  already proven a tiny-probe miss. A final
   fresh-process local A/B on `/Users/ethanmckanna/Downloads/bay-area-waymo.png`
   preserved the exact output summary and bounds while cutting full fallback
   generation from 0.877044s to 0.780672s. Playwright verified the local UI
@@ -4301,3 +4303,29 @@ with zero failures in 0.531s.
   uploaded 1,198,637 bytes, and used the same `dallas-waymo`
   `catalog-shape-match` source, so this generic-known-service-area path is now
   about 3.65x faster with the same catalog result.
+- Generic catalog-miss handoff extension: after the user again flagged Houston,
+  Miami, and Bay Area as changed from the saved base truth, the backend now
+  honors `catalog_probe_missed=1` for no-city generic requests when the filename
+  does not contain a stale-only area hint. This skips the redundant 240px/400px
+  pre-OCR catalog probes after the browser has already received `catalog_miss`,
+  extracts once at the accepted 1400px refine resolution, then either accepts a
+  strict full-resolution catalog match or falls through to OCR/georeference.
+  The drift guard remains: Houston/Miami/Bay Area saved fixtures are
+  `reference_mismatch` smoke checks, and the Bay Area generic browser proof
+  intentionally completed with `catalogSlug: null` and
+  `ocr-georeference:nominatim-label-fit`. Fresh-cache targeted A/B with network
+  blocked preserved exact output bboxes, sources, confidence, and output IoU
+  1.0 while improving `Waymo Houston.png` from 1.760478s to 0.239589s,
+  `Waymo Miami.png` from 1.747113s to 0.256643s, and
+  `waymo bay area.png` from 1.379578s to 0.107316s. Local Playwright validated
+  generic `IMG_3333.PNG` Bay Area: 27.0 KB `IMG_3333.catalog-probe.jpg`
+  returned HTTP 200 `catalog_miss`, then the 847.1 KB full upload completed as
+  `ocr-georeference:nominatim-label-fit` with confidence 0.877,
+  `catalogSlug: null`, and `build_boundary_s` 0.234794. Focused runner/API
+  tests passed 43 tests, full pytest passed 213 tests plus 9 subtests,
+  drift-aware default
+  `out/generic-miss-handoff-default-20260529/full-report.json` stayed green at
+  8/8 scored fixtures with seven reference-mismatch smokes, avg IoU 0.993/min
+  0.943, and no-catalog
+  `out/generic-miss-handoff-nocatalog-20260529/full-report.json` stayed green
+  at avg IoU 0.962/min 0.931 against the generic-probe baselines.

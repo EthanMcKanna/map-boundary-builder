@@ -387,7 +387,7 @@ def test_catalog_probe_missed_skips_low_res_probes_but_keeps_full_catalog_match(
     assert result.summary["georeference_source"] == "catalog-shape-match:probe-miss-full"
 
 
-def test_catalog_probe_missed_is_ignored_for_generic_requests(tmp_path, monkeypatch) -> None:
+def test_catalog_probe_missed_skips_low_res_probes_for_generic_requests(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unlabeled-map.png"
     Image.new("RGB", (2400, 2400), (245, 245, 245)).save(image_path)
     output_path = tmp_path / "boundary.geojson"
@@ -429,7 +429,6 @@ def test_catalog_probe_missed_is_ignored_for_generic_requests(tmp_path, monkeypa
         )
 
     assert max_dimensions == [
-        runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
 

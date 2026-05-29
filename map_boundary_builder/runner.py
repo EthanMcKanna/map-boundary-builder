@@ -822,7 +822,9 @@ def catalog_probe_missed_handoff_enabled(
     if not catalog_probe_missed_enabled(options) or not allow_pre_ocr_catalog:
         return False
     hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
-    return bool(catalog_provider_hint(hint_text)) or has_active_catalog_area_hint(hint_text)
+    if bool(catalog_provider_hint(hint_text)) or has_active_catalog_area_hint(hint_text):
+        return True
+    return city_input is None and not has_stale_catalog_area_hint(filename_hint)
 
 
 def high_confidence_label_texts(labels: list[Any]) -> list[str]:
