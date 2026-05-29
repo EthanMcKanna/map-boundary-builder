@@ -2988,6 +2988,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   0.962, min IoU 0.931, total 4.79s, and the Houston/Miami/Bay Area changed-
   fixture smoke `out/context-hint-changed-smoke-20260529/full-report.json`
   with 6/6 smoke-checked and 0 smoke failures.
+- The first production deployment of filename context hints
+  (`dpl_5MReH5PybJRKgFZVWXVoGn3dvLGc`, `pipeline-f44f3b8a74d01538`) confirmed
+  the new branch was live but also exposed a deeper latency source: a fresh
+  Avride Dallas upload tried the filename `Dallas` context, then spent 16.368s
+  in optional road refinement by fetching live Overpass roads before returning
+  the same unrefined 3-control label fit. The follow-up patch relaxes the
+  sparse-fit/no-local-roads skip from median residual <=900m to <=1300m while
+  keeping p90 <=1800m and the existing requirement that no local road points
+  are bundled or cached. A fresh-cache local Avride Dallas run moved from
+  12.529s to 0.371s with the same bbox, confidence 0.709, 3 controls, and no
+  road-match output. Validation passed full pytest (166 tests), `compileall`,
+  `git diff --check`, default active benchmark
+  `out/context-hint-roadskip-active-20260529/full-report.json` at 8/8 scored,
+  avg IoU 0.993, min IoU 0.943, total 0.45s, fresh-cache no-catalog benchmark
+  `out/context-hint-roadskip-cold-nocatalog-20260529/full-report.json` at 8/8,
+  avg IoU 0.962, min IoU 0.931, total 3.90s, and changed-fixture smoke
+  `out/context-hint-roadskip-changed-smoke-20260529/full-report.json` with
+  6/6 smoke-checked and 0 failures.
 
 ## Remaining Bottlenecks
 

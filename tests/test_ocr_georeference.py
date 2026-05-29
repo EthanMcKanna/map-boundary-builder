@@ -1218,6 +1218,49 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 )
             )
 
+    def test_sparse_reasonable_label_fit_skips_live_road_refinement_without_local_roads(self) -> None:
+        context = CityContext(
+            query="Dallas",
+            center=GeocodeResult(
+                label="Dallas",
+                lon=-96.797,
+                lat=32.776,
+                display_name="Dallas, Dallas County, Texas, United States",
+                bbox=(-97.0, 32.6, -96.5, 33.0),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=False):
+            self.assertFalse(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=16.0,
+                    inlier_count=3,
+                    residual_median_m=1080.0,
+                    residual_p90_m=1350.0,
+                    spread=76000.0,
+                    width=680,
+                    height=551,
+                )
+            )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertTrue(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=16.0,
+                    inlier_count=3,
+                    residual_median_m=1080.0,
+                    residual_p90_m=1350.0,
+                    spread=76000.0,
+                    width=680,
+                    height=551,
+                )
+            )
+
     def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
         fallback_result = object()

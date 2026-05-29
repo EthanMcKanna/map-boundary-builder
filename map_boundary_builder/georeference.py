@@ -3159,7 +3159,7 @@ def should_try_road_refinement(
         return False
     if (
         inlier_count <= 4
-        and residual_median_m <= 900.0
+        and residual_median_m <= 1300.0
         and residual_p90_m <= 1800.0
         and not has_local_road_points(city_context.center.bbox)
     ):
