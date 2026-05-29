@@ -42,6 +42,21 @@ avg IoU 0.961733, min IoU 0.931476, max duration 0.988s. The targeted changed
 market smoke `out/changed-area-config-smoke-20260529/full-report.json` ran all
 six Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` smoke checks
 with zero failures in 0.531s.
+- May 29 live user reminder re-confirmed Houston, Miami, and Bay Area drift.
+  Focused fixture tests passed 3 tests, the current default production-shaped
+  gate `out/user-confirmed-drift-default-20260529/full-report.json` passed 8/8
+  scored fixtures with 7 `reference_mismatch` skips in 0.500s, and the targeted
+  smoke `out/user-confirmed-drift-smoke-20260529/full-report.json` ran all six
+  Houston/Miami/Bay Area screenshots as unscored smoke checks with zero failures.
+  Current arbitrary no-catalog profiling
+  `out/current-profile-nocatalog-20260529/full-report.json` passed 8/8 scored
+  fixtures, avg IoU 0.961733, min IoU 0.931476, total 3.73s, with every active
+  fixture under 0.87s locally. Rejected follow-up latency probes: road-point
+  samples below 4000 regressed Nashville current-shape IoU to 0.907 or 0.799;
+  a 1500px general RapidOCR cap regressed Phoenix/Dallas active IoU; recognition
+  batch sizes 8 and 24 were both slower than the current 12; and a larger
+  synthetic OCR warmup only moved LA OCR from 0.506s to 0.501s after adding
+  extra warmup cost.
 - Georeference seed preloading now starts when the runner commits to the
   OCR/georeference path, overlapping geocoder, OSM place, and road seed loading
   with OCR/extraction and waiting immediately before the transform fit. This
