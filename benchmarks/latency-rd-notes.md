@@ -4474,3 +4474,47 @@ with zero failures in 0.531s.
   the same current-output bbox/source/confidence with `catalog_slug: null` and
   returned 2.222711s build / 1.744530s OCR, back on the faster
   performance-resource path.
+- Changed-market catalog threshold sanity check after the user's Houston/Miami/
+  Bay Area correction: local full-shape scoring shows the stale saved
+  screenshots are far from the refreshed current catalog geometries, so strict
+  catalog rejection is correct and should not be "fixed" by lowering thresholds.
+  The saved Houston Waymo screenshot's best bright-blue catalog candidate was
+  Dallas at about 0.719 IoU, not Houston; saved Miami matched current Miami at
+  only about 0.609 IoU; and saved Bay Area matched the expanded current Bay
+  Area entry at only about 0.589 IoU. Live production on
+  `pipeline-ce284dc37ba33fcc` after `/api/health?warm=ocr` confirmed the
+  intended split with current screenshots: the 520px current Houston probe
+  returned `catalog-shape-match:low-res-shape` / `houston-waymo` in 0.115318s
+  build time, the current Miami probe returned `catalog-shape-match` /
+  `miami-waymo` in 0.023837s build time, and the stale Bay Area screenshot
+  probe returned `catalog_miss` before the full upload correctly fell through
+  to `ocr-georeference:nominatim-label-fit` with `catalog_slug: null`.
+  Conclusion: Houston/Miami current screenshots are already on the fast strict
+  catalog path; Bay Area saved screenshot latency is a first-pass OCR problem,
+  not a catalog-threshold problem.
+- Rejected a single-RGB-buffer OCR overlap prototype for arbitrary no-catalog
+  generation. The idea was to load RGB once, start OCR from that prepared array,
+  and reuse the same pixels for extraction, avoiding the current duplicate image
+  decode between OCR and extraction. It preserved geometry exactly: focused
+  runner/API tests passed 43/43 and
+  `out/rgb-overlap-nocatalog-20260529/full-report.json` passed the strict
+  no-catalog regression gate with 8/8 scored fixtures, avg IoU 0.961733, min
+  IoU 0.931476, zero active IoU drops, and all seven drift fixtures smoked.
+  But it slowed the active total to 4.036839s versus the 3.525950s accepted
+  baseline because delaying OCR until after RGB load lost more overlap than the
+  shared decode saved. Reverted; keep the current overlapping OCR-before-RGB
+  path.
+- Rejected top-level `vercel.json` `"fluid": true` as an infra-only latency
+  candidate. Vercel's current docs say Fluid Compute can be enabled this way
+  for Python functions, so the change was deployed as
+  `dpl_7cFCoAbQEiNA4khN9bauA1zZZKdX` without changing the generation pipeline
+  hash (`pipeline-ce284dc37ba33fcc`). Production health stayed OK and the
+  function remained `api/index.py (101.05MB) [sfo1]`, but cache-busted live
+  smokes showed no measurable improvement over the immediately preceding
+  production split: current Houston probe was 0.117321s build, current Miami
+  probe was 0.023809s build, and stale Bay Area full fallback remained
+  2.433118s build / 1.903573s OCR. Reverted the config because it did not meet
+  the "faster in production" bar. Rollback deployment
+  `dpl_ExSEwvUwnQ1ZvRT2nmu6fuLye21c` is aliased to `https://mapboundary.app`,
+  still reports `pipeline-ce284dc37ba33fcc`, keeps `api/index.py (101.05MB)
+  [sfo1]`, and `/api/health?warm=ocr` returned HTTP 200 with warm status OK.
