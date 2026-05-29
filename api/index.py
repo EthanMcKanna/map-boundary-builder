@@ -60,7 +60,12 @@ class handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/" or parsed.path.startswith("/static/") or parsed.path == "/api/health":
+        if parsed.path == "/api/health":
+            self.send_response(health_response_status(health_payload()))
+            self.send_header("Cache-Control", "public, max-age=0, must-revalidate")
+            self.end_headers()
+            return
+        if parsed.path == "/" or parsed.path.startswith("/static/"):
             self.send_response(HTTPStatus.OK)
             self.send_header("Cache-Control", "public, max-age=0, must-revalidate")
             self.end_headers()
@@ -78,7 +83,8 @@ class handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/health":
                 query = parse_qs(parsed.query)
-                self.send_json(health_payload(warm=first_query_value(query, "warm")))
+                payload = health_payload(warm=first_query_value(query, "warm"))
+                self.send_json(payload, status=health_response_status(payload))
                 return
             if parsed.path == "/":
                 self.send_asset("index.html")
@@ -517,6 +523,10 @@ def runtime_health_ok(runtime_dependencies: dict[str, str], *, tmp_writable: boo
 
 def warm_generation_ok(payload: dict[str, Any]) -> bool:
     return payload.get("status") == "ok"
+
+
+def health_response_status(payload: dict[str, Any]) -> HTTPStatus:
+    return HTTPStatus.OK if payload.get("ok") is True else HTTPStatus.SERVICE_UNAVAILABLE
 
 
 def authorized_cron_request(authorization_header: str | None) -> bool:

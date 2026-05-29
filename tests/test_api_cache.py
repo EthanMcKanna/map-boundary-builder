@@ -16,6 +16,7 @@ from api.index import (
     cached_run_payload,
     cron_warm_generation_payload,
     event_stage_elapsed_seconds,
+    health_response_status,
     health_payload,
     inline_overlay,
     jpeg_commentless_run_result_cache_key,
@@ -475,6 +476,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(cold["ok"])
         self.assertFalse(warm["ok"])
         self.assertEqual(warm["warm"]["status"], "error")
+        self.assertEqual(health_response_status(warm), HTTPStatus.SERVICE_UNAVAILABLE)
 
     def test_cron_warm_generation_requires_bearer_secret(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
