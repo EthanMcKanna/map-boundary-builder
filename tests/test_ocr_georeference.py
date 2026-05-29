@@ -43,6 +43,7 @@ from map_boundary_builder.ocr import (
     rapidocr_input_image,
     rapidocr_items_to_labels,
     read_ocr_cache,
+    warm_rapidocr_runtime,
     write_ocr_cache,
 )
 from map_boundary_builder.runner import fit_georeference, rank_road_context_queries
@@ -314,6 +315,19 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(fast_engine.use_cls_calls, [False])
         self.assertEqual(classifier_engine.use_cls_calls, [True])
         self.assertEqual([label.text for label in labels], ["Southchase"])
+
+    def test_warm_rapidocr_runtime_runs_one_synthetic_fast_pass(self) -> None:
+        engine = FakeRapidOcrEngine({False: [[unit_ocr_box(), "Miami", 0.98]]})
+        warm_rapidocr_runtime.cache_clear()
+        try:
+            with patch.object(ocr_module, "rapidocr_engine", return_value=engine) as rapidocr:
+                self.assertTrue(warm_rapidocr_runtime())
+                self.assertTrue(warm_rapidocr_runtime())
+
+            rapidocr.assert_called_once_with()
+            self.assertEqual(engine.use_cls_calls, [False])
+        finally:
+            warm_rapidocr_runtime.cache_clear()
 
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
         rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)

@@ -31,9 +31,9 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         profile["seed_s"] = elapsed_seconds(seed_started)
 
         ocr_started = time.perf_counter()
-        from .ocr import rapidocr_engine
+        from .ocr import warm_rapidocr_runtime
 
-        rapidocr_engine()
+        profile["rapidocr_inference_warmed"] = warm_rapidocr_runtime()
         profile["rapidocr_s"] = elapsed_seconds(ocr_started)
         profile["status"] = "ok"
     except Exception as exc:

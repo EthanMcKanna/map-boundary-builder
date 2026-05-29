@@ -2199,6 +2199,31 @@ OCR/georeference rather than returning outdated fast-path polygons.
   reduced confidence from 0.908 to 0.854. Keep crop OCR as a possible guarded
   CPU-saving path only after proving net wall-clock improvement against the full
   drift-aware benchmark and production-shaped stale/general uploads.
+- Rejected RapidOCR detector candidate caps after fresh-cache no-catalog gates
+  and interleaved repeats. Caps of 500/300/200/120 preserved the active
+  fixture gate in one-pass sweeps, but repeat timings overlapped default
+  variance; `det_max80` changed Phoenix output and `det_max60` failed Phoenix.
+  This is too risky for arbitrary dense map screenshots, so the default
+  detector candidate limit remains unchanged.
+- Rejected RapidOCR recognition batch changes as a default. Fresh-cache
+  no-catalog gates for `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=8/12/16/24/32`
+  all passed the 8 scored active fixtures, but the timing spread stayed inside
+  local noise and 24/32 subtly changed San Antonio geometry from the current
+  default. The recognition batch remains at 12.
+- Runtime prewarm now performs one tiny synthetic RapidOCR inference per warm
+  process instead of only constructing the OCR engine. Local proof with fresh
+  caches showed the first warm call reporting `rapidocr_inference_warmed: true`
+  and moving about 0.19s of RapidOCR work into `/api/health?warm=ocr`; a second
+  warm call was effectively free because `warm_rapidocr_runtime()` is cached.
+  Focused OCR/API tests passed 59 tests, full pytest passed 114 tests plus 9
+  subtests, `compileall`, `node --check`, and `git diff --check` passed. The
+  corrected drift-aware default gate
+  `out/prewarm-default-20260529/full-report.json` passed 8/8 scored fixtures
+  with 7 reference-mismatch skips, avg IoU 0.993, min IoU 0.943, total 0.46s.
+  The no-catalog arbitrary OCR/georeference gate
+  `out/prewarm-no-catalog-20260529/full-report.json` passed 8/8 with avg IoU
+  0.962, min IoU 0.931, total 3.54s and preserved the Phoenix/Nashville
+  road-refined sources.
 
 ## Remaining Bottlenecks
 

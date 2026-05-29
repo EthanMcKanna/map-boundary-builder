@@ -249,6 +249,27 @@ def run_rapidocr_words(
     return scale_rapidocr_labels(labels, scale_x, scale_y)
 
 
+@lru_cache(maxsize=1)
+def warm_rapidocr_runtime() -> bool:
+    try:
+        engine = rapidocr_engine()
+        sample = np.full((128, 384, 3), 255, dtype=np.uint8)
+        cv2.putText(
+            sample,
+            "Miami",
+            (18, 78),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2.0,
+            (0, 0, 0),
+            4,
+            cv2.LINE_AA,
+        )
+        engine(sample, use_cls=False)
+    except Exception:
+        return False
+    return True
+
+
 def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:
     return count_useful_labels(labels) < RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS
 
