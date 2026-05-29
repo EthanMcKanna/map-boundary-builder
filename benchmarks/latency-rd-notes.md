@@ -4600,3 +4600,8 @@ with zero failures in 0.531s.
   Phoenix from 0.983820 to 0.971733, Nashville from 0.986282 to 0.975796, and
   Austin Tesla from 0.973925 to 0.965638. The change is not safe as a default
   because it alters the model input before georeferencing.
+- A gentler 2000px PNG upload cap was also rejected. It looked similarly fast
+  at max active duration 0.861348s, but the regression gate failed harder:
+  average IoU dropped to 0.954368 and Orlando fell to 0.885989. Pre-upload
+  raster resizing is therefore not a safe default without a new equivalence
+  strategy.
