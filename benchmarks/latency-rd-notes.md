@@ -2295,6 +2295,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `build_boundary_s` 3.327s with extraction 0.603s, OCR 2.636s, and
   georeference 0.085s. This shipped a measured extraction-stage speedup, not a
   first-run sub-second breakthrough; OCR remains the production wall.
+- Rejected the modern Vercel `functions`/`rewrites` migration as a latency
+  change. Per current Vercel docs, `functions` is the modern replacement for
+  legacy `builds`, and Python `excludeFiles` examples use `api/**/*.py`; in
+  this linked project both `api/index.py` and `api/**/*.py` failed to build
+  until `framework` was explicitly set to `null`. With that override, preview
+  build/deploy `dpl_3REP21VoXPXePKcDT5xpLvUhJ5sP` succeeded and authenticated
+  Vercel curl smokes returned 200 for `/`, `/static/app.js`, `/api/health`, and
+  `/api/health?warm=ocr`. The preview Miami stale-ground-truth POST stayed
+  correct with `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864,
+  and road score 0.681518, but server `build_boundary_s` was still 6.438s with
+  OCR at 4.298s and georeference at 1.515s. Because this did not prove a
+  latency improvement over the current production deployment and the generated
+  output layout changed materially, the production config stayed on the
+  known-good legacy `builds`/`routes` shape for now.
 
 ## Remaining Bottlenecks
 
