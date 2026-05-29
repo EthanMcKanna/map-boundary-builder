@@ -29,10 +29,14 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v2"
+OCR_CACHE_VERSION = "ocr-labels-v3"
 RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
 RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
 RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
+RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS", "2")),
+)
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -75,7 +79,8 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
-            f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:{digest}"
+            f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
+            f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:{digest}"
         ).encode("utf-8")
     ).hexdigest()
 
@@ -180,10 +185,22 @@ def run_rapidocr_words(image_path: str | Path) -> list[OcrLabel]:
     ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
     try:
         engine = rapidocr_engine()
-        result, _elapsed = engine(ocr_input)
+        result, _elapsed = engine(ocr_input, use_cls=False)
+        labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
+        if not should_retry_rapidocr_with_classifier(labels):
+            return labels
+        result, _elapsed = engine(ocr_input, use_cls=True)
     except Exception:
         return []
     labels = rapidocr_items_to_labels(result)
+    return scale_rapidocr_labels(labels, scale_x, scale_y)
+
+
+def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:
+    return count_useful_labels(labels) < RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS
+
+
+def scale_rapidocr_labels(labels: list[OcrLabel], scale_x: float, scale_y: float) -> list[OcrLabel]:
     if scale_x == 1.0 and scale_y == 1.0:
         return labels
     return [

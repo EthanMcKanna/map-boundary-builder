@@ -256,6 +256,22 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/stale-market-no-network-300-20260528-continue4/` completed Bay Area
   Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo in 0.193-0.554s with
   OCR/georeference sources and `catalog_slug: null`.
+- Current fast-classifier OCR retry head: RapidOCR now runs first without the
+  angle classifier and retries with the classifier only when the fast pass
+  yields fewer than two useful labels. Focused OCR/API/benchmark tests passed
+  51 tests, and the full suite passed 95 tests plus 9 subtests; `compileall`,
+  `node --check`, and `git diff --check` passed. Fresh-cache no-catalog full
+  benchmark `out/fast-cls-retry-no-catalog-full-20260528-continue5/full-report.json`
+  passed 8/8 scored fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU
+  0.962, min IoU 0.931, total 7.41s versus the prior default-code no-catalog
+  7.65s. Default catalog benchmark
+  `out/fast-cls-retry-default-full-20260528-continue5/full-report.json`
+  stayed green at 8/8 scored, avg IoU 0.993, min IoU 0.943, total 2.76s.
+  OCR-only rotated Orlando stress recovered readable labels after retry for
+  90/180/270 degree rotations, while a no-network stale-market smoke
+  `out/fast-cls-stale-no-network-20260528-continue5/` preserved
+  `catalog_slug: null`, current sources, and current bboxes for Bay Area
+  Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
@@ -1286,6 +1302,12 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   preserved the current catalog-heavy benchmark, but that does not generalize
   enough for arbitrary non-catalog uploads. Rejected; do not ship a lower global
   OCR cap without a stronger fallback or validator.
+- Cropping OCR to a padded service-area bbox looked attractive but was not
+  robust enough. At 5% padding it passed 8/8 active fixtures and reduced OCR
+  work, but lowered avg IoU to 0.942, dropped Orlando to 0.864, and dropped
+  Phoenix to 0.895 while confidence/residuals were not decisive enough to
+  guarantee a safe fallback. Rejected unless a stronger geometry validator is
+  added.
 
 ## Remaining Bottlenecks
 

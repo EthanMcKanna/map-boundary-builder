@@ -46,6 +46,20 @@ from map_boundary_builder.ocr import (
 from map_boundary_builder.runner import fit_georeference, rank_road_context_queries
 
 
+class FakeRapidOcrEngine:
+    def __init__(self, responses: dict[bool | None, list]) -> None:
+        self.responses = responses
+        self.use_cls_calls: list[bool | None] = []
+
+    def __call__(self, _image, *, use_cls=None):
+        self.use_cls_calls.append(use_cls)
+        return self.responses.get(use_cls, []), 0.0
+
+
+def unit_ocr_box(x: float = 0.0) -> list[list[float]]:
+    return [[x, 0.0], [x + 80.0, 0.0], [x + 80.0, 20.0], [x, 20.0]]
+
+
 class OcrGroupingTests(unittest.TestCase):
     def test_residual_median_p90_matches_numpy_linear_percentile(self) -> None:
         for values in ([4.0], [8.0, 2.0], [12.0, 2.0, 7.0], [0.0, 100.0, 300.0, 900.0, 1400.0]):
@@ -177,6 +191,57 @@ class OcrGroupingTests(unittest.TestCase):
                 key_24 = ocr_cache_key(image_path, use_tesseract=False)
 
         self.assertNotEqual(key_6, key_24)
+
+    def test_ocr_cache_key_depends_on_rapidocr_classifier_retry_threshold(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1):
+                key_1 = ocr_cache_key(image_path, use_tesseract=False)
+            with patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 3):
+                key_3 = ocr_cache_key(image_path, use_tesseract=False)
+
+        self.assertNotEqual(key_1, key_3)
+
+    def test_rapidocr_skips_classifier_when_fast_pass_has_labels(self) -> None:
+        engine = FakeRapidOcrEngine(
+            {
+                False: [
+                    [unit_ocr_box(), "Orlando", 0.98],
+                    [unit_ocr_box(x=100.0), "Southchase", 0.97],
+                ],
+                True: [[unit_ocr_box(), "Should Not Run", 0.98]],
+            }
+        )
+
+        with (
+            patch.object(ocr_module, "rapidocr_input_array", return_value=("image", 1.0, 1.0)),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 2),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png")
+
+        self.assertEqual(engine.use_cls_calls, [False])
+        self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
+
+    def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
+        engine = FakeRapidOcrEngine(
+            {
+                False: [],
+                True: [[unit_ocr_box(), "Southchase", 0.99]],
+            }
+        )
+
+        with (
+            patch.object(ocr_module, "rapidocr_input_array", return_value=("image", 1.0, 1.0)),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 2),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png")
+
+        self.assertEqual(engine.use_cls_calls, [False, True])
+        self.assertEqual([label.text for label in labels], ["Southchase"])
 
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
         rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
