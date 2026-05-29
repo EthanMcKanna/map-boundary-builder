@@ -3529,3 +3529,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   passed with the same accuracy floors: default avg IoU 0.992917/min 0.943345,
   no-catalog avg IoU 0.961670/min 0.931476, and changed-market smoke zero
   failures.
+- Production deployment `dpl_4yaBN1ZBgpBhoDDpJWPzd18ESdRR` is explicitly
+  aliased to `https://mapboundary.app` with pipeline hash
+  `pipeline-b255c952172814e5` and the purple-fill OCR cap in `/api/health`
+  (`rapidocr_purple_fill_max_dimension: 1000`). Protected and public warm
+  health checks returned HTTP 200 with `ok: true`, `cv2 4.10.0`, and warm
+  `status: ok`; public `HEAD /api/health` returned HTTP 200, and the root HTML
+  embeds the new pipeline hash. Fresh production Avride Dallas PNG generation
+  with `include_overlay=0` and `normalized_cache_lookup=0` missed cache and
+  preserved `Dallas`, `purple-fill`, `ocr-georeference:nominatim-label-fit`,
+  four controls, bbox `[-96.8183907, 32.7679806, -96.7549523, 32.8376563]`,
+  and confidence 0.873 at `build_boundary_s: 1.709s` and
+  `total_before_send_s: 1.768s`, faster than the prior filename-cache production
+  miss at 2.584s. Repeating the same upload hit raw cache at
+  `total_before_send_s: 0.005s`.
