@@ -2617,7 +2617,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   differ, and city/options remain part of the run-cache key. A local Avride
   Dallas microbench restored the same cached payload across two metadata
   variants and measured the PNG visual hash at 0.197 ms per call versus 8.649 ms
-  for the decoded normalized hash (44.0x cheaper).
+  for the decoded normalized hash (44.0x cheaper). Production deployment
+  `dpl_D3tVekwhwskvqrRtY3ADtdyQy2cc` preserved the cache-busted Avride Dallas
+  result (`Dallas`, `ocr-georeference:nominatim-label-fit`, confidence 0.847):
+  the first text-metadata variant missed at 2.913s server time, while the second
+  different-metadata/same-image-stream variant returned `cache_hit:
+  "png-visual"` in 0.0053s server time.
 
 ## Remaining Bottlenecks
 
