@@ -1880,6 +1880,14 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   min IoU 0.943, total 0.58s. The no-catalog gate
   `out/reference-only-catalog-no-catalog-20260529/full-report.json` passed
   11/11 with unchanged avg IoU 0.962 and min IoU 0.931.
+- Production deployment `dpl_3GyKHh1Yr5qDoxMM5c1dnJEr78qk` was built with
+  Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-d2ed9f652d46dae0`. The
+  local prebuilt output reported a 296.59 MB pre-runtime-installation bundle.
+  Cache-busted production smokes at
+  `out/reference-only-catalog-production-smoke-20260529/report.json` confirmed
+  Atlanta Waymo and Austin Waymo now use `catalog-shape-match` with 0.213s and
+  0.111s server build spans.
 
 ## Remaining Bottlenecks
 
