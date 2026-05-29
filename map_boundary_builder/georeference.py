@@ -448,6 +448,7 @@ def georeference_from_labels(
     min_control_points: int = 3,
     label_y_min: float | None = None,
     label_y_max: float | None = None,
+    road_feature_distance: np.ndarray | None = None,
 ) -> GeoreferenceResult | None:
     control_labels = labels
     if label_y_min is not None:
@@ -470,6 +471,7 @@ def georeference_from_labels(
             rgb=rgb,
             min_control_points=min_control_points,
             allow_two_control_fit=allow_two_control_fit,
+            road_feature_distance=road_feature_distance,
         )
         if result is not None:
             if city is None and city_context.query == "Inferred map area":
@@ -677,6 +679,7 @@ def georeference_from_label_context(
     rgb: np.ndarray | None = None,
     min_control_points: int,
     allow_two_control_fit: bool = False,
+    road_feature_distance: np.ndarray | None = None,
 ) -> GeoreferenceResult | None:
     city_center = city_context.center
     controls = build_control_points(
@@ -744,6 +747,7 @@ def georeference_from_label_context(
                                 width,
                                 height,
                             ),
+                            feature_distance=road_feature_distance,
                         )
                     if road_refinement is not None:
                         refined_residuals = control_residuals_for_transform(

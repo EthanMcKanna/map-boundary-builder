@@ -2426,6 +2426,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   This report is a target list, not a regression; it proves the arbitrary
   OCR/georeference path still needs real OCR/road-refine latency wins before
   the full active no-catalog suite can honestly claim sub-second generation.
+- Road-feature precompute now overlaps a road-refinement input with OCR for
+  large bright-blue screenshots. The precomputed distance field is passed into
+  `refine_transform_with_osm_roads`; if it is not ready, the old synchronous
+  computation remains the fallback. Focused adjacent A/B on Phoenix/Nashville
+  preserved road-refined sources and 0.985 avg IoU: precompute off ran in
+  3.04s then 2.61s, while precompute on ran in 2.55s then 2.63s. A matched
+  full no-catalog run with precompute enabled passed 8/8 scored fixtures, kept
+  avg IoU 0.962/min IoU 0.931 with zero regression issues, and ran in 5.44s
+  versus an adjacent patched-off run at 6.46s. The default catalog gate
+  `out/road-feature-precompute-default-20260529/full-report.json` stayed green
+  at 8/8 scored with avg IoU 0.993/min IoU 0.943. Drift smokes
+  `out/road-feature-precompute-drift-smoke-20260529/full-report.json` and
+  `out/road-feature-precompute-waymo-catalog-miss-20260529/full-report.json`
+  kept the user-confirmed Houston/Miami/Bay Area Waymo screenshots on
+  OCR/georeference with `catalog_slug: null`.
 
 ## Remaining Bottlenecks
 

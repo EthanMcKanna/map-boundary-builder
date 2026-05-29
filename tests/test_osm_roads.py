@@ -170,6 +170,37 @@ class RoadScoringTests(unittest.TestCase):
             finally:
                 osm_roads._ROAD_REFINE_MEMORY_CACHE.clear()
 
+    def test_road_refinement_accepts_precomputed_feature_distance(self) -> None:
+        rgb = np.full((40, 40, 3), 245, dtype=np.uint8)
+        feature_distance = image_feature_distance(rgb)
+        initial = GeoreferenceTransform(
+            city="Phoenix",
+            lon=-112.0,
+            lat=33.4,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=25.0,
+            rotation_radians=0.0,
+            confidence=0.84,
+            source="ocr-georeference:nominatim-label-fit",
+        )
+        center = type("Center", (), {"bbox": (-112.2, 33.2, -111.8, 33.7)})()
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            with (
+                patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)),
+                patch.object(osm_roads, "image_feature_distance", side_effect=AssertionError("feature should be reused")),
+                patch.object(osm_roads, "load_road_points", return_value=np.empty((0, 2))),
+            ):
+                self.assertIsNone(
+                    refine_transform_with_osm_roads(
+                        rgb,
+                        center,
+                        initial,
+                        feature_distance=feature_distance,
+                    )
+                )
+
     def test_road_point_seed_contains_refinement_contexts(self) -> None:
         seed = load_road_points_seed()
 

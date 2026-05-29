@@ -52,10 +52,12 @@ def refine_transform_with_osm_roads(
     initial: GeoreferenceTransform,
     *,
     lock_scale: bool = False,
+    feature_distance: np.ndarray | None = None,
 ) -> RoadMatchResult | None:
     if city_center.bbox is None:
         return None
-    feature_distance = image_feature_distance(rgb)
+    if feature_distance is None:
+        feature_distance = image_feature_distance(rgb)
     cache_key = road_refine_cache_key(feature_distance, city_center, initial, lock_scale=lock_scale)
     cached = read_road_refine_cache(cache_key)
     if cached is not None:

@@ -37,6 +37,7 @@ from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels
+from .osm_roads import image_feature_distance
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
@@ -137,6 +138,8 @@ def build_boundary(
 
     labels_future: Future[list[Any]] | None = None
     ocr_executor: ThreadPoolExecutor | None = None
+    road_feature_future: Future[Any] | None = None
+    road_feature_executor: ThreadPoolExecutor | None = None
     if should_overlap_ocr_with_extraction(
         city_input=city_input,
         allow_catalog=allow_catalog,
@@ -305,6 +308,9 @@ def build_boundary(
         if labels_future is None:
             ocr_executor = ThreadPoolExecutor(max_workers=1)
             labels_future = ocr_executor.submit(extract_ocr_labels, str(image_path))
+        if should_precompute_road_features(extraction.style, width, height):
+            road_feature_executor = ThreadPoolExecutor(max_workers=1)
+            road_feature_future = road_feature_executor.submit(image_feature_distance, rgb)
         emit_progress(
             progress,
             stage="ocr",
@@ -315,6 +321,9 @@ def build_boundary(
     finally:
         if ocr_executor is not None:
             ocr_executor.shutdown(wait=False, cancel_futures=True)
+        if road_feature_executor is not None:
+            road_feature_executor.shutdown(wait=False, cancel_futures=True)
+    road_feature_distance = ready_future_result(road_feature_future)
     emit_progress(
         progress,
         stage="ocr",
@@ -391,6 +400,7 @@ def build_boundary(
         min_control_points=opts.min_control_points,
         label_y_min=label_y_min,
         label_y_max=label_y_max,
+        road_feature_distance=road_feature_distance,
         progress=progress,
     )
     if georef is None:
@@ -459,6 +469,19 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
     if len(labels) <= CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT:
         return True
     return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
+
+
+def should_precompute_road_features(style: str, width: int, height: int) -> bool:
+    return style == "bright-blue" and max(width, height) >= 1000
+
+
+def ready_future_result(future: Future[Any] | None) -> Any | None:
+    if future is None or not future.done() or future.cancelled():
+        return None
+    try:
+        return future.result()
+    except Exception:
+        return None
 
 
 def low_resolution_shape_catalog_match(
@@ -693,6 +716,7 @@ def fit_georeference(
     min_control_points: int,
     label_y_min: float | None,
     label_y_max: float | None,
+    road_feature_distance: Any | None = None,
     progress: ProgressCallback | None,
 ):
     emit_progress(
@@ -726,6 +750,7 @@ def fit_georeference(
             height,
             rgb=rgb,
             min_control_points=min_control_points,
+            road_feature_distance=road_feature_distance,
         )
 
     if georef is None:
@@ -739,6 +764,7 @@ def fit_georeference(
             min_control_points=min_control_points,
             label_y_min=label_y_min,
             label_y_max=label_y_max,
+            road_feature_distance=road_feature_distance,
         )
 
     if georef is None and road_context_candidates:
@@ -761,6 +787,7 @@ def georeference_from_ranked_label_contexts(
     *,
     rgb: Any,
     min_control_points: int,
+    road_feature_distance: Any | None = None,
 ):
     best = None
     best_score = -1.0
@@ -773,6 +800,7 @@ def georeference_from_ranked_label_contexts(
             height,
             rgb=rgb,
             min_control_points=min_control_points,
+            road_feature_distance=road_feature_distance,
         )
         if result is None:
             continue
