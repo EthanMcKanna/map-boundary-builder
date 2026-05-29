@@ -1698,12 +1698,52 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `out/ocr-alias-stale-no-network-20260529/report.json` kept all six
   Houston/Miami/Bay Area changed-market screenshots on OCR/georeference with
   `catalog_slug: null` and zero attempted network calls.
+- Rejected passing the runner's already-loaded RGB image into the tie-breaking
+  similarity road scorer. The patch had a focused unit proof, but a fresh
+  trigger trace across Phoenix, Nashville, Miami, Bay Area Waymo, and Houston
+  Waymo showed `build_similarity_road_scorer` fired zero times on the current
+  representative OCR/georeference paths, and the full no-catalog benchmark was
+  noise-slower at 3.82s versus the previous 3.62s evidence. Reverted before
+  commit.
+- Rejected lowering the default geocoder worker count from 6 to 4. A first
+  sweep with `MAP_BOUNDARY_GEOCODE_WORKERS` 2/4/6/8 passed all no-catalog
+  fixtures and had 4 workers fastest at 3.48s versus 3.60s for 6, but an
+  alternating repeat flattened the signal: 6 workers ran 3.51s and 3.58s,
+  while 4 workers ran 3.54s and 3.59s. Keep 6 because it preserves stronger
+  fan-out for truly live, unseeded arbitrary screenshots and did not show a
+  repeatable local speed loss.
+- Added a drift-contract test that derives changed live-service-area slugs from
+  `benchmarks/service-area-fixtures.json` and requires matching catalog entries
+  to be inactive. This keeps Houston, Miami, and Bay Area from being
+  accidentally scored against stale references or re-enabled as saved catalog
+  polygons before their source polygons are refreshed.
+- Drift guard validation passed: `PYTHONPATH=. .venv/bin/python -m pytest -q
+  tests/test_benchmark.py tests/test_catalog_match.py` passed 20 tests, and
+  `PATH=/usr/bin:/bin MAP_BOUNDARY_CACHE_DIR=$(mktemp -d
+  /tmp/mbb-drift-guard-full-XXXXXX) PYTHONPATH=. .venv/bin/python -m
+  map_boundary_builder.benchmark --mode full --execution in-process
+  --no-debug-artifacts --out-dir out/drift-guard-full-20260529` passed 8/8
+  scored fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min
+  IoU 0.943, total 0.44s.
+- Production drift smoke on `https://mapboundary.app` with
+  `include_overlay=false` and normalized cache disabled confirmed the same stale
+  catalog behavior: Houston Waymo returned `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit`, confidence 0.865, and a 4.65s server
+  build; Miami Waymo returned `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864, and
+  an 11.61s server build; Bay Area Waymo returned `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit`, confidence 0.877, and a 9.95s server
+  build.
+- Full local regression after the drift guard stayed green:
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` passed 106 tests plus 9
+  subtests, `PYTHONPATH=. .venv/bin/python -m compileall -q api
+  map_boundary_builder` passed, and `git diff --check` passed.
 
 ## Remaining Bottlenecks
 
 - Production function size is improved after the ONNX Runtime pin, with Vercel
-  reporting `api/index.py` at 92.74 MB on the current deployment. The remote
-  Python build now reports a 297.34 MB pre-runtime-installation bundle, so
+  reporting `api/index.py` at 92.83 MB on the current deployment. The remote
+  Python build now reports a 297.95 MB pre-runtime-installation bundle, so
   cold starts and OCR model initialization remain production-only latency risks.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full

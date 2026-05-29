@@ -1,4 +1,6 @@
+import json
 from math import cos, radians, sin
+from pathlib import Path
 
 import numpy as np
 from shapely.affinity import rotate
@@ -211,6 +213,27 @@ def test_known_changed_catalog_entries_are_not_matched() -> None:
 
         assert not entry.is_active
         assert match is None or match.entry.slug != slug
+
+
+def test_changed_reference_mismatch_catalog_entries_are_inactive() -> None:
+    fixture_config = json.loads(
+        Path("benchmarks/service-area-fixtures.json").read_text()
+    )["fixtures"]
+    changed_slugs = {
+        slug
+        for slug, metadata in fixture_config.items()
+        if metadata.get("status") == "reference_mismatch"
+        and "changed" in metadata.get("note", "").lower()
+    }
+    entries = {item.slug: item for item in load_catalog_entries()}
+
+    assert changed_slugs == KNOWN_STALE_CATALOG_SLUGS
+    for slug in changed_slugs:
+        entry = entries[slug]
+        assert not entry.is_active
+        assert entry.status == "stale"
+        assert entry.stale_reason is not None
+        assert "changed live service area" in entry.stale_reason
 
 
 def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:
