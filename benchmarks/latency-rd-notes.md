@@ -4725,21 +4725,12 @@ with zero failures in 0.531s.
   0.992917, min IoU 0.943345, and zero active IoU drops; no-catalog
   `out/provider-ui-fast-prepass-nocatalog-20260529/full-report.json` preserved
   avg IoU 0.961733, min IoU 0.931476, and zero active IoU drops.
-- Tightened the provider-UI prepass further with an uncached RapidOCR-only
-  detector override. The prepass now uses detector side limit 256 while the
-  normal OCR/cache path keeps the production 608 detector and still runs on any
-  prepass miss. Local detector sweeps on `IMG_0071.PNG` kept the same
-  `las-vegas-zoox` catalog boundary at 384, 320, 256, and 192; 128 was slower,
-  so 256 is the conservative speed point. Clean fresh-cache local proof with
-  the default 256 detector returned the same bbox
-  `[-115.3550119,36.0353866,-115.1830059,36.187696]`, confidence 0.72,
-  `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617` in
-  0.377935s total with OCR wait 0.231850s. Focused OCR/API/runner tests passed
-  123/123, full pytest passed 219 tests plus 9 subtests, compileall passed, and
-  `git diff --check` passed. The production warmup configuration now primes
-  both RapidOCR detector limits `[608, 256]` so the first provider-UI prepass
-  does not pay a separate detector-session initialization. Drift-aware default
-  `out/provider-ui-det256-default-20260529/full-report.json` and no-catalog
-  `out/provider-ui-det256-nocatalog-20260529/full-report.json` both passed with
-  zero active IoU drops; Houston, Miami, and Bay Area remain smoke-only
-  reference mismatches.
+- Rejected the follow-on provider-UI detector-limit override despite promising
+  local results. A 256 detector prepass preserved the Las Vegas catalog output
+  locally, but production deploy `dpl_74nDgrs5zu81RRBLozZEWhCD4cHm` returned
+  `build_boundary_s: 1.482844` and `total_before_send_s: 1.549773` on the same
+  cache-miss `IMG_0071.PNG` proof, slightly slower than the 1200px prepass
+  deployment's `build_boundary_s: 1.449715` and `total_before_send_s:
+  1.519261`. It also increased warmup work by adding a second detector session.
+  Keep the 1200px provider prepass and do not ship a separate detector limit
+  until production proves it faster.

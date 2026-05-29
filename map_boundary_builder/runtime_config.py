@@ -27,7 +27,6 @@ def env_bool(name: str, default: bool) -> bool:
 RAPIDOCR_MAX_DIMENSION = env_int("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", 1600)
 RAPIDOCR_PURPLE_FILL_MAX_DIMENSION = env_int("MAP_BOUNDARY_RAPIDOCR_PURPLE_FILL_MAX_DIMENSION", 800)
 PROVIDER_UI_RAPIDOCR_MAX_DIMENSION = env_int("MAP_BOUNDARY_PROVIDER_UI_RAPIDOCR_MAX_DIMENSION", 1200)
-PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN = env_int("MAP_BOUNDARY_PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN", 256)
 RAPIDOCR_DET_LIMIT_SIDE_LEN = env_int("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", 608)
 RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN",
@@ -69,11 +68,7 @@ def rapidocr_warm_detector_limit() -> int:
 
 def rapidocr_warm_detector_limits() -> list[int]:
     limits: list[int] = []
-    for limit in (
-        rapidocr_warm_detector_limit(),
-        RAPIDOCR_DET_LIMIT_SIDE_LEN,
-        PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
-    ):
+    for limit in (rapidocr_warm_detector_limit(), RAPIDOCR_DET_LIMIT_SIDE_LEN):
         if limit > 0 and limit not in limits:
             limits.append(limit)
     return limits
@@ -84,7 +79,6 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_max_dimension": RAPIDOCR_MAX_DIMENSION,
         "rapidocr_purple_fill_max_dimension": RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
         "provider_ui_rapidocr_max_dimension": PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
-        "provider_ui_rapidocr_detector_limit_side_len": PROVIDER_UI_RAPIDOCR_DET_LIMIT_SIDE_LEN,
         "rapidocr_detector_limit_side_len": RAPIDOCR_DET_LIMIT_SIDE_LEN,
         "rapidocr_large_image_detector_limit_side_len": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,

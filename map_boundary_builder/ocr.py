@@ -248,25 +248,6 @@ def extract_ocr_labels_from_rgb(
     )
 
 
-def extract_rapidocr_labels_from_rgb_uncached(
-    image_path: str | Path,
-    rgb: np.ndarray,
-    *,
-    rapidocr_max_dimension: int | None = None,
-    rapidocr_detector_limit: int | None = None,
-) -> list[OcrLabel]:
-    rapid_words = run_rapidocr_words(
-        image_path,
-        prepared_bgr=rgb_to_bgr(rgb),
-        rapidocr_max_dimension=rapidocr_max_dimension,
-        rapidocr_detector_limit=rapidocr_detector_limit,
-    )
-    labels = list(rapid_words)
-    labels.extend(group_line_labels(rapid_words))
-    labels.extend(group_stacked_labels(rapid_words))
-    return dedupe_labels(labels)
-
-
 def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
     if rgb.ndim != 3 or rgb.shape[2] != 3:
         return None
@@ -624,7 +605,6 @@ def run_rapidocr_words(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
-    rapidocr_detector_limit: int | None = None,
 ) -> list[OcrLabel]:
     ocr_input, scale_x, scale_y = rapidocr_input_array(
         image_path,
@@ -632,7 +612,7 @@ def run_rapidocr_words(
         composited_alpha=composited_alpha,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
-    detector_limit = rapidocr_detector_limit or rapidocr_detector_limit_for_input(ocr_input)
+    detector_limit = rapidocr_detector_limit_for_input(ocr_input)
     try:
         engine = rapidocr_engine(detector_limit)
         result, _elapsed = engine(ocr_input, use_cls=False)
