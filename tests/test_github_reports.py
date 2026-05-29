@@ -1,0 +1,27 @@
+from map_boundary_builder.github_reports import GenerationReport, issue_body
+
+
+def test_issue_body_includes_runtime_profile() -> None:
+    report = GenerationReport(
+        filename="slow-map.png",
+        image_bytes=b"image",
+        error="Boundary took too long.",
+        run_id="run-1",
+        profile={
+            "upload_bytes": 750000,
+            "build_boundary_s": 0.52,
+            "build_stage_elapsed_s": {"ocr": 0.24},
+        },
+    )
+
+    body = issue_body(
+        "debug-reports",
+        "debug-reports/2026-05-29/run/input.png",
+        "https://example.test/input.png",
+        report,
+    )
+
+    assert "## Runtime Profile" in body
+    assert '"upload_bytes": 750000' in body
+    assert '"build_boundary_s": 0.52' in body
+    assert '"ocr": 0.24' in body

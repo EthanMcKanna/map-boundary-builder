@@ -4229,3 +4229,26 @@ with zero failures in 0.531s.
   targeted Houston/Miami/Bay Area smoke
   `out/probe-miss-flag-changed-smoke-20260529/full-report.json` passed all six
   changed fixtures with zero smoke failures.
+- Post-deploy arbitrary-upload bottleneck split: production payload `profile`
+  data showed that the warmed Bay Area miss path is now mostly upload/edge
+  wall time rather than Python generation. A live cache-busted full upload
+  without the probe-miss handoff returned in 2.328507s HTTP wall, but
+  `total_before_send_s` was only 0.553987s and `build_boundary_s` was
+  0.546507s (`extract`: 0.326987s, `ocr`: 0.159018s, `georeference`:
+  0.058001s). The flagged full upload returned the exact same bbox,
+  confidence 0.877, and `ocr-georeference:nominatim-label-fit` source with
+  `total_before_send_s` 0.525870s and `build_boundary_s` 0.518297s. The
+  remaining user-visible delay is dominated by sending the 750 KB original
+  upload before the function runs. Browser canvas PNG recompression was
+  rejected because Chrome's same-size opaque PNG was larger than the original
+  Bay Area PNG (923.8 KB vs 847.1 KB). WebP q98 was also rejected despite large
+  byte savings because the strict no-catalog regression gate failed:
+  `out/webp98-nocatalog-profile-20260529/full-report.json` dropped average IoU
+  from 0.961733 to 0.949277, with Orlando down to 0.865970 and additional
+  regressions on Dallas, Nashville, Austin, and San Antonio. To make future
+  latency and wrong-boundary reports more actionable without changing
+  generation semantics, the app now preserves the existing API `profile` in
+  browser history and includes it in GitHub report issues under `Runtime
+  Profile`; a local Playwright run confirmed a completed Bay Area generation
+  saved `upload_bytes`, `build_boundary_s`, and `build_stage_elapsed_s` in the
+  history entry with zero console warnings.

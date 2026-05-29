@@ -43,6 +43,7 @@ class RunState:
     percent: int = 0
     events: list[dict[str, Any]] = field(default_factory=list)
     summary: dict[str, Any] | None = None
+    profile: dict[str, Any] | None = None
     error: str | None = None
     condition: threading.Condition = field(default_factory=threading.Condition, repr=False)
 
@@ -56,6 +57,7 @@ class RunState:
                 "percent": self.percent,
                 "created_at": self.created_at,
                 "summary": self.summary,
+                "profile": self.profile,
                 "error": self.error,
                 "events": self.events[-20:],
                 "artifacts": artifact_urls(self) if self.status == "complete" else {},
@@ -160,6 +162,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         if catalog_probe_only:
             events: list[dict[str, Any]] = []
+            profile: dict[str, Any] = {"upload_bytes": len(image_bytes)}
 
             def progress(event: dict[str, Any]) -> None:
                 events.append({"timestamp": time.time(), **event})
@@ -173,8 +176,15 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                 filename_hint=original_filename,
             )
             try:
+                build_started = time.perf_counter()
                 result = build_boundary(image_path, city, output_path, debug_dir=None, options=options, progress=progress)
+                profile["build_boundary_s"] = elapsed_seconds(build_started)
+                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+                profile["total_before_send_s"] = profile["build_boundary_s"]
             except CatalogProbeMiss as exc:
+                profile["build_boundary_s"] = elapsed_seconds(build_started)
+                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+                profile["total_before_send_s"] = profile["build_boundary_s"]
                 self.send_json(
                     {
                         "id": run_id,
@@ -183,6 +193,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                         "percent": 100,
                         "error": str(exc),
                         "events": events[-20:],
+                        "profile": profile,
                     },
                     status=HTTPStatus.OK,
                 )
@@ -196,6 +207,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                     "percent": 100,
                     "summary": result.summary,
                     "events": events[-20:],
+                    "profile": profile,
                     "artifacts": {"geojson_inline": result.geojson},
                 },
                 status=HTTPStatus.CREATED,
@@ -210,6 +222,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             image_path=image_path,
             output_path=output_path,
             debug_dir=debug_dir,
+            profile={"upload_bytes": len(image_bytes)},
         )
         with RUNS_LOCK:
             RUNS[run_id] = state
@@ -252,6 +265,10 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             summary = {}
         try:
+            profile = json.loads(fields.get("profile", "{}") or "{}")
+        except json.JSONDecodeError:
+            profile = {}
+        try:
             result = create_failure_issue(
                 FailureReport(
                     filename=original_filename,
@@ -266,6 +283,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                     page_url=fields.get("page_url", "").strip() or None,
                     settings=settings if isinstance(settings, dict) else {},
                     summary=summary if isinstance(summary, dict) else {},
+                    profile=profile if isinstance(profile, dict) else {},
                 )
             )
         except GithubReportError as exc:
@@ -381,6 +399,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
 
 def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
     try:
+        build_started = time.perf_counter()
         result = build_boundary(
             state.image_path,
             state.city,
@@ -391,8 +410,20 @@ def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
         )
         with state.condition:
             state.summary = result.summary
+            profile = dict(state.profile or {})
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
+            profile["total_before_send_s"] = profile["build_boundary_s"]
+            state.profile = profile
             state.condition.notify_all()
     except Exception as exc:
+        with state.condition:
+            profile = dict(state.profile or {})
+            if "build_started" in locals():
+                profile["build_boundary_s"] = elapsed_seconds(build_started)
+                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
+                profile["total_before_send_s"] = profile["build_boundary_s"]
+            state.profile = profile
         record_event(
             state,
             {
@@ -402,6 +433,24 @@ def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
                 "status": "error",
             },
         )
+
+
+def elapsed_seconds(started: float) -> float:
+    return round(max(0.0, time.perf_counter() - started), 6)
+
+
+def event_stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float]:
+    timestamped: list[tuple[str, float]] = []
+    for event in events:
+        stage = event.get("stage")
+        timestamp = event.get("timestamp")
+        if isinstance(stage, str) and isinstance(timestamp, (int, float)):
+            timestamped.append((stage, float(timestamp)))
+
+    totals: dict[str, float] = {}
+    for (stage, timestamp), (_, next_timestamp) in zip(timestamped, timestamped[1:]):
+        totals[stage] = totals.get(stage, 0.0) + max(0.0, next_timestamp - timestamp)
+    return {stage: round(total, 6) for stage, total in totals.items()}
 
 
 def record_event(state: RunState, event: dict[str, Any]) -> None:

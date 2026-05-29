@@ -75,6 +75,7 @@ let latestRunError = null;
 let latestRunEvents = [];
 let latestRunStatus = "idle";
 let latestRunSummary = null;
+let latestRunProfile = null;
 let pendingRunCacheKey = null;
 let activeReportStatus = "completed";
 let copyFeedbackTimeout = null;
@@ -685,6 +686,7 @@ function setSelectedFile(file) {
   latestRunEvents = [];
   latestRunStatus = "idle";
   latestRunSummary = null;
+  latestRunProfile = null;
   pendingRunCacheKey = null;
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
@@ -1159,6 +1161,7 @@ function applyInlineRun(status, options = {}) {
   latestRunEvents = status.events || latestRunEvents;
   latestRunStatus = "completed";
   latestRunSummary = status.summary || null;
+  latestRunProfile = status.profile || null;
   for (const event of status.events || []) {
     applyEvent(event);
   }
@@ -1193,6 +1196,7 @@ function applyInlineRun(status, options = {}) {
     filename: status.filename,
     city: status.city,
     summary: status.summary,
+    profile: status.profile,
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay_data_url,
     cacheKey: options.cacheKey || pendingRunCacheKey,
@@ -1434,6 +1438,7 @@ async function loadArtifacts(runId) {
   latestRunId = status.id || runId;
   latestRunStatus = status.status === "complete" ? "completed" : status.status || latestRunStatus;
   latestRunSummary = status.summary || null;
+  latestRunProfile = status.profile || null;
   const artifacts = status.artifacts || {};
   if (artifacts.input) {
     inputPreview.src = artifacts.input;
@@ -1464,6 +1469,7 @@ async function loadArtifacts(runId) {
     filename: status.filename,
     city: status.city,
     summary: status.summary,
+    profile: status.profile,
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay,
     cacheKey: pendingRunCacheKey,
@@ -1510,6 +1516,7 @@ async function saveHistoryEntry(payload) {
     starred: Boolean(existing?.starred),
     renamedAt: existing?.renamedAt || null,
     summary: payload.summary || null,
+    profile: payload.profile || null,
     geojson: payload.geojson,
     inputImage,
     overlayImage,
@@ -1839,6 +1846,7 @@ function restoreHistoryEntry(entry) {
   latestRunEvents = [];
   latestRunStatus = "completed";
   latestRunSummary = entry.summary || null;
+  latestRunProfile = entry.profile || null;
   imageInput.value = "";
   clearGeneratedArtifacts();
   latestGeojson = entry.geojson;
@@ -2246,6 +2254,7 @@ function startNewRun() {
   latestRunEvents = [];
   latestRunStatus = "idle";
   latestRunSummary = null;
+  latestRunProfile = null;
   pendingRunCacheKey = null;
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
@@ -2280,6 +2289,7 @@ function resetRun() {
   latestRunEvents = [];
   latestRunStatus = "running";
   latestRunSummary = null;
+  latestRunProfile = null;
   pendingRunCacheKey = null;
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
@@ -2398,6 +2408,7 @@ async function submitGenerationReport(event) {
     formData.set("events", JSON.stringify(latestRunEvents));
     formData.set("settings", JSON.stringify(collectRunSettings()));
     formData.set("summary", JSON.stringify(latestRunSummary || {}));
+    formData.set("profile", JSON.stringify(latestRunProfile || {}));
     formData.set("user_agent", navigator.userAgent);
     formData.set("page_url", window.location.href);
     const response = await fetch("/api/reports", {

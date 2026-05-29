@@ -37,6 +37,7 @@ class GenerationReport:
     page_url: str | None = None
     settings: dict[str, Any] | None = None
     summary: dict[str, Any] | None = None
+    profile: dict[str, Any] | None = None
 
 
 FailureReport = GenerationReport
@@ -153,6 +154,7 @@ def issue_body(branch: str, artifact_path: str, image_url: str, report: Generati
     events = json.dumps(report.events or [], indent=2, default=str)
     settings = json.dumps(report.settings or {}, indent=2, default=str)
     summary = json.dumps(report.summary or {}, indent=2, default=str)
+    profile = json.dumps(report.profile or {}, indent=2, default=str)
     return "\n".join(
         [
             "A user reported a Boundary Builder generation from the app.",
@@ -190,6 +192,12 @@ def issue_body(branch: str, artifact_path: str, image_url: str, report: Generati
             "",
             "```json",
             settings[:8000],
+            "```",
+            "",
+            "## Runtime Profile",
+            "",
+            "```json",
+            profile[:8000],
             "```",
             "",
             "## Recent Events",

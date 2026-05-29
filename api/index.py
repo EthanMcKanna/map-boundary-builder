@@ -379,6 +379,10 @@ class handler(BaseHTTPRequestHandler):
             summary = json.loads(fields.get("summary", "{}") or "{}")
         except json.JSONDecodeError:
             summary = {}
+        try:
+            profile = json.loads(fields.get("profile", "{}") or "{}")
+        except json.JSONDecodeError:
+            profile = {}
         from map_boundary_builder.github_reports import FailureReport, GithubReportError, create_failure_issue
 
         try:
@@ -396,6 +400,7 @@ class handler(BaseHTTPRequestHandler):
                     page_url=fields.get("page_url", "").strip() or None,
                     settings=settings if isinstance(settings, dict) else {},
                     summary=summary if isinstance(summary, dict) else {},
+                    profile=profile if isinstance(profile, dict) else {},
                 )
             )
         except GithubReportError as exc:
