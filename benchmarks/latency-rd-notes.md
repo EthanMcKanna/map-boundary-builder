@@ -2961,6 +2961,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   The cache-cold no-catalog gate
   `out/dual-rapidocr-warm-cold-nocatalog-20260529/full-report.json` preserved
   8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total 7.568s.
+- Production deployment `dpl_F4YrC9zRXn6317xeiVWCnkDgUTYD` is aliased to
+  `https://mapboundary.app` and reports `pipeline-63147950abd3ef79`. Live
+  `/api/health` exposes `rapidocr_warm_detector_limits: [640, 608]`, and
+  `/api/health?warm=ocr` completed with `rapidocr_inference_warmed: true` and
+  total 3.994s. A fresh small Avride Dallas smoke after warmup still completed
+  correctly through OCR/georeference, but exposed the next bottleneck:
+  `build_stage_elapsed_s` was 2.323s OCR and 11.900s georeference/context
+  inference, so arbitrary Auto-mode context inference remains a major target.
 
 ## Remaining Bottlenecks
 
@@ -2972,3 +2980,8 @@ OCR/georeference rather than returning outdated fast-path polygons.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full
   active fixture suite before production.
+- Fresh arbitrary Auto-mode screenshots can still spend many seconds in context
+  inference when the location is not supplied as a city override or catalog
+  match. The fresh Avride Dallas smoke on `pipeline-63147950abd3ef79` spent
+  11.900s in georeference after OCR, making filename/city/context-priority
+  handling the next high-impact reliability and latency target.
