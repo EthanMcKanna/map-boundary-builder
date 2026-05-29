@@ -475,28 +475,48 @@ def first_query_value(query: dict[str, list[str]], name: str) -> str | None:
 
 
 def health_payload(*, warm: str | None = None) -> dict[str, Any]:
+    runtime_dependencies = dict(pipeline_version_dependency_versions())
+    tmp_writable = os.access(tempfile.gettempdir(), os.W_OK)
     payload: dict[str, Any] = {
-        "ok": True,
+        "ok": runtime_health_ok(runtime_dependencies, tmp_writable=tmp_writable),
         "runtime": "vercel-python",
         "tesseract": shutil.which("tesseract"),
-        "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
+        "tmp_writable": tmp_writable,
         "pipeline_version": get_pipeline_version(),
-        "runtime_dependencies": dict(pipeline_version_dependency_versions()),
+        "runtime_dependencies": runtime_dependencies,
         "ocr": ocr_runtime_config(),
     }
     if should_prewarm_generation_runtime(warm):
-        payload["warm"] = prewarm_generation_runtime()
+        warm_payload = prewarm_generation_runtime()
+        payload["warm"] = warm_payload
+        if not warm_generation_ok(warm_payload):
+            payload["ok"] = False
     return payload
 
 
 def cron_warm_generation_payload(*, authorization_header: str | None) -> tuple[dict[str, Any], HTTPStatus]:
     if not authorized_cron_request(authorization_header):
         return {"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED
+    warm_payload = prewarm_generation_runtime()
+    ok = warm_generation_ok(warm_payload)
     return {
-        "ok": True,
+        "ok": ok,
         "pipeline_version": get_pipeline_version(),
-        "warm": prewarm_generation_runtime(),
-    }, HTTPStatus.OK
+        "warm": warm_payload,
+    }, HTTPStatus.OK if ok else HTTPStatus.SERVICE_UNAVAILABLE
+
+
+def runtime_health_ok(runtime_dependencies: dict[str, str], *, tmp_writable: bool) -> bool:
+    if not tmp_writable:
+        return False
+    for dependency in ("numpy", "onnxruntime", "pillow", "rapidocr-onnxruntime", "shapely", "cv2"):
+        if runtime_dependencies.get(dependency) in {None, "", "missing", "unknown"}:
+            return False
+    return True
+
+
+def warm_generation_ok(payload: dict[str, Any]) -> bool:
+    return payload.get("status") == "ok"
 
 
 def authorized_cron_request(authorization_header: str | None) -> bool:

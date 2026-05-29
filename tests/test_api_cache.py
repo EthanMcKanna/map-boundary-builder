@@ -454,6 +454,28 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
         prewarm.assert_called_once_with()
 
+    def test_health_payload_marks_runtime_or_warm_failures_unhealthy(self) -> None:
+        dependencies = [
+            ("numpy", "2.4.6"),
+            ("onnxruntime", "1.26.0"),
+            ("opencv-python", "missing"),
+            ("opencv-python-headless", "4.10.0.84"),
+            ("pillow", "12.2.0"),
+            ("rapidocr-onnxruntime", "1.4.4"),
+            ("shapely", "2.1.2"),
+            ("cv2", "missing"),
+        ]
+        with (
+            patch("api.index.pipeline_version_dependency_versions", return_value=dependencies),
+            patch("api.index.prewarm_generation_runtime", return_value={"status": "error", "error": "No module named cv2"}),
+        ):
+            cold = health_payload()
+            warm = health_payload(warm="ocr")
+
+        self.assertFalse(cold["ok"])
+        self.assertFalse(warm["ok"])
+        self.assertEqual(warm["warm"]["status"], "error")
+
     def test_cron_warm_generation_requires_bearer_secret(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertFalse(authorized_cron_request("Bearer secret"))
@@ -481,6 +503,19 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["pipeline_version"], "pipeline-test")
         self.assertEqual(payload["warm"], {"status": "ok"})
         prewarm.assert_called_once_with()
+
+    def test_cron_warm_generation_payload_surfaces_prewarm_failure(self) -> None:
+        with (
+            patch.dict("os.environ", {"CRON_SECRET": "secret"}),
+            patch("api.index.get_pipeline_version", return_value="pipeline-test"),
+            patch("api.index.prewarm_generation_runtime", return_value={"status": "error", "error": "cv2 missing"}),
+        ):
+            payload, status = cron_warm_generation_payload(authorization_header="Bearer secret")
+
+        self.assertEqual(status, HTTPStatus.SERVICE_UNAVAILABLE)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["pipeline_version"], "pipeline-test")
+        self.assertEqual(payload["warm"]["status"], "error")
 
     def test_index_asset_embeds_pipeline_version_for_local_cache(self) -> None:
         html, mime = web_asset_response("index.html")

@@ -3415,3 +3415,10 @@ OCR/georeference rather than returning outdated fast-path polygons.
   returned the same bbox/source at `build_boundary_s: 0.094s` and
   `total_before_send_s: 0.099s`; repeating the identical border filename hit raw
   run cache at `total_before_send_s: 0.002s`.
+- Tightened health reporting after the OpenCV packaging probes: `/api/health`
+  now marks `ok: false` when a critical runtime dependency such as actual
+  `cv2` is missing, and `/api/health?warm=ocr` plus the authenticated warm cron
+  mark/report failure when prewarm returns `status: error`. This prevents broken
+  dependency deployments from looking healthy just because the HTTP handler
+  itself is still alive. Validation passed 181/181 pytest, compileall, and
+  `node --check map_boundary_builder/web_assets/app.js`.
