@@ -2060,6 +2060,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   but the full serial `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=20` gate at
   `out/ocr-rec20-no-catalog-serial-20260529/full-report.json` was not a clear
   improvement over the current no-catalog baseline, so the default remains 12.
+- Road-refine sweep after restoring the 8-scored/7-skipped drift policy:
+  `out/road-focus-base-drift-20260529/full-report.json` passed Phoenix and
+  Nashville at avg IoU 0.985 in 2.02s. Coarser 6/3 feature scales passed the
+  focused pair in 1.86s and full gate in 3.52s; batch size 2048 passed the
+  focused pair in 1.86s and full gate in 3.49s; combining both passed full in
+  3.50s. The wins are small/noisy and batch 2048 doubles peak vectorized search
+  memory, so no default changed. The 2500 road-point cap was rejected because it
+  dropped Nashville to 0.917 IoU despite passing the coarse threshold.
+- RapidOCR internals profile confirmed the bottleneck is the ONNX detector and
+  recognizer, not Python postprocessing: Phoenix OCR was 0.780s with 0.778s in
+  RapidOCR; Los Angeles was 0.443s with 0.442s in RapidOCR; line/stacked label
+  grouping and dedupe were effectively noise. A stricter detector box threshold
+  at 0.55/0.60 preserved the full gate but did not beat the baseline. Fixed
+  ONNX intra-op thread counts of 1, 2, and 4 preserved accuracy but slowed the
+  full gate to 7.99s, 5.13s, and 3.96s respectively, so ONNX default threading
+  remains best locally. Lowering RapidOCR max dimension to 1400 was rejected:
+  `out/ocr-maxdim1400-drift-full-20260529/full-report.json` failed 7/8 scored
+  fixtures, dropping Nashville to 0.759 IoU and degrading Phoenix/Orlando.
 
 ## Remaining Bottlenecks
 
