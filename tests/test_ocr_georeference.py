@@ -17,6 +17,8 @@ from map_boundary_builder.georeference import (
     candidate_place_labels,
     direct_city_contexts_from_labels,
     detect_label_marker_dots,
+    filename_city_contexts,
+    filename_context_queries,
     geocode_many,
     geocode_contexts,
     georeference_from_labels,
@@ -1244,6 +1246,83 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
         self.assertIs(result, fallback_result)
         label_fit.assert_called_once()
+
+    def test_filename_context_queries_extract_city_without_provider_noise(self) -> None:
+        queries = filename_context_queries("Avride Dallas df72214 small variant.png")
+
+        self.assertIn("Dallas", queries)
+        self.assertNotIn("Avride Dallas", queries)
+        self.assertNotIn("Small Variant", queries)
+
+    def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
+        dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")
+        bay_area_contexts = filename_city_contexts("Waymo Bay Area screenshot.png")
+
+        self.assertTrue(dallas_contexts)
+        self.assertEqual(dallas_contexts[0].query, "Dallas")
+        self.assertTrue(bay_area_contexts)
+        self.assertEqual(bay_area_contexts[0].query, "San Francisco Bay Area")
+
+    def test_context_hint_fast_path_skips_expensive_context_inference(self) -> None:
+        labels = [OcrLabel("Belmont", x=10, y=10, width=80, height=24, confidence=96)]
+        hinted_result = object()
+
+        with (
+            patch("map_boundary_builder.runner.georeference_from_labels", return_value=hinted_result) as label_fit,
+            patch("map_boundary_builder.runner.is_credible_context_hint_georeference", return_value=True),
+            patch("map_boundary_builder.runner.road_contexts_from_labels") as road_contexts,
+        ):
+            result = fit_georeference(
+                labels,
+                Path("input.png"),
+                pixel_geometry=object(),
+                rgb=None,
+                city_input=None,
+                context_hints=[SimpleNamespace(query="Dallas")],
+                width=680,
+                height=551,
+                coverage_ratio=0.27,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=None,
+                progress=None,
+            )
+
+        self.assertIs(result, hinted_result)
+        label_fit.assert_called_once()
+        road_contexts.assert_not_called()
+
+    def test_context_hint_failure_falls_back_to_normal_context_inference(self) -> None:
+        labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
+        weak_result = object()
+        fallback_result = object()
+
+        with (
+            patch(
+                "map_boundary_builder.runner.georeference_from_labels",
+                side_effect=[weak_result, fallback_result],
+            ) as label_fit,
+            patch("map_boundary_builder.runner.is_credible_context_hint_georeference", return_value=False),
+            patch("map_boundary_builder.runner.road_contexts_from_labels", return_value=[]),
+        ):
+            result = fit_georeference(
+                labels,
+                Path("input.png"),
+                pixel_geometry=object(),
+                rgb=None,
+                city_input=None,
+                context_hints=[SimpleNamespace(query="Dallas")],
+                width=1920,
+                height=1080,
+                coverage_ratio=0.22,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=None,
+                progress=None,
+            )
+
+        self.assertIs(result, fallback_result)
+        self.assertEqual(label_fit.call_count, 2)
 
     def test_specific_city_fit_keeps_city_after_synthetic_context_failure(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]

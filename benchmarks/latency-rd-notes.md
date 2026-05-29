@@ -2969,6 +2969,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   correctly through OCR/georeference, but exposed the next bottleneck:
   `build_stage_elapsed_s` was 2.323s OCR and 11.900s georeference/context
   inference, so arbitrary Auto-mode context inference remains a major target.
+- Auto-mode georeferencing now has a guarded filename-derived context hint. The
+  hint extractor only uses cache-only geocoder results for broad/admin contexts,
+  strips provider/file-noise tokens such as Waymo/Tesla/Avride/screenshot, and
+  accepts the shortcut only when the resulting OCR label fit is credible;
+  otherwise it falls back to the normal full label-inference path. Local Avride
+  Dallas Auto probes preserved the exact bbox
+  `[-96.8302546,32.7655174,-96.7710713,32.8247078]`, confidence 0.708,
+  3 controls, and residuals while improving from 2.049s before the patch to
+  0.764s on first hinted run and 0.072-0.073s warm repeats. A no-catalog wrong-
+  filename smoke on Phoenix with `Avride Dallas wrong filename.png` rejected the
+  Dallas hint, fell through to the normal Phoenix regional context, and returned
+  the Phoenix bbox with confidence 0.862. Validation passed full pytest
+  (165 tests), `compileall`, `git diff --check`, the default active benchmark
+  `out/context-hint-active-20260529/full-report.json` at 8/8 scored fixtures,
+  avg IoU 0.993, min IoU 0.943, total 0.42s, the fresh-cache no-catalog gate
+  `out/context-hint-cold-nocatalog-20260529/full-report.json` at 8/8, avg IoU
+  0.962, min IoU 0.931, total 4.79s, and the Houston/Miami/Bay Area changed-
+  fixture smoke `out/context-hint-changed-smoke-20260529/full-report.json`
+  with 6/6 smoke-checked and 0 smoke failures.
 
 ## Remaining Bottlenecks
 
@@ -2980,8 +2999,8 @@ OCR/georeference rather than returning outdated fast-path polygons.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full
   active fixture suite before production.
-- Fresh arbitrary Auto-mode screenshots can still spend many seconds in context
-  inference when the location is not supplied as a city override or catalog
-  match. The fresh Avride Dallas smoke on `pipeline-63147950abd3ef79` spent
-  11.900s in georeference after OCR, making filename/city/context-priority
-  handling the next high-impact reliability and latency target.
+- Fresh arbitrary Auto-mode screenshots without a useful filename/context hint
+  can still spend many seconds in context inference when the location is not
+  supplied as a city override or catalog match. The filename fast path removes
+  the major Avride Dallas class of avoidable context latency, but truly
+  anonymous screenshots still need a faster first-principles context resolver.

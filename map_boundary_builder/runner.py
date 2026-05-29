@@ -28,10 +28,12 @@ from .extract import (
 )
 from .georeference import (
     CityContext,
+    filename_city_contexts,
     georeference_from_city_context,
     georeference_from_label_context,
     georeference_from_labels,
     infer_city_contexts,
+    is_credible_context_hint_georeference,
 )
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
@@ -438,6 +440,7 @@ def build_boundary(
         extraction.pixel_geometry,
         rgb=rgb,
         city_input=city_input,
+        context_hints=filename_city_contexts(filename_hint) if city_input is None else None,
         width=width,
         height=height,
         coverage_ratio=extraction.coverage_ratio,
@@ -776,6 +779,7 @@ def fit_georeference(
     min_control_points: int,
     label_y_min: float | None,
     label_y_max: float | None,
+    context_hints: list[CityContext] | None = None,
     road_feature_distance: Any | None = None,
     progress: ProgressCallback | None,
 ):
@@ -785,6 +789,30 @@ def fit_georeference(
         message="Inferring map location from labels" if city_input is None else "Matching readable map labels",
         percent=48,
     )
+    if city_input is None and context_hints:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Trying filename map context",
+            percent=52,
+            details={"candidates": [context.query for context in context_hints]},
+        )
+        for context in context_hints:
+            georef = georeference_from_labels(
+                labels,
+                str(image_path),
+                context.query,
+                width,
+                height,
+                rgb=rgb,
+                min_control_points=min_control_points,
+                label_y_min=label_y_min,
+                label_y_max=label_y_max,
+                road_feature_distance=road_feature_distance,
+            )
+            if is_credible_context_hint_georeference(georef):
+                return georef
+
     road_contexts = road_contexts_from_labels(city_input, labels)
     road_context_candidates = [city_input] if city_input is not None else road_context_queries(road_contexts)
     try_ranked_context_first = label_y_min is None and should_try_ranked_context_first(

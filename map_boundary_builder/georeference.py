@@ -213,6 +213,40 @@ CITY_INFERENCE_STOP_TOKENS = {
     "walk",
     "with",
 }
+FILENAME_CONTEXT_STOP_TOKENS = CITY_INFERENCE_STOP_TOKENS | {
+    "app",
+    "area",
+    "avride",
+    "boundary",
+    "boundaries",
+    "cache",
+    "capture",
+    "coverage",
+    "geojson",
+    "image",
+    "img",
+    "map",
+    "maps",
+    "operating",
+    "polygon",
+    "prod",
+    "production",
+    "screenshot",
+    "service",
+    "small",
+    "snap",
+    "tesla",
+    "uber",
+    "variant",
+    "waymo",
+    "web",
+    "zoox",
+}
+FILENAME_CONTEXT_ALLOWED_PHRASES = {
+    ("bay", "area"),
+    ("los", "angeles"),
+    ("san", "francisco"),
+}
 NON_CONTEXT_COMPONENTS = {
     "alabama",
     "alaska",
@@ -661,6 +695,23 @@ def is_decisive_georeference_result(result: GeoreferenceResult) -> bool:
     )
 
 
+def is_credible_context_hint_georeference(result: GeoreferenceResult | None) -> bool:
+    if result is None:
+        return False
+    if is_decisive_georeference_result(result):
+        return True
+    if result.transform.confidence < 0.68:
+        return False
+    if len(result.control_points) >= 4:
+        return result.residual_median_m <= 2200.0 and result.residual_p90_m <= 3500.0
+    return (
+        len(result.control_points) >= 3
+        and result.transform.confidence >= 0.70
+        and result.residual_median_m <= 1300.0
+        and result.residual_p90_m <= 1600.0
+    )
+
+
 def georeference_control_spread_m(controls: list[ControlPoint]) -> float:
     if len(controls) < 2:
         return 0.0
@@ -910,6 +961,81 @@ def resolve_city_contexts(labels: list[OcrLabel], city: str | None) -> list[City
             return [CityContext(query=city, center=city_results[0], inferred=False)]
         return []
     return infer_city_contexts(labels)
+
+
+def filename_city_contexts(filename_hint: str | None) -> list[CityContext]:
+    queries = filename_context_queries(filename_hint)
+    if not queries:
+        return []
+
+    contexts: list[CityContext] = []
+    for query, results in zip(queries, geocode_many([(query, 2) for query in queries], allow_network=False)):
+        query_tokens = place_tokens(query)
+        for result in results:
+            if not result.bbox:
+                continue
+            if not primary_name_matches_label(result.display_name, query):
+                continue
+            if len(query_tokens) == 1 and not is_reliable_single_token_context(result):
+                continue
+            if result.place_type.lower() not in ADMIN_CONTEXT_TYPES and not is_broad_context_result(result):
+                continue
+            contexts.append(
+                CityContext(
+                    query=result.display_name.split(",", 1)[0].strip(),
+                    center=result,
+                    inferred=True,
+                    evidence=(query,),
+                )
+            )
+            break
+    return rank_city_contexts_for_georeferencing(dedupe_city_contexts(contexts))[:2]
+
+
+def filename_context_queries(filename_hint: str | None) -> list[str]:
+    if not filename_hint:
+        return []
+    tokens: list[str] = []
+    seen_tokens: set[str] = set()
+    for part in re.split(r"[^a-z0-9]+", filename_hint.lower()):
+        if len(part) < 3 or any(char.isdigit() for char in part):
+            continue
+        token = OCR_PLACE_TOKEN_ALIASES.get(part, part)
+        if token in seen_tokens:
+            continue
+        seen_tokens.add(token)
+        tokens.append(token)
+
+    queries: list[str] = []
+    seen_queries: set[str] = set()
+
+    def add_query(parts: tuple[str, ...]) -> None:
+        query = " ".join(part.title() for part in parts)
+        key = query.lower()
+        if key in seen_queries:
+            return
+        seen_queries.add(key)
+        queries.append(query)
+
+    for size in (3, 2):
+        for index in range(0, max(0, len(tokens) - size + 1)):
+            parts = tuple(tokens[index : index + size])
+            if parts in FILENAME_CONTEXT_ALLOWED_PHRASES:
+                add_query(parts)
+                continue
+            if any(part in FILENAME_CONTEXT_STOP_TOKENS for part in parts):
+                continue
+            if is_noisy_poi_query(set(parts)):
+                continue
+            add_query(parts)
+
+    for token in tokens:
+        if token in FILENAME_CONTEXT_STOP_TOKENS or token in GENERIC_SINGLE_TOKENS:
+            continue
+        if len(token) < 5:
+            continue
+        add_query((token,))
+    return queries[:8]
 
 
 def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
