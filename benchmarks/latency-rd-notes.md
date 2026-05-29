@@ -3278,3 +3278,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `total_before_send_s: 0.147s`. This is faster than the prior production
   canonical-OCR-only bordered proof at 0.279s server time. Repeating the
   bordered filename hit raw run cache in 0.00203s server time.
+- Optimized canonical OCR border detection to use the same edge-only row/column
+  probe as extraction caching instead of scanning a full-image mask. This does
+  not change OCR recognition or labels; it only lowers canonical cache lookup
+  overhead. The probe now takes about 0.4-2 ms on the large benchmark images
+  instead of tens of milliseconds. Validation passed 176/176 pytest,
+  `compileall`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. In-process default benchmark
+  `out/ocr-edge-trim-default-20260529/full-report.json` passed 8/8 scored,
+  skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU 0.943, total
+  0.49s. In-process no-catalog benchmark
+  `out/ocr-edge-trim-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.962, min IoU 0.931, total 4.50s. Changed-market smoke
+  `out/ocr-edge-trim-changed-smoke-20260529/full-report.json` smoke-checked
+  the user-confirmed changed Bay Area/Houston/Miami fixtures with zero failures.
+  Local in-process Avride Dallas padded-hit proof preserved the exact bbox/source
+  and returned canonical OCR labels in 0.0005s for the bordered variant.

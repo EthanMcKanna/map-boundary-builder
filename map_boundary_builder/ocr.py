@@ -287,17 +287,13 @@ def canonical_ocr_bgr(bgr: np.ndarray | None) -> tuple[np.ndarray | None, tuple[
     if bgr is None or bgr.ndim != 3 or bgr.shape[0] < 3 or bgr.shape[1] < 3:
         return bgr, (0.0, 0.0)
     contiguous = np.ascontiguousarray(bgr)
-    mask = canonical_border_mask(contiguous)
-    if mask is None:
-        return contiguous, (0.0, 0.0)
+    border_color = canonical_border_color(contiguous)
 
-    height, width = mask.shape
-    row_matches = np.mean(mask, axis=1) >= OCR_BORDER_ROW_MATCH_RATIO
-    col_matches = np.mean(mask, axis=0) >= OCR_BORDER_ROW_MATCH_RATIO
-    top = leading_true_count(row_matches)
-    bottom_trim = leading_true_count(row_matches[::-1])
-    left = leading_true_count(col_matches)
-    right_trim = leading_true_count(col_matches[::-1])
+    height, width = contiguous.shape[:2]
+    top = leading_matching_border_rows(contiguous, border_color, reverse=False)
+    bottom_trim = leading_matching_border_rows(contiguous, border_color, reverse=True)
+    left = leading_matching_border_cols(contiguous, border_color, reverse=False)
+    right_trim = leading_matching_border_cols(contiguous, border_color, reverse=True)
     bottom = height - bottom_trim
     right = width - right_trim
     if top >= bottom or left >= right:
@@ -317,7 +313,7 @@ def canonical_ocr_bgr_trimmed(
     return origin != (0.0, 0.0) or original_bgr.shape[:2] != canonical_bgr.shape[:2]
 
 
-def canonical_border_mask(bgr: np.ndarray) -> np.ndarray | None:
+def canonical_border_color(bgr: np.ndarray) -> np.ndarray:
     border_samples = np.concatenate(
         (
             bgr[0, :, :],
@@ -327,18 +323,34 @@ def canonical_border_mask(bgr: np.ndarray) -> np.ndarray | None:
         ),
         axis=0,
     )
-    border_color = np.median(border_samples.astype(np.int16), axis=0)
-    delta = np.max(np.abs(bgr.astype(np.int16) - border_color), axis=2)
-    return delta <= OCR_BORDER_COLOR_TOLERANCE
+    return np.median(border_samples.astype(np.int16), axis=0)
 
 
-def leading_true_count(values: np.ndarray) -> int:
+def leading_matching_border_rows(bgr: np.ndarray, border_color: np.ndarray, *, reverse: bool) -> int:
+    height = bgr.shape[0]
     count = 0
-    for value in values:
-        if not bool(value):
+    indexes = range(height - 1, -1, -1) if reverse else range(height)
+    for index in indexes:
+        if not border_pixels_match(bgr[index, :, :], border_color):
             break
         count += 1
     return count
+
+
+def leading_matching_border_cols(bgr: np.ndarray, border_color: np.ndarray, *, reverse: bool) -> int:
+    width = bgr.shape[1]
+    count = 0
+    indexes = range(width - 1, -1, -1) if reverse else range(width)
+    for index in indexes:
+        if not border_pixels_match(bgr[:, index, :], border_color):
+            break
+        count += 1
+    return count
+
+
+def border_pixels_match(pixels: np.ndarray, border_color: np.ndarray) -> bool:
+    delta = np.max(np.abs(pixels.astype(np.int16) - border_color), axis=1)
+    return bool(np.mean(delta <= OCR_BORDER_COLOR_TOLERANCE) >= OCR_BORDER_ROW_MATCH_RATIO)
 
 
 def shift_ocr_labels(labels: tuple[OcrLabel, ...] | list[OcrLabel], dx: float, dy: float) -> list[OcrLabel]:
