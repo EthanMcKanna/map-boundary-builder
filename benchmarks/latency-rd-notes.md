@@ -4734,3 +4734,17 @@ with zero failures in 0.531s.
   1.519261`. It also increased warmup work by adding a second detector session.
   Keep the 1200px provider prepass and do not ship a separate detector limit
   until production proves it faster.
+- Production rollback/deploy `dpl_3oiSmw8Ec5DzXjx894H977b9V92c` restored the
+  faster measured 1200px provider prepass and is aliased to
+  `https://mapboundary.app`. Health returned HTTP 200 on
+  `pipeline-03b15602efcb219e` with `provider_ui_rapidocr_max_dimension: 1200`,
+  warm status OK, and `road_seed_digest_entries: 3`. A cache-miss production
+  `IMG_0071.PNG` proof returned `catalog-shape-match:provider-ui-label`,
+  `las-vegas-zoox`, bbox
+  `[-115.3550119,36.0353866,-115.1830059,36.187696]`, confidence 0.72,
+  `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617` with
+  `build_boundary_s: 1.390550`, OCR 1.203021s, and `total_before_send_s:
+  1.454396`. This improves the earlier provider-UI fallback production proof
+  from `build_boundary_s: 1.504360` and `total_before_send_s: 1.571622`, and
+  replaces the original slow production path that spent `build_boundary_s:
+  6.249073` with `ocr-georeference:nominatim-label-fit` on the same screenshot.
