@@ -1587,6 +1587,14 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `filename_hint`: without the hint the run still emitted the preflight
   `Refining service-area pixels` sequence, while with `filename_hint` it skipped
   that sequence and preserved the same bbox/source/confidence.
+- Production deployment `dpl_7MsfdNATHUkt9XK3VcZ9Me6fKgjB` verified the API
+  filename hint on `pipeline-d18417926e811927`: cache-busted Miami Waymo no
+  longer emitted `Refining service-area pixels`, stayed on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, preserved confidence
+  0.864 and `catalog_slug: null`. The first cold-ish run still took 7.801s
+  server-side because OCR/georeference initialization dominated, but warmed
+  cache-busted repeats completed server generation in 0.723s and 0.708s with
+  no refine/preflight sequence.
 
 ## Remaining Bottlenecks
 
