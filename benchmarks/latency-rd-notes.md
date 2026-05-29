@@ -4169,3 +4169,37 @@ with zero failures in 0.531s.
   `sfo1::sfo1`, returned HTTP 201 in 0.182s wall time, and spent 0.079s on the
   server with `catalog_slug: houston-waymo` and `georeference_source:
   catalog-shape-match`.
+- Continuation arbitrary-path probes after the SFO deployment kept the no-catalog
+  accuracy bar strict. Fresh current-head in-process no-catalog profiling at
+  `out/continue-nocatalog-profile-20260529-121757/full-report.json` passed 8/8
+  scored fixtures with avg IoU 0.961733, min IoU 0.931476, total active
+  duration 4.520861s, and max active duration 0.882435s; OCR remained the
+  dominant stage on the hard Waymo fixtures. A fresh padded service-area crop
+  OCR sweep was rejected again: even the best 6% bbox padding lowered avg IoU
+  to 0.959693, moved Austin/Dallas/San Antonio/Phoenix versus the current
+  accepted outputs, and did not provide a runtime-safe validator that could
+  distinguish those shifts before falling back. Client-side full-upload
+  downscaling to 1600px was also rejected as a default production shortcut:
+  downscaled PNG inputs reduced active duration to 3.711655s and JPEG inputs to
+  3.524011s, but strict regression checks failed because individual fixtures
+  lost IoU (PNG: Austin -0.008287, Nashville -0.010486, Phoenix -0.012087;
+  JPEG: Dallas Waymo -0.015946, Nashville -0.009811, Phoenix -0.012115, plus
+  smaller Tesla/San Antonio drops). The backend stays on the original upload
+  with internal 1600px processing until a validator can prove no per-fixture
+  accuracy reduction. Original-resolution JPEG recompression was rejected for
+  the same reason: quality-95 shrank bytes to 45.7% and quality-98 to 61.4% of
+  the source set, but the strict no-catalog regression check failed, including
+  Dallas Waymo -0.015405 at q95 and Orlando -0.065494 at q98. Live production
+  arbitrary-path probes on `mapboundary.app` used a pixel-busted
+  `/Users/ethanmckanna/Downloads/bay-area-waymo.png` upload that intentionally
+  missed the catalog and stayed on `ocr-georeference:nominatim-label-fit`. The
+  first cache-miss sample routed `sfo1::sfo1`, returned the accepted Bay Area
+  bbox/confidence with 15 controls, but still took 10.868s HTTP wall /
+  5.709s server (`build_boundary_s: 5.114s`, OCR 3.258s). A second pixel-busted
+  warm/visual-cache variant preserved the exact bbox/confidence/source and
+  returned in 2.111s wall / 0.579s server (`build_boundary_s: 0.571s`, OCR
+  0.145s), showing the remaining uncached arbitrary-path problem is first-pass
+  OCR/runtime plus upload/proxy overhead, not the SFO region path. Package
+  index checks found no newer `rapidocr-onnxruntime` or `onnxruntime` than the
+  deployed 1.4.4 / 1.26.0 pair, so there is no drop-in dependency upgrade to
+  test in this lane.
