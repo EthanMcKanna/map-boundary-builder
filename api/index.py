@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
 from map_boundary_builder.asset_response import web_asset_response
-from map_boundary_builder.pipeline_version import get_pipeline_version
+from map_boundary_builder.pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from map_boundary_builder.runtime_warmup import (
     prewarm_generation_runtime,
     should_prewarm_generation_runtime,
@@ -481,6 +481,7 @@ def health_payload(*, warm: str | None = None) -> dict[str, Any]:
         "tesseract": shutil.which("tesseract"),
         "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
         "pipeline_version": get_pipeline_version(),
+        "runtime_dependencies": dict(pipeline_version_dependency_versions()),
         "ocr": ocr_runtime_config(),
     }
     if should_prewarm_generation_runtime(warm):

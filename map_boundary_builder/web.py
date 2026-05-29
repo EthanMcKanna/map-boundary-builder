@@ -19,7 +19,7 @@ from .asset_response import web_asset_response
 from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
-from .pipeline_version import get_pipeline_version
+from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from .runner import BoundaryBuildOptions, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 
@@ -79,6 +79,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "runtime": "local-python",
                     "pipeline_version": get_pipeline_version(),
+                    "runtime_dependencies": dict(pipeline_version_dependency_versions()),
                 }
                 warm = first_query_value(parse_qs(parsed.query), "warm")
                 if should_prewarm_generation_runtime(warm):

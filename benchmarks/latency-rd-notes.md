@@ -2719,6 +2719,13 @@ OCR/georeference rather than returning outdated fast-path polygons.
   improving on the previous documented 2.975s server / 2.500s OCR warmed miss.
   Exact-repeat cache hits still return from the raw run cache in about 0.003s
   server time.
+- `/api/health` now reports the runtime dependency versions used in the
+  pipeline hash, including ONNX Runtime and RapidOCR. This closes the production
+  verification gap from the ONNX Runtime upgrade: future deploy checks can
+  directly confirm the installed inference engine instead of inferring it from
+  the pipeline hash alone. Focused API/pipeline-version tests passed 27 tests,
+  and local `health_payload()` reported `onnxruntime: 1.26.0` with
+  `rapidocr-onnxruntime: 1.4.4`.
 - Rejected road-search batch and feature-scale tuning as a durable win. Focused
   Phoenix/Nashville probes with `ROAD_SEARCH_BATCH_SIZE` at 512, 2048, and 4096
   preserved accuracy but were slower or too noisy than the current default.
