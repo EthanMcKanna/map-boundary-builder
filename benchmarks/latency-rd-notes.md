@@ -2577,6 +2577,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   stricter detector threshold still failed Phoenix. The faster-looking 4.50s
   total from the threshold+dilation-off probe is therefore an accuracy
   regression, not an acceptable latency win.
+- Rejected low-resolution OCR preflight/fallback as a production shortcut for
+  now. A fresh sweep with native-array input and Tesseract blocked showed the
+  temptation: `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1300` passed the coarse
+  8/8 scored fixture gate in 4.67s, faster than the current 1600px native-array
+  baseline, but it still reduced average IoU from 0.962 to 0.959 and lowered
+  several individual fixtures. The neighboring caps do not provide a stable
+  safe signal: 1200px dropped Orlando to IoU 0.781, 1400px failed Nashville and
+  degraded Phoenix, and 1500px was slower while still lowering accuracy. A
+  fallback would need a reliable way to detect these subtle-but-real output
+  regressions before accepting the low-res result; confidence/source metadata
+  alone is not enough because some lower-IoU cases still report high
+  confidence.
 
 ## Remaining Bottlenecks
 
