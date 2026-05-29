@@ -12,6 +12,7 @@ from PIL import Image, features
 from api.index import (
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     cached_run_payload,
+    event_stage_elapsed_seconds,
     inline_overlay,
     json_response_body,
     normalized_image_sha256,
@@ -155,6 +156,27 @@ class ApiRunCacheTests(unittest.TestCase):
         payload = cached_run_payload(cached, "run-id", "Phoenix.png", [], profile=profile)
 
         self.assertEqual(payload["profile"], profile)
+
+    def test_event_stage_elapsed_seconds_sums_repeated_stages(self) -> None:
+        events = [
+            {"stage": "queued", "message": "Run queued"},
+            {"stage": "inspect", "timestamp": 10.0},
+            {"stage": "extract", "timestamp": 10.25},
+            {"stage": "extract", "timestamp": 10.75},
+            {"stage": "ocr", "timestamp": 11.0},
+            {"stage": "georeference", "timestamp": 11.4},
+            {"stage": "complete", "timestamp": 11.5},
+        ]
+
+        self.assertEqual(
+            event_stage_elapsed_seconds(events),
+            {
+                "inspect": 0.25,
+                "extract": 0.75,
+                "ocr": 0.4,
+                "georeference": 0.1,
+            },
+        )
 
     def test_json_response_body_gzips_large_payloads_when_supported(self) -> None:
         payload = {"data": "x" * 4096}

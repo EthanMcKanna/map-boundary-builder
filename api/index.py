@@ -174,6 +174,7 @@ class handler(BaseHTTPRequestHandler):
                 progress=progress,
             )
             profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
         except Exception as exc:
             self.send_json({"error": str(exc), "events": events[-20:]}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return
@@ -406,6 +407,20 @@ def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") ->
 
 def elapsed_seconds(started: float) -> float:
     return round(max(0.0, time.perf_counter() - started), 6)
+
+
+def event_stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float]:
+    timestamped: list[tuple[str, float]] = []
+    for event in events:
+        stage = event.get("stage")
+        timestamp = event.get("timestamp")
+        if isinstance(stage, str) and isinstance(timestamp, (int, float)):
+            timestamped.append((stage, float(timestamp)))
+
+    totals: dict[str, float] = {}
+    for (stage, timestamp), (_, next_timestamp) in zip(timestamped, timestamped[1:]):
+        totals[stage] = totals.get(stage, 0.0) + max(0.0, next_timestamp - timestamp)
+    return {stage: round(total, 6) for stage, total in totals.items()}
 
 
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:

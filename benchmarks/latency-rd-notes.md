@@ -12,18 +12,18 @@ screenshot/reference pairing is known to have drifted. They remain visible in
 reports but are not scored as model regressions until the reference polygons and
 screenshots are refreshed.
 
-May 28 user confirmation: Houston, Miami, and Bay Area have changed from the
-saved ground truth. After probing the current external reference repo, Bay Area
-Tesla, Bay Area Zoox, and Houston Tesla now score cleanly again and are active
-benchmark fixtures. Bay Area Waymo, Houston Waymo, Miami Waymo, and Las Vegas
-Zoox remain data debt rather than model-regression signals.
+May 28 user confirmation, repeated during the continuation: Houston, Miami,
+and Bay Area have changed from the saved ground truth. Even variants that still
+score cleanly against the external reference repo are treated as data debt until
+the provider/source polygons are refreshed. Bay Area Tesla, Bay Area Waymo, Bay
+Area Zoox, Houston Tesla, Houston Waymo, Miami Waymo, and Las Vegas Zoox are
+therefore visible in benchmark reports but excluded from scored
+model-regression gates.
 
-The remaining mismatched variants are marked stale in the production
-service-area catalog and excluded from catalog matching until refreshed. Their
-JSON files remain in the bundle for audit/history, but production inference must
-fall back to OCR/georeference rather than returning an outdated fast-path
-polygon. Reactivated reference-backed variants can use the active catalog fast
-path again.
+The changed-market variants are marked stale in the production service-area
+catalog and excluded from catalog matching until refreshed. Their JSON files
+remain in the bundle for audit/history, but production inference must fall back
+to OCR/georeference rather than returning an outdated fast-path polygon.
 
 ## Shipped Changes
 
@@ -1534,6 +1534,18 @@ path again.
   total-before-send timing. This is an observability-only production aid so
   future latency work can distinguish cold start, cache, generation, and
   response overhead without changing the GeoJSON output.
+- Corrected production smoke shape: the web UI submits `include_overlay=0`, so
+  overlay-bearing API probes were overstating normal user-path artifact cost.
+  Fresh UI-shaped production probes on `pipeline-590f9371973bc230` showed
+  Phoenix Waymo at 0.468s server `total_before_send_s`, Miami Waymo at 0.958s,
+  and Houston Tesla at 0.103s. Miami and Houston stayed off stale catalog
+  entries with `catalog_slug: null`; the warm exact repeat hit raw server cache
+  with 0.004s server time. Remaining wall time is mostly upload/download and
+  network path rather than server generation for the warmed UI path.
+- API fresh-run profiles now include per-stage elapsed timing derived from the
+  same progress events returned to the client. This keeps production evidence
+  self-contained for OCR/georeference/extraction bottleneck comparisons without
+  post-processing event timestamps by hand.
 
 ## Remaining Bottlenecks
 
