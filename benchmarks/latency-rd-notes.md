@@ -1679,6 +1679,25 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   remained OCR-bound and noisy at roughly 3.3s. Warm repeat probes preserved the
   same stale-market catalog guard and confirmed production OCR/runtime remains
   the current bottleneck for larger no-catalog screenshots.
+- Added OCR place-alias repairs for leading-letter drops observed in the
+  production stress smoke: `rsey Village` now resolves as `Jersey Village`, and
+  `ILLOWBROOK` resolves as `Willowbrook`. On the exact pixel-mutated Houston
+  Tesla stress image that previously failed with network blocked and took 22.6s
+  in production through `city-context:osm-road-search`, the local no-network
+  guard `out/houston-tesla-bust-alias-20260529/report.json` now completes in
+  0.284s through `ocr-georeference:nominatim-label-fit`, with 3 controls,
+  `catalog_slug: null`, and zero attempted network calls. Focused OCR/geocoder
+  tests passed 47 tests plus 9 subtests, the full suite passed 105 tests plus 9
+  subtests, and `compileall`, `node --check`, and `git diff --check` passed.
+  Drift-aware gates stayed green: no-catalog full benchmark
+  `out/ocr-alias-no-catalog-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 reference mismatches, avg IoU 0.962, min IoU 0.931, total
+  3.62s; default catalog benchmark
+  `out/ocr-alias-default-20260529/full-report.json` passed 8/8, avg IoU 0.993,
+  min IoU 0.943, total 0.41s; and
+  `out/ocr-alias-stale-no-network-20260529/report.json` kept all six
+  Houston/Miami/Bay Area changed-market screenshots on OCR/georeference with
+  `catalog_slug: null` and zero attempted network calls.
 
 ## Remaining Bottlenecks
 
