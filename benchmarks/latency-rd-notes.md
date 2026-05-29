@@ -2151,6 +2151,28 @@ OCR/georeference rather than returning outdated fast-path polygons.
   with georeference at 0.200s. HTTP elapsed also fell from 9.401s to 2.776s.
   The production warm endpoint reported catalog/seed/RapidOCR prewarm
   `status: ok` before the generation pair.
+- Browser decoded-pixel history cache: the web UI now stores both the existing
+  raw-byte local run key and a decoded RGBA pixel key for completed runs. The
+  pixel key is prepared in idle time after file selection and only waits up to
+  60 ms during the submit-time cache lookup, preserving the fast raw-byte path
+  while allowing recompressed/same-pixel screenshots to restore from browser
+  history before `/api/runs` is called. The server normalized-pixel lookup stays
+  disabled for fresh UI uploads, so the earlier 0.17-0.21s production
+  normalized-cache lookup tax remains off the fresh-run critical path.
+- Local browser proof used two PNGs with identical decoded pixels but different
+  bytes/metadata under `out/browser-pixel-cache-20260529/`. With `/api/runs`
+  mocked to isolate UI behavior, the first small same-pixel upload made exactly
+  one generation POST and completed in 584 ms with an intentional 500 ms mocked
+  server delay. The recompressed second upload restored from browser cache in
+  35 ms, made zero additional generation POSTs, and saved both
+  `image-to-geojson-v3` pixel and `image-to-geojson-v2` raw cache keys.
+  Validation stayed clean: `node --check`, `git diff --check`, `compileall`,
+  focused API cache tests passed 15/15, full pytest passed 113 tests plus 9
+  subtests, the corrected default gate
+  `out/ui-pixel-cache-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.993, min IoU 0.943, total 0.45s, and the corrected
+  no-catalog gate `out/ui-pixel-cache-no-catalog-20260529/full-report.json`
+  passed 8/8 with avg IoU 0.962, min IoU 0.931, total 3.84s.
 
 ## Remaining Bottlenecks
 

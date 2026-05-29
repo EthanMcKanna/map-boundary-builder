@@ -81,6 +81,9 @@ let copyFeedbackTimeout = null;
 let activeImageMode = "original";
 let generationRuntimePrewarm = null;
 let generationRuntimePrewarmScheduled = false;
+let selectedImageHashTask = null;
+let pendingRunCacheKeys = [];
+let pendingRunCacheKeysPromise = null;
 
 const BOUNDARY_SOURCE_ID = "generated-boundary";
 const BOUNDARY_FILL_ID = "generated-boundary-fill";
@@ -88,8 +91,10 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_VERSION = "image-to-geojson-v2";
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v2";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v3";
 const RUN_CACHE_SETTING_FIELDS = ["include_overlay", "min_confidence", "min_control_points", "simplify_px"];
+const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
   ready: "Build boundary",
@@ -290,14 +295,18 @@ form.addEventListener("submit", async (event) => {
     markProgressStep("prepare", "running", "Checking local cache.");
     setStatus("Checking browser cache", 6, "running", {
       step: "prepare",
-      note: "Looking for an exact match from this browser.",
+      note: "Looking for a matching image and settings in this browser.",
     });
-    const cacheKey = await buildRunCacheKey(uploadFile, formData);
-    pendingRunCacheKey = cacheKey;
-    const cachedEntry = findCachedHistoryEntry(cacheKey);
+    const cacheLookup = await buildRunCacheKeys(uploadFile, formData);
+    pendingRunCacheKeys = cacheLookup.lookupKeys;
+    pendingRunCacheKey = pendingRunCacheKeys[0] || null;
+    pendingRunCacheKeysPromise = cacheLookup.cacheKeysPromise;
+    const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);
     if (cachedEntry) {
       restoreCachedHistoryEntry(cachedEntry);
       pendingRunCacheKey = null;
+      pendingRunCacheKeys = [];
+      pendingRunCacheKeysPromise = null;
       return;
     }
     markProgressStep("prepare", "running", "Uploading image.");
@@ -314,13 +323,19 @@ form.addEventListener("submit", async (event) => {
       throw new Error(payload.error || "Run failed to start.");
     }
     if (payload.status === "complete" && payload.artifacts) {
-      applyInlineRun(payload, { cacheKey });
+      applyInlineRun(payload, {
+        cacheKey: pendingRunCacheKey,
+        cacheKeys: pendingRunCacheKeys,
+        cacheKeysPromise: pendingRunCacheKeysPromise,
+      });
     } else {
       latestRunId = payload.id || null;
       connectEvents(payload.id);
     }
   } catch (error) {
     pendingRunCacheKey = null;
+    pendingRunCacheKeys = [];
+    pendingRunCacheKeysPromise = null;
     finishWithError(error.message);
   }
 });
@@ -588,6 +603,9 @@ function setSelectedFile(file) {
   latestRunStatus = "idle";
   latestRunSummary = null;
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
+  selectedImageHashTask = createImageHashTask(file);
   progressValue = 0;
   stopEstimatedProgress();
   resetProgressSteps();
@@ -612,6 +630,7 @@ function setSelectedFile(file) {
     note: "Review settings, then run the boundary export.",
   });
   scheduleGenerationRuntimePrewarm();
+  scheduleSelectedImageHashWarmup();
   renderHistory();
   activateTab("input");
 }
@@ -657,34 +676,136 @@ async function prepareRunImage(file) {
   });
 }
 
-async function buildRunCacheKey(file, formData) {
+async function buildRunCacheKeys(file, formData) {
   if (!window.crypto?.subtle || !file?.arrayBuffer || typeof TextEncoder === "undefined") {
-    return null;
+    return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
   }
   try {
     const pipelineVersion = await fetchRunCachePipelineVersion();
-    if (!pipelineVersion) return null;
+    if (!pipelineVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
     const settingsSignature = RUN_CACHE_SETTING_FIELDS
       .map((field) => `${field}=${String(formData.get(field) ?? "")}`)
       .join("&");
-    const [imageHash, settingsHash] = await Promise.all([
-      imageContentHash(file),
+    const [rawImageHash, settingsHash] = await Promise.all([
+      rawImageContentHash(file),
       sha256Hex(new TextEncoder().encode(settingsSignature)),
     ]);
-    return [
-      RUN_CACHE_VERSION,
+    const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
+    const pixelHashPromise = pixelImageContentHash(file);
+    const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
+    const lookupKeys = cacheKeysForHashes({
       pipelineVersion,
-      imageHash,
       settingsHash,
-    ].join(":");
+      rawImageHash,
+      pixelImageHash: quickPixelHash,
+    });
+    const cacheKeysPromise = pixelHashPromise
+      .then((pixelImageHash) => cacheKeysForHashes({
+        pipelineVersion,
+        settingsHash,
+        rawImageHash,
+        pixelImageHash,
+      }))
+      .catch(() => [rawKey]);
+    return { lookupKeys, cacheKeysPromise };
   } catch (error) {
     console.warn("Could not build local run cache key", error);
-    return null;
+    return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
   }
 }
 
-async function imageContentHash(file) {
+function runCacheKey(version, pipelineVersion, imageHash, settingsHash) {
+  return [
+    version,
+    pipelineVersion,
+    imageHash,
+    settingsHash,
+  ].join(":");
+}
+
+function cacheKeysForHashes({ pipelineVersion, settingsHash, rawImageHash, pixelImageHash }) {
+  const keys = [];
+  if (pixelImageHash) {
+    keys.push(runCacheKey(RUN_CACHE_PIXEL_VERSION, pipelineVersion, pixelImageHash, settingsHash));
+  }
+  if (rawImageHash) {
+    keys.push(runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash));
+  }
+  return [...new Set(keys)];
+}
+
+async function rawImageContentHash(file) {
   return `bytes:${await sha256Hex(await file.arrayBuffer())}`;
+}
+
+async function pixelImageContentHash(file) {
+  const task = selectedImageHashTask;
+  if (task?.file === file) return task.pixelHash();
+  return pixelImageContentHashFromFile(file);
+}
+
+function createImageHashTask(file) {
+  let pixelHashPromise = null;
+  return {
+    file,
+    pixelHash() {
+      pixelHashPromise ||= pixelImageContentHashFromFile(file);
+      return pixelHashPromise;
+    },
+  };
+}
+
+function scheduleSelectedImageHashWarmup() {
+  const task = selectedImageHashTask;
+  if (!task || isSvgFile(task.file)) return;
+  const start = () => {
+    if (selectedImageHashTask === task) {
+      task.pixelHash().catch((error) => {
+        console.warn("Could not prepare visual cache key", error);
+      });
+    }
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(start, { timeout: 1600 });
+  } else {
+    window.setTimeout(start, 350);
+  }
+}
+
+async function pixelImageContentHashFromFile(file) {
+  const canvas = await imageFileToCanvas(file);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const header = new TextEncoder().encode(`${canvas.width}x${canvas.height}:rgba:`);
+  const bytes = new Uint8Array(header.length + pixels.length);
+  bytes.set(header);
+  bytes.set(pixels, header.length);
+  return `pixels:${await sha256Hex(bytes)}`;
+}
+
+function promiseWithTimeout(promise, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(null);
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
 }
 
 function embeddedRunCachePipelineVersion() {
@@ -850,8 +971,12 @@ function applyInlineRun(status, options = {}) {
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay_data_url,
     cacheKey: options.cacheKey || pendingRunCacheKey,
+    cacheKeys: options.cacheKeys || pendingRunCacheKeys,
+    cacheKeysPromise: options.cacheKeysPromise || pendingRunCacheKeysPromise,
   });
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
   updateRunButton();
   updateReportTrigger();
 }
@@ -1117,8 +1242,12 @@ async function loadArtifacts(runId) {
     geojson: latestGeojson,
     overlaySrc: artifacts.overlay,
     cacheKey: pendingRunCacheKey,
+    cacheKeys: pendingRunCacheKeys,
+    cacheKeysPromise: pendingRunCacheKeysPromise,
   });
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
   updateReportTrigger();
 }
 
@@ -1131,18 +1260,26 @@ function queueHistorySave(payload) {
 
 async function saveHistoryEntry(payload) {
   const payloadId = String(payload.id || "");
-  const existing = historyEntries.find((entry) => (
-    entry.id === payloadId || (payload.cacheKey && entry.cacheKey === payload.cacheKey)
-  ));
   const title = historyTitle(payload);
+  const fallbackFilename = selectedFile?.name || "Map screenshot";
+  const inputImagePromise = imageUrlToStoredDataUrl(inputPreview.src);
+  const overlayImagePromise = imageUrlToStoredDataUrl(payload.overlaySrc);
+  const payloadCacheKeys = normalizedCacheKeys([
+    ...(payload.cacheKeys || []),
+    ...(await cacheKeysFromPromise(payload.cacheKeysPromise)),
+    payload.cacheKey,
+  ]);
+  const existing = historyEntries.find((entry) => (
+    entry.id === payloadId || cacheKeysOverlap(payloadCacheKeys, entryCacheKeys(entry))
+  ));
   const [inputImage, overlayImage] = await Promise.all([
-    imageUrlToStoredDataUrl(inputPreview.src),
-    imageUrlToStoredDataUrl(payload.overlaySrc),
+    inputImagePromise,
+    overlayImagePromise,
   ]);
   const entry = {
     id: String(payload.id || existing?.id || Date.now()),
     title: existing?.renamedAt ? existing.title : title,
-    filename: payload.filename || selectedFile?.name || "Map screenshot",
+    filename: payload.filename || fallbackFilename,
     city: payload.summary?.city || payload.city || "Auto",
     createdAt: existing?.createdAt || Date.now(),
     starred: Boolean(existing?.starred),
@@ -1151,7 +1288,8 @@ async function saveHistoryEntry(payload) {
     geojson: payload.geojson,
     inputImage,
     overlayImage,
-    cacheKey: payload.cacheKey || existing?.cacheKey || null,
+    cacheKey: payloadCacheKeys[0] || existing?.cacheKey || null,
+    cacheKeys: normalizedCacheKeys([...payloadCacheKeys, ...entryCacheKeys(existing)]),
   };
   upsertHistoryEntry(entry);
 }
@@ -1168,7 +1306,7 @@ function upsertHistoryEntry(entry) {
   historyEntries = [
     entry,
     ...historyEntries.filter((item) => (
-      item.id !== entry.id && (!entry.cacheKey || item.cacheKey !== entry.cacheKey)
+      item.id !== entry.id && !cacheKeysOverlap(entryCacheKeys(entry), entryCacheKeys(item))
     )),
   ];
   persistHistoryEntries();
@@ -1190,6 +1328,9 @@ function loadHistoryEntries() {
         starred: Boolean(entry.starred),
         renamedAt: Number(entry.renamedAt) || null,
         cacheKey: typeof entry.cacheKey === "string" ? entry.cacheKey : null,
+        cacheKeys: Array.isArray(entry.cacheKeys)
+          ? normalizedCacheKeys(entry.cacheKeys.filter((key) => typeof key === "string"))
+          : [],
       })),
     );
   } catch (error) {
@@ -1241,11 +1382,40 @@ function sortHistoryEntries(entries) {
   });
 }
 
-function findCachedHistoryEntry(cacheKey) {
-  if (!cacheKey) return null;
+function findCachedHistoryEntry(cacheKeys) {
+  const keys = normalizedCacheKeys(Array.isArray(cacheKeys) ? cacheKeys : [cacheKeys]);
+  if (!keys.length) return null;
   return sortHistoryEntries(historyEntries).find((entry) => (
-    entry.cacheKey === cacheKey && entry.geojson
+    cacheKeysOverlap(keys, entryCacheKeys(entry)) && entry.geojson
   )) || null;
+}
+
+async function cacheKeysFromPromise(cacheKeysPromise) {
+  if (!cacheKeysPromise) return [];
+  try {
+    const keys = await cacheKeysPromise;
+    return Array.isArray(keys) ? keys : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function entryCacheKeys(entry) {
+  if (!entry) return [];
+  return normalizedCacheKeys([
+    ...(Array.isArray(entry.cacheKeys) ? entry.cacheKeys : []),
+    entry.cacheKey,
+  ]);
+}
+
+function normalizedCacheKeys(keys) {
+  return [...new Set(keys.filter((key) => typeof key === "string" && key))];
+}
+
+function cacheKeysOverlap(left, right) {
+  if (!left.length || !right.length) return false;
+  const rightKeys = new Set(right);
+  return left.some((key) => rightKeys.has(key));
 }
 
 function renderHistory() {
@@ -1426,7 +1596,7 @@ function restoreCachedHistoryEntry(entry) {
   upsertHistoryEntry(cachedEntry);
   restoreHistoryEntry(cachedEntry);
   setStatus("Loaded from browser cache", 100, "complete", {
-    note: "Exact image and settings match a completed run.",
+    note: "Image pixels and settings match a completed run.",
   });
 }
 
@@ -1435,6 +1605,10 @@ function restoreHistoryEntry(entry) {
   renamingHistoryId = null;
   activeHistoryId = entry.id;
   selectedFile = null;
+  selectedImageHashTask = null;
+  pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
   latestRunId = entry.id;
   latestRunError = null;
   latestRunEvents = [];
@@ -1848,6 +2022,9 @@ function startNewRun() {
   latestRunStatus = "idle";
   latestRunSummary = null;
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
+  selectedImageHashTask = null;
   imageInput.value = "";
   progressValue = 0;
   resetProgressSteps();
@@ -1879,6 +2056,8 @@ function resetRun() {
   latestRunStatus = "running";
   latestRunSummary = null;
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
   hideFailureReport();
   resetProgressSteps();
   markProgressStep("prepare", "running", "Preparing image.");
@@ -1916,6 +2095,8 @@ function updateGeojsonPane(geojson) {
 function finishWithError(message) {
   stopEstimatedProgress();
   pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
   latestRunError = message || "Generation failed.";
   latestRunStatus = "failed";
   markProgressStep(activeProgressStep || "georeference", "error", message);
