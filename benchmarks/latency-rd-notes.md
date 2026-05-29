@@ -3893,3 +3893,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   scored with avg IoU 0.992917, min IoU 0.943345, and max active duration
   0.097847s; and `out/sparse-guard-changed-smoke-20260529/full-report.json`
   passed all six Houston/Miami/Bay Area `reference_mismatch` smokes in 0.385s.
+- Cleaned up the production API semantics for expected arbitrary-map generation
+  refusals. Before this pass, the sparse Avride catalog-miss proof correctly
+  refused the weak georeference but surfaced as an HTTP 500, which made a
+  client/input reliability refusal look like a server crash. The API now maps
+  `ValueError` generation failures to HTTP 422 with a structured `failed`
+  payload, run id, filename, last events, and timing profile while preserving
+  HTTP 500 for unexpected exceptions. Focused API tests passed 30/30, then the
+  full suite passed 198/198 with compileall, `node --check
+  map_boundary_builder/web_assets/app.js`, and `git diff --check`. Generation
+  gates stayed behaviorally unchanged: `out/error-status-default-20260529/full-report.json`
+  passed 8/8 scored with avg IoU 0.992917 and min IoU 0.943345;
+  `out/error-status-nocatalog-20260529/full-report.json` passed 8/8 scored with
+  avg IoU 0.961733 and min IoU 0.931476, with the higher 1.202415s max active
+  duration coming from Phoenix OCR timing variance; and
+  `out/error-status-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes in 0.406s.

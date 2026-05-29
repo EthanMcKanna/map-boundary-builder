@@ -16,6 +16,8 @@ from api.index import (
     cached_run_payload,
     cron_warm_generation_payload,
     event_stage_elapsed_seconds,
+    generation_error_payload,
+    generation_error_status,
     health_response_status,
     health_payload,
     inline_overlay,
@@ -452,6 +454,31 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertLess(len(encoded), 512)
         self.assertEqual(json_response_body(payload)[0], gzip.decompress(encoded))
+
+    def test_generation_value_errors_are_client_safe_failures(self) -> None:
+        events = [
+            {"stage": "queued", "timestamp": 10.0},
+            {"stage": "ocr", "timestamp": 10.5},
+        ]
+        profile = {"build_boundary_s": 0.42}
+
+        payload = generation_error_payload(
+            ValueError("Could not infer a reliable map location."),
+            "run-1",
+            "input.png",
+            events,
+            profile,
+        )
+
+        self.assertEqual(generation_error_status(ValueError("bad map")), HTTPStatus.UNPROCESSABLE_ENTITY)
+        self.assertEqual(generation_error_status(RuntimeError("boom")), HTTPStatus.INTERNAL_SERVER_ERROR)
+        self.assertEqual(payload["id"], "run-1")
+        self.assertEqual(payload["filename"], "input.png")
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["percent"], 100)
+        self.assertEqual(payload["profile"], profile)
+        self.assertIn("Could not infer", payload["error"])
+        self.assertEqual(payload["events"], events)
 
     def test_health_payload_can_prewarm_generation_runtime(self) -> None:
         with patch("api.index.prewarm_generation_runtime", return_value={"status": "ok", "total_s": 0.1}) as prewarm:

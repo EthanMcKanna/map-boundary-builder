@@ -288,7 +288,14 @@ class handler(BaseHTTPRequestHandler):
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
         except Exception as exc:
-            self.send_json({"error": str(exc), "events": events[-20:]}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            profile["cache_hit"] = "miss"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            self.send_json(
+                generation_error_payload(exc, run_id, original_filename, events, profile),
+                status=generation_error_status(exc),
+            )
             return
         artifacts_started = time.perf_counter()
         artifacts = {
@@ -601,6 +608,30 @@ def event_stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float
     for (stage, timestamp), (_, next_timestamp) in zip(timestamped, timestamped[1:]):
         totals[stage] = totals.get(stage, 0.0) + max(0.0, next_timestamp - timestamp)
     return {stage: round(total, 6) for stage, total in totals.items()}
+
+
+def generation_error_status(exc: Exception) -> HTTPStatus:
+    if isinstance(exc, ValueError):
+        return HTTPStatus.UNPROCESSABLE_ENTITY
+    return HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+def generation_error_payload(
+    exc: Exception,
+    run_id: str,
+    original_filename: str,
+    events: list[dict[str, Any]],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "id": run_id,
+        "filename": Path(original_filename).name or "uploaded-image",
+        "status": "failed",
+        "percent": 100,
+        "error": str(exc),
+        "events": events[-20:],
+        "profile": profile,
+    }
 
 
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
