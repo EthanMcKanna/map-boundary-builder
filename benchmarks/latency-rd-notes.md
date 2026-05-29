@@ -4114,3 +4114,26 @@ with zero failures in 0.531s.
   `total_before_send_s: 0.291369`, and HTTP 201; Avride Dallas web still
   returned `catalog-shape-match:filename-hint`, `catalog_slug: dallas-avride`,
   `build_boundary_s: 0.030145`, `total_before_send_s: 0.031361`, and HTTP 201.
+- Current changed-Waymo catalog refresh head: production gzip smokes showed the
+  remaining current-market OCR fallback pain clearly, with cache-miss
+  `h-waymo.png` at 4.482s server time / 3.605s OCR, `miami.png` at 5.108s /
+  3.754s OCR, and `zoox-sf.webp` at 3.195s / 1.867s OCR. After the user's May
+  29 correction that Houston, Miami, and Bay Area have drifted from the saved
+  ground truth, the current-verified Waymo catalog entries were refreshed from
+  current generated GeoJSON evidence in Downloads: `Houston boundary more
+  accurate.geojson`, `new miami boundary.geojson`, and `waymo bay area
+  expanded.geojson`. The strict shape guard accepted the current Houston
+  screenshot against the refreshed Houston boundary at 0.979 shape IoU and the
+  current Miami screenshot against the refreshed Miami boundary at 0.985 shape
+  IoU. Local current-image smoke then moved `h-waymo.png` to
+  `catalog-shape-match` in 0.095s with confidence 0.88 and `miami.png` to
+  `catalog-shape-match` in 0.070s with confidence 0.897. The saved Bay Area
+  Waymo screenshot still does not match the expanded current boundary and
+  correctly remains on OCR/georeference. Focused catalog/benchmark tests passed
+  40/40, full pytest passed 209/209, default drift-aware smoke
+  `out/current-catalog-refresh-default-20260529/full-report.json` passed 8/8
+  scored fixtures with seven `reference_mismatch` smokes and avg IoU 0.992917,
+  and no-catalog `out/current-catalog-refresh-nocatalog-20260529/full-report.json`
+  stayed green at avg IoU 0.961733/min 0.931476. Rejected OCR-cap retest:
+  global 1400px RapidOCR failed Nashville at 0.759 IoU, and 1200px/1500px
+  reduced active accuracy headroom, so no global OCR downscale shipped.

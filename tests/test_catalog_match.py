@@ -327,15 +327,15 @@ def test_changed_reference_mismatch_catalog_entries_use_verified_current_sources
         assert entry.is_active
         assert entry.status == "active"
         assert entry.stale_reason is None
-        assert entry.min_iou == (0.955 if slug == "bay-area-waymo" else 0.965)
+        assert entry.min_iou == 0.965
         assert entry.max_confidence is not None
 
 
 def test_current_verified_changed_waymo_entries_preserve_ocr_confidence_caps() -> None:
     expected_confidence = {
         "bay-area-waymo": 0.877,
-        "houston-waymo": 0.865,
-        "miami-waymo": 0.864,
+        "houston-waymo": 0.88,
+        "miami-waymo": 0.897,
     }
 
     entries = {item.slug: item for item in load_catalog_entries()}
