@@ -2688,13 +2688,38 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `intra=4/inter=1` took 7.145s. Outputs remained accurate, but the tiny
   `intra=4` total-time edge was not durable enough to justify adding a runtime
   configuration knob or risking production variance.
+- Production is now pinned to ONNX Runtime `1.26.0` instead of `1.19.2`, which
+  matches the fast local environment that had quietly drifted ahead of the
+  project dependency pin. A clean temporary venv with the old `1.19.2` pin
+  preserved accuracy but needed 11.794s total on the drift-aware no-catalog
+  active gate (8/8 scored, avg IoU 0.962, min IoU 0.931, max 2.926s). The same
+  gate on `1.26.0` preserved identical avg/min IoU while completing in 8.099s
+  in a noisy validation run, and an earlier sequential `1.26.0` reprobe
+  completed in 4.082s with the same output metrics. The default catalog gate
+  stayed fast and accurate: 8/8 scored, avg IoU 0.993, min IoU 0.943, max
+  0.099s. Linux cp312 wheel size increases from 12.56 MB to 17.34 MB, small
+  enough to justify a production deploy test. Full pytest passed 150 tests plus
+  9 subtests, `compileall` passed, and `pip check` reported no broken
+  requirements. Houston, Miami, and Bay Area remain `reference_mismatch` data
+  debt in these gates because their service areas have changed since the saved
+  screenshot/reference pairs.
+- Rejected road-search batch and feature-scale tuning as a durable win. Focused
+  Phoenix/Nashville probes with `ROAD_SEARCH_BATCH_SIZE` at 512, 2048, and 4096
+  preserved accuracy but were slower or too noisy than the current default.
+  `MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE` at 3 or 4 also preserved the two
+  focused outputs but slowed georeference in the measured run. Low-resolution
+  `RAPIDOCR_MAX_DIMENSION=1300` was rechecked and again preserved the coarse
+  gate but lowered avg IoU to 0.959 versus 0.962 at 1600, so the runtime stays
+  on the accuracy-preserving OCR dimension and takes the ONNX Runtime upgrade
+  instead.
 
 ## Remaining Bottlenecks
 
-- Production function size is improved after the ONNX Runtime pin, with Vercel
-  reporting `api/index.py` at 92.83 MB on the current deployment. The remote
-  Python build now reports a 297.95 MB pre-runtime-installation bundle, so
-  cold starts and OCR model initialization remain production-only latency risks.
+- Production function size improved after the original ONNX Runtime pin, but
+  the `1.26.0` upgrade still needs live Vercel size and cold-start observation.
+  The remote Python build had recently reported a 293.96 MB pre-runtime-
+  installation bundle, so cold starts and OCR model initialization remain
+  production-only latency risks.
 - OpenCV and ONNX Runtime remain the largest runtime weights. Removing either
   would require a larger architecture change and must be proven against the full
   active fixture suite before production.
