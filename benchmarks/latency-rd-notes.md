@@ -2173,6 +2173,19 @@ OCR/georeference rather than returning outdated fast-path polygons.
   fixtures with avg IoU 0.993, min IoU 0.943, total 0.45s, and the corrected
   no-catalog gate `out/ui-pixel-cache-no-catalog-20260529/full-report.json`
   passed 8/8 with avg IoU 0.962, min IoU 0.931, total 3.84s.
+- Production browser pixel-cache deployment `dpl_99adVZncNkQXahW38aWWB19kwxGY`
+  was built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and kept the 296.61 MB runtime-installation path.
+  The core pipeline hash stayed `pipeline-fefccd337975ad3b` because this is a
+  shipped web-asset/browser-cache improvement, not a generation-code change.
+  Production health returned ok, and `https://mapboundary.app/static/app.js`
+  serves `image-to-geojson-v3` plus the new pixel-cache restore copy. A
+  production-page Playwright smoke with `/api/runs` mocked proved the deployed
+  UI behavior: the first same-pixel upload made one generation POST and
+  completed in 556 ms with a 500 ms mocked server delay; the recompressed upload
+  restored from browser cache in 28 ms, made zero additional generation POSTs,
+  saved both pixel and raw cache keys, and reported embedded pipeline
+  `pipeline-fefccd337975ad3b`.
 
 ## Remaining Bottlenecks
 
