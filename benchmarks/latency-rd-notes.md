@@ -72,6 +72,18 @@ with zero failures in 0.531s.
   slower. Production was promoted back to
   `dpl_5fC8cmS8YySBRdUr8gKA5dvYuJjs` (`pipeline-904c134671cd17e5`), and the
   local tuning commit was reverted.
+- Rejected replacing the current `rapidocr-onnxruntime` path with the newer
+  `rapidocr` 3.x package/models. RapidOCR 3.8.1 with PP-OCRv5 English
+  recognition is available locally and the upstream PaddleOCR/PP-OCRv5 work is
+  promising, but the isolated app-shaped run was slower and less accurate for
+  current map screenshots. The monkeypatched PP-OCRv5 no-catalog gate
+  `out/ppocrv5-exp-nocatalog-20260529/full-report.json` passed 8/8 but dropped
+  avg IoU to 0.956101/min 0.926251 and took 4.775874s, versus the current
+  no-catalog profile at avg 0.961733/min 0.931476 and roughly 3.7s. RapidOCR
+  3.x with PP-OCRv4 English recognition was worse again:
+  `out/rapidocr3-ppocrv4-exp-nocatalog-20260529/full-report.json` passed only
+  by threshold margin with avg IoU 0.938678/min 0.863694 and 4.737697s. Keep
+  the existing OCR engine until a replacement beats both latency and active IoU.
 - Georeference seed preloading now starts when the runner commits to the
   OCR/georeference path, overlapping geocoder, OSM place, and road seed loading
   with OCR/extraction and waiting immediately before the transform fit. This
