@@ -2931,6 +2931,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `[-122.4445213,37.7471075,-122.3829064,37.8110961]`, and 0.254s server time
   before send. `Tesla Bay Area` correctly stayed off catalog with
   `catalog_slug: null` and `ocr-georeference:nominatim-label-fit`.
+- Production deployment `dpl_G4hAtiUASrWiy4ncN4PkHuWkRXHL` is aliased to
+  `https://mapboundary.app` and reports `pipeline-c3429feeb3adf9a6`. Fresh
+  no-cache production uploads confirm the Bay Area Tesla retry is live:
+  `Tesla Bay Area` returned `catalog_slug: bay-area-tesla`,
+  `catalog-shape-match:retry`, confidence 0.969651, current external bbox
+  `[-122.5974432,37.1807695,-121.7084889,37.9208366]`, and no OCR. The first
+  post-deploy fresh miss reported `build_boundary_s: 0.292s` and
+  `total_before_send_s: 0.951s`; a warmed fresh miss reported
+  `build_boundary_s: 0.087s`, `total_before_send_s: 0.090s`, and HTTP total
+  0.883s. Fresh Houston Tesla and Bay Area Zoox production smokes still return
+  `houston-tesla` and `bay-area-zoox` direct catalog matches with current
+  external geometry.
 
 ## Remaining Bottlenecks
 
