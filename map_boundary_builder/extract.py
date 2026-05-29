@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 import hashlib
-from importlib.metadata import PackageNotFoundError, version
 import json
 import os
 from pathlib import Path
@@ -16,6 +15,8 @@ from shapely.affinity import scale as scale_geometry
 from shapely.affinity import translate as translate_geometry
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import unary_union
+
+from .pipeline_version import runtime_dependency_signature
 
 DEFAULT_SIMPLIFY_PX = 6.0
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
@@ -32,6 +33,7 @@ EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CAC
 }
 EXTRACTION_CACHE_DEPENDENCY_PACKAGES = (
     "numpy",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "shapely",
@@ -375,14 +377,7 @@ def extraction_cache_dependency_signature() -> str:
     global _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
     if _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE is not None:
         return _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
-    versions: list[str] = []
-    for package in EXTRACTION_CACHE_DEPENDENCY_PACKAGES:
-        try:
-            package_version = version(package)
-        except PackageNotFoundError:
-            package_version = "missing"
-        versions.append(f"{package}={package_version}")
-    _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = ",".join(versions)
+    _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = runtime_dependency_signature(EXTRACTION_CACHE_DEPENDENCY_PACKAGES)
     return _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
 
 

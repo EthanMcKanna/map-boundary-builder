@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 import csv
 import hashlib
-from importlib.metadata import PackageNotFoundError, version
 import json
 import os
 import re
@@ -18,6 +17,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
@@ -59,6 +59,7 @@ OCR_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_OCR_DISK_CACHE", "").lower
 }
 OCR_CACHE_DEPENDENCY_PACKAGES = (
     "onnxruntime",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",
@@ -395,14 +396,7 @@ def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bo
 
 @lru_cache(maxsize=1)
 def ocr_cache_dependency_signature() -> str:
-    versions: list[str] = []
-    for package in OCR_CACHE_DEPENDENCY_PACKAGES:
-        try:
-            package_version = version(package)
-        except PackageNotFoundError:
-            package_version = "missing"
-        versions.append(f"{package}={package_version}")
-    return ",".join(versions)
+    return runtime_dependency_signature(OCR_CACHE_DEPENDENCY_PACKAGES)
 
 
 def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:

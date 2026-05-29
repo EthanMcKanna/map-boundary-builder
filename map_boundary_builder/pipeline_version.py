@@ -11,6 +11,7 @@ PIPELINE_VERSION_ENV = "MAP_BOUNDARY_PIPELINE_VERSION"
 PIPELINE_VERSION_PACKAGES = (
     "numpy",
     "onnxruntime",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",
@@ -70,9 +71,28 @@ def pipeline_version_sources():
 
 
 def pipeline_version_dependency_versions():
-    for package in PIPELINE_VERSION_PACKAGES:
+    yield from runtime_dependency_versions(PIPELINE_VERSION_PACKAGES)
+    yield "cv2", cv2_runtime_version()
+
+
+def runtime_dependency_versions(packages: tuple[str, ...]):
+    for package in packages:
         try:
             package_version = version(package)
         except PackageNotFoundError:
             package_version = "missing"
         yield package, package_version
+
+
+def runtime_dependency_signature(packages: tuple[str, ...]) -> str:
+    versions = [f"{package}={package_version}" for package, package_version in runtime_dependency_versions(packages)]
+    versions.append(f"cv2={cv2_runtime_version()}")
+    return ",".join(versions)
+
+
+def cv2_runtime_version() -> str:
+    try:
+        import cv2
+    except Exception:
+        return "missing"
+    return str(getattr(cv2, "__version__", "unknown"))

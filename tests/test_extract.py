@@ -6,7 +6,12 @@ from unittest.mock import patch
 import numpy as np
 
 import map_boundary_builder.extract as extract_module
-from map_boundary_builder.extract import _EXTRACTION_MEMORY_CACHE, extract_service_area, repair_mask
+from map_boundary_builder.extract import (
+    _EXTRACTION_MEMORY_CACHE,
+    extract_service_area,
+    extraction_cache_dependency_signature,
+    repair_mask,
+)
 
 
 class MaskRepairTests(unittest.TestCase):
@@ -122,6 +127,20 @@ class MaskRepairTests(unittest.TestCase):
         np.testing.assert_array_equal(bordered_result.mask[4:84, 7:107], base_result.mask)
         self.assertFalse(bordered_result.mask[:4, :].any())
         self.assertFalse(bordered_result.mask[:, :7].any())
+
+    def test_extraction_cache_signature_tracks_cv2_runtime(self) -> None:
+        original = extract_module._EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
+        extract_module._EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = None
+        try:
+            with patch.object(extract_module, "runtime_dependency_signature", return_value="deps=cv2-a"):
+                first = extraction_cache_dependency_signature()
+            extract_module._EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = None
+            with patch.object(extract_module, "runtime_dependency_signature", return_value="deps=cv2-b"):
+                second = extraction_cache_dependency_signature()
+        finally:
+            extract_module._EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = original
+
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

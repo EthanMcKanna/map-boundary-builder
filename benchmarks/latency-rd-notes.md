@@ -3391,3 +3391,14 @@ OCR/georeference rather than returning outdated fast-path polygons.
   overlap, raised active total time to 5.44s, and regressed Orlando to 0.864 IoU
   and Phoenix to 0.894 IoU. The missing outer labels are important enough that
   this cannot be the default general path.
+- Pinned RapidOCR's transitive `opencv-python` runtime to 4.10.0.84 and added
+  actual `cv2.__version__` plus `opencv-python` metadata to pipeline, OCR-cache,
+  and extraction-cache signatures. This closes a hidden reliability hole where
+  the local runtime had drifted to `cv2 4.13.0` while cache keys and health only
+  reported `opencv-python-headless 4.10.0.84`. Local accuracy gates remained
+  clean under heavy unrelated CPU load: 179/179 pytest, compileall, JS syntax,
+  default full benchmark 8/8 avg IoU 0.993/min 0.943, no-catalog 8/8 avg
+  0.962/min 0.931, and changed-market smoke 6/6 with zero failures. Treat local
+  timings from `out/opencv-pin-*` and `out/cv2-runtime-signature-*` as
+  contention-noisy because concurrent OTP/uvicorn/audit jobs were consuming CPU;
+  production health/timing is the deployment source of truth for this pin.

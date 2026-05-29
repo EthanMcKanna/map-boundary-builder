@@ -448,6 +448,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])
         self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
+        self.assertIn("cv2", cold["runtime_dependencies"])
         self.assertIn("rapidocr-onnxruntime", cold["runtime_dependencies"])
         self.assertNotIn("warm", cold)
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})

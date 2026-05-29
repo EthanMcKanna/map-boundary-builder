@@ -587,10 +587,10 @@ class OcrGroupingTests(unittest.TestCase):
 
             ocr_cache_dependency_signature.cache_clear()
             try:
-                with patch.object(ocr_module, "version", return_value="1.0"):
+                with patch.object(ocr_module, "runtime_dependency_signature", return_value="deps=1.0"):
                     key_1 = ocr_cache_key(image_path, use_tesseract=False)
                 ocr_cache_dependency_signature.cache_clear()
-                with patch.object(ocr_module, "version", return_value="2.0"):
+                with patch.object(ocr_module, "runtime_dependency_signature", return_value="deps=2.0"):
                     key_2 = ocr_cache_key(image_path, use_tesseract=False)
             finally:
                 ocr_cache_dependency_signature.cache_clear()
