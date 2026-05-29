@@ -4412,3 +4412,16 @@ with zero failures in 0.531s.
   output, but a full no-catalog active benchmark at 1000px dropped avg IoU from
   0.962 to 0.915 and Orlando/Phoenix fell near the floor, so a global bright-blue
   OCR cap is still rejected.
+- Current production cron/performance follow-up: Vercel now lists only
+  `/api/cron/warm-generation-v2` for this project, `https://mapboundary.app`
+  inspects to current production deployment `dpl_ADDwuZ6KrXiDNqGceDLuiXTK4hBH`,
+  and the project default function memory type is `performance`. This is a
+  deployed infrastructure speed win rather than a model change, so it does not
+  affect accuracy gates. On fresh cache-busted Houston/Miami/Bay Area uploads
+  with `catalog_probe_missed=true`, standard resources measured Houston
+  3.600770s build / 3.013094s OCR, Miami 3.667394s / 2.674773s OCR, and Bay
+  Area 4.272716s / 3.335865s OCR. Performance resources measured Houston
+  2.377010s build / 1.748319s OCR, Miami 2.798293s / 1.828548s OCR, and Bay
+  Area 2.282286s / 1.671644s OCR, with the same OCR/georeference sources,
+  bboxes, confidence values, and `catalog_slug: null`. This materially improves
+  live fresh OCR but is still not the sub-second arbitrary screenshot target.
