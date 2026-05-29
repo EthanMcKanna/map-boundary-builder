@@ -126,6 +126,24 @@ with zero failures in 0.531s.
   `out/refreshed-fixture-probe-20260529/`; do not reactivate them as clean
   scored fixtures until fresher screenshots or human-verified overlays close
   the current-reference gap.
+- Fresh stress and latency-budget pass after the rejected tuning sweeps:
+  `out/subsecond-latency-budget-nocatalog-20260529/full-report.json` passed
+  the strict active no-catalog gate with `--max-duration-s 1.0`, 8/8 scored
+  fixtures, avg IoU 0.961733, min IoU 0.931476, max active duration 0.874391s,
+  and zero latency-budget issues. A network-blocked real-screenshot stress
+  pass in `out/fresh-stress-pass-20260529/` also completed all nine available
+  out-of-fixture images under one second: `IMG_0071.PNG` 0.473997s and
+  `IMG_0226.PNG` 0.682899s via provider-UI Zoox catalog match; `LA.png`
+  0.171196s, `avride dallas.png` 0.079365s, `waymo-n.webp` 0.102654s, and
+  `waymo-o.png` 0.249532s via catalog; `uber-avride-operating-map-dallas.webp`
+  0.047265s via filename-hinted Avride catalog; and arbitrary OCR/georeference
+  cases `robotaxi-service-area-map.jpg` 0.533466s with 13 Austin controls and
+  confidence 0.991, plus `zoox-sf.webp` 0.733863s with 17 San Francisco
+  controls and confidence 0.946. The Zoox SF aliases already resolve as active
+  Bay Area hints, but the extracted shape does not pass catalog IoU guards at
+  240px, 400px, 800px, 1200px, 1600px, or full resolution, so keeping it on
+  OCR/georeference is correct. This is evidence of current local sub-second
+  robustness, not a new runtime change.
 - Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
   upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
   OCR median moved from 0.606837s to 0.597544s, but production did not validate
