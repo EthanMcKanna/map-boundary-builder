@@ -3356,3 +3356,10 @@ OCR/georeference rather than returning outdated fast-path polygons.
   (`out/cap64-order-nocatalog-20260529/full-report.json`, 9.25s total). Keep
   the current full-recognition path until a selector can prove both speed and
   exact no-regression behavior.
+- Rejected parallel RapidOCR recognition batches. A class-level prototype with
+  two worker threads produced exact OCR labels on all eight active scored
+  fixtures and one local probe (`out/parrec2-nocatalog-20260529/full-report.json`)
+  matched the memory-first baseline at 3.825s, but the implemented code path
+  repeated much slower at 6.92s and 9.25s on full no-catalog gates. ONNX Runtime
+  session concurrency appears too noisy/oversubscribed for a safe default, so
+  the patch was reverted before commit/deploy.
