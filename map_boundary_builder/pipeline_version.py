@@ -12,6 +12,7 @@ PIPELINE_VERSION_ENV = "MAP_BOUNDARY_PIPELINE_VERSION"
 PIPELINE_VERSION_PACKAGES = (
     "numpy",
     "onnxruntime",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",

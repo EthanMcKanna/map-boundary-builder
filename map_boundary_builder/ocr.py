@@ -59,6 +59,7 @@ OCR_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_OCR_DISK_CACHE", "").lower
 }
 OCR_CACHE_DEPENDENCY_PACKAGES = (
     "onnxruntime",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",

@@ -33,6 +33,7 @@ EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CAC
 }
 EXTRACTION_CACHE_DEPENDENCY_PACKAGES = (
     "numpy",
+    "opencv-python",
     "opencv-python-headless",
     "pillow",
     "shapely",

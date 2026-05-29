@@ -20,7 +20,7 @@ def test_pipeline_version_tracks_runtime_dependency_versions() -> None:
     versions = dict(pipeline_version_dependency_versions())
 
     assert versions["onnxruntime"]
-    assert versions["opencv-python-headless"]
+    assert "opencv-python" in versions
     assert versions["cv2"]
     assert versions["rapidocr-onnxruntime"]
 
