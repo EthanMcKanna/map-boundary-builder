@@ -1259,6 +1259,17 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   also stayed off the stale catalog with bbox `[-122.4978873, 37.3073419,
   -121.8576229, 37.7981634]`, confidence 0.877, and 5.486s wall / 3.392s event
   span.
+- Production dead-catalog-probe skip deployment `dpl_G6jJRD4T157jiPbooW2Smer5CJPx`
+  is Ready and aliased to `https://mapboundary.app`; health reports
+  `pipeline-c8589e8cd0f856fa` and the build again reported a 297.93 MB Python
+  bundle before runtime dependency installation. Cache-busted Miami
+  `include_overlay=0` POSTs preserved `catalog_slug: null`, bbox
+  `[-80.3230924, 25.6880246, -80.1184998, 25.9396977]`, confidence 0.864, and
+  road-refined source, with no `Refining service-area pixels` event. The warm
+  variant completed in 5.023s wall / 3.367s event span versus the prior
+  fast-classifier evidence of 5.504s / 3.379s. Cache-busted Bay Area Waymo also
+  stayed off the stale catalog with the expected bbox, confidence 0.877, no
+  refine event, and 5.382s wall / 3.250s event span.
 
 ## Failed Or Rejected Experiments
 
