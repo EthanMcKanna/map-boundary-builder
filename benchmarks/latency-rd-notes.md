@@ -1199,6 +1199,20 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
     Phoenix warmed call returned in 3.220s wall / 0.862s event span. Miami's
     first post-deploy call was cold at 11.092s wall / 9.070s event span, then a
     warmed cache-busted call returned in 2.922s wall / 0.846s event span.
+- Production catalog pre-extraction deployment `dpl_3ruNgK6G4qMYPr9oGKQ8CEtC9nHU`
+  is Ready and aliased to `https://mapboundary.app`; health reports
+  `pipeline-63036c5080844eb7` and the build reported a 297.93 MB Python bundle
+  before runtime dependency installation. Cache-busted Phoenix active-catalog
+  POSTs with `include_overlay=0` preserved the exact Phoenix catalog bbox and
+  confidence while completing server-side generation in 0.284s cold-after-deploy
+  and 0.166s warm, compared with the prior warmed Phoenix evidence of 0.862s
+  on the OCR/georeference path before city/catalog fast-pathing. Cache-busted
+  Miami with `city=Miami` correctly stayed off the stale catalog
+  (`catalog_slug: null`), preserved bbox `[-80.3230924, 25.6880246,
+  -80.1184998, 25.9396977]`, confidence 0.864, and source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`; the warmed variant
+  completed in 5.659s wall / 3.462s event span with a 2.624 KB GeoJSON-first
+  response, with OCR still the dominant production cost.
 
 ## Failed Or Rejected Experiments
 
