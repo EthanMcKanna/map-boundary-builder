@@ -57,6 +57,21 @@ with zero failures in 0.531s.
   batch sizes 8 and 24 were both slower than the current 12; and a larger
   synthetic OCR warmup only moved LA OCR from 0.506s to 0.501s after adding
   extra warmup cost.
+- Rejected ONNX Runtime time-bounded spin/backoff as a production default. The
+  upstream ONNX Runtime docs make this a plausible tuning lever, and local LA
+  OCR median moved from 0.606837s to 0.597544s, but production did not validate
+  it. Deployment `dpl_DhxZNEKpgghpCuQNFeFWGw2TWfx9` exposed
+  `pipeline-eaa1c2458692a9bc` with `onnxruntime_spin_duration_us=1000` and
+  `onnxruntime_spin_backoff_max=8`, passed health, and returned identical LA
+  Santa Monica OCR/georeference output to previous production:
+  bbox `[-118.5324802,33.9303557,-118.2265349,34.1191264]`, confidence 0.855,
+  source `ocr-georeference:nominatim-label-fit`, and `catalog_slug: null`.
+  However the first cache-busted production A/B was slower than previous
+  production (`build_boundary_s` 3.000197s vs 2.325060s, OCR 2.189558s vs
+  1.941889s), and follow-up warm/visual-cache variants were only tied/slightly
+  slower. Production was promoted back to
+  `dpl_5fC8cmS8YySBRdUr8gKA5dvYuJjs` (`pipeline-904c134671cd17e5`), and the
+  local tuning commit was reverted.
 - Georeference seed preloading now starts when the runner commits to the
   OCR/georeference path, overlapping geocoder, OSM place, and road seed loading
   with OCR/extraction and waiting immediately before the transform fit. This
