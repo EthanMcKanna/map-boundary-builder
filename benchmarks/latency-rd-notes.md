@@ -1640,6 +1640,16 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   kept Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo on
   OCR/georeference with `catalog_slug: null`, zero attempted network calls, and
   local generation from 0.067s to 0.702s.
+- Production deployment `dpl_FHkahh3dE6UCdQypuDL6XmfGvfxa` was aliased to
+  `https://mapboundary.app`, reported `pipeline-cf24dc3244ce2951`, and kept
+  `api/index.py` at 92.83 MB. Cache-busted UI-shaped smokes preserved active
+  Phoenix on `catalog-shape-match` and kept Miami Waymo / Bay Area Zoox off
+  stale catalog entries. Warmed cache-busted repeats reported Phoenix server
+  generation at 0.310s; Miami at 5.023s total with extraction 0.930s, OCR
+  2.490s, georeference 1.594s; and Bay Area Zoox at 3.110s total with
+  extraction 0.571s, OCR 2.503s, georeference 0.029s. The extraction cap
+  reduces the non-catalog extraction component, but production OCR/model work
+  remains the larger cold-path bottleneck.
 
 ## Remaining Bottlenecks
 
