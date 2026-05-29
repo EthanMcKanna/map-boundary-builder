@@ -3363,3 +3363,9 @@ OCR/georeference rather than returning outdated fast-path polygons.
   repeated much slower at 6.92s and 9.25s on full no-catalog gates. ONNX Runtime
   session concurrency appears too noisy/oversubscribed for a safe default, so
   the patch was reverted before commit/deploy.
+- Rejected pre-OCR city-context road matching as a shortcut for explicit-city
+  requests. A direct probe using each active fixture's city and extracted pixel
+  geometry spent 6-24s on most fixtures and returned no result; the one returned
+  Dallas Tesla result took 18.8s and was wrong at IoU 0.287. Road-pattern search
+  remains useful only as a later fallback/refinement after OCR narrows context
+  enough to keep the candidate space and acceptance risk under control.
