@@ -1,18 +1,43 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
+import hashlib
+from importlib.metadata import PackageNotFoundError, version
+import json
 import os
 from pathlib import Path
+import tempfile
 
 import cv2
 import numpy as np
 from PIL import Image
 from shapely.affinity import scale as scale_geometry
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.affinity import translate as translate_geometry
+from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import unary_union
 
 DEFAULT_SIMPLIFY_PX = 6.0
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
+_CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
+EXTRACTION_CACHE_DIR = _CACHE_ROOT / "extractions"
+EXTRACTION_CACHE_VERSION = "extraction-v1"
+EXTRACTION_BORDER_COLOR_TOLERANCE = 6
+EXTRACTION_BORDER_ROW_MATCH_RATIO = 0.995
+EXTRACTION_MEMORY_CACHE_MAX = 24
+EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CACHE", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+EXTRACTION_CACHE_DEPENDENCY_PACKAGES = (
+    "numpy",
+    "opencv-python-headless",
+    "pillow",
+    "shapely",
+)
+_EXTRACTION_MEMORY_CACHE: OrderedDict[str, ExtractionResult] = OrderedDict()
+_EXTRACTION_CACHE_DEPENDENCY_SIGNATURE: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +76,17 @@ def extract_service_area(
     if rgb is None:
         rgb = load_rgb(image_path)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
+    rgb = np.ascontiguousarray(rgb)
+    canonical_rgb, canonical_origin = canonical_extract_rgb(rgb)
+    canonical_key = extraction_visual_cache_key(
+        canonical_rgb,
+        simplify_px=simplify_px,
+        max_dimension=max_dimension,
+    )
+    if canonical_key is not None:
+        cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
+        if cached is not None:
+            return cached
     scale = extraction_scale_factor(rgb, max_dimension)
     if scale < 1.0:
         height, width = rgb.shape[:2]
@@ -60,8 +96,12 @@ def extract_service_area(
             interpolation=cv2.INTER_AREA,
         )
         scaled = extract_service_area_from_rgb(scaled_rgb, simplify_px=simplify_px * scale)
-        return rescale_extraction_result(scaled, width=width, height=height, scale=scale)
-    return extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
+        result = rescale_extraction_result(scaled, width=width, height=height, scale=scale)
+    else:
+        result = extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
+    if canonical_key is not None:
+        write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
+    return result
 
 
 def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
@@ -127,6 +167,223 @@ def rescale_extraction_result(
         contour_count=result.contour_count,
         confidence=confidence,
     )
+
+
+def extraction_visual_cache_key(
+    rgb: np.ndarray | None,
+    *,
+    simplify_px: float,
+    max_dimension: int,
+) -> str | None:
+    if rgb is None:
+        return None
+    contiguous = np.ascontiguousarray(rgb)
+    digest = hashlib.sha256()
+    digest.update(b"rgb-canonical-extraction")
+    digest.update(str(tuple(contiguous.shape)).encode("ascii"))
+    digest.update(contiguous.data)
+    payload = (
+        f"{EXTRACTION_CACHE_VERSION}:"
+        f"simplify={round(float(simplify_px), 4)}:"
+        f"max-dimension={int(max_dimension)}:"
+        f"deps={extraction_cache_dependency_signature()}:"
+        f"{digest.hexdigest()}"
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def read_extraction_cache(
+    cache_key: str,
+    output_shape: tuple[int, int],
+    origin: tuple[float, float],
+) -> ExtractionResult | None:
+    cached = _EXTRACTION_MEMORY_CACHE.get(cache_key)
+    if cached is None:
+        if not EXTRACTION_DISK_CACHE_ENABLED:
+            return None
+        cache_path = EXTRACTION_CACHE_DIR / f"{cache_key}.npz"
+        if not cache_path.exists():
+            return None
+        try:
+            with np.load(cache_path, allow_pickle=False) as data:
+                mask = data["mask"].astype(bool)
+                style = str(data["style"].item())
+                geometry_payload = str(data["geometry"].item())
+                geometry = shape(json.loads(geometry_payload))
+                contour_count = int(data["contour_count"].item())
+        except Exception:
+            return None
+        cached = ExtractionResult(
+            mask=mask,
+            style=style,
+            pixel_geometry=geometry,
+            coverage_ratio=float(mask.mean()),
+            contour_count=contour_count,
+            confidence=extraction_confidence(mask, style, contour_count),
+        )
+        remember_extraction_memory_cache(cache_key, cached)
+    else:
+        _EXTRACTION_MEMORY_CACHE.move_to_end(cache_key)
+
+    return shift_cached_extraction(cached, output_shape=output_shape, origin=origin)
+
+
+def write_extraction_cache(
+    cache_key: str,
+    result: ExtractionResult,
+    canonical_shape: tuple[int, int],
+    origin: tuple[float, float],
+) -> None:
+    left, top = rounded_origin(origin)
+    height, width = canonical_shape
+    if height <= 0 or width <= 0:
+        return
+    if top < 0 or left < 0 or top + height > result.mask.shape[0] or left + width > result.mask.shape[1]:
+        return
+    canonical_mask = np.ascontiguousarray(result.mask[top : top + height, left : left + width])
+    canonical_geometry = translate_geometry(result.pixel_geometry, xoff=-left, yoff=-top)
+    cached = ExtractionResult(
+        mask=canonical_mask,
+        style=result.style,
+        pixel_geometry=canonical_geometry,
+        coverage_ratio=float(canonical_mask.mean()),
+        contour_count=result.contour_count,
+        confidence=extraction_confidence(canonical_mask, result.style, result.contour_count),
+    )
+    remember_extraction_memory_cache(cache_key, cached)
+    if not EXTRACTION_DISK_CACHE_ENABLED:
+        return
+    try:
+        EXTRACTION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            dir=EXTRACTION_CACHE_DIR,
+            prefix=f"{cache_key}.",
+            suffix=".tmp.npz",
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+            np.savez(
+                tmp,
+                mask=canonical_mask.astype(np.uint8),
+                style=np.array(result.style),
+                geometry=np.array(json.dumps(mapping(canonical_geometry), separators=(",", ":"))),
+                contour_count=np.array(result.contour_count, dtype=np.int32),
+            )
+        tmp_path.replace(EXTRACTION_CACHE_DIR / f"{cache_key}.npz")
+    except OSError:
+        return
+
+
+def remember_extraction_memory_cache(cache_key: str, result: ExtractionResult) -> None:
+    _EXTRACTION_MEMORY_CACHE[cache_key] = result
+    _EXTRACTION_MEMORY_CACHE.move_to_end(cache_key)
+    while len(_EXTRACTION_MEMORY_CACHE) > EXTRACTION_MEMORY_CACHE_MAX:
+        _EXTRACTION_MEMORY_CACHE.popitem(last=False)
+
+
+def shift_cached_extraction(
+    result: ExtractionResult,
+    *,
+    output_shape: tuple[int, int],
+    origin: tuple[float, float],
+) -> ExtractionResult | None:
+    left, top = rounded_origin(origin)
+    height, width = result.mask.shape
+    output_height, output_width = output_shape
+    if top < 0 or left < 0 or top + height > output_height or left + width > output_width:
+        return None
+    mask = np.zeros((output_height, output_width), dtype=bool)
+    mask[top : top + height, left : left + width] = result.mask
+    geometry = translate_geometry(result.pixel_geometry, xoff=left, yoff=top)
+    coverage_ratio = float(mask.mean())
+    confidence = extraction_confidence(mask, result.style, result.contour_count)
+    return ExtractionResult(
+        mask=mask,
+        style=result.style,
+        pixel_geometry=geometry,
+        coverage_ratio=coverage_ratio,
+        contour_count=result.contour_count,
+        confidence=confidence,
+    )
+
+
+def canonical_extract_rgb(rgb: np.ndarray | None) -> tuple[np.ndarray | None, tuple[float, float]]:
+    if rgb is None or rgb.ndim != 3 or rgb.shape[0] < 3 or rgb.shape[1] < 3:
+        return rgb, (0.0, 0.0)
+    contiguous = np.ascontiguousarray(rgb)
+    border_color = canonical_extract_border_color(contiguous)
+
+    height, width = contiguous.shape[:2]
+    top = leading_matching_border_rows(contiguous, border_color, reverse=False)
+    bottom_trim = leading_matching_border_rows(contiguous, border_color, reverse=True)
+    left = leading_matching_border_cols(contiguous, border_color, reverse=False)
+    right_trim = leading_matching_border_cols(contiguous, border_color, reverse=True)
+    bottom = height - bottom_trim
+    right = width - right_trim
+    if top >= bottom or left >= right:
+        return contiguous, (0.0, 0.0)
+    if top == 0 and left == 0 and bottom == height and right == width:
+        return contiguous, (0.0, 0.0)
+    return np.ascontiguousarray(contiguous[top:bottom, left:right]), (float(left), float(top))
+
+
+def canonical_extract_border_color(rgb: np.ndarray) -> np.ndarray:
+    border_samples = np.concatenate(
+        (
+            rgb[0, :, :],
+            rgb[-1, :, :],
+            rgb[:, 0, :],
+            rgb[:, -1, :],
+        ),
+        axis=0,
+    )
+    return np.median(border_samples.astype(np.int16), axis=0)
+
+
+def leading_matching_border_rows(rgb: np.ndarray, border_color: np.ndarray, *, reverse: bool) -> int:
+    height = rgb.shape[0]
+    count = 0
+    indexes = range(height - 1, -1, -1) if reverse else range(height)
+    for index in indexes:
+        if not border_pixels_match(rgb[index, :, :], border_color):
+            break
+        count += 1
+    return count
+
+
+def leading_matching_border_cols(rgb: np.ndarray, border_color: np.ndarray, *, reverse: bool) -> int:
+    width = rgb.shape[1]
+    count = 0
+    indexes = range(width - 1, -1, -1) if reverse else range(width)
+    for index in indexes:
+        if not border_pixels_match(rgb[:, index, :], border_color):
+            break
+        count += 1
+    return count
+
+
+def border_pixels_match(pixels: np.ndarray, border_color: np.ndarray) -> bool:
+    delta = np.max(np.abs(pixels.astype(np.int16) - border_color), axis=1)
+    return bool(np.mean(delta <= EXTRACTION_BORDER_COLOR_TOLERANCE) >= EXTRACTION_BORDER_ROW_MATCH_RATIO)
+
+
+def rounded_origin(origin: tuple[float, float]) -> tuple[int, int]:
+    return int(round(origin[0])), int(round(origin[1]))
+
+
+def extraction_cache_dependency_signature() -> str:
+    global _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
+    if _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE is not None:
+        return _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
+    versions: list[str] = []
+    for package in EXTRACTION_CACHE_DEPENDENCY_PACKAGES:
+        try:
+            package_version = version(package)
+        except PackageNotFoundError:
+            package_version = "missing"
+        versions.append(f"{package}={package_version}")
+    _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE = ",".join(versions)
+    return _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE
 
 
 def classify_style(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> str:

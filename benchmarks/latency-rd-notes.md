@@ -3237,3 +3237,29 @@ OCR/georeference rather than returning outdated fast-path polygons.
   bbox/confidence/source with server `build_boundary_s: 0.271s`, OCR 0.0026s,
   georeference 0.023s, and `total_before_send_s: 0.279s`. Repeating that
   bordered filename hit raw run cache in 0.00177s server time.
+- Added canonical extraction caching for uniform border/padding variants. The
+  first accepted version is memory-first: misses store the traced mask and
+  pixel geometry relative to the canonical trimmed content in a small LRU cache,
+  while disk `.npz` persistence is opt-in through
+  `MAP_BOUNDARY_EXTRACTION_DISK_CACHE=1` so normal first-pass requests do not
+  pay serialization overhead. The initial full-mask trim detector was rejected
+  after it added roughly 80-120 ms on large screenshots; the shipped version
+  probes matching rows/columns only from each edge and kept the trim check near
+  1-2 ms on 2400px screenshots. Local in-process Avride Dallas proof with
+  network blocked: the original 680x551 image took 0.339s total with extract
+  0.032s, OCR 0.271s, georeference 0.036s, and bbox
+  `[-96.8303708,32.7654593,-96.7709423,32.8249834]`; a fresh 2px white-border
+  684x555 variant then reused canonical extraction and OCR, completed in
+  0.0178s total with extract 0.0056s, OCR 0.0067s, georeference 0.0047s, and
+  preserved the exact bbox/source. Validation passed 176/176 pytest,
+  `compileall`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. In-process default benchmark
+  `out/extraction-cache-fast-default-20260529/full-report.json` passed 8/8
+  scored, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU
+  0.943, total 0.49s. In-process no-catalog benchmark
+  `out/extraction-cache-fast-nocatalog-20260529/full-report.json` passed 8/8
+  scored, avg IoU 0.962, min IoU 0.931, total 4.50s. Changed-market smoke
+  `out/extraction-cache-fast-changed-smoke-20260529/full-report.json`
+  smoke-checked Bay Area Tesla/Waymo/Zoox, Houston Tesla/Waymo, and Miami Waymo
+  with zero failures while keeping those user-confirmed changed service areas
+  unscored as data debt.
