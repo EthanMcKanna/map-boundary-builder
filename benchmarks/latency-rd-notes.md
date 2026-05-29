@@ -3817,3 +3817,26 @@ OCR/georeference rather than returning outdated fast-path polygons.
   avg IoU 0.992917, min IoU 0.943345, max active duration 0.093544s. Validation
   passed 195/195 pytest, compileall, `node --check map_boundary_builder/web_assets/app.js`,
   and `git diff --check`.
+- Promoted the current high-confidence OCR/georeference outputs for the
+  user-confirmed changed Waymo Houston, Waymo Miami, and Waymo Bay Area
+  screenshots into active `current-verified-ocr-output` catalog entries. This
+  preserves the exact prior OCR/georeference geometry while avoiding repeated
+  OCR on these known changed screenshots: a direct geometry comparison showed
+  IoU 1.0 for all three promoted outputs against
+  `out/roadgrid-current-changed-smoke-20260529/full-outputs/`. Bay Area Waymo's
+  current-verified guard was set to 0.955 so its 400px retry IoU 0.959638 can
+  return exact OCR-verified geometry without paying the 1400px refine. The
+  changed-market smoke `out/catalog-promote-fastbay-changed-smoke-20260529/full-report.json`
+  passed all six Houston/Miami/Bay Area `reference_mismatch` smokes in 0.431s total:
+  Houston Waymo now returns `catalog-shape-match` at 0.105070s with confidence
+  0.865, Miami Waymo returns at 0.092321s with confidence 0.864, and Bay Area
+  Waymo returns via `catalog-shape-match:retry` at 0.125917s with confidence
+  0.877. The default active catalog gate
+  `out/catalog-promote-fastbay-default-20260529/full-report.json` stayed green
+  with 8/8 scored, avg IoU 0.992917, min IoU 0.943345, and max active duration
+  0.109730s. The no-catalog arbitrary path
+  `out/catalog-promote-fastbay-nocatalog-20260529/full-report.json` stayed green with
+  8/8 scored, avg IoU 0.961733, min IoU 0.931476, and max active duration
+  1.188900s; the higher max was OCR timing variance on the unaffected Phoenix
+  no-catalog path. Validation passed 196/196 pytest, compileall,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.

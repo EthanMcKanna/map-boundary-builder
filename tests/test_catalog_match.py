@@ -36,18 +36,18 @@ KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
     "atlanta-waymo",
     "austin-waymo",
     "bay-area-tesla",
-    "bay-area-waymo",
     "bay-area-zoox",
     "houston-tesla",
-    "houston-waymo",
-    "miami-waymo",
 }
 
 KNOWN_CURRENT_EXTERNAL_CHANGED_SLUGS = {
     "bay-area-tesla",
     "bay-area-zoox",
-    "bay-area-waymo",
     "houston-tesla",
+}
+
+KNOWN_CURRENT_VERIFIED_CHANGED_SLUGS = {
+    "bay-area-waymo",
     "houston-waymo",
     "miami-waymo",
 }
@@ -258,7 +258,7 @@ def test_reference_catalog_entry_outputs_exact_geometry_after_match() -> None:
 
 
 def test_current_external_catalog_entry_can_keep_audit_threshold() -> None:
-    entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
+    entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-zoox")
 
     assert entry.is_active
     assert entry.status == "active"
@@ -297,7 +297,7 @@ def test_stale_ocr_derived_changed_catalog_entries_are_not_matched() -> None:
         assert match is None
 
 
-def test_changed_reference_mismatch_catalog_entries_use_current_external_references() -> None:
+def test_changed_reference_mismatch_catalog_entries_use_verified_current_sources() -> None:
     fixture_config = json.loads(
         Path("benchmarks/service-area-fixtures.json").read_text()
     )["fixtures"]
@@ -316,6 +316,33 @@ def test_changed_reference_mismatch_catalog_entries_use_current_external_referen
         assert entry.status == "active"
         assert entry.stale_reason is None
         assert entry.min_iou == 0.965
+    for slug in KNOWN_CURRENT_VERIFIED_CHANGED_SLUGS:
+        entry = entries[slug]
+        assert entry.is_active
+        assert entry.status == "active"
+        assert entry.stale_reason is None
+        assert entry.min_iou == (0.955 if slug == "bay-area-waymo" else 0.965)
+        assert entry.max_confidence is not None
+
+
+def test_current_verified_changed_waymo_entries_preserve_ocr_confidence_caps() -> None:
+    expected_confidence = {
+        "bay-area-waymo": 0.877,
+        "houston-waymo": 0.865,
+        "miami-waymo": 0.864,
+    }
+
+    entries = {item.slug: item for item in load_catalog_entries()}
+    for slug, confidence in expected_confidence.items():
+        entry = entries[slug]
+        pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+        match = match_service_area_catalog(pixel_geometry, style="bright-blue")
+
+        assert entry.use_exact_geometry
+        assert entry.max_confidence == confidence
+        assert match is not None
+        assert match.entry.slug == slug
+        assert match.confidence == confidence
 
 
 def test_reference_only_waymo_catalog_entries_are_active() -> None:

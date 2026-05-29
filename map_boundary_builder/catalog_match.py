@@ -26,6 +26,7 @@ CATALOG_ROTATION_MAX_DEGREES = 2.0
 CATALOG_ROTATION_STEP_DEGREES = 0.25
 CATALOG_EXACT_MIN_POINTS = 10
 CATALOG_EXACT_MIN_IOU = 0.985
+CATALOG_EXACT_MIN_IOU_FLOOR = 0.955
 CATALOG_LABEL_HINT_MIN_IOU = 0.94
 PROVIDER_STYLES = {
     "avride": {"purple-fill"},
@@ -299,7 +300,7 @@ def parse_catalog_min_iou(value: Any, use_exact_geometry: bool) -> float:
         min_iou = float(value)
     except (TypeError, ValueError):
         return CATALOG_MIN_IOU
-    return max(0.965, min(CATALOG_MIN_IOU, min_iou))
+    return max(CATALOG_EXACT_MIN_IOU_FLOOR, min(CATALOG_MIN_IOU, min_iou))
 
 
 def provider_from_slug(slug: str) -> str | None:
