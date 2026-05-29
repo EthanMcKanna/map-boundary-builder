@@ -3059,3 +3059,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/cachehint-nocatalog-seq-20260529/full-report.json` passed 8/8 scored
   fixtures with avg IoU 0.962, min IoU 0.931. The no-catalog timing was cold
   and noisy, so it is retained as regression evidence rather than speed proof.
+- Production deployment `dpl_B1NWG4sMHJYnsjW2CXqcwQ58MM28` is aliased to
+  `https://mapboundary.app` and reports `pipeline-998946518fa292f2`, matching
+  the local pipeline hash after cache-key hardening. Production cache-key smoke
+  posted identical Tesla Dallas pixels with different filenames and
+  `normalized_cache_lookup=0`; both returned `cache_hit: miss`, proving the
+  filename hint is part of the cache identity. Repeating the second filename
+  returned `cache_hit: raw` with `total_before_send_s: 0.001284`, preserving
+  exact-repeat speed. A fresh Avride Dallas filename-hint miss on the same
+  deployment preserved the current Dallas bbox
+  `[-96.8303708,32.7654593,-96.7709423,32.8249834]`, confidence 0.709,
+  `ocr-georeference:nominatim-label-fit`, and `catalog_slug: null`; server
+  `build_boundary_s` was 2.444s, `total_before_send_s` was 2.449s, OCR was
+  2.148s, and georeference was 0.036s.
