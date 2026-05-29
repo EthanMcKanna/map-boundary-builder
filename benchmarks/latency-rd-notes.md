@@ -4104,3 +4104,13 @@ with zero failures in 0.531s.
   cap to 1200/1300 sped some bright-blue fall-throughs but moved the dark-teal
   Zoox San Francisco output to about 0.814 IoU versus the accepted output, so
   the 1400px refine cap stays unchanged.
+- Deployed `eecd5de` with Vercel CLI 54.6.1 as production deployment
+  `dpl_HpLzd6NurD7Z9KJWd764BVGHkqhc` at
+  `map-boundary-builder-36psnwy8g-ethanmckannas-projects.vercel.app`, then
+  aliased `mapboundary.app` to that deployment. Public health returned
+  `pipeline-6f44d70394be534e` and warm OCR status ok. Live production smokes:
+  a cache-miss San Antonio Waymo upload returned `catalog-shape-match`,
+  `catalog_slug: san-antonio-waymo`, `build_boundary_s: 0.281534`,
+  `total_before_send_s: 0.291369`, and HTTP 201; Avride Dallas web still
+  returned `catalog-shape-match:filename-hint`, `catalog_slug: dallas-avride`,
+  `build_boundary_s: 0.030145`, `total_before_send_s: 0.031361`, and HTTP 201.
