@@ -204,6 +204,18 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_1, key_3)
 
+    def test_ocr_cache_key_depends_on_tesseract_fallback_threshold(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3):
+                key_3 = ocr_cache_key(image_path, use_tesseract=True)
+            with patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 12):
+                key_12 = ocr_cache_key(image_path, use_tesseract=True)
+
+        self.assertNotEqual(key_3, key_12)
+
     def test_rapidocr_skips_classifier_when_fast_pass_has_labels(self) -> None:
         engine = FakeRapidOcrEngine(
             {
@@ -261,6 +273,7 @@ class OcrGroupingTests(unittest.TestCase):
 
         with (
             patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
             patch.object(ocr_module, "tesseract_available", return_value=True),
             patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]) as rapidocr,
             patch.object(ocr_module, "run_tesseract_words", return_value=[]),
@@ -270,6 +283,27 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertEqual(rapidocr.call_count, 1)
         self.assertIn("Bay Area CA", {label.text for label in labels})
+
+    def test_extract_ocr_labels_skips_tesseract_when_rapidocr_has_enough_labels(self) -> None:
+        rapid_labels = [
+            OcrLabel("University Park", x=10, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Highland Park", x=110, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Dallas", x=210, y=10, width=80, height=20, confidence=96),
+        ]
+
+        with (
+            patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(ocr_module, "tesseract_available", return_value=True),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=rapid_labels),
+            patch.object(ocr_module, "run_tesseract_words") as tesseract,
+            patch.object(ocr_module, "run_preprocessed_tesseract_words") as preprocessed,
+        ):
+            labels = extract_ocr_labels("unused.png")
+
+        tesseract.assert_not_called()
+        preprocessed.assert_not_called()
+        self.assertIn("University Park", {label.text for label in labels})
 
 
 class PlaceCandidateTests(unittest.TestCase):

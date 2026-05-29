@@ -37,6 +37,10 @@ RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS", "2")),
 )
+TESSERACT_FALLBACK_MIN_USEFUL_LABELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_TESSERACT_FALLBACK_MIN_USEFUL_LABELS", "3")),
+)
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -51,13 +55,13 @@ def extract_ocr_labels(image_path: str | Path) -> list[OcrLabel]:
     rapid_words: list[OcrLabel] = run_rapidocr_words(image_path)
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
-    if count_useful_labels(words) < 12 and use_tesseract:
+    if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and use_tesseract:
         words = run_tesseract_words(image_path)
         words = [word for word in words if is_useful_text(word.text)]
         if len(words) < 80:
             words.extend(word for word in run_preprocessed_tesseract_words(image_path) if is_useful_text(word.text))
         used_tesseract_fallback = True
-    if used_tesseract_fallback and count_useful_labels(words) < 12:
+    if used_tesseract_fallback and count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS:
         words.extend(rapid_words)
     words = dedupe_labels(words)
     labels = list(words)
@@ -80,7 +84,8 @@ def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
-            f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:{digest}"
+            f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
+            f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:{digest}"
         ).encode("utf-8")
     ).hexdigest()
 

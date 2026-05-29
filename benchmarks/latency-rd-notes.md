@@ -290,6 +290,29 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Local Miami with `city=Miami` now has a 0.201s extract stage and no refine
   event while preserving bbox `[-80.3230924, 25.6880246, -80.1184998,
   25.9396977]`, confidence 0.864, and road-refined source.
+- Current Tesseract fallback gate head: optional Tesseract OCR now runs only as
+  a near-empty RapidOCR fallback instead of whenever the fast OCR pass has fewer
+  than twelve useful labels. This avoids local/self-hosted Tesseract noise on
+  sparse-but-usable screenshots while preserving a last-resort OCR safety net.
+  Focused OCR/API/benchmark tests passed 54 tests, and the full suite passed
+  98 tests plus 9 subtests; `compileall`, `node --check`, and `git diff
+  --check` passed. With Homebrew Tesseract present, the fresh-cache no-catalog
+  full benchmark `out/tesseract-threshold3-no-catalog-20260529/full-report.json`
+  passed 8/8 scored fixtures, skipped 7 reference mismatches, avg IoU 0.962,
+  min IoU 0.931, total 7.33s versus the pre-change local Tesseract path
+  `out/current-no-catalog-profile-20260529/full-report.json` at avg IoU 0.948,
+  min IoU 0.908, total 9.46s. Dallas Waymo improved from 2.234s, 0.908 IoU,
+  and 0.864 confidence to 0.948s, 0.957 IoU, and 0.946 confidence. Default
+  catalog benchmark `out/tesseract-threshold3-default-20260529/full-report.json`
+  stayed green at 8/8 scored, avg IoU 0.993, min IoU 0.943, total 2.98s.
+  Production-equivalent no-Tesseract no-catalog
+  `out/current-no-tesseract-no-catalog-20260529/full-report.json` also passed
+  8/8 scored with avg IoU 0.962, min IoU 0.931, total 7.36s. Fresh-cache
+  changed-service-area no-network smoke
+  `out/tesseract-threshold3-stale-no-network-20260529/` preserved
+  `catalog_slug: null`, OCR/georeference sources, current bboxes, and zero
+  attempted geocoder/OSM network calls for Bay Area Tesla/Waymo/Zoox, Houston
+  Tesla/Waymo, and Miami Waymo.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
