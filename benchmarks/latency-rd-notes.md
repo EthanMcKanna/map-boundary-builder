@@ -4518,3 +4518,17 @@ with zero failures in 0.531s.
   `dpl_ExSEwvUwnQ1ZvRT2nmu6fuLye21c` is aliased to `https://mapboundary.app`,
   still reports `pipeline-ce284dc37ba33fcc`, keeps `api/index.py (101.05MB)
   [sfo1]`, and `/api/health?warm=ocr` returned HTTP 200 with warm status OK.
+- Current-fixture refresh probe after the drift correction: copied current
+  Houston and Miami screenshots from Downloads (`h-waymo.png`, `miami.png`) and
+  their matching current GeoJSONs into a temporary benchmark fixture set while
+  leaving Bay Area marked `reference_mismatch` because the saved Bay Area
+  screenshot still does not match `waymo bay area expanded.geojson`. The
+  temporary no-catalog run
+  `out/refreshed-current-fixture-probe-20260529/no-catalog-report/full-report.json`
+  passed with 11 scored fixtures and 4 drift smokes. Houston Waymo scored
+  0.941416 IoU / confidence 0.885 against the refreshed reference. Miami Waymo
+  scored 0.851050 IoU / confidence 0.716, which is above the coarse gate but
+  too close to use as a stronger no-regression guard without reviewing the
+  screenshot/reference pairing. Keep the committed fixture policy at 8 scored /
+  7 `reference_mismatch` until a complete refreshed Houston/Miami/Bay Area set
+  is intentionally adopted.
