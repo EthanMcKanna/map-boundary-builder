@@ -4532,3 +4532,8 @@ with zero failures in 0.531s.
   screenshot/reference pairing. Keep the committed fixture policy at 8 scored /
   7 `reference_mismatch` until a complete refreshed Houston/Miami/Bay Area set
   is intentionally adopted.
+- Package index check after the production OCR-path probes:
+  `rapidocr-onnxruntime` remains latest at 1.4.4, `onnxruntime` remains latest
+  at 1.26.0, and `rapidocr` remains latest at 3.8.1. There is no safe drop-in
+  dependency upgrade lane available right now; the rejected modern `rapidocr`
+  v3 production experiment remains the relevant evidence for that branch.
