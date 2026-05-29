@@ -2310,6 +2310,22 @@ OCR/georeference rather than returning outdated fast-path polygons.
   latency improvement over the current production deployment and the generated
   output layout changed materially, the production config stayed on the
   known-good legacy `builds`/`routes` shape for now.
+- Rejected explicit ONNX Runtime thread defaults for RapidOCR. Direct local
+  model-only timing on Miami, Houston, and Phoenix suggested
+  `intra_op_num_threads=4, inter_op_num_threads=1` could reduce average OCR
+  inference from 1.629s to 0.659s while preserving labels, but the real
+  drift-aware no-catalog benchmark did not confirm it: the old default
+  `out/onnx-thread-old-no-catalog-20260529/full-report.json` passed 8/8 scored
+  fixtures in 4.07s, the proposed 4-thread default passed with the same avg/min
+  IoU but took 4.33s, and a 2-thread probe slowed to 5.75s. Since this would
+  change OCR cache keys and invalidate production caches without a proven
+  end-to-end win, the runtime thread settings remain on the upstream defaults.
+- Rejected pre-OCR city-context road fitting as a shortcut for city-provided
+  uploads. A fresh-cache probe of `georeference_from_city_context` after
+  extraction returned no result for stale Waymo Miami/Houston, Zoox San
+  Francisco, Phoenix, Nashville, or Los Angeles, and it took 3.8-30.1s on those
+  failures. It only returned for Tesla Houston and Tesla Bay Area, where the
+  existing catalog path is already faster and more auditable.
 
 ## Remaining Bottlenecks
 
