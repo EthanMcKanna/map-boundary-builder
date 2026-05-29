@@ -3977,3 +3977,21 @@ with zero failures in 0.531s.
   in the cache key. Focused API tests passed 31/31, and full validation passed
   201/201 tests, compileall, `node --check map_boundary_builder/web_assets/app.js`,
   and `git diff --check`.
+- Added extraction runtime setup to the generation prewarm path. A fresh local
+  `warm_extraction_runtime()` probe paid 0.266387s on the first process call
+  for NumPy/OpenCV/Shapely extraction setup and then 0.0014-0.0016s on repeated
+  calls, so `/api/health?warm=ocr` and the authenticated cron can now absorb
+  that cold cost before the first user upload. The full local prewarm profile
+  reported `extraction_warmed: true`, `extraction_style: bright-blue`,
+  `extraction_s: 0.014856`, and total 0.676691s. This does not change the
+  generation code path or outputs; it only exercises the existing extractor
+  with a tiny synthetic bright-blue service-area mask. Focused warmup/API tests
+  passed 4/4, and full validation passed 205/205 tests, compileall,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  Generation gates stayed green: `out/extraction-warm-default-20260529/full-report.json`
+  passed 8/8 scored fixtures with avg IoU 0.992917, min IoU 0.943345, and max
+  active duration 0.106081s; `out/extraction-warm-nocatalog-20260529/full-report.json`
+  passed 8/8 no-catalog scored fixtures with avg IoU 0.961733, min IoU
+  0.931476, total 4.805836s, and max active duration 1.074409s; and
+  `out/extraction-warm-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes in 0.411s.

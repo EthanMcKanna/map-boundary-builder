@@ -30,6 +30,13 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         profile["road_seed_entries"] = len(load_road_points_seed())
         profile["seed_s"] = elapsed_seconds(seed_started)
 
+        extraction_started = time.perf_counter()
+        extraction_profile = warm_extraction_runtime()
+        profile["extraction_warmed"] = True
+        profile["extraction_style"] = extraction_profile["style"]
+        profile["extraction_contour_count"] = extraction_profile["contour_count"]
+        profile["extraction_s"] = elapsed_seconds(extraction_started)
+
         ocr_started = time.perf_counter()
         from .ocr import warm_rapidocr_runtime
 
@@ -41,6 +48,22 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         profile["error"] = str(exc)
     profile["total_s"] = elapsed_seconds(started)
     return profile
+
+
+def warm_extraction_runtime() -> dict[str, Any]:
+    import numpy as np
+
+    from .extract import extract_service_area_from_rgb
+
+    rgb = np.full((256, 256, 3), 255, dtype=np.uint8)
+    rgb[64:192, 64:192] = (40, 150, 230)
+    result = extract_service_area_from_rgb(rgb)
+    return {
+        "style": result.style,
+        "coverage_ratio": round(result.coverage_ratio, 6),
+        "contour_count": result.contour_count,
+        "confidence": round(result.confidence, 6),
+    }
 
 
 def elapsed_seconds(started: float) -> float:
