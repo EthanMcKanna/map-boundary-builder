@@ -1819,6 +1819,34 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   Miami Waymo returned `catalog_slug: null` through OCR/georeference. Repeat
   OCR spans remained production-noisy and OCR-bound, but behavior and
   confidence stayed stable.
+- Rejected boundary-centered OCR cropping as a general first pass. A prototype
+  on Phoenix, Nashville, Orlando, Bay Area Waymo, Houston Waymo, Miami Waymo,
+  and Bay Area Zoox showed some good local OCR reductions, but also produced
+  plausible high-confidence lower-IoU fits: Phoenix fell to 0.859 IoU at 16-28%
+  padding and Orlando drifted to 0.862 IoU at narrow/wide pads while residuals
+  and confidence still looked acceptable. This is too easy to turn into a silent
+  accuracy regression, so it remains rejected unless paired with a stronger
+  independent validator.
+- Current external Waymo references now replace the stale OCR-derived catalog
+  shapes for Bay Area Waymo, Houston Waymo, and Miami Waymo. Before updating,
+  old saved screenshots scored only 0.578, 0.577, and 0.609 IoU against the
+  current external catalog shapes at the 300px catalog preflight scale, proving
+  the drifted screenshots should not accidentally match the current polygons.
+  Focused catalog/API/benchmark tests passed 34/34. The default catalog
+  benchmark `out/current-waymo-reference-default-20260529/full-report.json`
+  passed 11/11 scored fixtures, skipped 4 reference mismatches, avg IoU 0.985,
+  min IoU 0.943, total 0.54s. The no-catalog generalization gate
+  `out/current-waymo-reference-no-catalog-20260529/full-report.json` passed
+  11/11, avg IoU 0.962, min IoU 0.931, total 3.98s.
+- Current-reference safety smoke
+  `out/current-waymo-reference-six-market-no-network-20260529/report.json` had
+  zero attempted geocoder/OSM `urlopen` calls. Bay Area Tesla, Bay Area Zoox,
+  and Houston Tesla still used `catalog-shape-match` in 0.058s, 0.036s, and
+  0.022s. The old Bay Area Waymo, Houston Waymo, and Miami Waymo screenshots
+  bypassed the new current-reference catalog entries and stayed on
+  OCR/georeference with `catalog_slug: null` in 0.574s, 0.389s, and 0.784s.
+  Full regression passed 106 tests plus 9 subtests, `compileall`, `node
+  --check`, and `git diff --check`.
 
 ## Remaining Bottlenecks
 

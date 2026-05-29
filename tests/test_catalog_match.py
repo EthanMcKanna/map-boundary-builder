@@ -19,16 +19,19 @@ from map_boundary_builder.catalog_match import (
 from map_boundary_builder.extract import ExtractionResult
 
 
-KNOWN_STALE_CATALOG_SLUGS = {
+KNOWN_CURRENT_CHANGED_CATALOG_SLUGS = {
+    "bay-area-tesla",
     "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
     "houston-waymo",
     "miami-waymo",
 }
 
-KNOWN_REACTIVATED_CATALOG_SLUGS = {
-    "bay-area-tesla",
-    "bay-area-zoox",
-    "houston-tesla",
+KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS = {
+    "bay-area-waymo",
+    "houston-waymo",
+    "miami-waymo",
 }
 
 STYLE_BY_PROVIDER = {
@@ -76,16 +79,18 @@ def test_catalog_area_aliases_understand_bay_area_text() -> None:
 def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:
     assert has_active_catalog_area_hint("Waymo Phoenix")
     assert not has_stale_catalog_area_hint("Waymo Phoenix")
-    assert has_stale_catalog_area_hint("Waymo Miami")
-    assert has_stale_catalog_area_hint("Waymo Houston")
-    assert has_stale_catalog_area_hint("Waymo Bay Area")
-    assert has_stale_catalog_area_hint("Houston")
-    assert has_stale_catalog_area_hint("Bay Area")
+    assert has_active_catalog_area_hint("Waymo Miami")
+    assert has_active_catalog_area_hint("Waymo Houston")
+    assert has_active_catalog_area_hint("Waymo Bay Area")
+    assert has_active_catalog_area_hint("Houston")
+    assert has_active_catalog_area_hint("Bay Area")
     assert has_active_catalog_area_hint("Tesla Houston")
     assert has_active_catalog_area_hint("Zoox San Francisco")
-    assert not has_active_catalog_area_hint("Waymo Miami")
-    assert not has_active_catalog_area_hint("Waymo Houston")
-    assert not has_active_catalog_area_hint("Waymo Bay Area")
+    assert not has_stale_catalog_area_hint("Waymo Miami")
+    assert not has_stale_catalog_area_hint("Waymo Houston")
+    assert not has_stale_catalog_area_hint("Waymo Bay Area")
+    assert not has_stale_catalog_area_hint("Houston")
+    assert not has_stale_catalog_area_hint("Bay Area")
     assert not has_stale_catalog_area_hint("Tesla Houston")
     assert not has_stale_catalog_area_hint("Zoox San Francisco")
 
@@ -201,34 +206,20 @@ def test_reference_catalog_entry_outputs_exact_geometry_after_match() -> None:
     assert output_geometry.equals_exact(entry.geometry, tolerance=1e-7)
 
 
-def test_stale_current_verified_catalog_entry_can_keep_audit_threshold() -> None:
+def test_current_external_catalog_entry_can_keep_audit_threshold() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
 
-    assert not entry.is_active
-    assert entry.status == "stale"
+    assert entry.is_active
+    assert entry.status == "active"
     assert entry.min_iou == 0.965
-    assert entry.stale_reason is not None
-    assert "changed live service area" in entry.stale_reason
+    assert entry.stale_reason is None
 
 
-def test_known_changed_catalog_entries_are_not_matched() -> None:
+def test_known_changed_catalog_entries_are_current_and_matched() -> None:
     entries = {item.slug: item for item in load_catalog_entries()}
 
-    assert KNOWN_STALE_CATALOG_SLUGS <= set(entries)
-    for slug in KNOWN_STALE_CATALOG_SLUGS:
-        entry = entries[slug]
-        pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
-        match = match_service_area_catalog(pixel_geometry, style=STYLE_BY_PROVIDER[entry.provider])
-
-        assert not entry.is_active
-        assert match is None or match.entry.slug != slug
-
-
-def test_reactivated_changed_catalog_entries_are_active() -> None:
-    entries = {item.slug: item for item in load_catalog_entries()}
-
-    assert KNOWN_REACTIVATED_CATALOG_SLUGS <= set(entries)
-    for slug in KNOWN_REACTIVATED_CATALOG_SLUGS:
+    assert KNOWN_CURRENT_CHANGED_CATALOG_SLUGS <= set(entries)
+    for slug in KNOWN_CURRENT_CHANGED_CATALOG_SLUGS:
         entry = entries[slug]
         pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
         match = match_service_area_catalog(pixel_geometry, style=STYLE_BY_PROVIDER[entry.provider])
@@ -240,7 +231,7 @@ def test_reactivated_changed_catalog_entries_are_active() -> None:
         assert match.entry.slug == slug
 
 
-def test_changed_reference_mismatch_catalog_entries_are_inactive() -> None:
+def test_changed_reference_mismatch_waymo_catalog_entries_use_current_external_references() -> None:
     fixture_config = json.loads(
         Path("benchmarks/service-area-fixtures.json").read_text()
     )["fixtures"]
@@ -252,13 +243,13 @@ def test_changed_reference_mismatch_catalog_entries_are_inactive() -> None:
     }
     entries = {item.slug: item for item in load_catalog_entries()}
 
-    assert changed_slugs == KNOWN_STALE_CATALOG_SLUGS
+    assert changed_slugs == KNOWN_CURRENT_EXTERNAL_CATALOG_SLUGS
     for slug in changed_slugs:
         entry = entries[slug]
-        assert not entry.is_active
-        assert entry.status == "stale"
-        assert entry.stale_reason is not None
-        assert "changed live service area" in entry.stale_reason
+        assert entry.is_active
+        assert entry.status == "active"
+        assert entry.stale_reason is None
+        assert entry.min_iou == 0.965
 
 
 def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:
