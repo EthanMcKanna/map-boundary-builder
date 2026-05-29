@@ -2561,6 +2561,16 @@ OCR/georeference rather than returning outdated fast-path polygons.
   redeploy returned to `ocr` 2.379s/server 2.774s. This is not the sub-second
   breakthrough for arbitrary OCR-heavy maps, but it is a validated production
   win with the safer default-path fallback still available.
+- Rejected selective RapidOCR recognition caps. The first monkey-patched probe
+  suggested recognizing only the 64 strongest detector boxes could preserve the
+  no-catalog benchmark while reducing local total time, but the real
+  implementation had to replace RapidOCR's optimized `engine(...)` path with a
+  manual detect/crop/recognize path. That preserved scored accuracy (`8/8`
+  scored, seven `reference_mismatch` skips, avg IoU 0.962, min IoU 0.931, zero
+  regression issues) but slowed the production-shaped gate to 9.70s versus the
+  current native-array baseline at 5.05s. Lower caps were already rejected by
+  the prototype because they degraded Phoenix/Los Angeles georeference quality,
+  so recognition caps stay out of the runtime.
 
 ## Remaining Bottlenecks
 
