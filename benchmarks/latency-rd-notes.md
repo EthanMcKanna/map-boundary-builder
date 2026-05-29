@@ -3369,3 +3369,10 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Dallas Tesla result took 18.8s and was wrong at IoU 0.287. Road-pattern search
   remains useful only as a later fallback/refinement after OCR narrows context
   enough to keep the candidate space and acceptance risk under control.
+- Rejected sharing the runner's freshly loaded RGB with the overlapped
+  no-catalog OCR path. The code variant still preserved 8/8 active no-catalog
+  fixture accuracy at avg IoU 0.962 and min IoU 0.931, but it slowed the gate to
+  9.98s total (`out/shared-rgb-overlap-nocatalog-20260529/full-report.json`)
+  versus the current 3.79s memory-first baseline. Keep the existing file-path
+  OCR overlap for arbitrary no-catalog images because it starts RapidOCR sooner
+  and is materially faster on the full active suite.
