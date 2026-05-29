@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .georef_transform import lonlat_to_mercator
+from .network_policy import network_blocked
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "overpass-places"
@@ -70,6 +71,8 @@ def load_overpass_places(bbox: tuple[float, float, float, float]) -> dict[str, o
     seeded = seed_overpass_places_payload(cache_path.stem, bbox=bbox)
     if seeded is not _NO_SEED:
         return seeded if isinstance(seeded, dict) else {"elements": []}
+    if network_blocked():
+        return {"elements": []}
     query = f"""
 [out:json][timeout:35];
 (

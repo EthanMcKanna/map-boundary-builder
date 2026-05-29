@@ -180,6 +180,20 @@ class RoadScoringTests(unittest.TestCase):
         self.assertGreater(len(seed_road_points("93e43ee6c074669e9df90297")), 5000)
         self.assertEqual(seed_road_points("missing-road-seed"), None)
 
+    def test_block_network_env_returns_empty_uncached_overpass_miss_without_urlopen(self) -> None:
+        bbox = (-10.0, -10.0, -9.9, -9.9)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_roads, "CACHE_DIR", Path(tmpdir) / "overpass"),
+                patch.object(osm_roads, "urlopen", side_effect=AssertionError("network should not run")),
+                patch.dict("os.environ", {"MAP_BOUNDARY_BLOCK_NETWORK": "1"}),
+            ):
+                osm_roads.load_overpass_roads.cache_clear()
+                payload = osm_roads.load_overpass_roads(bbox)
+
+        self.assertEqual(payload, {"elements": []})
+
 
 if __name__ == "__main__":
     unittest.main()

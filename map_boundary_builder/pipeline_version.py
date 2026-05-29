@@ -16,6 +16,7 @@ PIPELINE_VERSION_FILES = (
     "georef_transform.py",
     "geojson.py",
     "image_io.py",
+    "network_policy.py",
     "ocr.py",
     "osm_places.py",
     "osm_places_seed.json.gz",

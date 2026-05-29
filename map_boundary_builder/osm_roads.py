@@ -16,6 +16,7 @@ import numpy as np
 
 from .geocoder import GeocodeResult
 from .georef_transform import GeoreferenceTransform, lonlat_to_mercator, mercator_to_lonlat
+from .network_policy import network_blocked
 from .ocr import OcrLabel
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
@@ -746,6 +747,8 @@ def load_overpass_roads(bbox: tuple[float, float, float, float]) -> dict[str, ob
     cache_path = overpass_cache_file(bbox)
     if cache_path.exists():
         return json.loads(cache_path.read_text())
+    if network_blocked():
+        return {"elements": []}
     query = f"""
 [out:json][timeout:25];
 (

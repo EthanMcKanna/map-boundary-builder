@@ -81,6 +81,20 @@ class GeocoderSeedTests(unittest.TestCase):
         self.assertEqual(results[0].display_name, "Pflugerville, Texas, United States")
         self.assertEqual(results[0].bbox, (-97.75, 30.3, -97.5, 30.55))
 
+    def test_block_network_env_returns_empty_uncached_miss_without_urlopen(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", {"version": 1, "nominatim": {}, "photon": {}}),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+                patch.dict("os.environ", {"MAP_BOUNDARY_BLOCK_NETWORK": "1"}),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("Definitely Missing Place", limit=1)
+
+        self.assertEqual(results, [])
+
     def test_bundled_los_angeles_seed_serves_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with (

@@ -96,6 +96,22 @@ class OsmPlacesSeedTests(unittest.TestCase):
         self.assertIn("Menlo Park", place_names)
         self.assertIn("Sunnyvale", place_names)
 
+    def test_block_network_env_returns_empty_uncached_miss_without_urlopen(self) -> None:
+        bbox = (-10.0, -10.0, -9.9, -9.9)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_places, "CACHE_DIR", Path(tmpdir) / "overpass-places"),
+                patch.object(osm_places, "_OSM_PLACES_SEED", {"version": 1, "overpass_places": {}}),
+                patch.object(osm_places, "urlopen", side_effect=AssertionError("network should not run")),
+                patch.dict("os.environ", {"MAP_BOUNDARY_BLOCK_NETWORK": "1"}),
+            ):
+                osm_places.load_overpass_places.cache_clear()
+                osm_places.load_place_points.cache_clear()
+                places = osm_places.load_place_points(bbox)
+
+        self.assertEqual(places, [])
+
     def test_covering_seed_chooses_smallest_covering_payload(self) -> None:
         broad = {
             "elements": [

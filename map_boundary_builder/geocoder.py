@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .georef_transform import lonlat_to_mercator
+from .network_policy import network_blocked
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 CACHE_DIR = _CACHE_ROOT / "geocoder"
@@ -69,7 +70,7 @@ def _geocode_cached(query: str, limit: int, country_codes: str, allow_network: b
         seeded = seed_cache_payload("nominatim", cache_path.stem)
         if seeded is not _NO_SEED:
             payload = seeded
-        elif not allow_network:
+        elif not allow_network or network_blocked():
             payload = []
         else:
             params = {
@@ -136,7 +137,7 @@ def geocode_photon(query: str, *, limit: int, country_codes: str, allow_network:
         seeded = seed_cache_payload("photon", cache_path.stem)
         if seeded is not _NO_SEED:
             payload = seeded
-        elif not allow_network:
+        elif not allow_network or network_blocked():
             return []
         else:
             params = {

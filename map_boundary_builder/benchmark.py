@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import os
 import subprocess
 import sys
 import time
@@ -15,6 +17,7 @@ from shapely.ops import transform
 
 from .extract import extract_service_area
 from .georef_transform import lonlat_to_mercator
+from .network_policy import NETWORK_BLOCK_ENV
 
 DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons")
 DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
@@ -154,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--block-network",
+        action="store_true",
+        help="Block live geocoder/Overpass fallbacks during full benchmark generation.",
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -216,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         debug_artifacts=not args.no_debug_artifacts,
         smoke_skipped=args.smoke_skipped,
         require_smoked_catalog_miss=args.require_smoked_catalog_miss,
+        block_network=args.block_network,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -261,6 +270,7 @@ def run_benchmark(
     debug_artifacts: bool = True,
     smoke_skipped: bool = False,
     require_smoked_catalog_miss: bool = False,
+    block_network: bool = False,
 ) -> dict[str, Any]:
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
@@ -271,49 +281,50 @@ def run_benchmark(
         inventory["filtered_from"] = before_count
         inventory["only_filters"] = filters
     scores: list[BenchmarkScore] = []
-    for fixture in fixtures:
-        if fixture.status != "active":
-            if mode == "full" and smoke_skipped:
-                score = score_full_fixture(
-                    fixture,
-                    out_dir=out_dir,
-                    min_iou=min_iou,
-                    timeout_seconds=timeout_seconds,
-                    city_overrides=city_overrides,
-                    no_catalog=no_catalog,
-                    execution=execution,
-                    debug_artifacts=debug_artifacts,
-                    score_reference=False,
-                )
-                if require_smoked_catalog_miss and score.catalog_slug:
-                    score = replace(
-                        score,
-                        passed=False,
-                        error=(
-                            f"smoke-checked skipped fixture returned catalog_slug={score.catalog_slug}; "
-                            "expected OCR/georeference catalog miss"
-                        ),
+    with benchmark_network_policy(block_network):
+        for fixture in fixtures:
+            if fixture.status != "active":
+                if mode == "full" and smoke_skipped:
+                    score = score_full_fixture(
+                        fixture,
+                        out_dir=out_dir,
+                        min_iou=min_iou,
+                        timeout_seconds=timeout_seconds,
+                        city_overrides=city_overrides,
+                        no_catalog=no_catalog,
+                        execution=execution,
+                        debug_artifacts=debug_artifacts,
+                        score_reference=False,
                     )
-                scores.append(score)
-            else:
-                scores.append(skipped_fixture_score(fixture, mode=mode))
-            continue
-        if mode == "full":
-            scores.append(
-                score_full_fixture(
-                    fixture,
-                    out_dir=out_dir,
-                    min_iou=min_iou,
-                    timeout_seconds=timeout_seconds,
-                    city_overrides=city_overrides,
-                    no_catalog=no_catalog,
-                    execution=execution,
-                    debug_artifacts=debug_artifacts,
-                    score_reference=True,
+                    if require_smoked_catalog_miss and score.catalog_slug:
+                        score = replace(
+                            score,
+                            passed=False,
+                            error=(
+                                f"smoke-checked skipped fixture returned catalog_slug={score.catalog_slug}; "
+                                "expected OCR/georeference catalog miss"
+                            ),
+                        )
+                    scores.append(score)
+                else:
+                    scores.append(skipped_fixture_score(fixture, mode=mode))
+                continue
+            if mode == "full":
+                scores.append(
+                    score_full_fixture(
+                        fixture,
+                        out_dir=out_dir,
+                        min_iou=min_iou,
+                        timeout_seconds=timeout_seconds,
+                        city_overrides=city_overrides,
+                        no_catalog=no_catalog,
+                        execution=execution,
+                        debug_artifacts=debug_artifacts,
+                        score_reference=True,
+                    )
                 )
-            )
-        else:
-            scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
+            else:
+                scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
 
     scored = [score for score in scores if score.status == "active"]
     skipped = [score for score in scores if score.status != "active"]
@@ -339,6 +350,7 @@ def run_benchmark(
             "debug_artifacts": debug_artifacts,
             "smoke_skipped": smoke_skipped,
             "require_smoked_catalog_miss": require_smoked_catalog_miss,
+            "block_network": block_network,
         },
         "summary": {
             "passed": passed,
@@ -441,6 +453,22 @@ def fixture_matches_filters(fixture: BenchmarkFixture, filters: list[str]) -> bo
     haystack = f"{fixture.slug} {fixture.image_path.name}".lower()
     normalized_haystack = normalized_words(haystack)
     return any(value in haystack or normalized_words(value) in normalized_haystack for value in filters)
+
+
+@contextmanager
+def benchmark_network_policy(block_network: bool):
+    if not block_network:
+        yield
+        return
+    previous = os.environ.get(NETWORK_BLOCK_ENV)
+    os.environ[NETWORK_BLOCK_ENV] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(NETWORK_BLOCK_ENV, None)
+        else:
+            os.environ[NETWORK_BLOCK_ENV] = previous
 
 
 def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:

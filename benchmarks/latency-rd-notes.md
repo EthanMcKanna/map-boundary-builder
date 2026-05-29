@@ -2389,6 +2389,30 @@ OCR/georeference rather than returning outdated fast-path polygons.
   passed all three in 2.79s. A global catalog-miss requirement is intentionally
   too blunt because reference-mismatch data debt and valid current-verified
   catalog entries are separate policy states.
+- Rejected skipping road refinement under the current drift-aware model. A
+  controlled probe in `out/no-road-refine-probe-20260529/` patched
+  `should_try_road_refinement` off for the road-heavy fixtures. It reduced
+  source complexity but not correctness: Phoenix fell from 0.983 benchmark IoU
+  to 0.898, Nashville fell from 0.986 to 0.799, and stale Miami lost the
+  road-refined source/confidence. Road refinement remains part of the accuracy
+  budget even when it is the slowest no-catalog georeference component.
+- Benchmark network blocking is now explicit. `--block-network` sets
+  `MAP_BOUNDARY_BLOCK_NETWORK=1` during generation, and the geocoder,
+  Overpass-place, and Overpass-road clients honor it by returning cached/seeded
+  data only. This converts earlier ad hoc patched-`urlopen` smokes into a
+  first-class gate. Fresh-cache proof
+  `out/block-network-active-no-catalog-accuracy-20260529/full-report.json`
+  passed the active OCR/georeference benchmark with 8/8 scored fixtures, 7
+  reference mismatches skipped, avg IoU 0.962, min IoU 0.931, total 3.83s, and
+  zero accuracy-regression issues against the existing baseline. The changed
+  Houston/Miami/Bay Area smoke also passed with live network blocked:
+  `out/block-network-drift-smoke-20260529/full-report.json` smoke-checked six
+  drift fixtures with zero failures, and the stricter Waymo-only catalog-miss
+  gate `out/block-network-waymo-catalog-miss-20260529/full-report.json` passed
+  all three OCR/georeference fallbacks with `catalog_slug: null`. A parallel
+  latency-gated run failed only duration checks from local contention while
+  preserving every active IoU, so the blocked-network gate should be treated as
+  a correctness/robustness proof unless run serially for timing.
 
 ## Remaining Bottlenecks
 
