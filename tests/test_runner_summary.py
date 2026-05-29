@@ -5,11 +5,14 @@ import numpy as np
 from PIL import Image
 import pytest
 from shapely.geometry import Polygon, mapping
+from shapely.ops import transform
 
 import map_boundary_builder.runner as runner
+from map_boundary_builder.catalog_match import load_catalog_entries
 from map_boundary_builder.extract import ExtractionResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
 from map_boundary_builder.georeference import GeoreferenceResult
+from map_boundary_builder.ocr import OcrLabel
 from map_boundary_builder.runner import BoundaryBuildResult, build_boundary, build_summary
 
 
@@ -52,6 +55,17 @@ def base_feature_collection(properties: dict) -> dict:
     }
 
 
+def mercator_geometry_to_pixel(geometry):
+    min_x, min_y, max_x, max_y = geometry.bounds
+    width = max_x - min_x
+    height = max_y - min_y
+
+    def to_pixel(x: float, y: float, z: float | None = None) -> tuple[float, float]:
+        return (x - min_x) / width * 1000.0, (max_y - y) / height * 1000.0
+
+    return transform(to_pixel, geometry)
+
+
 def test_summary_exposes_catalog_match_metadata() -> None:
     data = base_feature_collection(
         {
@@ -76,6 +90,53 @@ def test_summary_exposes_catalog_match_metadata() -> None:
     assert summary["catalog_shape_iou"] == 0.984044
     assert summary["catalog_shape_margin"] == 0.42
     assert summary["catalog_area_ratio"] == 1.01
+
+
+def test_provider_ui_label_catalog_match_uses_nearby_selected_area() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))
+    extraction = ExtractionResult(
+        mask=np.zeros((1600, 800), dtype=np.uint8),
+        style="dark-teal",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.15,
+        contour_count=1,
+        confidence=1.0,
+    )
+    min_x, min_y, max_x, max_y = pixel_geometry.bounds
+    labels = [
+        OcrLabel(
+            text="You can ride with Zoox within the highlighted area on the map",
+            x=360,
+            y=1450,
+            width=600,
+            height=32,
+            confidence=96,
+        ),
+        OcrLabel(
+            text="Las Vegas",
+            x=(min_x + max_x) / 2,
+            y=(min_y + max_y) / 2,
+            width=150,
+            height=32,
+            confidence=99,
+        ),
+        OcrLabel(
+            text="San Francisco",
+            x=(min_x + max_x) / 2,
+            y=max_y + 600,
+            width=180,
+            height=32,
+            confidence=99,
+        ),
+    ]
+
+    match = runner.provider_ui_label_catalog_match(extraction, labels)
+
+    assert match is not None
+    assert match.entry.slug == "las-vegas-zoox"
+    assert match.iou < 0.94
+    assert match.confidence >= 0.55
 
 
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:

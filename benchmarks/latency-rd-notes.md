@@ -4682,3 +4682,24 @@ with zero failures in 0.531s.
   pre-change direct API default proof above, server time before send improved
   from `0.741824` to `0.301048`, a 2.46x speedup for direct fresh PNG API
   cache misses with no GeoJSON change.
+- Accepted provider-UI label catalog fallback for screenshots where the
+  provider app itself identifies the service area but UI chrome distorts or
+  obscures the visible polygon. The fallback only runs after OCR, requires a
+  high-confidence provider hint, a nearby high-confidence area label, exactly
+  one active provider/style catalog candidate, and a loose shape fit
+  (`IoU >= 0.50`, area ratio 0.55-2.20). The production baseline on
+  `/Users/ethanmckanna/Downloads/IMG_0071.PNG` took HTTP wall 7.381908s with
+  `build_boundary_s: 6.249073`, OCR 1.371105s, georeference 4.726738s,
+  `ocr-georeference:nominatim-label-fit`, no catalog slug, bbox
+  `[-115.43313,35.8595967,-115.1087062,36.0577567]`, and confidence 0.576.
+  The local candidate returned `catalog-shape-match:provider-ui-label` /
+  `las-vegas-zoox` in 0.573071s total with bbox
+  `[-115.3550119,36.0353866,-115.1830059,36.187696]`, confidence 0.72,
+  `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617`; local
+  stage timing was inspect 0.004750s, extract 0.217718s, OCR 0.343436s,
+  georeference 0.000003s, and export 0.000523s. Focused tests passed 70/70,
+  full pytest passed 217 tests plus 9 subtests, compileall passed, and
+  `git diff --check` passed. The focused Las Vegas smoke and both drift-aware
+  default/no-catalog benchmark gates passed with zero active IoU drops; Houston,
+  Miami, and Bay Area remain drift/reference-mismatch smoke checks because
+  their saved ground truth is known to be stale until refreshed.

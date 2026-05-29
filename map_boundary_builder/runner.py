@@ -14,11 +14,15 @@ from shapely.geometry import shape
 from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_provider_hint,
+    catalog_area_matches_text,
     catalog_style_supported,
     catalog_feature_collection,
     has_active_catalog_area_hint,
     has_stale_catalog_area_hint,
+    load_catalog_entries,
+    match_catalog_entry,
     match_service_area_catalog,
+    PROVIDER_STYLES,
 )
 from .extract import (
     DEFAULT_SIMPLIFY_PX,
@@ -67,6 +71,11 @@ CATALOG_MISS_REFINE_MAX_DIMENSION = max(
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
+PROVIDER_UI_LABEL_MIN_CONFIDENCE = 92.0
+PROVIDER_UI_LABEL_MIN_IOU = 0.50
+PROVIDER_UI_LABEL_MIN_AREA_RATIO = 0.55
+PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
+PROVIDER_UI_LABEL_CONFIDENCE = 0.72
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
@@ -507,6 +516,23 @@ def build_boundary(
             "top_labels": [label.text for label in labels[:8]],
         },
     )
+    if city_input is None and allow_catalog:
+        provider_ui_match = provider_ui_label_catalog_match(extraction, labels)
+        if provider_ui_match is not None:
+            return finish_catalog_boundary_result(
+                extraction,
+                provider_ui_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input="Auto",
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                rgb=rgb,
+                progress=progress,
+                georeference_source="catalog-shape-match:provider-ui-label",
+            )
     if city_input is None and allow_catalog and should_try_label_hinted_catalog(width, height, labels):
         label_hints = high_confidence_label_texts(labels)
         catalog_match = match_service_area_catalog(
@@ -853,6 +879,66 @@ def high_confidence_label_texts(labels: list[Any]) -> list[str]:
         for label in labels
         if label.text.strip() and label.confidence >= CATALOG_LABEL_HINT_MIN_CONFIDENCE
     ]
+
+
+def provider_ui_label_catalog_match(extraction, labels: list[Any]):
+    provider = provider_ui_label_provider(labels)
+    if provider is None or extraction.style not in PROVIDER_STYLES.get(provider, set()):
+        return None
+
+    nearby_texts = provider_ui_nearby_area_texts(labels, extraction.pixel_geometry.bounds)
+    if not nearby_texts:
+        return None
+    candidates = [
+        entry
+        for entry in load_catalog_entries()
+        if (
+            entry.is_active
+            and entry.provider == provider
+            and extraction.style in PROVIDER_STYLES.get(entry.provider, set())
+            and any(catalog_area_matches_text(entry.area, text) for text in nearby_texts)
+        )
+    ]
+    if len(candidates) != 1:
+        return None
+    return match_catalog_entry(
+        extraction.pixel_geometry,
+        candidates[0],
+        min_iou=PROVIDER_UI_LABEL_MIN_IOU,
+        min_area_ratio=PROVIDER_UI_LABEL_MIN_AREA_RATIO,
+        max_area_ratio=PROVIDER_UI_LABEL_MAX_AREA_RATIO,
+        confidence_override=PROVIDER_UI_LABEL_CONFIDENCE,
+    )
+
+
+def provider_ui_label_provider(labels: list[Any]) -> str | None:
+    high_confidence_text = " ".join(
+        label.text for label in labels if label.confidence >= PROVIDER_UI_LABEL_MIN_CONFIDENCE
+    )
+    return catalog_provider_hint(high_confidence_text)
+
+
+def provider_ui_nearby_area_texts(
+    labels: list[Any],
+    bounds: tuple[float, float, float, float],
+) -> list[str]:
+    return [
+        label.text
+        for label in labels
+        if (
+            label.confidence >= PROVIDER_UI_LABEL_MIN_CONFIDENCE
+            and label_near_extracted_geometry(label, bounds)
+        )
+    ]
+
+
+def label_near_extracted_geometry(label: Any, bounds: tuple[float, float, float, float]) -> bool:
+    min_x, min_y, max_x, max_y = bounds
+    width = max(1.0, max_x - min_x)
+    height = max(1.0, max_y - min_y)
+    pad_x = max(60.0, width * 0.35)
+    pad_y = max(60.0, height * 0.35)
+    return (min_x - pad_x) <= label.x <= (max_x + pad_x) and (min_y - pad_y) <= label.y <= (max_y + pad_y)
 
 
 def finish_catalog_boundary_result(

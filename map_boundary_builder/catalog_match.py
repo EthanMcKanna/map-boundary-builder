@@ -68,11 +68,13 @@ class ServiceAreaCatalogMatch:
     origin_x: float
     origin_y: float
     rotation_degrees: float
+    confidence_override: float | None = None
 
     @property
     def confidence(self) -> float:
         max_confidence = self.entry.max_confidence if self.entry.max_confidence is not None else 0.99
-        return min(0.99, max_confidence, max(0.0, self.iou))
+        evidence_confidence = self.iou if self.confidence_override is None else self.confidence_override
+        return min(0.99, max_confidence, max(0.0, evidence_confidence))
 
 
 def match_service_area_catalog(
@@ -107,9 +109,61 @@ def match_service_area_catalog(
     if not (CATALOG_MIN_AREA_RATIO <= best_area_ratio <= CATALOG_MAX_AREA_RATIO):
         return None
 
-    fitted_lonlat = transform(mercator_to_lonlat, best_fitted)
+    return catalog_match_from_score(
+        pixel_geometry,
+        best_entry,
+        iou=best_iou,
+        area_ratio=best_area_ratio,
+        margin=margin,
+        fitted_mercator_geometry=best_fitted,
+        rotation_degrees=rotation_degrees,
+    )
+
+
+def match_catalog_entry(
+    pixel_geometry: Polygon | MultiPolygon,
+    entry: ServiceAreaCatalogEntry,
+    *,
+    min_iou: float,
+    min_area_ratio: float = CATALOG_MIN_AREA_RATIO,
+    max_area_ratio: float = CATALOG_MAX_AREA_RATIO,
+    confidence_override: float | None = None,
+) -> ServiceAreaCatalogMatch | None:
+    best_iou, best_area_ratio, _entry, best_fitted, rotation_degrees = score_catalog_entry(
+        pixel_geometry,
+        entry,
+        min_iou=min_iou,
+    )
+    if best_iou < min_iou:
+        return None
+    if not (min_area_ratio <= best_area_ratio <= max_area_ratio):
+        return None
+    return catalog_match_from_score(
+        pixel_geometry,
+        entry,
+        iou=best_iou,
+        area_ratio=best_area_ratio,
+        margin=best_iou,
+        fitted_mercator_geometry=best_fitted,
+        rotation_degrees=rotation_degrees,
+        confidence_override=confidence_override,
+    )
+
+
+def catalog_match_from_score(
+    pixel_geometry: Polygon | MultiPolygon,
+    entry: ServiceAreaCatalogEntry,
+    *,
+    iou: float,
+    area_ratio: float,
+    margin: float,
+    fitted_mercator_geometry: Polygon | MultiPolygon,
+    rotation_degrees: float,
+    confidence_override: float | None = None,
+) -> ServiceAreaCatalogMatch:
+    fitted_lonlat = transform(mercator_to_lonlat, fitted_mercator_geometry)
     min_x, min_y, max_x, max_y = pixel_geometry.bounds
-    ref_min_x, ref_min_y, ref_max_x, ref_max_y = best_entry.mercator_geometry.bounds
+    ref_min_x, ref_min_y, ref_max_x, ref_max_y = entry.mercator_geometry.bounds
     pixel_width = max(1.0, max_x - min_x)
     pixel_height = max(1.0, max_y - min_y)
     meters_per_pixel = ((ref_max_x - ref_min_x) / pixel_width + (ref_max_y - ref_min_y) / pixel_height) / 2.0
@@ -118,11 +172,11 @@ def match_service_area_catalog(
     origin_lon, origin_lat = mercator_to_lonlat((ref_min_x + ref_max_x) / 2.0, (ref_min_y + ref_max_y) / 2.0)
 
     return ServiceAreaCatalogMatch(
-        entry=best_entry,
-        iou=best_iou,
-        area_ratio=best_area_ratio,
+        entry=entry,
+        iou=iou,
+        area_ratio=area_ratio,
         margin=margin,
-        fitted_mercator_geometry=best_fitted,
+        fitted_mercator_geometry=fitted_mercator_geometry,
         fitted_lonlat_geometry=fitted_lonlat,
         meters_per_pixel=meters_per_pixel,
         origin_lon=origin_lon,
@@ -130,6 +184,7 @@ def match_service_area_catalog(
         origin_x=origin_x,
         origin_y=origin_y,
         rotation_degrees=rotation_degrees,
+        confidence_override=confidence_override,
     )
 
 
