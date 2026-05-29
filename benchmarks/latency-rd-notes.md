@@ -2502,19 +2502,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   screenshot remains outside the sub-second arbitrary-map goal at 2.91s server
   time before send, dominated by 2.56s OCR, so the next real breakthrough still
   has to attack OCR latency without losing generality.
-- The warmup path now initializes both common RapidOCR detector sessions with
-  the same tiny synthetic sample: the default 608px detector used by native
-  moderate-size uploads and the 640px detector used by resized large screenshots.
-  This specifically targets the production Avride Dallas finding where the
-  cron/browser warmup had heated the 640px session, but the first unique 1400px
-  upload still paid the cold 608px session cost. Local warmup verification
-  reported `rapidocr_warm_detector_limits: [608, 640]`, first warmup
-  `rapidocr_s` 0.415s, and repeat warmup effectively free. The full current
-  no-catalog/block-network regression gate
-  `out/warm-both-detectors-full-20260529/full-report.json` passed 8/8 scored
-  fixtures, skipped the seven known reference mismatches, kept avg IoU 0.962
-  and min IoU 0.931, and reported zero regression issues against
-  `out/block-network-active-no-catalog-accuracy-20260529/full-report.json`.
+- Rejected warming both RapidOCR detector sessions as a production default.
+  The hypothesis was that `/api/health?warm=ocr` warmed the 640px detector used
+  by resized large screenshots but missed the 608px detector used by native
+  moderate-size uploads such as the 1400px Avride Dallas image. Local validation
+  showed no accuracy regression (`out/warm-both-detectors-full-20260529/full-report.json`
+  passed the full no-catalog/block-network regression gate) and local warmup
+  still repeated for free, but production did not show a user-latency win:
+  deploy `dpl_7krYLrhT4expsYzdf5bSFWnx1LGn` reported a heavier warm call
+  (`rapidocr_s` 3.036s, total 3.888s), and a pixel-busted Avride Dallas upload
+  after warmup still spent 2.424s in OCR and 2.837s server time before send.
+  The code was reverted; keep the cheaper single-detector warmup until there is
+  stronger evidence of instance-local benefit.
 
 ## Remaining Bottlenecks
 
