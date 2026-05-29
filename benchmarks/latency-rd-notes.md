@@ -3698,3 +3698,24 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Tesla Houston, Tesla Bay Area, and Zoox Bay Area now return current external
   catalog geometry, while Waymo Houston, Waymo Miami, and Waymo Bay Area remain
   OCR/georeference smoke cases against stale saved references.
+- Production deployment `dpl_HhWsNDqW7LKPfrB35Kt6bJbkaJnW` is aliased to
+  `https://mapboundary.app` and reports `pipeline-2a3d652d82fd1a16` from both
+  `/api/health` and the root HTML. The custom domain initially remained on
+  `pipeline-08ff7baeceffdb00`, so the deployment was explicitly aliased with
+  `vercel alias set` from the deployment URL to `mapboundary.app`. Warm health
+  returned `rapidocr_inference_warmed: true`,
+  `catalog_entries: 18`, and `total_s: 2.039021`. Cache-busted production Miami
+  Waymo road-refine smokes confirmed the new `road_match_elapsed_s` property on
+  the live API: the first cold-ish miss preserved bbox
+  `[-80.3230932,25.6879523,-80.1186554,25.9397748]`, confidence 0.864,
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, and
+  `road_match_elapsed_s: 0.785179` at `total_before_send_s: 6.315964`; the
+  repeated raw-cache hit returned the same summary at `total_before_send_s:
+  0.003044`; a warmed cache-busted miss returned the same summary with
+  `road_match_elapsed_s: 0.269953` at `total_before_send_s: 1.033488`; and a
+  third warmed cache-busted miss returned the same summary with
+  `road_match_elapsed_s: 0.237698`, OCR 0.107559s, georeference 0.277265s,
+  build 0.904655s, and total 0.911042s. This gives a live production proof
+  point that the warm arbitrary OCR/georeference road-refine path can run
+  sub-second without changing geometry/confidence, while cold platform routing
+  still needs separate mitigation.
