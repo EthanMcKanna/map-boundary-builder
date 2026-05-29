@@ -770,16 +770,10 @@ function scheduleGenerationRuntimePrewarm() {
 }
 
 function cancelPendingGenerationRuntimePrewarm() {
-  if (generationRuntimePrewarmAbortController) {
-    generationRuntimePrewarmAbortController.abort();
-    generationRuntimePrewarmAbortController = null;
-    generationRuntimePrewarm = null;
-    generationRuntimePrewarmScheduled = false;
+  if (generationRuntimePrewarm) {
     return;
   }
-  if (!generationRuntimePrewarm) {
-    generationRuntimePrewarmScheduled = false;
-  }
+  generationRuntimePrewarmScheduled = false;
 }
 
 async function prepareRunImage(file) {

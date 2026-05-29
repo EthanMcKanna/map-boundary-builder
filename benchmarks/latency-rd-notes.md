@@ -4329,3 +4329,16 @@ with zero failures in 0.531s.
   0.943, and no-catalog
   `out/generic-miss-handoff-nocatalog-20260529/full-report.json` stayed green
   at avg IoU 0.962/min 0.931 against the generic-probe baselines.
+- Browser warmup preservation: the app already schedules `/api/health?warm=ocr`
+  on page load and after image selection, but the submit path aborted an
+  already-started warmup when a user clicked Build immediately. Since Vercel
+  request cancellation can discard exactly the Python/RapidOCR instance we want
+  hot, the client now only clears not-yet-started warmups and lets in-flight
+  prewarm requests finish while the upload proceeds. This does not change
+  extraction, OCR, georeference, catalog matching, or API semantics; it makes
+  the existing warm path less fragile for impatient first-run users. Local
+  Playwright held `/api/health?warm=ocr` open, clicked Build during the
+  in-flight warmup, and verified the health request fulfilled rather than
+  aborting (`healthRequested: 1`, `healthFulfilled: 1`, `healthFailed: 0`) while
+  the generation completed. Focused warmup/API tests passed 33 tests, and
+  `node --check map_boundary_builder/web_assets/app.js` passed.
