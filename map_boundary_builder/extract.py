@@ -74,21 +74,25 @@ def extract_service_area(
     *,
     rgb: np.ndarray | None = None,
     max_dimension: int | None = None,
+    cache: bool = True,
 ) -> ExtractionResult:
     if rgb is None:
         rgb = load_rgb(image_path)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
-    canonical_rgb, canonical_origin = canonical_extract_rgb(rgb)
-    canonical_key = extraction_visual_cache_key(
-        canonical_rgb,
-        simplify_px=simplify_px,
-        max_dimension=max_dimension,
-    )
-    if canonical_key is not None:
-        cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
-        if cached is not None:
-            return cached
+    canonical_key: str | None = None
+    canonical_origin = (0.0, 0.0)
+    if cache:
+        canonical_rgb, canonical_origin = canonical_extract_rgb(rgb)
+        canonical_key = extraction_visual_cache_key(
+            canonical_rgb,
+            simplify_px=simplify_px,
+            max_dimension=max_dimension,
+        )
+        if canonical_key is not None:
+            cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
+            if cached is not None:
+                return cached
     scale = extraction_scale_factor(rgb, max_dimension)
     if scale < 1.0:
         height, width = rgb.shape[:2]

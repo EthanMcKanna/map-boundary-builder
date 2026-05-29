@@ -99,6 +99,26 @@ class MaskRepairTests(unittest.TestCase):
 
             self.assertEqual(list(cache_dir.glob("*.npz")), [])
 
+    def test_cache_false_bypasses_memory_cache(self) -> None:
+        base = np.full((80, 100, 3), 255, dtype=np.uint8)
+        base[24:58, 30:74] = (46, 119, 246)
+
+        with TemporaryDirectory() as workdir:
+            with patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)):
+                _EXTRACTION_MEMORY_CACHE.clear()
+                try:
+                    with patch.object(
+                        extract_module,
+                        "extract_service_area_from_rgb",
+                        wraps=extract_module.extract_service_area_from_rgb,
+                    ) as wrapped:
+                        extract_service_area("base.png", rgb=base)
+                        extract_service_area("base.png", rgb=base, cache=False)
+                finally:
+                    _EXTRACTION_MEMORY_CACHE.clear()
+
+        self.assertEqual(wrapped.call_count, 2)
+
     def test_canonical_extraction_disk_cache_can_be_enabled(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
         base[24:58, 30:74] = (46, 119, 246)

@@ -199,6 +199,7 @@ def build_boundary(
             simplify_px=opts.simplify_px,
             rgb=rgb,
             max_dimension=extraction_max_dimension,
+            cache=not allow_pre_ocr_catalog,
         )
         emit_progress(
             progress,
@@ -294,6 +295,7 @@ def build_boundary(
                 simplify_px=opts.simplify_px,
                 rgb=rgb,
                 max_dimension=CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+                cache=False,
             )
             catalog_match = match_service_area_catalog(
                 retry_extraction.pixel_geometry,

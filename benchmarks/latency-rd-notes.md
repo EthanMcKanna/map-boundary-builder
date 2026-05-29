@@ -4083,3 +4083,24 @@ with zero failures in 0.531s.
   smoked duration. Current catalog-backed hits remain allowed only because the
   catalog metadata is refreshed or current-verified; the stale saved
   screenshot/reference pairs are still excluded from model-regression scoring.
+- Low-resolution pre-OCR catalog probes now skip extraction visual-cache
+  lookup/write work. Exact/API result caches already handle repeat known-map
+  uploads, while the refined fall-through extraction still keeps the canonical
+  cache used by bordered/padded variants. The change preserves extraction,
+  OCR, georeference, and output geometry; it only avoids hashing/cache
+  bookkeeping on the cheap 240px/400px catalog guard passes. Focused
+  extraction/runner tests passed 17/17. Fresh validation stayed green:
+  `out/probe-cacheoff-default-20260529/full-report.json` passed 8/8 scored
+  fixtures with seven `reference_mismatch` skips, avg IoU 0.992917, min IoU
+  0.943345, total active duration 0.476068s, and max active duration
+  0.084070s; `out/probe-cacheoff-nocatalog-20260529/full-report.json`
+  preserved the arbitrary no-catalog gate at avg IoU 0.961733, min IoU
+  0.931476, max active duration 0.874834s; and
+  `out/probe-cacheoff-changed-smoke-20260529/full-report.json` passed all six
+  Houston/Miami/Bay Area `reference_mismatch` smokes in 0.346s total. Real
+  arbitrary stress probes with the patch preserved 1.0 IoU versus the prior
+  accepted outputs for Austin Robotaxi, Houston Waymo, Miami Waymo, and Zoox
+  San Francisco. Rejected nearby probe: lowering the global catalog-miss refine
+  cap to 1200/1300 sped some bright-blue fall-throughs but moved the dark-teal
+  Zoox San Francisco output to about 0.814 IoU versus the accepted output, so
+  the 1400px refine cap stays unchanged.

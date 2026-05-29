@@ -135,9 +135,11 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
         confidence=1.0,
     )
     max_dimensions: list[int] = []
+    cache_flags: list[bool] = []
 
     def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
         max_dimensions.append(max_dimension)
+        cache_flags.append(_kwargs.get("cache", True))
         return extraction
 
     ocr_rgb_shapes: list[tuple[int, ...]] = []
@@ -176,6 +178,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
         runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
+    assert cache_flags[:2] == [False, True]
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
@@ -205,9 +208,11 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
         confidence=1.0,
     )
     max_dimensions: list[int] = []
+    cache_flags: list[bool] = []
 
     def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
         max_dimensions.append(max_dimension)
+        cache_flags.append(_kwargs.get("cache", True))
         if max_dimension == runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION:
             return retry_extraction
         return coarse_extraction
@@ -258,6 +263,7 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
         runner.CATALOG_EXTRACT_MAX_DIMENSION,
         runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
     ]
+    assert cache_flags == [False, False]
     assert result.summary["catalog_slug"] == "bay-area-tesla"
     assert result.summary["georeference_source"] == "catalog-shape-match:retry"
 
