@@ -3668,3 +3668,33 @@ OCR/georeference rather than returning outdated fast-path polygons.
   sweeps at 1500 and 1550 were rejected: both made Phoenix slower and less
   accurate, while 1600 still preserves the accuracy floor but can miss the
   one-second gate under noisy cold timing.
+- Road-refinement timing is now exposed in generated GeoJSON summaries as
+  `road_match_elapsed_s` when OSM road refinement is accepted. This is
+  observability, not an accuracy-changing optimization, but it separates the
+  remaining no-catalog tail into OCR versus road-fit cost for production-shaped
+  traces. A direct Phoenix no-catalog run
+  `out/road-elapsed-phoenix-20260529/out.geojson` preserved
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, bbox
+  `[-112.1164072, 33.2319356, -111.8164435, 33.6890316]`, confidence 0.908,
+  and `road_match_score: 0.706233`, with `road_match_elapsed_s: 0.273544`,
+  OCR stage 0.896881s, georeference stage 0.337335s, and total 1.360157s.
+  Earlier same-session probes rejected skipping road refinement: Phoenix fell
+  from IoU 0.983320 to 0.898017 when road refinement was monkeypatched off, and
+  merged-control label-only fits stayed around 0.893-0.900 IoU. RapidOCR split
+  probes showed the remaining OCR wall comes from detector plus recognition
+  variance, with Phoenix detector/recognition timings ranging roughly
+  0.180-0.618s and 0.391-0.745s in repeated warm runs. Validation passed
+  193/193 pytest, compileall, `node --check`, and `git diff --check`; default
+  active benchmark `out/road-elapsed-default-20260529/full-report.json` passed
+  8/8 scored with avg IoU 0.992917/min 0.943345/max duration 0.090988s; the
+  no-catalog arbitrary benchmark
+  `out/road-elapsed-nocatalog-20260529/full-report.json` passed 8/8 scored with
+  avg IoU 0.961670/min 0.931476/max duration 0.986531s; and the corrected
+  changed-market smoke
+  `out/road-elapsed-changed-smoke-allowcatalog-20260529/full-report.json`
+  smoke-checked all six Houston/Miami/Bay Area `reference_mismatch` fixtures
+  with zero failures. The stricter `--require-smoked-catalog-miss` drift smoke
+  is intentionally not the right gate for current-external catalog entries:
+  Tesla Houston, Tesla Bay Area, and Zoox Bay Area now return current external
+  catalog geometry, while Waymo Houston, Waymo Miami, and Waymo Bay Area remain
+  OCR/georeference smoke cases against stale saved references.

@@ -7,6 +7,7 @@ from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
 import os
 import re
+import time
 
 import cv2
 import numpy as np
@@ -342,6 +343,7 @@ class GeoreferenceResult:
     residual_median_m: float
     residual_p90_m: float
     road_match: RoadMatchResult | None = None
+    road_match_elapsed_s: float | None = None
 
 
 @dataclass(frozen=True)
@@ -788,6 +790,7 @@ def georeference_from_label_context(
                     )
                     spread = control_spread(pixel_positions(controls, inliers))
                     road_refinement = None
+                    road_refinement_elapsed_s = None
                     if should_try_road_refinement(
                         city_context,
                         scale,
@@ -804,6 +807,7 @@ def georeference_from_label_context(
                             road_rgb = load_rgb(image_path)
                         else:
                             road_rgb = rgb
+                        road_started = time.perf_counter()
                         road_refinement = refine_transform_with_osm_roads(
                             road_rgb,
                             city_center,
@@ -819,6 +823,7 @@ def georeference_from_label_context(
                             ),
                             feature_distance=road_feature_distance,
                         )
+                        road_refinement_elapsed_s = max(0.0, time.perf_counter() - road_started)
                     if road_refinement is not None:
                         refined_residuals = control_residuals_for_transform(
                             road_refinement.transform,
@@ -835,12 +840,14 @@ def georeference_from_label_context(
                             geo_transform = road_refinement.transform
                         else:
                             road_refinement = None
+                            road_refinement_elapsed_s = None
                     return GeoreferenceResult(
                         transform=geo_transform,
                         control_points=[controls[i] for i in inliers],
                         residual_median_m=residual_median,
                         residual_p90_m=residual_p90,
                         road_match=road_refinement,
+                        road_match_elapsed_s=road_refinement_elapsed_s,
                     )
     return None
 

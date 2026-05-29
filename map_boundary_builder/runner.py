@@ -486,6 +486,8 @@ def build_boundary(
         properties["road_match_score"] = georef.road_match.score
         properties["road_match_base_score"] = georef.road_match.base_score
         properties["road_match_sampled_points"] = georef.road_match.sampled_points
+        if georef.road_match_elapsed_s is not None:
+            properties["road_match_elapsed_s"] = round(georef.road_match_elapsed_s, 6)
         if georef.road_match.anchor_label is not None:
             properties["road_match_anchor_label"] = georef.road_match.anchor_label.text
 
@@ -1093,6 +1095,7 @@ def build_summary(
         "median_residual_m": round(properties["georeference_residual_median_m"], 1),
         "p90_residual_m": round(properties["georeference_residual_p90_m"], 1),
         "road_match_score": properties.get("road_match_score"),
+        "road_match_elapsed_s": properties.get("road_match_elapsed_s"),
         "mask": str(mask_path) if mask_path else None,
         "overlay": str(overlay_path) if overlay_path else None,
     }

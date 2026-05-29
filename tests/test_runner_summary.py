@@ -96,6 +96,29 @@ def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     assert summary["catalog_area_ratio"] is None
 
 
+def test_summary_exposes_road_refinement_elapsed_time() -> None:
+    data = base_feature_collection(
+        {
+            "georeference_source": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+            "road_match_score": 0.706233,
+            "road_match_elapsed_s": 0.312345,
+        }
+    )
+
+    summary = build_summary(
+        data,
+        output_path=Path("boundary.geojson"),
+        city="Auto",
+        width=2400,
+        height=2400,
+        mask_path=None,
+        overlay_path=None,
+    )
+
+    assert summary["road_match_score"] == 0.706233
+    assert summary["road_match_elapsed_s"] == 0.312345
+
+
 def test_catalog_miss_refines_at_general_processing_cap(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unknown-waymo.png"
     Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
