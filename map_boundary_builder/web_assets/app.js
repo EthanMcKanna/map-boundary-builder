@@ -93,9 +93,58 @@ const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
 const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v4";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v5";
 const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
+const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
+  "app",
+  "boundary",
+  "boundaries",
+  "bust",
+  "cache",
+  "capture",
+  "copy",
+  "coverage",
+  "current",
+  "final",
+  "frame",
+  "geojson",
+  "gif",
+  "hint",
+  "image",
+  "img",
+  "jpeg",
+  "jpg",
+  "latency",
+  "map",
+  "maps",
+  "operating",
+  "pipeline",
+  "png",
+  "prod",
+  "production",
+  "proof",
+  "run",
+  "screenshot",
+  "service",
+  "small",
+  "snap",
+  "tif",
+  "tiff",
+  "ui",
+  "upload",
+  "variant",
+  "version",
+  "web",
+  "webp",
+]);
+const FILENAME_HINT_CACHE_ALLOWED_PHRASES = [
+  ["bay", "area"],
+  ["las", "vegas"],
+  ["los", "angeles"],
+  ["san", "antonio"],
+  ["san", "francisco"],
+];
 const RUN_BUTTON_LABELS = {
   empty: "Choose image",
   ready: "Build boundary",
@@ -725,7 +774,7 @@ async function buildRunCacheKeys(file, formData) {
     const pipelineVersion = await fetchRunCachePipelineVersion();
     if (!pipelineVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
     const settingsSignature = JSON.stringify({
-      filename_hint: file.name || "",
+      filename_hint: filenameHintCacheValue(file.name || ""),
       settings: Object.fromEntries(
         RUN_CACHE_SETTING_FIELDS.map((field) => [field, String(formData.get(field) ?? "")]),
       ),
@@ -776,6 +825,42 @@ function cacheKeysForHashes({ pipelineVersion, settingsHash, rawImageHash, pixel
     keys.push(runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash));
   }
   return [...new Set(keys)];
+}
+
+function filenameHintCacheValue(filename) {
+  if (!filename) return "";
+  const baseName = filename.split(/[\\/]/).pop() || "";
+  const extensionMatch = baseName.match(/\.([^.]+)$/);
+  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  const stem = extensionMatch ? baseName.slice(0, -extensionMatch[0].length) : baseName;
+  const rawTokens = stem
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 2 && !/[0-9]/.test(token));
+  const protectedIndexes = filenameHintCachePhraseIndexes(rawTokens);
+  const seen = new Set();
+  const tokens = [];
+  rawTokens.forEach((token, index) => {
+    if (!protectedIndexes.has(index) && FILENAME_HINT_CACHE_NOISE_TOKENS.has(token)) return;
+    if (seen.has(token)) return;
+    seen.add(token);
+    tokens.push(token);
+  });
+  const tokenPart = tokens.join(" ");
+  return extension ? `${extension}:${tokenPart}` : tokenPart;
+}
+
+function filenameHintCachePhraseIndexes(tokens) {
+  const protectedIndexes = new Set();
+  FILENAME_HINT_CACHE_ALLOWED_PHRASES.forEach((phrase) => {
+    const size = phrase.length;
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+      if (phrase.every((token, offset) => tokens[index + offset] === token)) {
+        phrase.forEach((_token, offset) => protectedIndexes.add(index + offset));
+      }
+    }
+  });
+  return protectedIndexes;
 }
 
 async function rawImageContentHash(file) {

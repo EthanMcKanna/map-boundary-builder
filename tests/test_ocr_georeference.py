@@ -1522,12 +1522,16 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
     def test_filename_context_queries_extract_city_without_provider_noise(self) -> None:
         queries = filename_context_queries("Avride Dallas df72214 small variant.png")
+        cache_bust_queries = filename_context_queries(
+            "avride-dallas-pipeline-version-1780067151-e527924-ui.png"
+        )
 
         self.assertIn("Dallas", queries)
         self.assertNotIn("Avride Dallas", queries)
         self.assertNotIn("Small Variant", queries)
         self.assertNotIn("Dallas Png", queries)
         self.assertNotIn("Variant Png", queries)
+        self.assertEqual(cache_bust_queries, ["Dallas"])
 
     def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
         dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")

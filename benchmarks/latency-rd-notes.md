@@ -3467,3 +3467,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   different filename missed the run-result cache but reused warm
   extraction/OCR caches for the same visual content, preserving the Dallas
   bbox/source at `build_boundary_s: 0.133s` and `total_before_send_s: 0.140s`.
+- Added semantic filename-hint cache normalization for browser and server run
+  caches. The cache key now strips upload/cache-bust noise and digit/hex suffixes
+  while preserving extension, provider, city, and multi-word area phrases, so
+  identical uploads like `avride-dallas-pipeline-version-...png` and
+  `avride-dallas-ui-...png` can share a raw run-cache key without collapsing
+  provider-sensitive hints such as `waymo bay area` versus `tesla bay area`.
+  The actual filename-context parser now ignores the same technical noise tokens,
+  keeping cache semantics aligned with inference behavior. Validation passed
+  183/183 pytest, compileall, `node --check`, and `git diff --check`. Default
+  in-process no-network benchmark
+  `out/filename-cache-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped the 7 reference mismatches, avg IoU 0.992917, min IoU
+  0.943345, max active duration 0.943s. No-catalog gate
+  `out/filename-cache-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.961670, min IoU 0.931476. Changed-market no-network smoke
+  `out/filename-cache-changed-smoke-20260529/full-report.json` passed six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures and kept
+  the drifted Waymo screenshots on OCR/georeference with `catalog_slug: null`.

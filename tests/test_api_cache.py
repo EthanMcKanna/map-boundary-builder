@@ -203,19 +203,37 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_mask_options)
         self.assertNotEqual(base, changed_overlay_mode)
 
-    def test_run_cache_filename_hint_uses_basename(self) -> None:
+    def test_run_cache_filename_hint_uses_semantic_basename(self) -> None:
         options = BoundaryBuildOptions(filename_hint="/tmp/uploads/Dallas.png")
         same_basename = BoundaryBuildOptions(filename_hint="Dallas.png")
         different_basename = BoundaryBuildOptions(filename_hint="Phoenix.png")
+        same_context_cache_bust = BoundaryBuildOptions(
+            filename_hint="Dallas pipeline-version-1780067151-e527924-ui.png"
+        )
 
-        self.assertEqual(filename_hint_cache_value(options.filename_hint), "Dallas.png")
+        self.assertEqual(filename_hint_cache_value(options.filename_hint), "png:dallas")
         self.assertEqual(
             run_result_cache_key(b"image-a", None, options),
             run_result_cache_key(b"image-a", None, same_basename),
         )
+        self.assertEqual(
+            run_result_cache_key(b"image-a", None, options),
+            run_result_cache_key(b"image-a", None, same_context_cache_bust),
+        )
         self.assertNotEqual(
             run_result_cache_key(b"image-a", None, options),
             run_result_cache_key(b"image-a", None, different_basename),
+        )
+
+    def test_run_cache_filename_hint_preserves_provider_and_multiword_area(self) -> None:
+        waymo = BoundaryBuildOptions(filename_hint="Waymo Bay Area screenshot-1780067151.png")
+        tesla = BoundaryBuildOptions(filename_hint="Tesla Bay Area screenshot-1780067151.png")
+
+        self.assertEqual(filename_hint_cache_value(waymo.filename_hint), "png:waymo bay area")
+        self.assertEqual(filename_hint_cache_value(tesla.filename_hint), "png:tesla bay area")
+        self.assertNotEqual(
+            run_result_cache_key(b"image-a", None, waymo),
+            run_result_cache_key(b"image-a", None, tesla),
         )
 
     def test_run_cache_key_depends_on_pipeline_version(self) -> None:

@@ -35,7 +35,7 @@ MAX_INLINE_OVERLAY_BYTES = 1_800_000
 INLINE_OVERLAY_OPTIMIZE_BYTES = 64_000
 INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation"
-RUN_RESULT_CACHE_VERSION = "run-result-v5"
+RUN_RESULT_CACHE_VERSION = "run-result-v6"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
@@ -47,6 +47,55 @@ JPEG_COMMENT_MARKER = 0xFE
 JPEG_START_OF_SCAN_MARKER = 0xDA
 JPEG_END_OF_IMAGE = b"\xff\xd9"
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
+FILENAME_HINT_CACHE_NOISE_TOKENS = {
+    "app",
+    "boundary",
+    "boundaries",
+    "bust",
+    "cache",
+    "capture",
+    "copy",
+    "coverage",
+    "current",
+    "final",
+    "frame",
+    "geojson",
+    "gif",
+    "hint",
+    "image",
+    "img",
+    "jpeg",
+    "jpg",
+    "latency",
+    "map",
+    "maps",
+    "operating",
+    "pipeline",
+    "png",
+    "prod",
+    "production",
+    "proof",
+    "run",
+    "screenshot",
+    "service",
+    "small",
+    "snap",
+    "tif",
+    "tiff",
+    "ui",
+    "upload",
+    "variant",
+    "version",
+    "web",
+    "webp",
+}
+FILENAME_HINT_CACHE_ALLOWED_PHRASES = {
+    ("bay", "area"),
+    ("las", "vegas"),
+    ("los", "angeles"),
+    ("san", "antonio"),
+    ("san", "francisco"),
+}
 
 
 class RequestError(ValueError):
@@ -602,7 +651,38 @@ def run_result_cache_key_for_hash(
 def filename_hint_cache_value(filename_hint: object) -> str:
     if not filename_hint:
         return ""
-    return Path(str(filename_hint)).name
+    filename = Path(str(filename_hint)).name
+    path = Path(filename)
+    extension = path.suffix.lower().lstrip(".")
+    raw_tokens = [
+        token
+        for token in re.split(r"[^a-z0-9]+", path.stem.lower())
+        if len(token) >= 2 and not any(char.isdigit() for char in token)
+    ]
+    protected_indexes = filename_hint_cache_phrase_indexes(raw_tokens)
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for index, token in enumerate(raw_tokens):
+        if index not in protected_indexes and token in FILENAME_HINT_CACHE_NOISE_TOKENS:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    token_part = " ".join(tokens)
+    if extension:
+        return f"{extension}:{token_part}"
+    return token_part
+
+
+def filename_hint_cache_phrase_indexes(tokens: list[str]) -> set[int]:
+    protected: set[int] = set()
+    for phrase in FILENAME_HINT_CACHE_ALLOWED_PHRASES:
+        size = len(phrase)
+        for index in range(0, max(0, len(tokens) - size + 1)):
+            if tuple(tokens[index : index + size]) == phrase:
+                protected.update(range(index, index + size))
+    return protected
 
 
 def normalized_image_sha256(image_bytes: bytes) -> str:
