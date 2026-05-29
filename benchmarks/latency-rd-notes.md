@@ -1944,6 +1944,21 @@ OCR/georeference rather than returning outdated fast-path polygons.
   0.943, total 0.47s. The no-catalog gate
   `out/lowres-shape-no-catalog-20260529/full-report.json` passed 8/8, skipped
   7 reference mismatches, avg IoU 0.962, min IoU 0.931, total 3.84s.
+- Production low-res shape deployment `dpl_7DvCn3QkCCBL2y7T4ShEHq2ScT1L` was
+  built with Vercel CLI 54.6.1 via `npx -y vercel@latest`, aliased to
+  `https://mapboundary.app`, and reports `pipeline-c51cc3870394687c` with
+  `tesseract: null`. The first attempted deployment excluded `uv.lock` and
+  failed runtime dependency installation, so `vercel.json` now excludes build
+  byproducts while preserving the generated runtime lockfile. The corrected
+  build returned to the 296.59 MB pre-runtime-installation bundle. Cache-busted
+  production smokes at `out/prod-lowres-shape-fixed-smoke-20260529/report.json`
+  confirmed issue #5 now uses `catalog-shape-match:low-res-shape`: first server
+  build 0.126s and warmed repeat 0.050s, both with `nashville-waymo`, confidence
+  0.951, shape IoU 0.951, and the expected bbox. Phoenix stayed on
+  `catalog-shape-match` with a 0.229s server build. Bay Area Waymo, Houston
+  Waymo, and Miami Waymo remained off catalog shortcuts with `catalog_slug:
+  null` and OCR/georeference sources, preserving the user-confirmed
+  stale-ground-truth guard.
 
 ## Remaining Bottlenecks
 
