@@ -46,7 +46,11 @@ from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
-from .runtime_config import RAPIDOCR_MAX_DIMENSION, RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+from .runtime_config import (
+    PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
+    RAPIDOCR_MAX_DIMENSION,
+    RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
+)
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
@@ -76,6 +80,8 @@ PROVIDER_UI_LABEL_MIN_IOU = 0.50
 PROVIDER_UI_LABEL_MIN_AREA_RATIO = 0.55
 PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
+PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal"}
+PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
@@ -179,6 +185,8 @@ def build_boundary(
         width, height = img.size
 
     labels_future: Future[list[Any]] | None = None
+    provider_ui_labels_future: Future[list[Any]] | None = None
+    provider_ui_fast_ocr_max_dimension: int | None = None
     ocr_executor: ThreadPoolExecutor | None = None
     road_feature_future: Future[Any] | None = None
     road_feature_executor: ThreadPoolExecutor | None = None
@@ -245,6 +253,11 @@ def build_boundary(
         )
 
         catalog_style_can_match = catalog_style_supported(extraction.style)
+        provider_ui_fast_ocr_max_dimension = provider_ui_fast_ocr_max_dimension_for_style(
+            extraction.style,
+            width=width,
+            height=height,
+        )
         if allow_pre_ocr_catalog and catalog_style_can_match:
             catalog_match = match_service_area_catalog(
                 extraction.pixel_geometry,
@@ -376,13 +389,25 @@ def build_boundary(
         if used_catalog_scaled_extraction:
             if labels_future is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
-                labels_future = submit_ocr_labels_from_rgb(
-                    ocr_executor,
-                    image_path,
-                    rgb,
-                    style=extraction.style,
-                )
-                ensure_georeference_resource_preload()
+                if (
+                    city_input is None
+                    and allow_catalog
+                    and provider_ui_fast_ocr_max_dimension is not None
+                ):
+                    provider_ui_labels_future = ocr_executor.submit(
+                        extract_ocr_labels_from_rgb,
+                        str(image_path),
+                        rgb,
+                        rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                    )
+                else:
+                    labels_future = submit_ocr_labels_from_rgb(
+                        ocr_executor,
+                        image_path,
+                        rgb,
+                        style=extraction.style,
+                    )
+                    ensure_georeference_resource_preload()
             emit_progress(
                 progress,
                 stage="extract",
@@ -479,8 +504,58 @@ def build_boundary(
             if extraction.style == "gray-fill"
             else None
         )
+        if (
+            labels_future is None
+            and city_input is None
+            and allow_catalog
+            and provider_ui_fast_ocr_max_dimension is not None
+        ):
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Reading provider area labels",
+                percent=43,
+                details={"rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension},
+            )
+            if provider_ui_labels_future is None:
+                provider_ui_labels = extract_ocr_labels_from_rgb(
+                    str(image_path),
+                    rgb,
+                    rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                )
+            else:
+                provider_ui_labels = provider_ui_labels_future.result()
+                provider_ui_labels_future = None
+            provider_ui_match = provider_ui_label_catalog_match(extraction, provider_ui_labels)
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Provider area labels read",
+                percent=46,
+                details={
+                    "label_count": len(provider_ui_labels),
+                    "top_labels": [label.text for label in provider_ui_labels[:8]],
+                    "matched_catalog": provider_ui_match.entry.slug if provider_ui_match is not None else None,
+                },
+            )
+            if provider_ui_match is not None:
+                return finish_catalog_boundary_result(
+                    extraction,
+                    provider_ui_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input="Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:provider-ui-label",
+                )
         if labels_future is None:
-            ocr_executor = ThreadPoolExecutor(max_workers=1)
+            if ocr_executor is None:
+                ocr_executor = ThreadPoolExecutor(max_workers=1)
             labels_future = submit_ocr_labels_from_rgb(
                 ocr_executor,
                 image_path,
@@ -736,6 +811,18 @@ def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
     return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
 
 
+def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, height: int) -> int | None:
+    if style not in PROVIDER_UI_FAST_OCR_STYLES:
+        return None
+    if width <= 0 or height <= 0 or height < width * PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO:
+        return None
+    if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
+        return None
+    if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+        return None
+    return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+
+
 def low_resolution_shape_catalog_match(
     extraction,
     *,
@@ -889,21 +976,26 @@ def provider_ui_label_catalog_match(extraction, labels: list[Any]):
     nearby_texts = provider_ui_nearby_area_texts(labels, extraction.pixel_geometry.bounds)
     if not nearby_texts:
         return None
-    candidates = [
+    provider_entries = [
         entry
         for entry in load_catalog_entries()
         if (
             entry.is_active
             and entry.provider == provider
             and extraction.style in PROVIDER_STYLES.get(entry.provider, set())
-            and any(catalog_area_matches_text(entry.area, text) for text in nearby_texts)
         )
     ]
+    candidates = {}
+    for text in nearby_texts:
+        text_candidates = [entry for entry in provider_entries if catalog_area_matches_text(entry.area, text)]
+        if len(text_candidates) == 1:
+            candidates[text_candidates[0].slug] = text_candidates[0]
     if len(candidates) != 1:
         return None
+    candidate = next(iter(candidates.values()))
     return match_catalog_entry(
         extraction.pixel_geometry,
-        candidates[0],
+        candidate,
         min_iou=PROVIDER_UI_LABEL_MIN_IOU,
         min_area_ratio=PROVIDER_UI_LABEL_MIN_AREA_RATIO,
         max_area_ratio=PROVIDER_UI_LABEL_MAX_AREA_RATIO,
@@ -915,7 +1007,14 @@ def provider_ui_label_provider(labels: list[Any]) -> str | None:
     high_confidence_text = " ".join(
         label.text for label in labels if label.confidence >= PROVIDER_UI_LABEL_MIN_CONFIDENCE
     )
-    return catalog_provider_hint(high_confidence_text)
+    provider = catalog_provider_hint(high_confidence_text)
+    if provider is not None:
+        return provider
+    compact_text = "".join(ch for ch in high_confidence_text.lower() if ch.isalnum())
+    for provider in PROVIDER_STYLES:
+        if provider in compact_text:
+            return provider
+    return None
 
 
 def provider_ui_nearby_area_texts(

@@ -122,6 +122,14 @@ def test_provider_ui_label_catalog_match_uses_nearby_selected_area() -> None:
             confidence=99,
         ),
         OcrLabel(
+            text="Las Vegas San Francisco",
+            x=(min_x + max_x) / 2,
+            y=(min_y + max_y) / 2 + 24,
+            width=260,
+            height=32,
+            confidence=98,
+        ),
+        OcrLabel(
             text="San Francisco",
             x=(min_x + max_x) / 2,
             y=max_y + 600,
@@ -137,6 +145,55 @@ def test_provider_ui_label_catalog_match_uses_nearby_selected_area() -> None:
     assert match.entry.slug == "las-vegas-zoox"
     assert match.iou < 0.94
     assert match.confidence >= 0.55
+
+
+def test_provider_ui_label_provider_accepts_glued_ocr_provider_text() -> None:
+    labels = [
+        OcrLabel(
+            text="Youcanridewith Zooxwithinthehighlighted areaonthemap",
+            x=360,
+            y=1450,
+            width=600,
+            height=32,
+            confidence=96,
+        )
+    ]
+
+    assert runner.provider_ui_label_provider(labels) == "zoox"
+
+
+def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))
+    extraction = ExtractionResult(
+        mask=np.zeros((1600, 800), dtype=np.uint8),
+        style="dark-teal",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.15,
+        contour_count=1,
+        confidence=1.0,
+    )
+    min_x, min_y, max_x, max_y = pixel_geometry.bounds
+    labels = [
+        OcrLabel(
+            text="Youcanridewith Zooxwithinthehighlighted areaonthemap",
+            x=360,
+            y=1450,
+            width=600,
+            height=32,
+            confidence=96,
+        ),
+        OcrLabel(
+            text="Las Vegas San Francisco",
+            x=(min_x + max_x) / 2,
+            y=(min_y + max_y) / 2,
+            width=260,
+            height=32,
+            confidence=99,
+        ),
+    ]
+
+    assert runner.provider_ui_label_catalog_match(extraction, labels) is None
 
 
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:

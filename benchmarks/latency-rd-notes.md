@@ -4703,3 +4703,25 @@ with zero failures in 0.531s.
   default/no-catalog benchmark gates passed with zero active IoU drops; Houston,
   Miami, and Bay Area remain drift/reference-mismatch smoke checks because
   their saved ground truth is known to be stale until refreshed.
+- Accepted a provider-UI fast OCR prepass on top of that fallback. Instead of
+  lowering the global RapidOCR resolution, which was previously rejected for
+  arbitrary no-catalog accuracy, portrait dark-teal uploads now start a 1200px
+  provider-label OCR future while extraction refinement runs. If the provider
+  UI text plus nearby area labels prove exactly one catalog entry, the run
+  returns the catalog boundary immediately; if not, it falls back to the
+  existing full-resolution OCR/georeference path. The resolver also accepts
+  OCR-glued provider text such as `Zooxwithinthehighlighted` but ignores
+  ambiguous merged area labels such as `Las Vegas San Francisco` unless another
+  unambiguous nearby label identifies the selected area. Fresh-cache local proof
+  on `/Users/ethanmckanna/Downloads/IMG_0071.PNG` preserved
+  `catalog-shape-match:provider-ui-label`, `las-vegas-zoox`, bbox
+  `[-115.3550119,36.0353866,-115.1830059,36.187696]`, confidence 0.72,
+  `catalog_shape_iou: 0.524784`, and `catalog_area_ratio: 1.435617`, while
+  lowering local total time from the prior 0.573071s candidate to 0.428890s.
+  Focused tests passed 72/72, full pytest passed 219 tests plus 9 subtests,
+  compileall passed, and `git diff --check` passed. Drift-aware default
+  `out/provider-ui-fast-prepass-default-20260529/full-report.json` passed 8/8
+  scored fixtures with seven `reference_mismatch` smoke checks, avg IoU
+  0.992917, min IoU 0.943345, and zero active IoU drops; no-catalog
+  `out/provider-ui-fast-prepass-nocatalog-20260529/full-report.json` preserved
+  avg IoU 0.961733, min IoU 0.931476, and zero active IoU drops.
