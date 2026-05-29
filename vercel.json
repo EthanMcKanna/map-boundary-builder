@@ -5,7 +5,7 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "excludeFiles": "{docs/**,.github/**,benchmarks/**,tests/**,promo-video/**,out/**,output/**,input/**,.cache/**,.venv/**,**/__pycache__/**,**/*.pyc}"
+        "excludeFiles": "{docs/**,.github/**,benchmarks/**,tests/**,promo-video/**,out/**,output/**,input/**,.cache/**,.venv/**,_uv/**,build/**,uv.lock,.python-version,**/__pycache__/**,**/*.pyc}"
       }
     }
   ],
