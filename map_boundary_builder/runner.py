@@ -40,6 +40,7 @@ from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
+from .runtime_config import RAPIDOCR_MAX_DIMENSION, RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
@@ -273,7 +274,12 @@ def build_boundary(
         if used_catalog_scaled_extraction:
             if labels_future is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
-                labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+                labels_future = submit_ocr_labels_from_rgb(
+                    ocr_executor,
+                    image_path,
+                    rgb,
+                    style=extraction.style,
+                )
             emit_progress(
                 progress,
                 stage="extract",
@@ -353,7 +359,12 @@ def build_boundary(
         )
         if labels_future is None:
             ocr_executor = ThreadPoolExecutor(max_workers=1)
-            labels_future = ocr_executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+            labels_future = submit_ocr_labels_from_rgb(
+                ocr_executor,
+                image_path,
+                rgb,
+                style=extraction.style,
+            )
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
             road_feature_future = road_feature_executor.submit(image_feature_distance, rgb)
@@ -529,6 +540,34 @@ def ready_future_result(future: Future[Any] | None) -> Any | None:
         return future.result()
     except Exception:
         return None
+
+
+def submit_ocr_labels_from_rgb(
+    executor: ThreadPoolExecutor,
+    image_path: str | Path,
+    rgb,
+    *,
+    style: str,
+) -> Future[list[Any]]:
+    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    if rapidocr_max_dimension is None:
+        return executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb)
+    return executor.submit(
+        extract_ocr_labels_from_rgb,
+        str(image_path),
+        rgb,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
+
+
+def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
+    if style != "purple-fill":
+        return None
+    if RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_PURPLE_FILL_MAX_DIMENSION <= 0:
+        return None
+    if RAPIDOCR_PURPLE_FILL_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+        return None
+    return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
 
 
 def low_resolution_shape_catalog_match(

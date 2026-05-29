@@ -511,6 +511,22 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertAlmostEqual(scale_x, 0.5)
             self.assertAlmostEqual(scale_y, 0.5)
 
+    def test_rapidocr_input_array_uses_per_call_max_dimension(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 40):
+                ocr_input, scale_x, scale_y = rapidocr_input_array(
+                    image_path,
+                    rapidocr_max_dimension=10,
+                )
+
+            self.assertIsInstance(ocr_input, np.ndarray)
+            self.assertEqual(ocr_input.shape[:2], (5, 10))
+            self.assertAlmostEqual(scale_x, 0.5)
+            self.assertAlmostEqual(scale_y, 0.5)
+
     def test_rapidocr_input_array_can_return_loaded_array_for_native_moderate_images(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -555,6 +571,20 @@ class OcrGroupingTests(unittest.TestCase):
                 key_736 = ocr_cache_key(image_path, use_tesseract=False)
 
         self.assertNotEqual(key_640, key_736)
+
+    def test_ocr_cache_key_depends_on_per_call_rapidocr_max_dimension(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(image_path, use_tesseract=False)
+            key_1000 = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_max_dimension=1000,
+            )
+
+        self.assertNotEqual(key_default, key_1000)
 
     def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:

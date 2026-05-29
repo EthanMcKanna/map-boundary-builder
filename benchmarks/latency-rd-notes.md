@@ -3499,3 +3499,33 @@ OCR/georeference rather than returning outdated fast-path polygons.
   0.847. Playwright browser verification loaded the deployed page, found zero
   console warnings/errors, and confirmed `window.__MAP_BOUNDARY_PIPELINE_VERSION__`
   is `pipeline-47f7f83c39e970ec`.
+- Accepted the OCR-size hypothesis only for purple-fill maps, and rejected it
+  for gray-fill. Fresh Tesla no-catalog probes showed 1200px OCR preserved
+  Austin/Dallas IoU but did not improve total time (`out/ocrdim-default-tesla-20260529`
+  total 2.108s versus `out/ocrdim-1200-tesla-20260529` total 2.113s), while
+  1000px was slower at 2.283s. Direct Avride Dallas probes were different:
+  default 1600px OCR took 3.512s total with confidence 0.849, explicit 1200px
+  took 2.856s but dropped to three controls/confidence 0.805, and explicit
+  1000px took 2.674s with four controls/confidence 0.873. The implemented
+  adaptive path now caps only purple-fill OCR at 1000px and bakes the effective
+  OCR max dimension into every raw/visual/canonical OCR cache key so 1000px and
+  1600px labels cannot cross-contaminate. Real adaptive Avride Dallas proof
+  `out/adaptive-purple-avride-20260529/out.geojson` preserved Dallas,
+  `ocr-georeference:nominatim-label-fit`, four controls, bbox
+  `[-96.8183907, 32.7679806, -96.7549523, 32.8376563]`, confidence 0.873,
+  and cut local total to 2.395s with OCR at 1.090s. Default active benchmark
+  `out/adaptive-purple-default-20260529/full-report.json` passed 8/8 scored,
+  skipped seven `reference_mismatch` fixtures, avg IoU 0.992917, min IoU
+  0.943345, and max active duration 0.537s. No-catalog benchmark
+  `out/adaptive-purple-nocatalog-20260529/full-report.json` passed 8/8 scored,
+  avg IoU 0.961670, min IoU 0.931476. Changed-market smoke
+  `out/adaptive-purple-changed-smoke-20260529/full-report.json` passed six
+  Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures and kept
+  drifted Waymo screenshots on OCR/georeference with `catalog_slug: null`.
+  After the final mock-compatibility patch, reruns
+  `out/adaptive-purple-default-final-20260529/full-report.json`,
+  `out/adaptive-purple-nocatalog-final-20260529/full-report.json`, and
+  `out/adaptive-purple-changed-smoke-final-20260529/full-report.json` all
+  passed with the same accuracy floors: default avg IoU 0.992917/min 0.943345,
+  no-catalog avg IoU 0.961670/min 0.931476, and changed-market smoke zero
+  failures.

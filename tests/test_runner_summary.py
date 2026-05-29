@@ -236,3 +236,58 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
     ]
     assert result.summary["catalog_slug"] == "bay-area-tesla"
     assert result.summary["georeference_source"] == "catalog-shape-match:retry"
+
+
+def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "avride dallas.png"
+    Image.new("RGB", (1400, 933), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((933, 1400, 3), 245, dtype=np.uint8)
+    mask = np.zeros((933, 1400), dtype=bool)
+    mask[150:835, 470:995] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="purple-fill",
+        pixel_geometry=Polygon([(470, 150), (995, 150), (995, 835), (470, 835)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    ocr_kwargs: list[dict] = []
+
+    def fake_extract_service_area(*_args, **_kwargs):
+        return extraction
+
+    def fake_extract_ocr_labels_from_rgb(_path, _prepared_rgb, **kwargs):
+        ocr_kwargs.append(kwargs)
+        return []
+
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Dallas",
+            lon=-96.8,
+            lat=32.8,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=13.5,
+            rotation_radians=0.0,
+            confidence=0.9,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+
+    monkeypatch.setattr(runner, "RAPIDOCR_MAX_DIMENSION", 1600)
+    monkeypatch.setattr(runner, "RAPIDOCR_PURPLE_FILL_MAX_DIMENSION", 1000)
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
+
+    build_boundary(image_path, None, output_path)
+
+    assert ocr_kwargs == [{"rapidocr_max_dimension": 1000}]

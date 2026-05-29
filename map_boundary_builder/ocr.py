@@ -73,9 +73,14 @@ def extract_ocr_labels(
     *,
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
+    rapidocr_max_dimension: int | None = None,
 ) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
-    cache_key = ocr_cache_key(image_path, use_tesseract=use_tesseract)
+    cache_key = ocr_cache_key(
+        image_path,
+        use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
     if cache_key is not None:
         cached = read_ocr_cache(cache_key)
         if cached is not None:
@@ -93,7 +98,11 @@ def extract_ocr_labels(
             prepared_bgr = np.ascontiguousarray(prepared_bgr)
         else:
             prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
-        visual_cache_key = ocr_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
+        visual_cache_key = ocr_visual_cache_key(
+            prepared_bgr,
+            use_tesseract=use_tesseract,
+            rapidocr_max_dimension=rapidocr_max_dimension,
+        )
         if visual_cache_key is not None and visual_cache_key != cache_key:
             cached = read_ocr_cache(visual_cache_key)
             if cached is not None:
@@ -103,6 +112,7 @@ def extract_ocr_labels(
         canonical_visual_cache_key = ocr_canonical_visual_cache_key(
             canonical_bgr,
             use_tesseract=use_tesseract,
+            rapidocr_max_dimension=rapidocr_max_dimension,
         )
         canonical_trimmed = canonical_ocr_bgr_trimmed(prepared_bgr, canonical_bgr, canonical_origin)
         if (
@@ -118,7 +128,11 @@ def extract_ocr_labels(
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 return labels
-        near_visual_cache_key = ocr_near_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
+        near_visual_cache_key = ocr_near_visual_cache_key(
+            prepared_bgr,
+            use_tesseract=use_tesseract,
+            rapidocr_max_dimension=rapidocr_max_dimension,
+        )
         if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
             cached = read_ocr_cache(near_visual_cache_key)
             if cached is not None:
@@ -127,7 +141,11 @@ def extract_ocr_labels(
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 return labels
-        coarse_visual_cache_key = ocr_coarse_visual_cache_key(prepared_bgr, use_tesseract=use_tesseract)
+        coarse_visual_cache_key = ocr_coarse_visual_cache_key(
+            prepared_bgr,
+            use_tesseract=use_tesseract,
+            rapidocr_max_dimension=rapidocr_max_dimension,
+        )
         if coarse_visual_cache_key is not None and coarse_visual_cache_key not in {
             cache_key,
             visual_cache_key,
@@ -164,10 +182,14 @@ def extract_ocr_labels(
                     write_ocr_cache(coarse_visual_cache_key, labels)
                 return labels
 
+    rapidocr_kwargs: dict[str, int] = {}
+    if rapidocr_max_dimension is not None:
+        rapidocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
     rapid_words: list[OcrLabel] = run_rapidocr_words(
         image_path,
         prepared_bgr=prepared_bgr,
         composited_alpha=prepared_composited_alpha,
+        **rapidocr_kwargs,
     )
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
@@ -213,8 +235,17 @@ def extract_ocr_labels(
     return labels
 
 
-def extract_ocr_labels_from_rgb(image_path: str | Path, rgb: np.ndarray) -> list[OcrLabel]:
-    return extract_ocr_labels(image_path, prepared_bgr=rgb_to_bgr(rgb))
+def extract_ocr_labels_from_rgb(
+    image_path: str | Path,
+    rgb: np.ndarray,
+    *,
+    rapidocr_max_dimension: int | None = None,
+) -> list[OcrLabel]:
+    return extract_ocr_labels(
+        image_path,
+        prepared_bgr=rgb_to_bgr(rgb),
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
 
 
 def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
@@ -223,38 +254,70 @@ def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
     return np.ascontiguousarray(rgb[:, :, ::-1])
 
 
-def ocr_cache_key(image_path: str | Path, *, use_tesseract: bool) -> str | None:
+def ocr_cache_key(
+    image_path: str | Path,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str | None:
     try:
         digest = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
     except OSError:
         return None
-    return ocr_cache_key_for_digest("raw-sha256", digest, use_tesseract=use_tesseract)
+    return ocr_cache_key_for_digest(
+        "raw-sha256",
+        digest,
+        use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
 
 
-def ocr_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+def ocr_visual_cache_key(
+    bgr: np.ndarray | None,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str | None:
     if bgr is None:
         return None
     digest = hashlib.sha256()
     digest.update(b"bgr")
     digest.update(str(tuple(bgr.shape)).encode("ascii"))
     digest.update(np.ascontiguousarray(bgr).data)
-    return ocr_cache_key_for_digest("visual-bgr-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
+    return ocr_cache_key_for_digest(
+        "visual-bgr-sha256",
+        digest.hexdigest(),
+        use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
 
 
-def ocr_near_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+def ocr_near_visual_cache_key(
+    bgr: np.ndarray | None,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
         mask=OCR_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr6-sha256",
         digest_tag=b"bgr-quantized",
     )
 
 
-def ocr_coarse_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+def ocr_coarse_visual_cache_key(
+    bgr: np.ndarray | None,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
         mask=OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr5-sha256",
         digest_tag=b"bgr-coarse-quantized",
@@ -265,6 +328,7 @@ def ocr_quantized_visual_cache_key(
     bgr: np.ndarray | None,
     *,
     use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
     mask: int,
     digest_kind: str,
     digest_tag: bytes,
@@ -276,17 +340,32 @@ def ocr_quantized_visual_cache_key(
     digest.update(digest_tag)
     digest.update(str(tuple(quantized.shape)).encode("ascii"))
     digest.update(quantized.data)
-    return ocr_cache_key_for_digest(digest_kind, digest.hexdigest(), use_tesseract=use_tesseract)
+    return ocr_cache_key_for_digest(
+        digest_kind,
+        digest.hexdigest(),
+        use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
 
 
-def ocr_canonical_visual_cache_key(bgr: np.ndarray | None, *, use_tesseract: bool) -> str | None:
+def ocr_canonical_visual_cache_key(
+    bgr: np.ndarray | None,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str | None:
     if bgr is None:
         return None
     digest = hashlib.sha256()
     digest.update(b"bgr-canonical-content")
     digest.update(str(tuple(bgr.shape)).encode("ascii"))
     digest.update(np.ascontiguousarray(bgr).data)
-    return ocr_cache_key_for_digest("visual-canonical-bgr-sha256", digest.hexdigest(), use_tesseract=use_tesseract)
+    return ocr_cache_key_for_digest(
+        "visual-canonical-bgr-sha256",
+        digest.hexdigest(),
+        use_tesseract=use_tesseract,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
 
 
 def canonical_ocr_bgr(bgr: np.ndarray | None) -> tuple[np.ndarray | None, tuple[float, float]]:
@@ -375,11 +454,24 @@ def shift_ocr_labels(labels: tuple[OcrLabel, ...] | list[OcrLabel], dx: float, d
     ]
 
 
-def ocr_cache_key_for_digest(digest_kind: str, digest: str, *, use_tesseract: bool) -> str:
+def effective_rapidocr_max_dimension(rapidocr_max_dimension: int | None = None) -> int:
+    if rapidocr_max_dimension is None:
+        return RAPIDOCR_MAX_DIMENSION
+    return max(0, int(rapidocr_max_dimension))
+
+
+def ocr_cache_key_for_digest(
+    digest_kind: str,
+    digest: str,
+    *,
+    use_tesseract: bool,
+    rapidocr_max_dimension: int | None = None,
+) -> str:
     engine = "tesseract" if use_tesseract else "rapidocr"
+    effective_max_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
     return hashlib.sha256(
         (
-            f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={RAPIDOCR_MAX_DIMENSION}:"
+            f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={effective_max_dimension}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
@@ -512,11 +604,13 @@ def run_rapidocr_words(
     *,
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
+    rapidocr_max_dimension: int | None = None,
 ) -> list[OcrLabel]:
     ocr_input, scale_x, scale_y = rapidocr_input_array(
         image_path,
         prepared_bgr=prepared_bgr,
         composited_alpha=composited_alpha,
+        rapidocr_max_dimension=rapidocr_max_dimension,
     )
     detector_limit = rapidocr_detector_limit_for_input(ocr_input)
     try:
@@ -592,9 +686,11 @@ def rapidocr_input_array(
     *,
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
+    rapidocr_max_dimension: int | None = None,
 ) -> tuple[Path | np.ndarray, float, float]:
     source_path = Path(image_path)
-    if RAPIDOCR_MAX_DIMENSION <= 0:
+    max_ocr_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
+    if max_ocr_dimension <= 0:
         return source_path, 1.0, 1.0
     if prepared_bgr is None:
         bgr, composited_alpha = load_rapidocr_bgr(source_path)
@@ -604,7 +700,7 @@ def rapidocr_input_array(
         return source_path, 1.0, 1.0
     height, width = bgr.shape[:2]
     max_dimension = max(width, height)
-    if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+    if max_dimension <= max_ocr_dimension:
         if (
             RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION > 0
             and max_dimension >= RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION
@@ -613,7 +709,7 @@ def rapidocr_input_array(
         if composited_alpha:
             return bgr, 1.0, 1.0
         return source_path, 1.0, 1.0
-    scale = RAPIDOCR_MAX_DIMENSION / float(max_dimension)
+    scale = max_ocr_dimension / float(max_dimension)
     resized = cv2.resize(
         bgr,
         (max(1, round(width * scale)), max(1, round(height * scale))),
@@ -640,18 +736,23 @@ def load_rapidocr_bgr(image_path: str | Path) -> tuple[np.ndarray | None, bool]:
     return image, False
 
 
-def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
+def rapidocr_input_image(
+    image_path: str | Path,
+    *,
+    rapidocr_max_dimension: int | None = None,
+) -> tuple[Path, float, float]:
     source_path = Path(image_path)
-    if RAPIDOCR_MAX_DIMENSION <= 0:
+    max_ocr_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
+    if max_ocr_dimension <= 0:
         return source_path, 1.0, 1.0
     bgr = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
     if bgr is None:
         return source_path, 1.0, 1.0
     height, width = bgr.shape[:2]
     max_dimension = max(width, height)
-    if max_dimension <= RAPIDOCR_MAX_DIMENSION:
+    if max_dimension <= max_ocr_dimension:
         return source_path, 1.0, 1.0
-    scale = RAPIDOCR_MAX_DIMENSION / float(max_dimension)
+    scale = max_ocr_dimension / float(max_dimension)
     resized = cv2.resize(
         bgr,
         (max(1, round(width * scale)), max(1, round(height * scale))),
