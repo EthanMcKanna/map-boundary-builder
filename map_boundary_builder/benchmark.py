@@ -123,6 +123,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="For --mode full, bypass catalog matching so OCR/georeference inference remains benchmarked.",
     )
+    parser.add_argument(
+        "--execution",
+        choices=("subprocess", "in-process"),
+        default="subprocess",
+        help=(
+            "For --mode full, subprocess preserves the historical cold-ish CLI gate; "
+            "in-process measures warm production-instance generation without interpreter startup."
+        ),
+    )
+    parser.add_argument(
+        "--no-debug-artifacts",
+        action="store_true",
+        help="For --mode full, skip mask/overlay debug artifacts to mirror the production web API path.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -141,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
         no_catalog=args.no_catalog,
         only_filters=args.only,
         fixture_config=args.fixture_config,
+        execution=args.execution,
+        debug_artifacts=not args.no_debug_artifacts,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -166,6 +182,8 @@ def run_benchmark(
     only_filters: list[str],
     fixture_config: Path,
     no_catalog: bool = False,
+    execution: str = "subprocess",
+    debug_artifacts: bool = True,
 ) -> dict[str, Any]:
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
@@ -189,6 +207,8 @@ def run_benchmark(
                     timeout_seconds=timeout_seconds,
                     city_overrides=city_overrides,
                     no_catalog=no_catalog,
+                    execution=execution,
+                    debug_artifacts=debug_artifacts,
                 )
             )
         else:
@@ -209,6 +229,8 @@ def run_benchmark(
             "min_iou": min_iou,
             "mean_iou": mean_iou,
             "no_catalog": no_catalog,
+            "execution": execution,
+            "debug_artifacts": debug_artifacts,
         },
         "summary": {
             "passed": passed,
@@ -357,9 +379,23 @@ def score_full_fixture(
     timeout_seconds: int,
     city_overrides: bool,
     no_catalog: bool,
+    execution: str,
+    debug_artifacts: bool,
 ) -> BenchmarkScore:
     output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
-    debug_dir = out_dir / "full-debug" / fixture.slug
+    debug_dir = out_dir / "full-debug" / fixture.slug if debug_artifacts else None
+    if execution == "in-process":
+        return score_full_fixture_in_process(
+            fixture,
+            output_path=output_path,
+            debug_dir=debug_dir,
+            min_iou=min_iou,
+            city_overrides=city_overrides,
+            no_catalog=no_catalog,
+            debug_artifacts=debug_artifacts,
+        )
+    if execution != "subprocess":
+        raise ValueError(f"Unsupported full benchmark execution mode: {execution}")
     command = [
         sys.executable,
         "-m",
@@ -368,11 +404,11 @@ def score_full_fixture(
         str(fixture.image_path),
         "--output",
         str(output_path),
-        "--debug-dir",
-        str(debug_dir),
         "--print-summary",
         "--profile-events",
     ]
+    if debug_dir is not None:
+        command.extend(["--debug-dir", str(debug_dir)])
     if city_overrides:
         command.extend(["--city", fixture.area])
     if no_catalog:
@@ -416,6 +452,64 @@ def score_full_fixture(
         )
     except Exception as exc:
         return failed_full_score(fixture, str(exc), duration_s=duration_s)
+
+
+def score_full_fixture_in_process(
+    fixture: BenchmarkFixture,
+    *,
+    output_path: Path,
+    debug_dir: Path | None,
+    min_iou: float,
+    city_overrides: bool,
+    no_catalog: bool,
+    debug_artifacts: bool,
+) -> BenchmarkScore:
+    from .cli import stage_elapsed_seconds
+    from .runner import BoundaryBuildOptions, build_boundary
+
+    events: list[dict[str, Any]] = []
+    started = time.perf_counter()
+
+    def progress(event: dict[str, Any]) -> None:
+        events.append({"elapsed_s": round(time.perf_counter() - started, 6), **event})
+
+    try:
+        result = build_boundary(
+            fixture.image_path,
+            fixture.area if city_overrides else None,
+            output_path,
+            debug_dir=debug_dir,
+            options=BoundaryBuildOptions(
+                allow_catalog=not no_catalog,
+                write_mask_artifact=debug_artifacts,
+            ),
+            progress=progress,
+        )
+        duration_s = time.perf_counter() - started
+        predicted = project_geometry(shape(result.geojson["features"][0]["geometry"]))
+        reference = project_geometry(load_reference_geometry(fixture.reference_path))
+        metrics = compare_geometries(predicted, reference)
+        properties = result.geojson["features"][0].get("properties", {})
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=metrics["iou"] >= min_iou,
+            iou=metrics["iou"],
+            area_ratio=metrics["area_ratio"],
+            centroid_distance_m=metrics["centroid_distance_m"],
+            vertices=count_vertices(shape(result.geojson["features"][0]["geometry"])),
+            style=result.summary.get("style"),
+            duration_s=duration_s,
+            georeference_source=result.summary.get("georeference_source"),
+            combined_confidence=result.summary.get("combined_confidence"),
+            catalog_slug=result.summary.get("catalog_slug") or properties.get("catalog_slug"),
+            stage_elapsed_s=stage_elapsed_seconds(events),
+            status=fixture.status,
+            note=fixture.note,
+        )
+    except Exception as exc:
+        return failed_full_score(fixture, str(exc), duration_s=time.perf_counter() - started)
 
 
 def failed_full_score(fixture: BenchmarkFixture, error: str, *, duration_s: float | None = None) -> BenchmarkScore:

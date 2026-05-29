@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
-from map_boundary_builder.benchmark import load_fixture_config, run_benchmark
+from map_boundary_builder.benchmark import (
+    BenchmarkFixture,
+    load_fixture_config,
+    run_benchmark,
+    score_full_fixture_in_process,
+)
 
 
 KNOWN_CHANGED_SERVICE_AREA_FIXTURES = {
@@ -84,5 +90,91 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "error": None,
             "status": "reference_mismatch",
             "note": "changed live service area",
+        }
+    ]
+
+
+def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:
+    polygon = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-112.0, 33.0],
+                            [-111.0, 33.0],
+                            [-111.0, 34.0],
+                            [-112.0, 33.0],
+                        ]
+                    ],
+                },
+            }
+        ],
+    }
+    image_path = tmp_path / "Waymo Phoenix.png"
+    reference_path = tmp_path / "phoenix-waymo.json"
+    image_path.write_bytes(b"unused by patched runner")
+    reference_path.write_text(json.dumps(polygon) + "\n")
+    fixture = BenchmarkFixture(
+        slug="phoenix-waymo",
+        provider="waymo",
+        area="Phoenix",
+        image_path=image_path,
+        reference_path=reference_path,
+    )
+    calls = []
+
+    def fake_build_boundary(image, city, output_path, *, debug_dir, options, progress):
+        calls.append(
+            {
+                "image": image,
+                "city": city,
+                "debug_dir": debug_dir,
+                "allow_catalog": options.allow_catalog,
+                "write_mask_artifact": options.write_mask_artifact,
+            }
+        )
+        progress(
+            {"stage": "inspect", "message": "Reading image metadata", "percent": 5, "status": "running"}
+        )
+        progress(
+            {"stage": "complete", "message": "Boundary export ready", "percent": 100, "status": "complete"}
+        )
+        return SimpleNamespace(
+            geojson=polygon,
+            summary={
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "combined_confidence": 0.96,
+                "catalog_slug": None,
+            },
+        )
+
+    monkeypatch.setattr("map_boundary_builder.runner.build_boundary", fake_build_boundary)
+
+    score = score_full_fixture_in_process(
+        fixture,
+        output_path=tmp_path / "out" / "boundary.geojson",
+        debug_dir=None,
+        min_iou=0.99,
+        city_overrides=True,
+        no_catalog=True,
+        debug_artifacts=False,
+    )
+
+    assert score.passed is True
+    assert score.iou == 1.0
+    assert score.georeference_source == "ocr-georeference:nominatim-label-fit"
+    assert calls == [
+        {
+            "image": image_path,
+            "city": "Phoenix",
+            "debug_dir": None,
+            "allow_catalog": False,
+            "write_mask_artifact": False,
         }
     ]

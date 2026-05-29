@@ -313,6 +313,26 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   `catalog_slug: null`, OCR/georeference sources, current bboxes, and zero
   attempted geocoder/OSM network calls for Bay Area Tesla/Waymo/Zoox, Houston
   Tesla/Waymo, and Miami Waymo.
+- Current production-shaped benchmark harness head: the full benchmark now has
+  an optional warm `--execution in-process` mode and `--no-debug-artifacts`
+  switch. The historical subprocess CLI gate remains the default, while the new
+  mode measures reusable production-instance generation without interpreter
+  startup and without preview artifacts. Focused benchmark tests passed 3 tests,
+  the full suite passed 99 tests and 9 subtests, and `compileall`,
+  `node --check`, and the historical subprocess full benchmark still passed.
+  With Tesseract absent from `PATH`, the production-shaped catalog benchmark
+  `out/inprocess-prodshape-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU 0.993, min IoU
+  0.943, and total 0.46s. The production-shaped no-catalog benchmark
+  `out/inprocess-prodshape-no-catalog-20260529/full-report.json` passed 8/8
+  scored fixtures, avg IoU 0.962, min IoU 0.931, and total 3.60s; every scored
+  OCR/georeference fixture completed locally under 1s, with Phoenix as the slow
+  case at 0.97s. The preserved subprocess default gate
+  `out/subprocess-default-after-inprocess-harness-20260529/full-report.json`
+  passed 8/8 scored, skipped the same 7 reference mismatches, avg IoU 0.993,
+  min IoU 0.943, and total 2.78s. This separates warm algorithmic latency from
+  Vercel cold/runtime/package overhead, which remains visible in production
+  stale-market OCR smokes.
 - Current stale-catalog guard head: focused tests for catalog matching and
   benchmark fixture handling passed 13 tests. Fresh-cache timed full benchmark
   `out/benchmark-timed-default-20260528-155312/full-report.json` passed 8/8
@@ -1366,6 +1386,10 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
 - Server normalized-image cache-key hashing is not a meaningful first-run wall:
   it costs roughly 0.02-0.05s on the 2400px PNG fixtures, so skipping it would
   trade away recompression-tolerant cache hits for too little latency.
+- Skipping the server GeoJSON disk write is not a meaningful production
+  shortcut. A warmed Phoenix catalog probe averaged 0.0574s normally and 0.0572s
+  with `write_geojson` patched out, so the write is below local timing noise and
+  not worth complicating the API/CLI contract.
 - Forcing every RapidOCR input through an OpenCV-loaded array broke small
   gray-fill fixtures: Houston Tesla fell to 0.000 IoU and Bay Area Tesla to
   0.859. Rejected; the array shortcut is limited to resized inputs only.
