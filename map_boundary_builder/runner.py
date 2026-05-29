@@ -42,6 +42,10 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
 CATALOG_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION", "300")))
 GENERAL_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION", "1600")))
+CATALOG_MISS_REFINE_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_CATALOG_MISS_REFINE_MAX_DIMENSION", str(GENERAL_EXTRACT_MAX_DIMENSION))),
+)
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
@@ -232,7 +236,7 @@ def build_boundary(
                 image_path,
                 simplify_px=opts.simplify_px,
                 rgb=rgb,
-                max_dimension=0,
+                max_dimension=CATALOG_MISS_REFINE_MAX_DIMENSION,
             )
             emit_progress(
                 progress,

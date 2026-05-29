@@ -2255,6 +2255,31 @@ OCR/georeference rather than returning outdated fast-path polygons.
   active fixtures still passed, but total time rose to 5.928s, average IoU fell
   to 0.935, min IoU to 0.865, and Phoenix lost the road-refined source. The
   current `rapidocr_onnxruntime` stack remains the production OCR engine.
+- Catalog-miss extraction refinement now defaults to the general 1600px
+  processing cap instead of full native resolution after a low-res catalog
+  match fails. `extract_service_area` rescales geometry back into original
+  image coordinates, so this keeps the existing GeoJSON coordinate contract
+  while avoiding 2400px mask work on stale/current-catalog misses. Focused
+  tests passed 21/21; full pytest passed 115 tests plus 9 subtests;
+  `compileall`, `node --check`, and `git diff --check` passed. The corrected
+  drift-aware default gate
+  `out/catalog-miss-1600-default-20260529/full-report.json` passed 8/8 scored
+  fixtures, skipped 7 reference mismatches, avg IoU 0.993, min IoU 0.943,
+  total 0.52s. Repeated no-catalog gate
+  `out/catalog-miss-1600-no-catalog2-20260529/full-report.json` passed 8/8
+  with avg IoU 0.962 and min IoU 0.931, confirming the arbitrary OCR path still
+  scores cleanly.
+- Focused old-vs-new stale-market catalog-miss comparison used
+  `MAP_BOUNDARY_CATALOG_MISS_REFINE_MAX_DIMENSION=0` as the old full-resolution
+  baseline and the new 1600 default on Houston, Miami, and Bay Area screenshots.
+  The catalog-hit stale entries stayed identical; OCR fallback outputs remained
+  near-identical to old full-resolution output: Houston Waymo IoU 0.997888,
+  Miami Waymo IoU 0.995087, and Bay Area Waymo IoU 0.991368. Sources,
+  confidences, control counts, and Miami road score were preserved. Local
+  first-run durations improved on Houston Waymo from 0.718s to 0.596s, Miami
+  from 1.049s to 0.992s, and Houston Tesla catalog-hit extraction from 0.139s
+  to 0.090s; Bay Area Waymo was noisy/slower locally, so production proof is
+  still required before treating this as a broad first-run latency win.
 
 ## Remaining Bottlenecks
 
