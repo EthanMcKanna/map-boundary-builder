@@ -2326,24 +2326,6 @@ OCR/georeference rather than returning outdated fast-path polygons.
   Francisco, Phoenix, Nashville, or Los Angeles, and it took 3.8-30.1s on those
   failures. It only returned for Tesla Houston and Tesla Bay Area, where the
   existing catalog path is already faster and more auditable.
-- RapidOCR warmup now uses a 1600px map-like synthetic image instead of a tiny
-  text tile, so ONNX Runtime sees a full production-shaped OCR pass before the
-  user's generation request when `/api/health?warm=ocr` completes after file
-  selection. A direct local probe showed cold Miami OCR at 2.466s, repeat OCR
-  at 0.762s, tiny warm then Miami at 2.524s, and large warm then Miami at
-  1.199s with the same 12 labels. The intended local warm-then-generate path
-  reported warm `rapidocr_s` 0.671s, then stale Miami generation in 0.947s with
-  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864,
-  road score 0.681518, and `catalog_slug: null`; stale Houston completed in
-  0.402s with confidence 0.865 and `catalog_slug: null`. Validation stayed
-  clean: focused OCR/API tests passed 59/59, full pytest passed 115 tests plus
-  9 subtests, `compileall`, `node --check`, and `git diff --check` passed. The
-  drift-aware default benchmark
-  `out/large-warm-default-20260529/full-report.json` passed 8/8 scored fixtures
-  with 7 reference-mismatch skips, avg IoU 0.993, min IoU 0.943, total 0.47s;
-  the no-catalog arbitrary OCR/georeference gate
-  `out/large-warm-no-catalog-20260529/full-report.json` passed 8/8 with avg IoU
-  0.962, min IoU 0.931, and total 4.15s.
 
 ## Remaining Bottlenecks
 
