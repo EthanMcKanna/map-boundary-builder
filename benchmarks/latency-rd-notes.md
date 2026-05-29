@@ -3560,3 +3560,17 @@ OCR/georeference rather than returning outdated fast-path polygons.
   scored with avg IoU 0.961670/min 0.931476, and changed-market smoke
   `out/adaptive-purple800-changed-smoke-20260529/full-report.json` passed six
   Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures.
+- Production deployment `dpl_DSvD1QonH762zhez6k7hdVxxo2Jp` is explicitly
+  aliased to `https://mapboundary.app` with pipeline hash
+  `pipeline-d2d82e3576c26b86`. Protected and public warm health checks returned
+  HTTP 200 with `ok: true`, `cv2 4.10.0`, warm `status: ok`, and
+  `rapidocr_purple_fill_max_dimension: 800`; public `HEAD /api/health` returned
+  HTTP 200, and the root HTML embeds the new hash. Fresh production Avride
+  Dallas PNG generation with `include_overlay=0` and
+  `normalized_cache_lookup=0` missed cache and preserved `Dallas`,
+  `purple-fill`, `ocr-georeference:nominatim-label-fit`, five controls, bbox
+  `[-96.8183506, 32.7681501, -96.7551594, 32.83758]`, and confidence 0.922 at
+  `build_boundary_s: 1.803s` and `total_before_send_s: 1.867s`, still faster
+  than the pre-adaptive production miss at 2.584s and materially more confident
+  than the 1000px cap proof. Repeating the same upload hit raw cache at
+  `total_before_send_s: 0.003s`.
