@@ -3439,3 +3439,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   2.825s`; a fresh 2px Avride WebP-border variant reused canonical
   extraction/OCR at `build_boundary_s: 0.114s` and `total_before_send_s:
   0.123s`.
+- Reconfirmed the May 29 changed-service-area handling with a focused in-process
+  no-network smoke:
+  `out/changed-market-smoke-20260529-latest/full-report.json`. Houston, Miami,
+  and Bay Area produced six `reference_mismatch` smoke results with zero smoke
+  failures in 4.627s total. The drifted Waymo screenshots stayed off catalog
+  (`catalog_slug: null` for Houston Waymo, Miami Waymo, and Bay Area Waymo),
+  while Bay Area Tesla, Bay Area Zoox, and Houston Tesla still returned their
+  separately verified current catalog shapes. None of the six are scored against
+  stale saved references.
