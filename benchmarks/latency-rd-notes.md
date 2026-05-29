@@ -2882,6 +2882,23 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/stale-derived-catalog-nocatalog-20260529/full-report.json` preserved
   8/8 scored accuracy, avg IoU 0.962, and min IoU 0.931; its 8.57s total was
   OCR-noise only because the no-catalog path bypasses the changed catalog code.
+- Current external references restored two changed-market fast paths without
+  reusing stale saved-fixture geometry. Houston Tesla and Bay Area Zoox catalog
+  entries now come directly from the current `av-coverage-checker` service-area
+  polygons, declare `catalog_min_shape_iou: 0.965`, and return exact current
+  external geometry. Bay Area Tesla remains stale because its saved screenshot
+  only scored 0.964186 against the current external polygon, just below the
+  existing current-reference guard. Focused catalog/API tests passed 46 tests,
+  full pytest passed 160 tests plus 9 subtests, `compileall` passed, and
+  `git diff --check` passed. The targeted smoke
+  `out/current-external-reactivation-smoke-20260529/full-report.json` kept Bay
+  Area Tesla on OCR at 0.30s while restoring catalog fast paths for Houston
+  Tesla at 0.01s and Bay Area Zoox at 0.04s. The default active benchmark
+  `out/current-external-reactivation-default-20260529/full-report.json` passed
+  8/8 scored fixtures, skipped the seven known stale references, avg IoU 0.993,
+  min IoU 0.943, total 0.50s. The no-catalog gate
+  `out/current-external-reactivation-nocatalog-20260529/full-report.json`
+  preserved 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and total 4.62s.
 
 ## Remaining Bottlenecks
 

@@ -4,79 +4,71 @@
     {
       "type": "Feature",
       "properties": {
-        "catalog_source": "current-verified-ocr-output",
-        "catalog_status": "stale",
-        "catalog_stale_reason": "The Houston service area changed after this OCR-derived catalog entry was created from the saved fixture; keep it out of production fast paths until refreshed from a current source.",
-        "catalog_refresh_evidence": "Previously reactivated after matching an external reference polygon at 0.945032 IoU, but later user confirmation marked the saved Houston fixture family as stale.",
-        "catalog_reference_iou": 0.945032,
+        "catalog_source": "current-external-service-area-reference",
+        "catalog_status": "active",
+        "catalog_refresh_evidence": "Updated from the current external service-area reference after the saved screenshot/reference pair drifted. The saved screenshot clears the catalog guard at 0.976806 shape IoU.",
+        "catalog_min_shape_iou": 0.965,
         "slug": "houston-tesla",
-        "georeference_source": "ocr-georeference:nominatim-label-fit",
-        "georeference_confidence": 0.853,
-        "rotation_degrees": -1.419928
+        "provider": "tesla",
+        "name": "Houston",
+        "georeference_source": "current-external-service-area-reference",
+        "georeference_confidence": 0.99
       },
       "geometry": {
         "type": "Polygon",
         "coordinates": [
           [
             [
-              -95.538357,
-              29.9718015
+              -95.62493896484375,
+              29.917274475097656
             ],
             [
-              -95.5245324,
-              29.9418227
+              -95.56692504882812,
+              29.876760482788086
             ],
             [
-              -95.5256447,
-              29.8572751
+              -95.52423095703125,
+              29.858476638793945
             ],
             [
-              -95.5678351,
-              29.8765731
+              -95.5238265991211,
+              29.926328659057617
             ],
             [
-              -95.5818914,
-              29.8870595
+              -95.52672576904297,
+              29.933773040771484
             ],
             [
-              -95.5893912,
-              29.8872207
+              -95.52588653564453,
+              29.942068099975586
             ],
             [
-              -95.5889196,
-              29.8923023
+              -95.52831268310547,
+              29.948108673095703
             ],
             [
-              -95.6247125,
-              29.9185262
+              -95.54037475585938,
+              29.971940994262695
             ],
             [
-              -95.5906823,
-              29.9333477
+              -95.56429290771484,
+              29.967500686645508
             ],
             [
-              -95.5892164,
-              29.9389711
+              -95.56440734863281,
+              29.958147048950195
             ],
             [
-              -95.5784559,
-              29.9387399
+              -95.56472778320312,
+              29.947593688964844
             ],
             [
-              -95.5681778,
-              29.9444565
+              -95.57422637939453,
+              29.940336227416992
             ],
             [
-              -95.5638257,
-              29.948321
-            ],
-            [
-              -95.5622817,
-              29.9680755
-            ],
-            [
-              -95.538357,
-              29.9718015
+              -95.62493896484375,
+              29.917274475097656
             ]
           ]
         ]
