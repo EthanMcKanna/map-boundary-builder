@@ -17,6 +17,7 @@ from map_boundary_builder.osm_roads import (
     read_road_refine_cache,
     refine_transform_with_osm_roads,
     road_refine_cache_key,
+    road_points_source_digest,
     score_georeference_transform,
     search_near_transform,
     score_transform_batch_arrays_on_score_image,
@@ -230,10 +231,100 @@ class RoadScoringTests(unittest.TestCase):
         )
         center = type("Center", (), {"bbox": (-112.2, 33.2, -111.8, 33.7)})()
 
-        clean_key = road_refine_cache_key(image_feature_distance(rgb), center, transform, lock_scale=False)
-        noisy_key = road_refine_cache_key(image_feature_distance(noisy), center, transform, lock_scale=False)
+        clean_key = road_refine_cache_key(
+            image_feature_distance(rgb),
+            center,
+            transform,
+            lock_scale=False,
+            road_source_digest="roads-a",
+        )
+        noisy_key = road_refine_cache_key(
+            image_feature_distance(noisy),
+            center,
+            transform,
+            lock_scale=False,
+            road_source_digest="roads-a",
+        )
 
         self.assertEqual(clean_key, noisy_key)
+
+    def test_road_refine_cache_key_depends_on_road_source_digest(self) -> None:
+        feature_distance = np.zeros((20, 20), dtype=np.float32)
+        transform = GeoreferenceTransform(
+            city="Phoenix",
+            lon=-112.0,
+            lat=33.4,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=25.0,
+            rotation_radians=0.0,
+            confidence=0.91,
+            source="ocr-georeference:nominatim-label-fit",
+        )
+        center = type("Center", (), {"bbox": (-112.2, 33.2, -111.8, 33.7)})()
+
+        key_a = road_refine_cache_key(
+            feature_distance,
+            center,
+            transform,
+            lock_scale=False,
+            road_source_digest="roads-a",
+        )
+        key_b = road_refine_cache_key(
+            feature_distance,
+            center,
+            transform,
+            lock_scale=False,
+            road_source_digest="roads-b",
+        )
+
+        self.assertNotEqual(key_a, key_b)
+
+    def test_road_points_source_digest_tracks_overpass_cache_bytes(self) -> None:
+        bbox = (-10.0, -10.0, -9.9, -9.9)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_roads, "CACHE_DIR", Path(tmpdir)),
+                patch.object(osm_roads, "seed_road_points", return_value=None),
+            ):
+                cache_path = osm_roads.overpass_cache_file(bbox)
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                cache_path.write_text('{"elements":[]}\n')
+                first = road_points_source_digest(bbox)
+                cache_path.write_text('{"elements":[{"id":1}]}\n')
+                second = road_points_source_digest(bbox)
+
+        self.assertNotEqual(first, second)
+
+    def test_load_road_points_cache_depends_on_road_source_digest(self) -> None:
+        bbox = (-10.0, -10.0, -9.9, -9.9)
+        short_road = (
+            '{"elements":[{"geometry":[{"lon":-10.0,"lat":-10.0},{"lon":-9.999,"lat":-10.0}]}]}\n'
+        )
+        long_road = (
+            '{"elements":[{"geometry":[{"lon":-10.0,"lat":-10.0},{"lon":-9.98,"lat":-10.0}]}]}\n'
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(osm_roads, "CACHE_DIR", Path(tmpdir)),
+                patch.object(osm_roads, "seed_road_points", return_value=None),
+            ):
+                osm_roads.load_road_points.cache_clear()
+                osm_roads.load_overpass_roads.cache_clear()
+                try:
+                    cache_path = osm_roads.overpass_cache_file(bbox)
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    cache_path.write_text(short_road)
+                    first = osm_roads.load_road_points(bbox)
+                    cache_path.write_text(long_road)
+                    second = osm_roads.load_road_points(bbox)
+                finally:
+                    osm_roads.load_road_points.cache_clear()
+                    osm_roads.load_overpass_roads.cache_clear()
+
+        self.assertGreater(len(second), len(first))
 
     def test_road_refinement_cache_reuses_same_feature_field(self) -> None:
         rgb = np.full((80, 80, 3), 245, dtype=np.uint8)
@@ -273,6 +364,7 @@ class RoadScoringTests(unittest.TestCase):
             try:
                 with (
                     patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)),
+                    patch.object(osm_roads, "road_points_source_digest", return_value="roads-a"),
                     patch.object(osm_roads, "load_road_points", return_value=road_points) as load_points,
                     patch.object(
                         osm_roads,
@@ -291,6 +383,63 @@ class RoadScoringTests(unittest.TestCase):
                 self.assertGreater(first_counts[2], 0)
                 self.assertEqual((load_points.call_count, score.call_count, search.call_count), first_counts)
                 self.assertEqual(len(list(Path(cache_dir).glob("*.json"))), 1)
+            finally:
+                osm_roads._ROAD_REFINE_MEMORY_CACHE.clear()
+
+    def test_road_refinement_cache_misses_when_road_source_changes(self) -> None:
+        rgb = np.full((80, 80, 3), 245, dtype=np.uint8)
+        rgb[:, 40:42] = (190, 190, 190)
+        initial = GeoreferenceTransform(
+            city="Phoenix",
+            lon=-112.0,
+            lat=33.4,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=25.0,
+            rotation_radians=0.0,
+            confidence=0.84,
+            source="ocr-georeference:nominatim-label-fit",
+        )
+        refined = GeoreferenceTransform(
+            city="Phoenix",
+            lon=-112.01,
+            lat=33.41,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=24.5,
+            rotation_radians=0.01,
+            confidence=0.84,
+            source="ocr-georeference:nominatim-label-fit",
+        )
+        center = type("Center", (), {"bbox": (-112.2, 33.2, -111.8, 33.7)})()
+        road_points = np.column_stack(
+            (np.linspace(-10000.0, 10000.0, 1200), np.linspace(-5000.0, 5000.0, 1200))
+        ).astype(np.float32)
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            osm_roads._ROAD_REFINE_MEMORY_CACHE.clear()
+            try:
+                with (
+                    patch.object(osm_roads, "ROAD_REFINE_CACHE_DIR", Path(cache_dir)),
+                    patch.object(
+                        osm_roads,
+                        "road_points_source_digest",
+                        side_effect=["roads-a", "roads-a", "roads-b", "roads-b"],
+                    ),
+                    patch.object(osm_roads, "load_road_points", return_value=road_points) as load_points,
+                    patch.object(
+                        osm_roads,
+                        "score_georeference_transform_on_score_image",
+                        return_value=(0.5, 1200),
+                    ),
+                    patch.object(osm_roads, "search_near_transform", return_value=(0.6, 1200, refined)),
+                ):
+                    first = refine_transform_with_osm_roads(rgb, center, initial)
+                    second = refine_transform_with_osm_roads(rgb, center, initial)
+
+                self.assertEqual(first, second)
+                self.assertEqual(load_points.call_count, 2)
+                self.assertEqual(len(list(Path(cache_dir).glob("*.json"))), 2)
             finally:
                 osm_roads._ROAD_REFINE_MEMORY_CACHE.clear()
 

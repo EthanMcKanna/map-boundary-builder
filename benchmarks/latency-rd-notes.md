@@ -2850,6 +2850,20 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `[-96.8183764,32.7679509,-96.7549157,32.8376675]`, and
   `ocr-georeference:nominatim-label-fit`; server time before send was 2.364s
   with 1.984s OCR.
+- Road-refinement cache keys now include a digest of the local road source, and
+  the road-point and Overpass loaders use that digest in their in-process cache
+  keys. This prevents expensive OSM alignment results, or the road points they
+  were scored against, from surviving bundled seed or Overpass cache changes.
+  Focused OSM-road tests passed 14 tests. Full pytest passed 159 tests plus 9
+  subtests, `compileall` passed, and `git diff --check` passed. Same-session
+  baseline A/B showed the production-shaped default gate improving from 0.65s
+  to `out/road-source-cache-current-default-ab-20260529/full-report.json` at
+  0.53s with identical 8/8 scored accuracy, avg IoU 0.993, min IoU 0.943, and
+  7 skipped `reference_mismatch` fixtures. The no-catalog arbitrary path
+  improved from the same-session baseline 7.59s to
+  `out/road-source-cache-current-ab-20260529/full-report.json` at 7.40s with
+  identical 8/8 scored accuracy, avg IoU 0.962, min IoU 0.931, and preserved
+  Phoenix/Nashville road-refined sources.
 
 ## Remaining Bottlenecks
 

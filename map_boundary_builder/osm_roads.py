@@ -59,14 +59,34 @@ def refine_transform_with_osm_roads(
         return None
     if feature_distance is None:
         feature_distance = image_feature_distance(rgb)
-    cache_key = road_refine_cache_key(feature_distance, city_center, initial, lock_scale=lock_scale)
+    road_source_digest = road_points_source_digest(city_center.bbox)
+    cache_key = road_refine_cache_key(
+        feature_distance,
+        city_center,
+        initial,
+        lock_scale=lock_scale,
+        road_source_digest=road_source_digest,
+    )
     cached = read_road_refine_cache(cache_key)
     if cached is not None:
         return cached
 
-    road_points = load_road_points(city_center.bbox)
+    road_points = load_road_points(city_center.bbox, road_source_digest=road_source_digest)
     if road_points.size == 0:
         return None
+    loaded_source_digest = road_points_source_digest(city_center.bbox)
+    if loaded_source_digest != road_source_digest:
+        road_source_digest = loaded_source_digest
+        cache_key = road_refine_cache_key(
+            feature_distance,
+            city_center,
+            initial,
+            lock_scale=lock_scale,
+            road_source_digest=road_source_digest,
+        )
+        cached = read_road_refine_cache(cache_key)
+        if cached is not None:
+            return cached
     road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
     feature_scores = feature_score_image(feature_distance)
     base_score, base_count = score_georeference_transform_on_score_image(road_points, feature_scores, initial)
@@ -169,6 +189,7 @@ def road_refine_cache_key(
     initial: GeoreferenceTransform,
     *,
     lock_scale: bool,
+    road_source_digest: str,
 ) -> str:
     feature_digest = hashlib.sha256(np.ascontiguousarray(feature_distance).data).hexdigest()
     bbox = tuple(round(value, 5) for value in (city_center.bbox or ()))
@@ -176,6 +197,7 @@ def road_refine_cache_key(
         ROAD_REFINE_CACHE_VERSION,
         feature_digest,
         json.dumps(bbox, separators=(",", ":")),
+        f"road-source={road_source_digest}",
         initial.source,
         f"{initial.lon:.8f}",
         f"{initial.lat:.8f}",
@@ -189,6 +211,39 @@ def road_refine_cache_key(
         "lock" if lock_scale else "free",
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def road_points_source_digest(bbox: tuple[float, float, float, float] | None) -> str:
+    if bbox is None:
+        return "none"
+    key = overpass_cache_file(bbox).stem
+    seeded = seed_road_points(key)
+    if seeded is not None:
+        contiguous = np.ascontiguousarray(seeded)
+        digest = hashlib.sha256()
+        digest.update(b"seed")
+        digest.update(key.encode("ascii"))
+        digest.update(str(tuple(contiguous.shape)).encode("ascii"))
+        digest.update(str(contiguous.dtype).encode("ascii"))
+        digest.update(contiguous.data)
+        return digest.hexdigest()
+
+    return overpass_source_digest(bbox)
+
+
+def overpass_source_digest(bbox: tuple[float, float, float, float]) -> str:
+    key = overpass_cache_file(bbox).stem
+    cache_path = overpass_cache_file(bbox)
+    if not cache_path.exists():
+        return f"missing:{key}"
+    try:
+        digest = hashlib.sha256()
+        digest.update(b"overpass")
+        digest.update(key.encode("ascii"))
+        digest.update(cache_path.read_bytes())
+        return digest.hexdigest()
+    except OSError:
+        return f"overpass-unreadable:{key}"
 
 
 def road_refine_search_grids(*, lock_scale: bool) -> dict[str, np.ndarray]:
@@ -690,12 +745,22 @@ def sample_road_points(road_points: np.ndarray, *, max_points: int) -> np.ndarra
     return road_points[::step]
 
 
+def load_road_points(
+    bbox: tuple[float, float, float, float],
+    *,
+    road_source_digest: str | None = None,
+) -> np.ndarray:
+    if road_source_digest is None:
+        road_source_digest = road_points_source_digest(bbox)
+    return _load_road_points_cached(bbox, road_source_digest)
+
+
 @lru_cache(maxsize=256)
-def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
+def _load_road_points_cached(bbox: tuple[float, float, float, float], road_source_digest: str) -> np.ndarray:
     seeded = seed_road_points(overpass_cache_file(bbox).stem)
     if seeded is not None:
         return seeded
-    payload = load_overpass_roads(bbox)
+    payload = load_overpass_roads(bbox, road_source_digest=road_source_digest)
     points: list[tuple[float, float]] = []
     for element in payload.get("elements", []):
         geometry = element.get("geometry", [])
@@ -708,6 +773,10 @@ def load_road_points(bbox: tuple[float, float, float, float]) -> np.ndarray:
         step = int(np.ceil(len(arr) / 45000))
         arr = arr[::step]
     return arr
+
+
+load_road_points.cache_clear = _load_road_points_cached.cache_clear  # type: ignore[attr-defined]
+load_road_points.cache_info = _load_road_points_cached.cache_info  # type: ignore[attr-defined]
 
 
 def seed_road_points(key: str) -> np.ndarray | None:
@@ -769,8 +838,21 @@ def sample_line(points: list[tuple[float, float]], spacing_m: float) -> list[tup
     return samples
 
 
+def load_overpass_roads(
+    bbox: tuple[float, float, float, float],
+    *,
+    road_source_digest: str | None = None,
+) -> dict[str, object]:
+    if road_source_digest is None:
+        road_source_digest = overpass_source_digest(bbox)
+    return _load_overpass_roads_cached(bbox, road_source_digest)
+
+
 @lru_cache(maxsize=256)
-def load_overpass_roads(bbox: tuple[float, float, float, float]) -> dict[str, object]:
+def _load_overpass_roads_cached(
+    bbox: tuple[float, float, float, float],
+    road_source_digest: str,
+) -> dict[str, object]:
     west, south, east, north = bbox
     cache_path = overpass_cache_file(bbox)
     if cache_path.exists():
@@ -797,6 +879,10 @@ out geom;
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(payload) + "\n")
     return payload
+
+
+load_overpass_roads.cache_clear = _load_overpass_roads_cached.cache_clear  # type: ignore[attr-defined]
+load_overpass_roads.cache_info = _load_overpass_roads_cached.cache_info  # type: ignore[attr-defined]
 
 
 def overpass_cache_file(bbox: tuple[float, float, float, float]) -> Path:
