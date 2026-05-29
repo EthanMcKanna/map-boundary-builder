@@ -5,8 +5,9 @@
       "type": "Feature",
       "properties": {
         "catalog_source": "current-verified-ocr-output",
-        "catalog_status": "stale",
-        "catalog_stale_reason": "Known changed live service area after saved screenshot/reference capture; exclude from production catalog matching until refreshed.",
+        "catalog_status": "active",
+        "catalog_refresh_evidence": "Reactivated after matching the current external reference polygon at 0.992894 IoU.",
+        "catalog_reference_iou": 0.992894,
         "slug": "bay-area-zoox",
         "georeference_source": "ocr-georeference:nominatim-label-fit",
         "georeference_confidence": 0.93

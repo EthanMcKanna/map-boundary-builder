@@ -134,8 +134,11 @@ def match_service_area_catalog(
 def has_active_catalog_area_hint(text: str | None) -> bool:
     if text is None or not text.strip():
         return False
+    provider_hint = catalog_provider_hint(text)
     return any(
-        entry.is_active and catalog_area_matches_text(entry.area, text)
+        entry.is_active
+        and catalog_provider_matches_hint(entry.provider, provider_hint)
+        and catalog_area_matches_text(entry.area, text)
         for entry in load_catalog_entries()
     )
 
@@ -143,8 +146,11 @@ def has_active_catalog_area_hint(text: str | None) -> bool:
 def has_stale_catalog_area_hint(text: str | None) -> bool:
     if text is None or not text.strip():
         return False
+    provider_hint = catalog_provider_hint(text)
     return any(
-        not entry.is_active and catalog_area_matches_text(entry.area, text)
+        not entry.is_active
+        and catalog_provider_matches_hint(entry.provider, provider_hint)
+        and catalog_area_matches_text(entry.area, text)
         for entry in load_catalog_entries()
     )
 
@@ -323,6 +329,18 @@ def catalog_area_token_matches(expected: str, observed: str) -> bool:
     if len(expected) < 6 or len(observed) < 5:
         return False
     return edit_distance_at_most_one(expected, observed)
+
+
+def catalog_provider_hint(text: str) -> str | None:
+    tokens = set(normalize_catalog_area_tokens(text))
+    for provider in PROVIDER_STYLES:
+        if provider in tokens:
+            return provider
+    return None
+
+
+def catalog_provider_matches_hint(provider: str, provider_hint: str | None) -> bool:
+    return provider_hint is None or provider == provider_hint
 
 
 def edit_distance_at_most_one(left: str, right: str) -> bool:

@@ -1784,6 +1784,28 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   3.405s, Bay Area 3.500s. The second pass is faster than the immediate
   pre-change production drift smoke for all three hard OCR cases: Houston
   4.65s, Miami 11.61s, and Bay Area 9.95s.
+- Reactivated only the changed-market catalog entries that match current
+  external references: Bay Area Tesla at 0.953635 IoU, Bay Area Zoox at
+  0.992894 IoU, and Houston Tesla at 0.945032 IoU. Bay Area Waymo, Houston
+  Waymo, Miami Waymo, and Las Vegas Zoox remain reference mismatches. Catalog
+  hint detection is now provider-aware, so `Waymo Bay Area` and `Waymo Houston`
+  still avoid stale catalog matches while `Tesla Bay Area`, `Zoox San
+  Francisco`, and `Tesla Houston` can use the verified fast path.
+- Validation after provider-aware reactivation: focused
+  API/cache/catalog/benchmark tests passed 35/35, full pytest passed 107 tests
+  plus 9 subtests, `compileall`, `node --check`, and `git diff --check` passed.
+  Fresh-cache catalog benchmark
+  `out/reactivated-catalog-default-20260529/full-report.json` passed 11/11
+  scored fixtures, skipped 4 reference mismatches, avg IoU 0.985, min IoU
+  0.943, total 0.67s. The no-catalog generalization gate
+  `out/reactivated-catalog-no-catalog-20260529/full-report.json` passed 11/11,
+  avg IoU 0.962, min IoU 0.931, total 4.28s.
+- Changed-market no-network smoke
+  `out/reactivated-catalog-stale-no-network-20260529/report.json` had zero
+  attempted geocoder/OSM `urlopen` calls. Bay Area Tesla, Bay Area Zoox, and
+  Houston Tesla used `catalog-shape-match` in 0.051s, 0.039s, and 0.023s;
+  Bay Area Waymo, Houston Waymo, and Miami Waymo stayed on OCR/georeference with
+  `catalog_slug: null` in 0.570s, 0.349s, and 0.690s.
 
 ## Remaining Bottlenecks
 
