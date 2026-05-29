@@ -45,6 +45,12 @@ GENERAL_EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_GENERAL_
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
+LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
+LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.945
+LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
+LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO = 0.92
+LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
+LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
 
 
 @dataclass(frozen=True)
@@ -189,6 +195,27 @@ def build_boundary(
                     rgb=rgb,
                     progress=progress,
                 )
+            catalog_match = low_resolution_shape_catalog_match(
+                extraction,
+                width=width,
+                height=height,
+                city_input=city_input,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
+                    extraction,
+                    catalog_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:low-res-shape",
+                )
 
         if used_catalog_scaled_extraction:
             if labels_future is None:
@@ -238,6 +265,27 @@ def build_boundary(
                         opts=opts,
                         rgb=rgb,
                         progress=progress,
+                    )
+                catalog_match = low_resolution_shape_catalog_match(
+                    extraction,
+                    width=width,
+                    height=height,
+                    city_input=city_input,
+                )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:low-res-shape",
                     )
 
         label_y_max = (
@@ -409,6 +457,31 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
     return max(width, height) <= CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION
 
 
+def low_resolution_shape_catalog_match(
+    extraction,
+    *,
+    width: int,
+    height: int,
+    city_input: str | None,
+):
+    if max(width, height) > LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION:
+        return None
+    if extraction.confidence < LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE:
+        return None
+    match = match_service_area_catalog(
+        extraction.pixel_geometry,
+        style=extraction.style,
+        min_iou=LOW_RES_SHAPE_CATALOG_MIN_IOU,
+        min_margin=LOW_RES_SHAPE_CATALOG_MIN_MARGIN,
+        area_hint_texts=[city_input] if city_input is not None else None,
+    )
+    if match is None:
+        return None
+    if not (LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO <= match.area_ratio <= LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO):
+        return None
+    return match
+
+
 def should_overlap_ocr_with_extraction(
     *,
     city_input: str | None,
@@ -466,6 +539,7 @@ def finish_catalog_boundary_result(
     opts: BoundaryBuildOptions,
     rgb,
     progress: ProgressCallback | None,
+    georeference_source: str = "catalog-shape-match",
 ) -> BoundaryBuildResult:
     data = catalog_feature_collection(
         extraction,
@@ -475,14 +549,16 @@ def finish_catalog_boundary_result(
         image_path=image_path,
         city_input=city_input,
     )
-    combined_confidence = data["features"][0]["properties"]["combined_confidence"]
+    properties = data["features"][0]["properties"]
+    properties["georeference_source"] = georeference_source
+    combined_confidence = properties["combined_confidence"]
     emit_progress(
         progress,
         stage="georeference",
         message="Matched known service-area shape",
         percent=78,
         details={
-            "source": "catalog-shape-match",
+            "source": georeference_source,
             "catalog_slug": catalog_match.entry.slug,
             "shape_iou": round(catalog_match.iou, 3),
             "combined_confidence": combined_confidence,

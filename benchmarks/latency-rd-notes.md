@@ -1928,6 +1928,22 @@ OCR/georeference rather than returning outdated fast-path polygons.
   the accurate low-res path for known service-area shapes; arbitrary
   single-label screenshots still need a stronger independent georeferencing
   signal before accepting a no-catalog road-only fit.
+- Low-resolution high-margin shape catalog fast path: known service-area
+  screenshots at <=520px now get one guarded pre-OCR near-match pass after the
+  strict catalog pass. The guard requires extraction confidence >=0.98, shape
+  IoU >=0.945, runner-up margin >=0.24, and area ratio 0.92-1.08, and reports
+  `catalog-shape-match:low-res-shape` so it stays auditable. The exact issue #5
+  artifact now skips OCR and completes locally in 0.05s with the same Nashville
+  bbox, confidence 0.951, shape IoU 0.951, and margin 0.274. Downscaled
+  stale-ground-truth Waymo Bay Area/Houston/Miami screenshots still returned no
+  low-res shape match, while current-verified Bay Area Tesla/Zoox and Houston
+  Tesla matched their active current catalog entries. Focused catalog/OCR tests
+  passed 60/60; full pytest passed 109 tests plus 9 subtests. The drift-aware
+  catalog benchmark `out/lowres-shape-default-20260529/full-report.json` passed
+  8/8 scored fixtures, skipped 7 reference mismatches, avg IoU 0.993, min IoU
+  0.943, total 0.47s. The no-catalog gate
+  `out/lowres-shape-no-catalog-20260529/full-report.json` passed 8/8, skipped
+  7 reference mismatches, avg IoU 0.962, min IoU 0.931, total 3.84s.
 
 ## Remaining Bottlenecks
 
