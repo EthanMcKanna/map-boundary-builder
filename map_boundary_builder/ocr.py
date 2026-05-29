@@ -16,6 +16,18 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .runtime_config import (
+    RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
+    RAPIDOCR_CLS_BATCH_NUM,
+    RAPIDOCR_DET_LIMIT_SIDE_LEN,
+    RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
+    RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
+    RAPIDOCR_MAX_DIMENSION,
+    RAPIDOCR_REC_BATCH_NUM,
+    TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
+    rapidocr_warm_detector_limit,
+)
+
 
 @dataclass(frozen=True)
 class OcrLabel:
@@ -30,26 +42,6 @@ class OcrLabel:
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
 OCR_CACHE_VERSION = "ocr-labels-v5"
-RAPIDOCR_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", "1600")))
-RAPIDOCR_DET_LIMIT_SIDE_LEN = max(0, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", "608")))
-RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = max(
-    0,
-    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", "640")),
-)
-RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = max(
-    0,
-    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION", "1000")),
-)
-RAPIDOCR_CLS_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", "24")))
-RAPIDOCR_REC_BATCH_NUM = max(1, int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", "12")))
-RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = max(
-    0,
-    int(os.environ.get("MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS", "2")),
-)
-TESSERACT_FALLBACK_MIN_USEFUL_LABELS = max(
-    0,
-    int(os.environ.get("MAP_BOUNDARY_TESSERACT_FALLBACK_MIN_USEFUL_LABELS", "3")),
-)
 _OCR_MEMORY_CACHE: dict[str, tuple[OcrLabel, ...]] = {}
 
 
@@ -292,12 +284,6 @@ def warm_rapidocr_runtime() -> bool:
     except Exception:
         return False
     return True
-
-
-def rapidocr_warm_detector_limit() -> int:
-    if RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN > 0:
-        return RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN
-    return RAPIDOCR_DET_LIMIT_SIDE_LEN
 
 
 def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:

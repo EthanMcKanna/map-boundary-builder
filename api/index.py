@@ -25,6 +25,7 @@ from map_boundary_builder.runtime_warmup import (
     prewarm_generation_runtime,
     should_prewarm_generation_runtime,
 )
+from map_boundary_builder.runtime_config import ocr_runtime_config
 
 DEFAULT_SIMPLIFY_PX = 6.0
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -424,6 +425,7 @@ def health_payload(*, warm: str | None = None) -> dict[str, Any]:
         "tesseract": shutil.which("tesseract"),
         "tmp_writable": os.access(tempfile.gettempdir(), os.W_OK),
         "pipeline_version": get_pipeline_version(),
+        "ocr": ocr_runtime_config(),
     }
     if should_prewarm_generation_runtime(warm):
         payload["warm"] = prewarm_generation_runtime()
