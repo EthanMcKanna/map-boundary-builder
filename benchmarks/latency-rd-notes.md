@@ -3485,3 +3485,15 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `out/filename-cache-changed-smoke-20260529/full-report.json` passed six
   Houston/Miami/Bay Area `reference_mismatch` smokes with zero failures and kept
   the drifted Waymo screenshots on OCR/georeference with `catalog_slug: null`.
+- Production deployment `dpl_3tjT9uhdi3FfV5QuUyskBbsohWHk` is explicitly
+  aliased to `https://mapboundary.app` with semantic filename-hint cache keys and
+  pipeline hash `pipeline-47f7f83c39e970ec`. Protected-deployment warm health
+  and public `/api/health?warm=ocr` returned HTTP 200 with `ok: true`, `cv2
+  4.10.0`, and warm `status: ok`; public `HEAD /api/health` returned HTTP 200,
+  and the root HTML embeds the new hash. Production two-filename proof used the
+  same Avride Dallas PNG with `include_overlay=0` and normalized cache disabled:
+  `avride-dallas-pipeline-version-...png` missed at `total_before_send_s:
+  2.584s`, while `avride-dallas-ui-...-ui.png` normalized to the same semantic
+  filename hint and hit raw run cache at `total_before_send_s: 0.006s`, returning
+  the same Dallas bbox, `ocr-georeference:nominatim-label-fit`, and confidence
+  0.847.
