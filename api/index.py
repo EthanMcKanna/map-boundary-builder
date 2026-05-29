@@ -187,7 +187,7 @@ class handler(BaseHTTPRequestHandler):
             events.append({"timestamp": time.time(), **event})
 
         include_overlay = bool_field(fields, "include_overlay", default=True)
-        normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=True)
+        normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=False)
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
         options = SimpleNamespace(

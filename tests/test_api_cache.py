@@ -16,6 +16,7 @@ from api.index import (
     LEGACY_CRON_WARM_PATH,
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     authorized_cron_request,
+    bool_field,
     cached_run_payload,
     cached_run_response_status,
     cron_warm_generation_payload,
@@ -663,6 +664,11 @@ class ApiRunCacheTests(unittest.TestCase):
         html, _mime = web_asset_response("index.html")
 
         self.assertIn(b'name="normalized_cache_lookup" value="0"', html)
+
+    def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
+        self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))
+        self.assertFalse(bool_field({"normalized_cache_lookup": "0"}, "normalized_cache_lookup", default=False))
+        self.assertTrue(bool_field({"normalized_cache_lookup": "1"}, "normalized_cache_lookup", default=False))
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:

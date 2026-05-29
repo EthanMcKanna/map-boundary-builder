@@ -4654,3 +4654,19 @@ with zero failures in 0.531s.
   helper is intentionally outside the pipeline hash inputs; generation outputs
   are unchanged. Houston, Miami, and Bay Area remain drift/reference-mismatch
   smoke markets until their saved ground truth is refreshed.
+- API direct-upload normalized-cache default candidate: the browser UI already
+  sends `normalized_cache_lookup=0` for fresh uploads, but direct API clients
+  still paid the default decoded-pixel cache lookup before every cache miss. A
+  live Phoenix PNG proof on `dpl_HeQemJZX963znzndkPZYvVWzFzGE` with the old API
+  default preserved `catalog-shape-match` / `phoenix-waymo` but spent
+  `normalized_cache_lookup_s: 0.356810`, `build_boundary_s: 0.320440`, and
+  `total_before_send_s: 0.741824`. The same upload with
+  `normalized_cache_lookup=0` preserved the exact same bbox, catalog slug,
+  confidence, and source while reducing server `total_before_send_s` to
+  `0.295363` with `build_boundary_s: 0.284534`. The API default now matches the
+  UI fast path (`False`), while callers can still opt in with
+  `normalized_cache_lookup=1` when cross-compression pixel cache hits are worth
+  the decode cost. Focused API tests passed 33/33, full pytest passed 216 tests
+  plus 9 subtests, compileall passed, and both drift-aware catalog/no-catalog
+  regression gates passed with zero active IoU drops. This changes cache lookup
+  policy only, not extraction, OCR, georeferencing, or generated GeoJSON.
