@@ -38,8 +38,8 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
         self.assertFalse(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=True))
-        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
-        self.assertFalse(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Houston", allow_catalog=True))
+        self.assertTrue(should_overlap_ocr_with_extraction(city_input="Bay Area", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Miami", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Atlantis", allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input="Phoenix", allow_catalog=False))
@@ -47,8 +47,8 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_pre_ocr_catalog_only_runs_when_it_can_match(self) -> None:
         self.assertTrue(should_try_pre_ocr_catalog(city_input=None, allow_catalog=True))
         self.assertTrue(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=True))
-        self.assertTrue(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
-        self.assertTrue(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Houston", allow_catalog=True))
+        self.assertFalse(should_try_pre_ocr_catalog(city_input="Bay Area", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Miami", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Atlantis", allow_catalog=True))
         self.assertFalse(should_try_pre_ocr_catalog(city_input="Phoenix", allow_catalog=False))
@@ -143,6 +143,18 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["filename"], "Miami.png")
         self.assertEqual(payload["events"][-1]["message"], "Boundary export ready from cache")
+
+    def test_cached_run_payload_can_include_request_profile(self) -> None:
+        cached = {
+            "city": "Phoenix",
+            "summary": {"city": "Phoenix"},
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+        profile = {"cache_hit": "raw", "total_before_send_s": 0.012345}
+
+        payload = cached_run_payload(cached, "run-id", "Phoenix.png", [], profile=profile)
+
+        self.assertEqual(payload["profile"], profile)
 
     def test_json_response_body_gzips_large_payloads_when_supported(self) -> None:
         payload = {"data": "x" * 4096}

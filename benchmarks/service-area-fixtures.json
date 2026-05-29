@@ -4,7 +4,19 @@
       "status": "reference_mismatch",
       "note": "The Bay Area service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
     },
+    "bay-area-tesla": {
+      "status": "reference_mismatch",
+      "note": "The Bay Area service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+    },
+    "bay-area-zoox": {
+      "status": "reference_mismatch",
+      "note": "The Bay Area service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+    },
     "houston-waymo": {
+      "status": "reference_mismatch",
+      "note": "The Houston service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+    },
+    "houston-tesla": {
       "status": "reference_mismatch",
       "note": "The Houston service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
     },

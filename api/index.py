@@ -92,7 +92,11 @@ class handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def handle_create_run(self) -> None:
+        request_started = time.perf_counter()
         fields, files = self.parse_multipart()
+        profile: dict[str, Any] = {
+            "parse_multipart_s": elapsed_seconds(request_started),
+        }
         city = fields.get("city", "").strip() or None
         upload = files.get("image")
         if upload is None:
@@ -100,6 +104,7 @@ class handler(BaseHTTPRequestHandler):
         original_filename, image_bytes = upload
         if not image_bytes:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Uploaded image is empty.")
+        profile["upload_bytes"] = len(image_bytes)
 
         events: list[dict[str, Any]] = [
             {"stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}
@@ -118,21 +123,31 @@ class handler(BaseHTTPRequestHandler):
             write_mask_artifact=False,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
+        raw_cache_started = time.perf_counter()
         raw_cache_key = raw_run_result_cache_key(image_bytes, city, options)
         cached = read_run_result_cache(raw_cache_key)
+        profile["raw_cache_lookup_s"] = elapsed_seconds(raw_cache_started)
         if cached is not None:
+            profile["cache_hit"] = "raw"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
             self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events),
+                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
                 status=HTTPStatus.CREATED,
             )
             return
 
+        normalized_cache_started = time.perf_counter()
         cache_key = run_result_cache_key(image_bytes, city, options)
         cached = read_run_result_cache(cache_key)
+        profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
         if cached is not None:
+            raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "normalized"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
             self.send_json(
-                cached_run_payload(cached, run_id, original_filename, events),
+                cached_run_payload(cached, run_id, original_filename, events, profile=profile),
                 status=HTTPStatus.CREATED,
             )
             return
@@ -142,11 +157,14 @@ class handler(BaseHTTPRequestHandler):
         run_dir.mkdir(parents=True, exist_ok=True)
         image_path = run_dir / f"input{safe_extension(original_filename)}"
         output_path = run_dir / "boundary.geojson"
+        write_upload_started = time.perf_counter()
         image_path.write_bytes(image_bytes)
+        profile["write_upload_s"] = elapsed_seconds(write_upload_started)
 
         try:
             from map_boundary_builder.runner import build_boundary
 
+            build_started = time.perf_counter()
             result = build_boundary(
                 image_path,
                 city,
@@ -155,14 +173,17 @@ class handler(BaseHTTPRequestHandler):
                 options=options,
                 progress=progress,
             )
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
         except Exception as exc:
             self.send_json({"error": str(exc), "events": events[-20:]}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        artifacts_started = time.perf_counter()
         artifacts = {
             "geojson_inline": result.geojson,
         }
         if options.include_overlay:
             artifacts["overlay_data_url"] = inline_overlay(result.overlay_path)
+        profile["build_artifacts_s"] = elapsed_seconds(artifacts_started)
         payload = {
             "id": run_id,
             "city": result.summary["city"],
@@ -173,8 +194,13 @@ class handler(BaseHTTPRequestHandler):
             "events": events[-20:],
             "artifacts": artifacts,
         }
+        cache_write_started = time.perf_counter()
         write_run_result_cache(cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
+        profile["cache_write_s"] = elapsed_seconds(cache_write_started)
+        profile["cache_hit"] = "miss"
+        profile["total_before_send_s"] = elapsed_seconds(request_started)
+        payload["profile"] = profile
         self.send_json(payload, status=HTTPStatus.CREATED)
 
     def handle_create_report(self) -> None:
@@ -378,6 +404,10 @@ def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") ->
     }
 
 
+def elapsed_seconds(started: float) -> float:
+    return round(max(0.0, time.perf_counter() - started), 6)
+
+
 def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
     return run_result_cache_key_for_hash("image_pixel_sha256", normalized_image_sha256(image_bytes), city, options)
 
@@ -455,6 +485,8 @@ def cached_run_payload(
     run_id: str,
     original_filename: str,
     events: list[dict[str, Any]],
+    *,
+    profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = json.loads(json.dumps(cached))
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
@@ -479,4 +511,6 @@ def cached_run_payload(
             ],
         }
     )
+    if profile is not None:
+        payload["profile"] = profile
     return payload

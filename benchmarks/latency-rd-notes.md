@@ -1505,6 +1505,35 @@ path again.
   failed with 0.759 IoU, and at 1200px Orlando barely passed the threshold at
   0.781 while confidence stayed high enough that a simple guard would miss the
   regression. Rejected.
+- Drift-guard correction after user confirmation: Houston, Miami, and Bay Area
+  service areas are all treated as changed from the saved screenshot/reference
+  baseline, even when a saved reference still scores cleanly. Bay Area Tesla,
+  Bay Area Zoox, and Houston Tesla were re-added to
+  `benchmarks/service-area-fixtures.json` as `reference_mismatch`, and their
+  bundled catalog entries were marked stale alongside Bay Area Waymo, Houston
+  Waymo, and Miami Waymo. This prevents stale ground truth from serving as a
+  production accuracy shortcut until the provider/source polygons are refreshed.
+- Post-correction validation: focused API/cache/catalog/benchmark tests passed
+  30/30; full pytest passed 101 tests plus 9 subtests; compileall, JS syntax,
+  and `git diff --check` passed. Fresh production-shaped benchmark
+  `out/drift-guard-prodshape-default-20260529/full-report.json` passed 8/8
+  scored fixtures, skipped 7 reference mismatches, avg IoU 0.993, min IoU
+  0.943, total 0.46s. The no-catalog generalization gate
+  `out/drift-guard-prodshape-no-catalog-20260529/full-report.json` passed 8/8,
+  avg IoU 0.962, min IoU 0.931, total 4.02s, with every scored fixture under
+  1s locally.
+- Changed-market no-network smoke
+  `out/drift-guard-stale-market-no-network-20260529/report.json` covered Bay
+  Area Tesla, Bay Area Waymo, Bay Area Zoox, Houston Tesla, Houston Waymo, and
+  Miami Waymo. All six completed in 0.092-0.800s locally with zero attempted
+  `urlopen` calls and `catalog_slug: null`, proving the stale catalog guard is
+  active for the user-confirmed changed markets.
+- API request profiling was added to `/api/runs` responses to separate
+  multipart parsing, raw/normalized cache lookup, upload write, boundary
+  generation, artifact serialization, cache write, cache-hit type, and
+  total-before-send timing. This is an observability-only production aid so
+  future latency work can distinguish cold start, cache, generation, and
+  response overhead without changing the GeoJSON output.
 
 ## Remaining Bottlenecks
 

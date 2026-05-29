@@ -11,16 +11,13 @@ from map_boundary_builder.benchmark import (
 
 
 KNOWN_REFERENCE_MISMATCH_FIXTURES = {
+    "bay-area-tesla",
     "bay-area-waymo",
+    "bay-area-zoox",
+    "houston-tesla",
     "houston-waymo",
     "las-vegas-zoox",
     "miami-waymo",
-}
-
-CURRENT_REFERENCE_BACKED_FIXTURES = {
-    "bay-area-tesla",
-    "bay-area-zoox",
-    "houston-tesla",
 }
 
 
@@ -32,9 +29,6 @@ def test_known_stale_reference_fixtures_are_reference_mismatches() -> None:
     for slug in KNOWN_REFERENCE_MISMATCH_FIXTURES:
         assert fixtures[slug]["status"] == "reference_mismatch"
         assert "changed" in fixtures[slug]["note"] or "different shapes" in fixtures[slug]["note"]
-
-    assert CURRENT_REFERENCE_BACKED_FIXTURES.isdisjoint(fixtures)
-
 
 def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"

@@ -7,6 +7,7 @@ from shapely.ops import transform
 
 from map_boundary_builder.catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
+    catalog_area_matches_text,
     catalog_feature_collection,
     load_catalog_entries,
     match_service_area_catalog,
@@ -15,15 +16,12 @@ from map_boundary_builder.extract import ExtractionResult
 
 
 KNOWN_STALE_CATALOG_SLUGS = {
-    "bay-area-waymo",
-    "houston-waymo",
-    "miami-waymo",
-}
-
-CURRENT_REFERENCE_CATALOG_SLUGS = {
     "bay-area-tesla",
+    "bay-area-waymo",
     "bay-area-zoox",
     "houston-tesla",
+    "houston-waymo",
+    "miami-waymo",
 }
 
 STYLE_BY_PROVIDER = {
@@ -63,21 +61,9 @@ def test_catalog_shape_match_respects_area_hints() -> None:
     assert wrong_city_match is None
 
 
-def test_catalog_shape_match_accepts_bay_area_alias_hints() -> None:
-    entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-zoox")
-    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
-
-    san_francisco_match = match_service_area_catalog(
-        pixel_geometry,
-        style="dark-teal",
-        area_hint_texts=["San Francisco"],
-    )
-    sf_match = match_service_area_catalog(pixel_geometry, style="dark-teal", area_hint_texts=["SF"])
-
-    assert san_francisco_match is not None
-    assert san_francisco_match.entry.slug == "bay-area-zoox"
-    assert sf_match is not None
-    assert sf_match.entry.slug == "bay-area-zoox"
+def test_catalog_area_aliases_understand_bay_area_text() -> None:
+    assert catalog_area_matches_text("Bay Area", "San Francisco")
+    assert catalog_area_matches_text("Bay Area", "SF")
 
 
 def test_ocr_derived_catalog_entry_preserves_original_confidence_cap() -> None:
@@ -212,22 +198,6 @@ def test_known_changed_catalog_entries_are_not_matched() -> None:
 
         assert not entry.is_active
         assert match is None or match.entry.slug != slug
-
-
-def test_current_reference_catalog_entries_are_active() -> None:
-    entries = {item.slug: item for item in load_catalog_entries()}
-
-    assert CURRENT_REFERENCE_CATALOG_SLUGS <= set(entries)
-    for slug in CURRENT_REFERENCE_CATALOG_SLUGS:
-        entry = entries[slug]
-        pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
-        match = match_service_area_catalog(pixel_geometry, style=STYLE_BY_PROVIDER[entry.provider])
-
-        assert entry.is_active
-        assert entry.status == "active"
-        assert entry.stale_reason is None
-        assert match is not None
-        assert match.entry.slug == slug
 
 
 def test_current_verified_catalog_entry_uses_exact_ordered_contour_fit() -> None:
