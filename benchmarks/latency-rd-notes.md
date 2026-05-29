@@ -2549,15 +2549,18 @@ OCR/georeference rather than returning outdated fast-path polygons.
   because older gray-fill fixture experiments regressed when every native-size
   image bypassed RapidOCR's original file path, but production can opt in for
   images at or above a proven size threshold. With the production env set to
-  `1000`, `/api/health?warm=ocr` confirmed deployment
-  `pipeline-fa11531193f625dc` was using the native-array gate. Two fresh
+  `1000`, `/api/health?warm=ocr` confirmed deployments
+  `dpl_D2ied5f2SyjUHVMyE9Do56omspug` and
+  `dpl_6vZ9RqCkqBYmFySWVEkQjKCQxEg3` were using the native-array gate. Fresh
   cache-busted Avride Dallas uploads preserved `Dallas`,
-  `ocr-georeference:nominatim-label-fit`, and confidence 0.847 while reducing
-  warmed production OCR/server work from the prior rejected-detector baseline
-  of `ocr` 2.424s and server-before-send 2.837s to `ocr` 2.256s/server 2.692s
-  and then `ocr` 1.936s/server 2.214s. This is not the sub-second breakthrough
-  for arbitrary OCR-heavy maps, but it is a validated production win with the
-  safer default-path fallback still available.
+  `ocr-georeference:nominatim-label-fit`, and confidence 0.847. The first
+  native deployment produced two warm misses at `ocr` 2.256s/server 2.692s and
+  `ocr` 1.936s/server 2.214s. A controlled env-off production A/B on
+  `dpl_EvsZXSu74mC34SydxQnPnWGEySt6` put the default path at `ocr`
+  3.419s/server 4.237s and `ocr` 3.039s/server 3.363s, while the env-on
+  redeploy returned to `ocr` 2.379s/server 2.774s. This is not the sub-second
+  breakthrough for arbitrary OCR-heavy maps, but it is a validated production
+  win with the safer default-path fallback still available.
 
 ## Remaining Bottlenecks
 
