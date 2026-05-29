@@ -4590,3 +4590,13 @@ with zero failures in 0.531s.
   returned HTTP 200 on `pipeline-dcfbc49f8636cdde`. Keep both OpenCV package
   pins until Vercel/uv packaging can be proven to preserve the actual `cv2`
   module with only the headless distribution.
+- Rejected browser-side 1600px PNG raster downscaling before upload. The
+  hypothesis was that the client could avoid uploading/decoding pixels above
+  the server's extraction/OCR working size without changing GeoJSON. A
+  transformed fixture directory did cut no-catalog active max duration to
+  0.786924s, but the strict drift-aware gate failed against
+  `out/catalog-miss-cache-nocatalog-20260529/full-report.json`: average IoU
+  dropped from 0.961733 to 0.956696, Orlando fell from 0.931476 to 0.918943,
+  Phoenix from 0.983820 to 0.971733, Nashville from 0.986282 to 0.975796, and
+  Austin Tesla from 0.973925 to 0.965638. The change is not safe as a default
+  because it alters the model input before georeferencing.
