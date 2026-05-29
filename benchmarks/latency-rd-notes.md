@@ -3376,3 +3376,12 @@ OCR/georeference rather than returning outdated fast-path polygons.
   versus the current 3.79s memory-first baseline. Keep the existing file-path
   OCR overlap for arbitrary no-catalog images because it starts RapidOCR sooner
   and is materially faster on the full active suite.
+- Rejected reducing OSM road-refinement work for the no-catalog tail. Lowering
+  `MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS` below the current effective step-sampled
+  count damaged Nashville (`out/roadcap3000-focused-20260529/full-report.json`
+  and `out/roadcap2500-focused-20260529/full-report.json`, IoU 0.917 versus the
+  current 0.986). A skip-polish road search was faster on Phoenix/Nashville
+  (`out/road-skip-polish-focused-20260529/full-report.json`, 4.70s focused
+  total) but still reduced IoU to 0.976 Nashville and 0.980 Phoenix. Keep the
+  full road-refinement search because those last passes are buying real
+  alignment, not just score churn.
