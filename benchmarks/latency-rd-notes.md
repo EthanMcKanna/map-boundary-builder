@@ -4635,3 +4635,12 @@ with zero failures in 0.531s.
   0.429787`, OCR 0.157034s, georeference 0.080827s, and road refine 0.059052s.
   Keep this as a small deterministic road-refine/cache improvement, not as an
   overall OCR breakthrough.
+- Extended `/api/health?warm=ocr` to precompute the bundled road-seed digests
+  introduced above. This shifts deterministic seed hashing into the existing
+  UI/cron warmup path instead of the first road-refined generation after warmup.
+  Local warmup proof cleared the digest cache, ran `prewarm_generation_runtime`,
+  and reported `road_seed_entries: 3`, `road_seed_digest_entries: 3`, and
+  `CacheInfo(misses=3, currsize=3)` with warm status OK. Focused runtime/API/
+  road tests passed 51/51, full pytest passed 215 tests plus 9 subtests,
+  compileall passed, and `git diff --check` passed. This does not alter OCR,
+  extraction, georeferencing, or generated GeoJSON.

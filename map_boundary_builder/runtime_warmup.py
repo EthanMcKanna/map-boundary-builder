@@ -23,11 +23,15 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         seed_started = time.perf_counter()
         from .geocoder import load_geocoder_seed
         from .osm_places import load_osm_places_seed
-        from .osm_roads import load_road_points_seed
+        from .osm_roads import load_road_points_seed, seeded_road_points_source_digest
 
         profile["geocoder_seed_entries"] = len(load_geocoder_seed())
         profile["osm_place_seed_entries"] = len(load_osm_places_seed())
-        profile["road_seed_entries"] = len(load_road_points_seed())
+        road_seed = load_road_points_seed()
+        profile["road_seed_entries"] = len(road_seed)
+        profile["road_seed_digest_entries"] = sum(
+            1 for key in road_seed if seeded_road_points_source_digest(key) is not None
+        )
         profile["seed_s"] = elapsed_seconds(seed_started)
 
         extraction_started = time.perf_counter()
