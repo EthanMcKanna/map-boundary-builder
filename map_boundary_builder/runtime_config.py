@@ -12,6 +12,18 @@ def env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return max(minimum, value)
 
 
+def env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    return default
+
+
 RAPIDOCR_MAX_DIMENSION = env_int("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", 1600)
 RAPIDOCR_DET_LIMIT_SIDE_LEN = env_int("MAP_BOUNDARY_RAPIDOCR_DET_LIMIT_SIDE_LEN", 608)
 RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = env_int(
@@ -36,6 +48,14 @@ RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION",
     0,
 )
+ONNXRUNTIME_ENABLE_CPU_MEM_ARENA = env_bool(
+    "MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA",
+    True,
+)
+ONNXRUNTIME_ALLOW_SPINNING = env_bool(
+    "MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING",
+    True,
+)
 
 
 def rapidocr_warm_detector_limit() -> int:
@@ -56,4 +76,6 @@ def ocr_runtime_config() -> dict[str, Any]:
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
+        "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
+        "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,
     }

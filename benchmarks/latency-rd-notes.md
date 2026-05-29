@@ -2757,6 +2757,25 @@ OCR/georeference rather than returning outdated fast-path polygons.
   `ocr-georeference:nominatim-label-fit+osm-road-refine`; the georeference
   stage was 0.900s and total server time before send was 8.491s, dominated by
   5.818s of OCR rather than road search.
+- ONNX Runtime session tuning pass after the May 29 drift correction: enabling
+  CPU memory arena reuse while leaving ONNX thread spinning enabled preserved
+  the OCR model, detector thresholds, recognition batch, georeference logic, and
+  all GeoJSON outputs. Disabling thread spinning was rejected after it produced
+  much slower direct OCR and no-catalog gates on the local machine. With
+  `MAP_BOUNDARY_RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION=1000`, the no-arena/spinning
+  comparison gate `out/ortopts-noarena-spin-nocatalog-20260529/full-report.json`
+  passed 8/8 scored fixtures, skipped 7 `reference_mismatch` fixtures, avg IoU
+  0.962, min IoU 0.931, total 8.42s. The CPU-arena default gates
+  `out/ort-arena-default-nocatalog-20260529/full-report.json` and
+  `out/ort-arena-default2-nocatalog-20260529/full-report.json` preserved the
+  same 8/8 score, avg/min IoU, and skipped stale Houston/Miami/Bay Area pairs
+  at 8.22s and 8.26s. A faster 3.92s arena run was treated as a favorable
+  outlier rather than primary proof. The default catalog gate
+  `out/ort-arena-default-catalog-20260529/full-report.json` passed 8/8 scored,
+  skipped 7 stale pairs, avg IoU 0.993, min IoU 0.943, total 0.43s. Health now
+  exposes `onnxruntime_enable_cpu_mem_arena` and
+  `onnxruntime_allow_spinning` so production smokes can confirm the live session
+  settings.
 
 ## Remaining Bottlenecks
 

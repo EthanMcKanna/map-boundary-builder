@@ -18,6 +18,8 @@ import cv2
 import numpy as np
 
 from .runtime_config import (
+    ONNXRUNTIME_ALLOW_SPINNING,
+    ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
@@ -47,6 +49,7 @@ OCR_CACHE_VERSION = "ocr-labels-v5"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_MEMORY_CACHE_MAX = 128
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
+_RAPIDOCR_SESSION_OPTIONS_PATCHED = False
 
 
 def extract_ocr_labels(
@@ -441,11 +444,13 @@ def rapidocr_input_image(image_path: str | Path) -> tuple[Path, float, float]:
 
 @lru_cache(maxsize=2)
 def rapidocr_engine(det_limit_side_len: int | None = None):
+    configure_rapidocr_onnxruntime_session_options()
     return rapidocr_engine_without_classifier(**rapidocr_engine_kwargs(det_limit_side_len))
 
 
 @lru_cache(maxsize=2)
 def rapidocr_classifier_engine(det_limit_side_len: int | None = None):
+    configure_rapidocr_onnxruntime_session_options()
     from rapidocr_onnxruntime import RapidOCR
 
     return RapidOCR(**rapidocr_engine_kwargs(det_limit_side_len))
@@ -457,6 +462,40 @@ def rapidocr_engine_kwargs(det_limit_side_len: int | None = None) -> dict[str, i
     if det_limit > 0:
         kwargs["det_limit_side_len"] = det_limit
     return kwargs
+
+
+def configure_rapidocr_onnxruntime_session_options() -> None:
+    global _RAPIDOCR_SESSION_OPTIONS_PATCHED
+    if _RAPIDOCR_SESSION_OPTIONS_PATCHED:
+        return
+    try:
+        import onnxruntime as ort
+        from rapidocr_onnxruntime.utils import OrtInferSession
+    except Exception:
+        return
+
+    def init_sess_opts(config):
+        sess_opt = ort.SessionOptions()
+        sess_opt.log_severity_level = 4
+        sess_opt.enable_cpu_mem_arena = ONNXRUNTIME_ENABLE_CPU_MEM_ARENA
+        sess_opt.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        cpu_nums = os.cpu_count() or 1
+        intra_op_num_threads = config.get("intra_op_num_threads", -1)
+        if intra_op_num_threads != -1 and 1 <= intra_op_num_threads <= cpu_nums:
+            sess_opt.intra_op_num_threads = intra_op_num_threads
+
+        inter_op_num_threads = config.get("inter_op_num_threads", -1)
+        if inter_op_num_threads != -1 and 1 <= inter_op_num_threads <= cpu_nums:
+            sess_opt.inter_op_num_threads = inter_op_num_threads
+
+        allow_spinning = "1" if ONNXRUNTIME_ALLOW_SPINNING else "0"
+        sess_opt.add_session_config_entry("session.intra_op.allow_spinning", allow_spinning)
+        sess_opt.add_session_config_entry("session.inter_op.allow_spinning", allow_spinning)
+        return sess_opt
+
+    OrtInferSession._init_sess_opts = staticmethod(init_sess_opts)
+    _RAPIDOCR_SESSION_OPTIONS_PATCHED = True
 
 
 def rapidocr_engine_without_classifier(**kwargs):

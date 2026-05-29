@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -470,6 +471,60 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(
             rapidocr_detector_limit_for_input(np.zeros((400, 800, 3), dtype=np.uint8)),
             ocr_module.RAPIDOCR_DET_LIMIT_SIDE_LEN,
+        )
+
+    def test_configure_rapidocr_session_options_applies_runtime_defaults(self) -> None:
+        class FakeSessionOptions:
+            def __init__(self) -> None:
+                self.log_severity_level = None
+                self.enable_cpu_mem_arena = None
+                self.graph_optimization_level = None
+                self.intra_op_num_threads = None
+                self.inter_op_num_threads = None
+                self.entries = {}
+
+            def add_session_config_entry(self, key, value) -> None:
+                self.entries[key] = value
+
+        class FakeOrtInferSession:
+            pass
+
+        fake_ort = SimpleNamespace(
+            SessionOptions=FakeSessionOptions,
+            GraphOptimizationLevel=SimpleNamespace(ORT_ENABLE_ALL="all"),
+        )
+        fake_utils = SimpleNamespace(OrtInferSession=FakeOrtInferSession)
+        was_patched = ocr_module._RAPIDOCR_SESSION_OPTIONS_PATCHED
+        try:
+            ocr_module._RAPIDOCR_SESSION_OPTIONS_PATCHED = False
+            with (
+                patch.dict(
+                    "sys.modules",
+                    {
+                        "onnxruntime": fake_ort,
+                        "rapidocr_onnxruntime.utils": fake_utils,
+                    },
+                ),
+                patch.object(ocr_module.os, "cpu_count", return_value=8),
+                patch.object(ocr_module, "ONNXRUNTIME_ENABLE_CPU_MEM_ARENA", True),
+                patch.object(ocr_module, "ONNXRUNTIME_ALLOW_SPINNING", False),
+            ):
+                ocr_module.configure_rapidocr_onnxruntime_session_options()
+                opts = FakeOrtInferSession._init_sess_opts(
+                    {"intra_op_num_threads": 2, "inter_op_num_threads": 3}
+                )
+        finally:
+            ocr_module._RAPIDOCR_SESSION_OPTIONS_PATCHED = was_patched
+
+        self.assertTrue(opts.enable_cpu_mem_arena)
+        self.assertEqual(opts.intra_op_num_threads, 2)
+        self.assertEqual(opts.inter_op_num_threads, 3)
+        self.assertEqual(
+            opts.entries,
+            {
+                "session.intra_op.allow_spinning": "0",
+                "session.inter_op.allow_spinning": "0",
+            },
         )
 
     def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
