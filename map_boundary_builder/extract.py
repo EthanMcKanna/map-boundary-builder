@@ -338,7 +338,7 @@ def keep_main_components(mask: np.ndarray, max_components: int) -> np.ndarray:
         area = float(areas[label - 1])
         if area >= max(150.0, max_area * 0.015):
             keep.append(int(label))
-    return np.isin(labels, keep)
+    return select_component_labels(labels, keep)
 
 
 def remove_dark_teal_chrome(mask: np.ndarray, style: str) -> np.ndarray:
@@ -379,7 +379,17 @@ def remove_small_components(mask: np.ndarray, *, min_area: int) -> np.ndarray:
     keep = keep[keep != 0]
     if len(keep) == 0:
         return np.zeros_like(mask, dtype=bool)
-    return np.isin(labels, keep)
+    return select_component_labels(labels, keep)
+
+
+def select_component_labels(labels: np.ndarray, keep: list[int] | np.ndarray) -> np.ndarray:
+    if len(keep) == 0:
+        return np.zeros(labels.shape, dtype=bool)
+    keep_array = np.asarray(keep, dtype=np.intp)
+    label_count = int(labels.max(initial=0)) + 1
+    selected = np.zeros(label_count, dtype=bool)
+    selected[keep_array[(keep_array >= 0) & (keep_array < label_count)]] = True
+    return selected[labels]
 
 
 def fill_binary_holes(mask: np.ndarray) -> np.ndarray:

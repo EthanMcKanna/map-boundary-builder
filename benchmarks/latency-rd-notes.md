@@ -1595,6 +1595,25 @@ to OCR/georeference rather than returning an outdated fast-path polygon.
   server-side because OCR/georeference initialization dominated, but warmed
   cache-busted repeats completed server generation in 0.723s and 0.708s with
   no refine/preflight sequence.
+- May 29 user correction reconfirmed that Houston, Miami, and Bay Area service
+  areas have changed from the saved ground-truth baselines. Re-ran the six
+  drifted screenshots through a fresh no-network local smoke at
+  `out/user-confirmed-drift-no-network-20260529/report.json`; all stayed on
+  OCR/georeference with `catalog_slug: null`, zero attempted network calls, and
+  local generation from 0.075s to 0.680s. Keep these markets out of hard
+  regression scoring and out of production catalog matching until their source
+  polygons/screenshots are refreshed.
+- Replaced full-image `np.isin` connected-component label selection with a
+  direct boolean lookup table. This preserves exact component semantics while
+  reducing extraction CPU on large masks. Detached-baseline A/B against
+  `e75e4a8` improved the drift-aware extraction benchmark from 1.166s to
+  0.720s total, and the catalog-enabled in-process full benchmark from 0.621s
+  to 0.409s, with the same 8/8 scored fixtures, 7 skipped reference mismatches,
+  avg/min IoU, and catalog decisions. The no-catalog gate remained effectively
+  OCR-bound at 6.371s baseline versus 6.367s current; all 8 scored no-catalog
+  GeoJSON files were byte-for-byte identical between baseline and current.
+  Focused extract/benchmark tests passed, full pytest passed 104 tests plus 9
+  subtests, and compileall, JS syntax, and `git diff --check` passed.
 
 ## Remaining Bottlenecks
 
