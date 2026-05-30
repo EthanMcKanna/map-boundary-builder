@@ -5246,3 +5246,14 @@ with zero failures in 0.531s.
   same-class production OCR path, which had measured about 2.64-3.06s server
   time after warmup, so this is a roughly 6.8x-7.8x server-side improvement for
   known catalog screenshots whose user prompt names an included subcity.
+- User checkpoint at 2026-05-29 19:38 PDT: Houston, Miami, and Bay Area are
+  confirmed changed from the base saved ground truth. Keep those fixtures as
+  `reference_mismatch` smoke/data-debt cases until a full refreshed
+  screenshot/reference set replaces the old baseline. The targeted smoke
+  `out/user-drift-confirmed-smoke-20260530/full-report.json` ran all six
+  Houston/Miami/Bay Area fixtures with zero smoke failures: Bay Area Tesla
+  0.04s via `catalog-shape-match:retry`, Houston Tesla 0.01s via catalog,
+  Houston Waymo 0.54s via OCR/georeference, Miami Waymo 0.57s via
+  OCR/georeference plus road refine, Bay Area Zoox 0.04s via catalog, and Bay
+  Area Waymo 0.38s via OCR/georeference. These are current-behavior smoke
+  checks, not accuracy scoring against stale polygons.
