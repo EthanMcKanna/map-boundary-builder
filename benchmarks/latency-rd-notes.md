@@ -5490,3 +5490,13 @@ with zero failures in 0.531s.
   (`0.361/0.315s` vs `0.332/0.338s`). Focused asset/runner checks passed 3/3,
   then full pytest passed 239 tests plus 9 subtests; `compileall`,
   `node --check`, and `git diff --check` passed.
+- Deployed the generic skipped-probe handoff to production. Production
+  deployment `dpl_C8k7vXPBKzGDVPoTTbGbe8YrqBrC` is `Ready` and aliased to
+  `https://mapboundary.app`; public HTML references
+  `asset-e561ac3c20076c26`; public health is OK on backend
+  `pipeline-c69d42a455f16bce`; and the public hashed JS contains the
+  `catalogProbeCandidate` skipped-miss path. A live production A/B on a
+  pixel-distinct generic `Waymo Miami.png` upload preserved
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, null catalog slug, and
+  0.864 confidence while improving `build_boundary_s` from 3.347870 to 1.818301
+  and `total_before_send_s` from 3.577670 to 1.827001.
