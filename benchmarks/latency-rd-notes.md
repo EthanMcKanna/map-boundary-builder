@@ -5257,3 +5257,17 @@ with zero failures in 0.531s.
   OCR/georeference plus road refine, Bay Area Zoox 0.04s via catalog, and Bay
   Area Waymo 0.38s via OCR/georeference. These are current-behavior smoke
   checks, not accuracy scoring against stale polygons.
+- Production recheck after that correction kept the distinction clean on
+  `https://mapboundary.app` / `pipeline-bac75e416ecf253a`. Pixel-distinct
+  current full-size uploads from `/Users/ethanmckanna/Downloads/h-waymo.png`
+  and `/Users/ethanmckanna/Downloads/miami.png`, with city hints and overlays
+  off, both used refreshed catalog geometry: Houston returned
+  `catalog-shape-match` / `houston-waymo`, confidence 0.88, shape IoU 0.979470,
+  `build_boundary_s: 0.285704`, and `total_before_send_s: 0.295008`; Miami
+  returned `catalog-shape-match` / `miami-waymo`, confidence 0.897, shape IoU
+  0.985198, `build_boundary_s: 0.320008`, and `total_before_send_s: 0.325936`.
+  Browser-shaped 520px catalog probes were much lighter: the 28 KB Houston
+  probe returned in 0.229s wall / 0.091s server, and the 34 KB Miami probe
+  cached-repeat returned in 0.260s wall / 0.000527s server. The initial Miami
+  probe also matched catalog but had a one-off 0.469s raw cache lookup; repeat
+  behavior was normal.
