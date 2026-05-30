@@ -748,6 +748,10 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
+            b"const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE = 0.70;",
+            app_js,
+        )
+        self.assertIn(
             b"const CATALOG_PROBE_AREA_HINT_PATTERN =",
             app_js,
         )
@@ -769,6 +773,14 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         self.assertIn(
             b"summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug",
+            app_js,
+        )
+        self.assertIn(
+            b"if (!isProviderUiCatalogHandoffPayload(summary)) return false;",
+            app_js,
+        )
+        self.assertIn(
+            b"const scale = Math.min(1, FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension);",
             app_js,
         )
         self.assertIn(

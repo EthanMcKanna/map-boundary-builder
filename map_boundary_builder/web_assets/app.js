@@ -108,6 +108,10 @@ const FAST_CATALOG_HANDOFF_MAX_SIZE_RATIO = 0.75;
 const FAST_CATALOG_HANDOFF_WEBP_QUALITY = 0.92;
 const FAST_CATALOG_HANDOFF_MIN_PROBE_IOU = 0.5;
 const FAST_CATALOG_HANDOFF_MIN_CONFIDENCE = 0.84;
+const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE = 0.70;
+const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_IOU = 0.50;
+const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_AREA_RATIO = 0.55;
+const FAST_CATALOG_HANDOFF_PROVIDER_UI_MAX_AREA_RATIO = 2.20;
 const CATALOG_PROBE_HINT_PATTERNS = [
   /\bwaymo\b/,
   /\btesla\b/,
@@ -1049,10 +1053,33 @@ function isFastCatalogHandoffPayload(payload, catalogProbeResult) {
   if (CATALOG_PROBE_AREA_HINT_PATTERN.test(catalogProbeResult.catalogHintText || "")) {
     if (!catalogSlugMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText)) return false;
   } else if (catalogProbeResult.bestActiveCatalogSlug && summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug) {
-    return false;
+    if (!isProviderUiCatalogHandoffPayload(summary)) return false;
+    if (!catalogSlugProviderMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText || "")) return false;
   }
+  if (isProviderUiCatalogHandoffPayload(summary)) return true;
   const confidence = Number(summary.combined_confidence);
   return Number.isFinite(confidence) && confidence >= FAST_CATALOG_HANDOFF_MIN_CONFIDENCE;
+}
+
+function isProviderUiCatalogHandoffPayload(summary) {
+  const source = String(summary?.georeference_source || "");
+  if (!source.startsWith("catalog-shape-match:provider-ui-")) return false;
+  const confidence = Number(summary.combined_confidence);
+  const shapeIou = Number(summary.catalog_shape_iou);
+  const areaRatio = Number(summary.catalog_area_ratio);
+  return Number.isFinite(confidence)
+    && confidence >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE
+    && Number.isFinite(shapeIou)
+    && shapeIou >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_IOU
+    && Number.isFinite(areaRatio)
+    && areaRatio >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_AREA_RATIO
+    && areaRatio <= FAST_CATALOG_HANDOFF_PROVIDER_UI_MAX_AREA_RATIO;
+}
+
+function catalogSlugProviderMatchesHint(slug, hintText) {
+  if (!slug || !hintText || !CATALOG_PROBE_PROVIDER_HINT_PATTERN.test(hintText)) return true;
+  const provider = String(slug).toLowerCase().split("-").filter(Boolean).at(-1);
+  return Boolean(provider) && hintTextHasToken(hintText, provider);
 }
 
 function catalogSlugMatchesHint(slug, hintText) {
@@ -1078,8 +1105,7 @@ async function fastCatalogHandoffCandidate(file, probeCandidate) {
   if (!shouldPrepareFastCatalogHandoff(file, probeCandidate)) return null;
   const sourceCanvas = probeCandidate.sourceCanvas;
   const maxDimension = probeCandidate.maxDimension || Math.max(sourceCanvas.width, sourceCanvas.height);
-  if (maxDimension <= FAST_CATALOG_HANDOFF_MAX_DIMENSION) return null;
-  const scale = FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension;
+  const scale = Math.min(1, FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
   canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));

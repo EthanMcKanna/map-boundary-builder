@@ -7217,3 +7217,18 @@ with zero failures in 0.531s.
   OCR. The rejected baseline for the same UI-style path took 2.125640s with
   1.891764s in premature full-image OCR, so this removes the main frontend
   generic gray-fill tail without changing the direct output.
+- Medium WebP handoff candidate: after the no-hint probe-miss OCR deferral
+  fixed server time, the same generic gray-fill UI path still needed to upload
+  the 691922-byte PNG full image because the frontend only prepared a WebP
+  handoff when the source exceeded the 1600px handoff cap. A same-dimension
+  WebP handoff audit in `out/medium-handoff-audit-20260530/` showed that the
+  1200x1014 stress image could be encoded at quality 92 as 117256 bytes while
+  preserving `catalog-shape-match:provider-ui-label`, `austin-tesla`, evidence
+  IoU 0.593816, area ratio 0.854940, and 0.630679s total-before-send. The
+  accepted frontend candidate allows handoff WebP encoding even when no
+  downscale is needed, as long as the blob is still below the existing 75%
+  source-size ratio, and lets provider-UI label handoff payloads override a
+  weak low-res probe's best slug only when their own source-image evidence is
+  within the same provider-UI shape/area bounds. Validation passed 227 focused
+  API/runner/catalog/benchmark tests, full 293 tests plus 9 subtests,
+  compileall, JS syntax, and `git diff --check`.
