@@ -5929,3 +5929,39 @@ with zero failures in 0.531s.
   null catalog OCR/georeference for the old saved changed-market screenshots:
   Houston 1.462839s build / confidence 0.865, Miami 1.453690s / confidence
   0.864, and Bay Area 1.556886s / confidence 0.877.
+- Refreshed the warm arbitrary/no-catalog baseline after the probe deploy:
+  `out/continue-baseline-nocatalog-20260530b/full-report.json` passed 8/8
+  scored active fixtures, skipped the seven `reference_mismatch` fixtures, avg
+  IoU 0.961733, min IoU 0.931476, total active duration 2.922s, and max active
+  fixture 0.559s. Stage profiles still show OCR as the wall on large Waymo
+  screenshots: Dallas 0.449793s OCR, Phoenix 0.377344s, Los Angeles 0.363223s,
+  with extraction usually near 0.08-0.13s locally.
+- Rejected guarded lower OCR resolution after checking both accuracy and
+  self-consistency. `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1000` and `=1200`
+  still passed the broad floor but cut mean IoU and dropped Phoenix/Los Angeles
+  materially; `=1400` failed Nashville. More importantly, two low-resolution
+  outputs can agree while both are wrong relative to full OCR: 1000px versus
+  1200px had IoU 0.986 on stale Miami while each was only about 0.685 versus
+  the full output, 0.952 on Phoenix while only 0.806/0.838 versus full, and
+  0.956 on Los Angeles while only about 0.911/0.912 versus full. Confidence,
+  residuals, and road scores did not reliably distinguish the bad cases, so
+  "two small OCRs agree" is not a safe validator.
+- Rejected lowering the general extraction cap as a no-catalog default.
+  `MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION=1200`, `=1400`, and `=1800`
+  preserved broad pass/fail but introduced strict IoU drops on active fixtures
+  such as Phoenix, San Antonio, Dallas, or Nashville, and the parallel timing
+  samples were slower/noisy rather than proving a production win. Keep the
+  1600px general extraction cap for arbitrary/no-catalog generation.
+- Rejected enabling runner OCR caching by default. With
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=1`, the no-catalog gate preserved 8/8 scored
+  active fixtures and avg/min IoU, but total active duration rose from 2.922s
+  to 3.584s because first-run visual/canonical OCR cache hashing costs are paid
+  before any cache hit. Default catalog mode stayed clean, but this should
+  remain opt-in for repeated/variant workflows rather than becoming a default
+  first-upload latency path.
+- A catalog-probe dimension sweep found no immediate frontend knob to ship.
+  Existing 520px JPEG probes already hit all current active benchmark catalog
+  shapes and missed the old saved Houston/Miami/Bay Area Waymo screenshots.
+  Larger 640px/800px probes raised upload sizes without recovering any of those
+  stale changed-market misses, so the current 520px client probe remains the
+  right latency/accuracy tradeoff.
