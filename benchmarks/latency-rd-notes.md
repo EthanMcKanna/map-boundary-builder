@@ -7062,3 +7062,11 @@ with zero failures in 0.531s.
   changed-market scoring
   `out/provider-ui-tightpad-current-changed-market-score-20260530/full-report.json`,
   full 288 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.
+  Production `dpl_DosAzmV8RydGB8Z1YAVPJzkNtmkE` served
+  `pipeline-689adeea10dbe186`; cache-busted no-city uploads preserved the same
+  `las-vegas-zoox` catalog result. `IMG_0071.PNG` improved to
+  0.363694-0.484853s total before send, and `IMG_0226.PNG` improved to
+  1.035027-1.127561s total before send with OCR down to 0.768674-0.824353s.
+  A follow-up 0.20 pad attempt still matched locally, but it did not beat the
+  0.25 proof and made the hard-image label evidence less direct in the top OCR
+  labels, so it was rejected before deployment.
