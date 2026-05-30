@@ -498,6 +498,15 @@ def build_boundary(
                 style=extraction.style,
                 city_input=city_input,
             )
+            if catalog_match is None:
+                catalog_match = filename_hinted_current_catalog_shape_match(
+                    extraction,
+                    city_input=city_input,
+                    filename_hint=filename_hint,
+                )
+                catalog_match_source = (
+                    "catalog-shape-match:filename-shape" if catalog_match is not None else None
+                )
             if catalog_match is not None:
                 return finish_catalog_boundary_result(
                     extraction,
@@ -1664,6 +1673,60 @@ def current_catalog_label_shape_match(extraction, labels: list[Any]) -> ServiceA
         margin=best_iou - runner_up_iou,
         fitted_mercator_geometry=best_fitted,
         rotation_degrees=best_rotation,
+        confidence_override=CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE,
+    )
+
+
+def filename_hinted_current_catalog_shape_match(
+    extraction,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> ServiceAreaCatalogMatch | None:
+    if extraction.confidence < CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE:
+        return None
+    if not catalog_style_supported(extraction.style):
+        return None
+    hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
+    provider_hint = catalog_provider_hint(hint_text)
+    if provider_hint is None:
+        return None
+    candidates = [
+        entry
+        for entry in load_catalog_entries()
+        if (
+            entry.is_active
+            and getattr(entry, "catalog_source", None) in CURRENT_CATALOG_COMPLETION_SOURCES
+            and entry.provider == provider_hint
+            and extraction.style in PROVIDER_STYLES.get(entry.provider, set())
+            and catalog_area_matches_text(entry.area, hint_text)
+        )
+    ]
+    if len(candidates) != 1:
+        return None
+
+    entry = candidates[0]
+    iou, area_ratio, scored_entry, fitted, rotation_degrees = score_catalog_entry(
+        extraction.pixel_geometry,
+        entry,
+        min_iou=entry.min_iou,
+    )
+    if iou < CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU:
+        return None
+    if not (
+        CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO
+        <= area_ratio
+        <= CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO
+    ):
+        return None
+    return catalog_match_from_score(
+        extraction.pixel_geometry,
+        scored_entry,
+        iou=iou,
+        area_ratio=area_ratio,
+        margin=iou,
+        fitted_mercator_geometry=fitted,
+        rotation_degrees=rotation_degrees,
         confidence_override=CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE,
     )
 

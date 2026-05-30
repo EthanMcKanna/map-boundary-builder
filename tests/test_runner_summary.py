@@ -487,6 +487,102 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
     ]
 
 
+def test_catalog_probe_miss_filename_shape_shortcut_avoids_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Houston.catalog-handoff.webp"
+    Image.new("RGB", (1600, 1600), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((1600, 1600, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(400, 300), (1300, 300), (1300, 1200), (400, 1200)]),
+        coverage_ratio=0.32,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+
+    def fake_score_catalog_entry(pixel_geometry, seen_entry, *, min_iou):
+        assert pixel_geometry is extraction.pixel_geometry
+        assert seen_entry is entry
+        assert min_iou == entry.min_iou
+        return 0.58, 1.12, entry, extraction.pixel_geometry, 0.0
+
+    def fake_catalog_match_from_score(_pixel_geometry, scored_entry, **kwargs):
+        assert scored_entry is entry
+        assert kwargs["confidence_override"] == runner.CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE
+        return SimpleNamespace(entry=entry)
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("filename-shape handoff shortcut should avoid OCR")
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **kwargs):
+        return BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score_catalog_entry)
+    monkeypatch.setattr(runner, "catalog_match_from_score", fake_catalog_match_from_score)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            catalog_probe_missed=True,
+            filename_hint="Waymo Houston.catalog-handoff.webp",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert result.summary["catalog_slug"] == "houston-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:filename-shape"
+
+
+def test_filename_shape_shortcut_requires_provider_hint(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(400, 300), (1300, 300), (1300, 1200), (400, 1200)]),
+        coverage_ratio=0.32,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    def unexpected_catalog_scan():
+        raise AssertionError("area-only filenames must not use the filename-shape shortcut")
+
+    monkeypatch.setattr(runner, "load_catalog_entries", unexpected_catalog_scan)
+
+    assert (
+        runner.filename_hinted_current_catalog_shape_match(
+            extraction,
+            city_input=None,
+            filename_hint="Houston.catalog-handoff.webp",
+        )
+        is None
+    )
+
+
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "Tesla Bay Area.png"
     Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)

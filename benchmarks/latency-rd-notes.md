@@ -6525,3 +6525,33 @@ with zero failures in 0.531s.
   Houston Waymo in 1.973s wall / 0.771907s before-send, Miami Waymo in 1.590s
   / 0.620985s, and Bay Area Waymo in 0.655s / 0.064674s, all fresh cache misses
   with current catalog slugs preserved.
+- Filename/provider current-catalog handoff shortcut: after the user confirmed
+  Houston, Miami, and Bay Area service areas have changed from the saved base
+  ground-truth fixtures, the handoff path now treats those saved references as
+  stale and only uses current active catalog geometry when the filename/city
+  hint includes an explicit provider plus a unique active area match. This lets
+  provider-named handoff files skip the low-detail OCR used by
+  `catalog-shape-match:label-shape`, while area-only generic filenames still
+  avoid the shortcut. Local direct 1600px handoff builds in
+  `out/filename-shape-handoff-local-20260530h/summary.json` returned Houston
+  Waymo in 0.068260s and Miami Waymo in 0.071507s through
+  `catalog-shape-match:filename-shape`; Bay Area stayed OCR-free on
+  `catalog-shape-match:probe-miss-full` in 0.061507s. A generic-filename
+  browser safety run in
+  `out/filename-shape-handoff-local-20260530h/browser-summary.json` did not use
+  the filename shortcut for `houston.png` or `miami.png`, preserving the OCR
+  label-shape guard when the provider is not explicit. A provider-named local
+  browser run in
+  `out/filename-shape-handoff-local-20260530h/browser-provider-summary.json`
+  completed Houston in 0.884s wall / 0.067955s server before-send and Miami in
+  0.679s wall / 0.050609s server before-send via filename-shape; Bay Area still
+  finished from the one-shot tiny probe in 0.619s wall / 0.093392s server
+  before-send. Validation passed focused shortcut tests, full pytest
+  266/266 plus 9 subtests, `compileall -q map_boundary_builder tests`,
+  `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`. Drift-aware benchmark
+  `out/filename-shape-current-catalog-rerun-20260530h/full-report.json` scored
+  Houston/Miami/Bay Area against current catalog geometry at 3/3 IoU 1.000,
+  while `out/filename-shape-active-default-20260530h/full-report.json`
+  preserved the unchanged active suite at 8/8 scored, avg IoU 0.993, min IoU
+  0.943, and zero regression issues against the previous baseline.
