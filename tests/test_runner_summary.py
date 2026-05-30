@@ -686,7 +686,7 @@ def test_catalog_probe_only_accepts_hinted_verified_near_hit(tmp_path, monkeypat
     assert result.summary["georeference_source"] == "catalog-shape-match:probe-near-hit"
 
 
-def test_catalog_probe_near_hit_requires_provider_hint() -> None:
+def test_catalog_probe_near_hit_accepts_unique_unhinted_verified_source(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((20, 20), dtype=bool),
         style="bright-blue",
@@ -695,12 +695,166 @@ def test_catalog_probe_near_hit_requires_provider_hint() -> None:
         contour_count=1,
         confidence=1.0,
     )
+    bay = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Bay Area",
+        slug="bay-area-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+    miami = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Miami",
+        slug="miami-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        if entry is bay:
+            return 0.881, 1.03, entry, Polygon(), 0.0
+        return 0.22, 0.8, entry, Polygon(), 0.0
+
+    def fake_catalog_match_from_score(_pixel_geometry, entry, **kwargs):
+        assert entry is bay
+        assert kwargs["margin"] > runner.CATALOG_PROBE_UNHINTED_NEAR_HIT_MIN_MARGIN
+        return SimpleNamespace(entry=entry, iou=kwargs["iou"], margin=kwargs["margin"], area_ratio=kwargs["area_ratio"])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay, miami])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+    monkeypatch.setattr(runner, "catalog_match_from_score", fake_catalog_match_from_score)
+
+    match = runner.catalog_probe_near_hit_match(
+        extraction,
+        city_input=None,
+        filename_hint="uploaded-map.webp",
+    )
+
+    assert match is not None
+    assert match.entry.slug == "bay-area-waymo"
+
+
+def test_catalog_probe_near_hit_rejects_unhinted_low_margin(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    bay = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Bay Area",
+        slug="bay-area-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+    miami = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Miami",
+        slug="miami-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        if entry is bay:
+            return 0.881, 1.03, entry, Polygon(), 0.0
+        return 0.72, 1.01, entry, Polygon(), 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay, miami])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
 
     assert (
         runner.catalog_probe_near_hit_match(
             extraction,
             city_input=None,
-            filename_hint="Bay Area probe.webp",
+            filename_hint="uploaded-map.webp",
+        )
+        is None
+    )
+
+
+def test_post_georeference_catalog_completion_accepts_visible_current_subset(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.88,
+        use_exact_geometry=True,
+    )
+    visible_subset = Polygon([(1, 1), (7, 1), (7, 9), (1, 9)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    match = runner.post_georeference_catalog_completion_match(
+        extraction,
+        [OcrLabel("Houston", 10, 10, 80, 20, 96.0)],
+        visible_subset,
+        city_input=None,
+        filename_hint="uploaded-map.webp",
+        georef_confidence=0.91,
+    )
+
+    assert match is not None
+    assert match.entry.slug == "houston-waymo"
+    assert match.iou == pytest.approx(0.48)
+    assert match.area_ratio == pytest.approx(0.48)
+    assert match.margin == pytest.approx(1.0)
+    assert match.confidence == pytest.approx(runner.POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE)
+
+
+def test_post_georeference_catalog_completion_rejects_tiny_subset(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Miami",
+        slug="miami-waymo",
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.897,
+        use_exact_geometry=True,
+    )
+    tiny_visible_subset = Polygon([(1, 1), (5, 1), (5, 5), (1, 5)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    assert (
+        runner.post_georeference_catalog_completion_match(
+            extraction,
+            [OcrLabel("Miami", 10, 10, 80, 20, 96.0)],
+            tiny_visible_subset,
+            city_input=None,
+            filename_hint="uploaded-map.webp",
+            georef_confidence=0.91,
         )
         is None
     )

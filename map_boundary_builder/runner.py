@@ -11,11 +11,13 @@ from typing import Any, Callable
 import cv2
 from PIL import Image
 from shapely.geometry import shape
+from shapely.ops import transform
 
 from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_provider_hint,
     catalog_area_matches_text,
+    catalog_match_from_score,
     catalog_style_supported,
     catalog_feature_collection,
     has_active_catalog_city_hint,
@@ -112,9 +114,21 @@ CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD = 0.80
 CATALOG_PROBE_NEAR_HIT_MIN_IOU = 0.86
 CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO = 0.90
 CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO = 1.12
+CATALOG_PROBE_UNHINTED_NEAR_HIT_MIN_MARGIN = 0.24
+POST_GEOREF_CATALOG_COMPLETION_MIN_IOU = 0.40
+POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE = 0.84
+POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE = 0.40
+POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO = 0.40
+POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO = 1.25
+POST_GEOREF_CATALOG_COMPLETION_MIN_GEOREF_CONFIDENCE = 0.80
+POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE = 0.84
 OCR_DERIVED_CATALOG_SOURCES = {
     "current-verified-ocr-output",
     "verified-screenshot-ocr-output",
+}
+CURRENT_CATALOG_COMPLETION_SOURCES = {
+    "current-external-service-area-reference",
+    "current-verified-ocr-output",
 }
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
@@ -900,6 +914,32 @@ def build_boundary(
         if georef.road_match.anchor_label is not None:
             properties["road_match_anchor_label"] = georef.road_match.anchor_label.text
 
+    if allow_catalog:
+        catalog_completion_match = post_georeference_catalog_completion_match(
+            extraction,
+            labels,
+            geom,
+            city_input=city_input,
+            filename_hint=filename_hint,
+            georef_confidence=geo_transform.confidence,
+        )
+        if catalog_completion_match is not None:
+            return finish_catalog_boundary_result(
+                extraction,
+                catalog_completion_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input=city_input or "Auto",
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                rgb=rgb,
+                progress=progress,
+                georeference_source="catalog-shape-match:georef-contained",
+                catalog_label_hints=high_confidence_label_texts(labels)[:5],
+            )
+
     emit_progress(
         progress,
         stage="georeference",
@@ -1320,7 +1360,7 @@ def catalog_probe_near_hit_match(
     hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
     provider_hint = catalog_provider_hint(hint_text)
     if provider_hint is None:
-        return None
+        return catalog_probe_unhinted_near_hit_match(extraction)
     candidates = [
         entry
         for entry in load_catalog_entries()
@@ -1340,6 +1380,120 @@ def catalog_probe_near_hit_match(
         min_iou=CATALOG_PROBE_NEAR_HIT_MIN_IOU,
         min_area_ratio=CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO,
         max_area_ratio=CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO,
+    )
+
+
+def catalog_probe_unhinted_near_hit_match(extraction):
+    scored = []
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if getattr(entry, "catalog_source", None) not in OCR_DERIVED_CATALOG_SOURCES:
+            continue
+        if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        iou, area_ratio, scored_entry, fitted, rotation_degrees = score_catalog_entry(
+            extraction.pixel_geometry,
+            entry,
+            min_iou=entry.min_iou,
+        )
+        scored.append((iou, area_ratio, scored_entry, fitted, rotation_degrees))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_iou, best_area_ratio, best_entry, best_fitted, best_rotation = scored[0]
+    runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
+    margin = best_iou - runner_up_iou
+    if best_iou < CATALOG_PROBE_NEAR_HIT_MIN_IOU:
+        return None
+    if margin < CATALOG_PROBE_UNHINTED_NEAR_HIT_MIN_MARGIN:
+        return None
+    if not (CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO <= best_area_ratio <= CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO):
+        return None
+    return catalog_match_from_score(
+        extraction.pixel_geometry,
+        best_entry,
+        iou=best_iou,
+        area_ratio=best_area_ratio,
+        margin=margin,
+        fitted_mercator_geometry=best_fitted,
+        rotation_degrees=best_rotation,
+    )
+
+
+def post_georeference_catalog_completion_match(
+    extraction,
+    labels: list[Any],
+    lonlat_geometry,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    georef_confidence: float,
+) -> ServiceAreaCatalogMatch | None:
+    if georef_confidence < POST_GEOREF_CATALOG_COMPLETION_MIN_GEOREF_CONFIDENCE:
+        return None
+    if not catalog_style_supported(extraction.style):
+        return None
+
+    hint_texts = [
+        text
+        for text in [city_input, filename_hint, *high_confidence_label_texts(labels)]
+        if text and text.strip()
+    ]
+    if not hint_texts:
+        return None
+    provider_hint = catalog_provider_hint(" ".join(hint_texts))
+    candidates = []
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if getattr(entry, "catalog_source", None) not in CURRENT_CATALOG_COMPLETION_SOURCES:
+            continue
+        if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        if provider_hint is not None and entry.provider != provider_hint:
+            continue
+        if any(catalog_area_matches_text(entry.area, text) for text in hint_texts):
+            candidates.append(entry)
+    if len(candidates) != 1:
+        return None
+
+    entry = candidates[0]
+    output_mercator = transform(lambda x, y, z=None: lonlat_to_mercator(x, y), lonlat_geometry).buffer(0)
+    catalog_mercator = entry.mercator_geometry.buffer(0)
+    output_area = output_mercator.area
+    catalog_area = catalog_mercator.area
+    if output_area <= 0.0 or catalog_area <= 0.0:
+        return None
+    intersection_area = output_mercator.intersection(catalog_mercator).area
+    union_area = output_mercator.union(catalog_mercator).area
+    if union_area <= 0.0:
+        return None
+    iou = intersection_area / union_area
+    output_coverage = intersection_area / output_area
+    catalog_coverage = intersection_area / catalog_area
+    area_ratio = output_area / catalog_area
+    if iou < POST_GEOREF_CATALOG_COMPLETION_MIN_IOU:
+        return None
+    if output_coverage < POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE:
+        return None
+    if catalog_coverage < POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE:
+        return None
+    if not (
+        POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO
+        <= area_ratio
+        <= POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO
+    ):
+        return None
+    return catalog_match_from_score(
+        extraction.pixel_geometry,
+        entry,
+        iou=iou,
+        area_ratio=area_ratio,
+        margin=output_coverage,
+        fitted_mercator_geometry=output_mercator,
+        rotation_degrees=0.0,
+        confidence_override=min(POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE, georef_confidence),
     )
 
 

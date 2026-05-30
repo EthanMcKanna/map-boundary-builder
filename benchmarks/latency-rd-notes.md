@@ -6283,3 +6283,52 @@ with zero failures in 0.531s.
   hinted current Bay Area Waymo uploads from the tiny probe instead of sending a
   full image, while ambiguous filenames still fall through to the safer full
   path.
+- Promoted the same Bay Area Waymo probe near-hit path to generic filenames,
+  but only when the visual shape is uniquely close to an OCR-derived verified
+  catalog entry. The unhinted uniqueness scan
+  `out/probe-visual-uniqueness-20260530.json` showed the generic 520px Bay
+  probe at IoU 0.928644 against `bay-area-waymo` with a 0.701835 runner-up
+  margin in the saved fixture set, while stale Houston/Miami/Las Vegas misses
+  stayed below the near-hit threshold or margin. A direct local generic probe on
+  the production WebP candidate (`uploaded-map.catalog-probe.webp`) returned
+  `catalog-shape-match:probe-near-hit` for `bay-area-waymo`, the same bbox, and
+  0.877 confidence in 0.03568s. The all-fixture generic probe scan
+  `out/catalog-probe-520-unhinted-scan-20260530.json` kept stale
+  Houston/Miami/Las Vegas as misses and let Bay Area Waymo complete from the
+  tiny probe without relying on filename text. The neutral no-catalog gate was
+  timing-noisy in `out/unhinted-nearhit-neutral-nocatalog-20260530a/`, but that
+  path bypasses catalog matching and preserved the exact avg/min IoU values.
+- Added a separate current-catalog completion guard for drifted/cropped service
+  area screenshots after the user called out that Houston, Miami, and Bay Area
+  have all changed from the saved base truth. The guard only uses active
+  current catalog sources, requires matching provider/style plus area text,
+  georeference confidence >= 0.80, IoU >= 0.40, at least 84% of the extracted
+  georeferenced shape inside the catalog, at least 40% of the catalog visible,
+  and an extracted/catalog area ratio from 0.40 to 1.25. The current-image drift
+  gate `out/georef-contained-current-drift-score-20260530a/full-report.json`
+  passed all six Houston/Miami/Bay Area fixtures against current catalog
+  geometry with avg IoU 1.0, total duration 1.602148s, Houston Waymo 0.703951s,
+  Miami Waymo 0.461324s, and Bay Area Waymo 0.381165s. The same gate failed
+  before this completion step in `out/unhinted-nearhit-current-drift-score-20260530a/`
+  because Houston/Miami screenshots were visible subsets of newer full catalog
+  polygons rather than stale-reference matches.
+- Re-ran the same current-catalog drift gate with neutral upload names in
+  `out/georef-contained-current-drift-neutral-20260530a/full-report.json`.
+  It passed all six fixtures, avg IoU 0.965488, min IoU 0.79293, and total
+  duration 1.597456s. Houston/Miami/Bay Waymo all completed through
+  `catalog-shape-match:georef-contained` from image labels and geometry rather
+  than filename hints; Bay Area Tesla intentionally stayed on OCR/georeference
+  and still passed, which keeps the fallback path exercised instead of forcing a
+  catalog answer from weaker evidence.
+- Network-blocked neutral current-drift validation also passed in
+  `out/georef-contained-current-drift-neutral-blocknet-20260530a/full-report.json`
+  with avg IoU 0.965488, min IoU 0.79293, total duration 1.402441s, and all
+  six Houston/Miami/Bay Area current-catalog fixtures passing without live
+  geocoder/Overpass fallback. The broader active-fixture production-shaped gate
+  `out/georef-contained-default-20260530a/full-report.json` passed 8/8 scored
+  fixtures with avg IoU 0.992917, min IoU 0.943345, total duration 0.413499s,
+  max duration 0.076597s. The no-catalog neutral fallback gate
+  `out/georef-contained-neutral-nocatalog-20260530a/full-report.json` passed
+  with avg IoU 0.961733, min IoU 0.931476, total duration 2.993634s, and max
+  duration 0.56105s, confirming OCR/georeference still works when the catalog
+  shortcuts are disabled.
