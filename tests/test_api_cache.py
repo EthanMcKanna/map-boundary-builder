@@ -679,6 +679,23 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertIn(b'name="normalized_cache_lookup" value="0"', html)
 
+    def test_frontend_marks_unhinted_skipped_catalog_probe_as_missed(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        self.assertIn(
+            b"if (!probeCandidate.file) return probeCandidate.skippedMiss ? { missed: true } : null;",
+            app_js,
+        )
+        self.assertIn(
+            b"if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return { file: null, skippedMiss: !hasHint };",
+            app_js,
+        )
+        self.assertIn(
+            b"return { file: null, skippedMiss: true };",
+            app_js,
+        )
+
     def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))
         self.assertFalse(bool_field({"normalized_cache_lookup": "0"}, "normalized_cache_lookup", default=False))

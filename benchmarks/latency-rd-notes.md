@@ -5464,3 +5464,29 @@ with zero failures in 0.531s.
   image returned HTTP 201, `status: complete`, `catalog-shape-match`,
   `los-angeles-waymo`, no overlay artifact, `build_boundary_s: 0.079465`, and
   `total_before_send_s: 0.14166`.
+- Rejected lowering the arbitrary-path general extraction max dimension. Parallel
+  1400/1200/1000px probes were timing-contended, but all three still showed tiny
+  real active-fixture IoU drops. A clean sequential 1400px no-catalog rerun
+  failed the strict no-regression gate against
+  `out/prewarm-cancel-nocatalog-20260530/full-report.json`: Phoenix dropped
+  0.000356 IoU, San Antonio dropped 0.001403 IoU, mean IoU dropped 0.000141,
+  Phoenix took 1.038s, and total active duration was 5.720s. Keep the current
+  1600px arbitrary extraction default.
+- Rechecked production catalog probes for the user-confirmed drifted markets.
+  The saved Tesla Bay Area, Zoox SF/Bay Area, and Tesla Houston screenshots
+  still hit current verified catalog entries (`bay-area-tesla` 0.047673s before
+  send, `bay-area-zoox` 0.127372s, `houston-tesla` 0.026778s). The old Waymo Bay
+  Area, Houston, and Miami screenshots correctly returned `catalog_miss` rather
+  than stale catalog geometry (`0.537849s`, `0.455759s`, and `0.427810s` before
+  send respectively).
+- Accepted a browser handoff for generic uploads where the tiny catalog probe is
+  skipped before a network request. For unhinted skipped probes, the frontend now
+  marks the full upload as `catalog_probe_missed=1`, letting the server skip the
+  low-res broad catalog prepass, overlap OCR with extraction, and still attempt a
+  full-resolution catalog match after extraction. A local no-network generic
+  drift-image A/B preserved output/source/confidence while improving Miami from
+  `0.471/0.411s` to `0.307/0.300s`; Houston stayed neutral
+  (`0.297/0.286s` vs `0.304/0.287s`); Bay Area was mixed but safe
+  (`0.361/0.315s` vs `0.332/0.338s`). Focused asset/runner checks passed 3/3,
+  then full pytest passed 239 tests plus 9 subtests; `compileall`,
+  `node --check`, and `git diff --check` passed.

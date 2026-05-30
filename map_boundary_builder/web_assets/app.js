@@ -811,13 +811,13 @@ async function tryCatalogProbe(file, formData, options = {}) {
     note: "Trying a tiny shape probe before uploading the full screenshot.",
   });
   try {
-    const probeFile = await catalogProbeFile(file, formData);
-    if (!probeFile) return null;
+    const probeCandidate = await catalogProbeCandidate(file, formData);
+    if (!probeCandidate.file) return probeCandidate.skippedMiss ? { missed: true } : null;
     const probeData = new FormData();
     formData.forEach((value, name) => {
       if (name !== "image") probeData.append(name, value);
     });
-    probeData.set("image", probeFile, probeFile.name);
+    probeData.set("image", probeCandidate.file, probeCandidate.file.name);
     probeData.set("catalog_probe_only", "1");
     probeData.set("include_overlay", "0");
     probeData.set("normalized_cache_lookup", "0");
@@ -848,12 +848,14 @@ function hasCatalogProbeHint(file, formData) {
   return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
 }
 
-async function catalogProbeFile(file, formData) {
+async function catalogProbeCandidate(file, formData) {
   const hasHint = hasCatalogProbeHint(file, formData);
   const sourceCanvas = await imageFileToCanvas(file);
   const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
-  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return null;
-  if (!hasHint && !catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file)) return null;
+  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return { file: null, skippedMiss: !hasHint };
+  if (!hasHint && !catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file)) {
+    return { file: null, skippedMiss: true };
+  }
   const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
@@ -863,11 +865,14 @@ async function catalogProbeFile(file, formData) {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
   const blob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
-  if (!blob || blob.size >= file.size * 0.75) return null;
-  return new File([blob], `${fileBaseName(file.name)}.catalog-probe.jpg`, {
-    type: "image/jpeg",
-    lastModified: file.lastModified,
-  });
+  if (!blob || blob.size >= file.size * 0.75) return { file: null, skippedMiss: !hasHint };
+  return {
+    file: new File([blob], `${fileBaseName(file.name)}.catalog-probe.jpg`, {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    }),
+    skippedMiss: false,
+  };
 }
 
 function catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file) {
