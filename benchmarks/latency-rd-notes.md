@@ -5500,3 +5500,12 @@ with zero failures in 0.531s.
   `ocr-georeference:nominatim-label-fit+osm-road-refine`, null catalog slug, and
   0.864 confidence while improving `build_boundary_s` from 3.347870 to 1.818301
   and `total_before_send_s` from 3.577670 to 1.827001.
+- Tightened the skipped-probe heuristic after checking plausible generic
+  gray-fill screenshots. A production API A/B showed generic Tesla Dallas stayed
+  subsecond either way (`0.046622s` current vs `0.061497s` missed before send),
+  but generic Tesla Austin slowed from `0.087390s` to `0.262873s` before send
+  when forced through the missed handoff. The frontend now only infers
+  `catalog_probe_missed=1` for skipped probes that do not look service-area-like;
+  small or inefficient-to-resize service-area-like uploads keep the older server
+  catalog path. Focused checks passed 2/2, then full pytest passed 239 tests
+  plus 9 subtests; `compileall`, `node --check`, and `git diff --check` passed.

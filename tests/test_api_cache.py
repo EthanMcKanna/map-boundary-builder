@@ -688,7 +688,7 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
-            b"if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return { file: null, skippedMiss: !hasHint };",
+            b"return { file: null, skippedMiss: !looksServiceAreaLike };",
             app_js,
         )
         self.assertIn(

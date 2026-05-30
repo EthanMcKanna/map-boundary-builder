@@ -852,8 +852,11 @@ async function catalogProbeCandidate(file, formData) {
   const hasHint = hasCatalogProbeHint(file, formData);
   const sourceCanvas = await imageFileToCanvas(file);
   const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
-  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) return { file: null, skippedMiss: !hasHint };
-  if (!hasHint && !catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file)) {
+  const looksServiceAreaLike = hasHint || catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file);
+  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) {
+    return { file: null, skippedMiss: !looksServiceAreaLike };
+  }
+  if (!looksServiceAreaLike) {
     return { file: null, skippedMiss: true };
   }
   const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
@@ -865,7 +868,7 @@ async function catalogProbeCandidate(file, formData) {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
   const blob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
-  if (!blob || blob.size >= file.size * 0.75) return { file: null, skippedMiss: !hasHint };
+  if (!blob || blob.size >= file.size * 0.75) return { file: null, skippedMiss: !looksServiceAreaLike };
   return {
     file: new File([blob], `${fileBaseName(file.name)}.catalog-probe.jpg`, {
       type: "image/jpeg",
