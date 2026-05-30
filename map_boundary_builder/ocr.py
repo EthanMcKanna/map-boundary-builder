@@ -27,8 +27,6 @@ from .runtime_config import (
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_MAX_DIMENSION,
-    RAPIDOCR_INTER_OP_NUM_THREADS,
-    RAPIDOCR_INTRA_OP_NUM_THREADS,
     RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
@@ -851,10 +849,6 @@ def rapidocr_engine_kwargs(det_limit_side_len: int | None = None) -> dict[str, i
     det_limit = RAPIDOCR_DET_LIMIT_SIDE_LEN if det_limit_side_len is None else max(0, int(det_limit_side_len))
     if det_limit > 0:
         kwargs["det_limit_side_len"] = det_limit
-    if RAPIDOCR_INTRA_OP_NUM_THREADS > 0:
-        kwargs["intra_op_num_threads"] = RAPIDOCR_INTRA_OP_NUM_THREADS
-    if RAPIDOCR_INTER_OP_NUM_THREADS > 0:
-        kwargs["inter_op_num_threads"] = RAPIDOCR_INTER_OP_NUM_THREADS
     return kwargs
 
 

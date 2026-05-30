@@ -6070,3 +6070,14 @@ with zero failures in 0.531s.
   `out/ort-thread-default4-drift-smoke-20260530a/` (Houston 0.76s, Miami 0.63s,
   Bay Area 0.58s). This still needs protected Vercel A/B before any public
   alias because Vercel's effective CPU count may differ from local.
+- Protected Vercel A/B rejected the thread-bound RapidOCR default, so the code
+  was backed out and public aliases stayed on `pipeline-98930576fb78a091`.
+  Candidate `dpl_EEdmC9nJNsCaFBB9H9F5XqXbGK11`
+  (`pipeline-87cb6d64ce24e64e`) reported the intended health config
+  (`rapidocr_intra_op_num_threads: 4`, `rapidocr_inter_op_num_threads: 1`) and
+  warmed successfully, but cache-busted Houston OCR fallback was slower than
+  public production with identical output: first candidate run 2.012698s build
+  versus public 1.443904s, warmed repeat 1.748090s versus public 1.408276s.
+  The slowdown was concentrated in OCR (`1.435s` candidate versus `1.129s`
+  public on the repeat), so ONNX thread limiting is not a production win on the
+  current Vercel Python runtime.

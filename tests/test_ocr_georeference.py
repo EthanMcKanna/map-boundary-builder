@@ -631,21 +631,6 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_640, key_736)
 
-    def test_rapidocr_engine_kwargs_include_thread_limits(self) -> None:
-        kwargs = ocr_module.rapidocr_engine_kwargs()
-
-        self.assertEqual(kwargs["intra_op_num_threads"], 4)
-        self.assertEqual(kwargs["inter_op_num_threads"], 1)
-
-        with (
-            patch.object(ocr_module, "RAPIDOCR_INTRA_OP_NUM_THREADS", 0),
-            patch.object(ocr_module, "RAPIDOCR_INTER_OP_NUM_THREADS", 0),
-        ):
-            unlimited = ocr_module.rapidocr_engine_kwargs()
-
-        self.assertNotIn("intra_op_num_threads", unlimited)
-        self.assertNotIn("inter_op_num_threads", unlimited)
-
     def test_ocr_cache_key_depends_on_per_call_rapidocr_max_dimension(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"

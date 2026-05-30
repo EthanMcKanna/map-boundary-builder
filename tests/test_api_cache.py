@@ -585,8 +585,6 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
-        self.assertEqual(cold["ocr"]["rapidocr_intra_op_num_threads"], 4)
-        self.assertEqual(cold["ocr"]["rapidocr_inter_op_num_threads"], 1)
         self.assertTrue(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])
         self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_styles"], ["bright-blue", "gray-fill"])
