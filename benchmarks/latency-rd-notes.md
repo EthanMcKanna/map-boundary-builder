@@ -6997,3 +6997,24 @@ with zero failures in 0.531s.
   stale Houston/Miami/Bay Area saved fixtures without scoring them as truth.
   Full validation passed 282 tests plus 9 subtests, compileall, JS syntax, and
   `git diff --check`.
+- Retry-first production proof and guard tightening: commit `4c9d518` deployed
+  to production as `dpl_HNdftbsCgABonj1GkHj6n5zg8Ysc` with
+  `pipeline-a4b72325d928dae8`. Three cache-busted Bay Area Waymo uploads on
+  `https://mapboundary.app` returned the same current `bay-area-waymo` catalog
+  geometry, confidence 0.877, bbox
+  `[-122.4980521, 37.3075553, -121.8590466, 37.7981715]`, source
+  `catalog-shape-match:area-hint-current`, and evidence IoU 0.960519. Their
+  total-before-send timings were 0.387537s, 0.275179s, and 0.273362s, averaging
+  0.312026s versus the previous deployed average 0.507577s on matching
+  cache-busted Bay Area current-catalog runs. Current Houston and Miami sanity
+  checks still returned `houston-waymo` and `miami-waymo` catalog geometry in
+  0.222824s and 0.234901s total before send. A follow-up edge guard keeps the
+  retry-first heuristic provider-aware, so `Tesla Bay Area` does not inherit
+  the complex Waymo Bay Area shortcut, and skips a duplicate retry extraction
+  when a request already started at the retry dimension and still missed. The
+  follow-up validation passed 96 focused tests, 284 full tests plus 9 subtests,
+  compileall, JS syntax, `git diff --check`, default active regression
+  `out/dupguard-default2-20260530/full-report.json`, no-catalog regression
+  `out/dupguard-nocatalog-20260530/full-report.json`, and current changed-market
+  catalog scoring
+  `out/dupguard-current-changed-market-score2-20260530/full-report.json`.

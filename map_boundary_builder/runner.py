@@ -489,6 +489,7 @@ def build_boundary(
             filename_hint=filename_hint,
             allow_pre_ocr_catalog=allow_pre_ocr_catalog,
             used_catalog_scaled_extraction=used_catalog_scaled_extraction,
+            initial_extract_max_dimension=extraction_max_dimension,
             catalog_style_can_match=catalog_style_can_match,
             catalog_probe_only=catalog_probe_only_enabled(opts),
         ):
@@ -1505,12 +1506,14 @@ def area_hinted_current_catalog_should_start_at_retry_dimension(
     hint_texts = [text for text in (city_input, filename_hint) if text and text.strip()]
     if not hint_texts:
         return False
+    provider_hint = catalog_provider_hint(" ".join(hint_texts))
     candidates = [
         entry
         for entry in load_catalog_entries()
         if (
             getattr(entry, "is_active", False)
             and getattr(entry, "catalog_source", None) == "current-verified-ocr-output"
+            and (provider_hint is None or getattr(entry, "provider", None) == provider_hint)
             and any(catalog_area_matches_text(getattr(entry, "area", ""), hint) for hint in hint_texts)
         )
     ]
@@ -1541,6 +1544,7 @@ def should_retry_pre_ocr_catalog(
     filename_hint: str | None,
     allow_pre_ocr_catalog: bool,
     used_catalog_scaled_extraction: bool,
+    initial_extract_max_dimension: int = CATALOG_EXTRACT_MAX_DIMENSION,
     catalog_style_can_match: bool = True,
     catalog_probe_only: bool = False,
 ) -> bool:
@@ -1549,6 +1553,8 @@ def should_retry_pre_ocr_catalog(
     if not catalog_style_can_match:
         return False
     if CATALOG_RETRY_EXTRACT_MAX_DIMENSION <= CATALOG_EXTRACT_MAX_DIMENSION:
+        return False
+    if initial_extract_max_dimension >= CATALOG_RETRY_EXTRACT_MAX_DIMENSION:
         return False
     if CATALOG_RETRY_EXTRACT_MAX_DIMENSION >= CATALOG_MISS_REFINE_MAX_DIMENSION:
         return False

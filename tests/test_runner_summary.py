@@ -1343,6 +1343,7 @@ def test_area_hinted_current_catalog_match_rejects_when_best_shape_is_different_
 def test_complex_area_hinted_current_catalog_starts_at_retry_dimension(monkeypatch) -> None:
     entry = SimpleNamespace(
         is_active=True,
+        provider="waymo",
         catalog_source="current-verified-ocr-output",
         area="Bay Area",
         geometry=Polygon([(index, index % 7) for index in range(151)]),
@@ -1377,6 +1378,40 @@ def test_smaller_area_hinted_current_catalog_keeps_tiny_probe(monkeypatch) -> No
             allow_pre_ocr_catalog=True,
         )
         == runner.CATALOG_EXTRACT_MAX_DIMENSION
+    )
+
+
+def test_area_hinted_current_catalog_respects_provider_hint(monkeypatch) -> None:
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        catalog_source="current-verified-ocr-output",
+        area="Bay Area",
+        geometry=Polygon([(index, index % 7) for index in range(151)]),
+    )
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+
+    assert (
+        runner.initial_catalog_extract_max_dimension(
+            city_input="Tesla Bay Area",
+            filename_hint="Tesla Bay Area.png",
+            allow_pre_ocr_catalog=True,
+        )
+        == runner.CATALOG_EXTRACT_MAX_DIMENSION
+    )
+
+
+def test_pre_ocr_catalog_retry_skips_duplicate_retry_dimension() -> None:
+    assert (
+        runner.should_retry_pre_ocr_catalog(
+            city_input="Bay Area",
+            filename_hint="Waymo Bay Area.png",
+            allow_pre_ocr_catalog=True,
+            used_catalog_scaled_extraction=True,
+            initial_extract_max_dimension=runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+        )
+        is False
     )
 
 
