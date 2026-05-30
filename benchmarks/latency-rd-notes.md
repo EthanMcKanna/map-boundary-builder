@@ -5764,3 +5764,22 @@ with zero failures in 0.531s.
   and Bay Area 1.939980s. The public `mapboundary.app` alias remained on
   `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`, so the 1200px runtime cap was backed out
   and only the reproducibility harness should stay.
+- Accepted a slightly stricter fast-text OCR recognition filter. Lowering the
+  full OCR input size was rejected: `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200`
+  and `=1400` both caused large active-fixture IoU drops, especially Phoenix,
+  Orlando, Los Angeles, and Nashville. Raising `FAST_TEXT_OCR_MIN_AREA` was more
+  targeted because it keeps full-scale text detection and only avoids
+  recognizing smaller boxes on bright-blue and gray-fill styles. A 1200px text
+  area threshold was rejected after Phoenix dropped to IoU 0.851108, and 1000px
+  was also rejected because it produced a measurable Phoenix/mean IoU drop
+  under the no-regression gate. The 900px threshold passed strict local gates:
+  no-catalog `out/fast-text-area900-nocatalog-20260530/full-report.json`
+  preserved 8/8 active fixtures with avg IoU 0.961733, min IoU 0.931476, zero
+  regression issues, and total 2.58s versus 2.958559s in
+  `out/webp-decode-nocatalog-20260530/full-report.json`; default catalog
+  `out/fast-text-area900-default-20260530/full-report.json` passed 8/8 active
+  with zero regression issues; and
+  `out/fast-text-area900-drift-smoke-20260530/full-report.json` kept the
+  user-confirmed stale Houston/Miami/Bay Area fixtures as null-catalog
+  OCR/georeference handoffs with zero smoke failures. This is still pending
+  full test/build/protected-production validation before public promotion.

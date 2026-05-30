@@ -382,7 +382,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
-    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
+    assert ocr_kwargs == [{"rapidocr_min_text_area": 900.0, "cache": False}]
 
 
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
@@ -939,4 +939,4 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
 
     assert order == ["preload", "fit"]
     assert ocr_rgb_shapes == [(800, 1200, 3)]
-    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
+    assert ocr_kwargs == [{"rapidocr_min_text_area": 900.0, "cache": False}]
