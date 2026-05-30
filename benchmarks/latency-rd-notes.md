@@ -7232,3 +7232,14 @@ with zero failures in 0.531s.
   within the same provider-UI shape/area bounds. Validation passed 227 focused
   API/runner/catalog/benchmark tests, full 293 tests plus 9 subtests,
   compileall, JS syntax, and `git diff --check`.
+  Production commit `98747c3` deployed as
+  `dpl_8cVesVeC1HkdbYYaAyytw3GNzWtN`; the served `/static/app.js` included the
+  provider-UI handoff evidence guard and same-dimension WebP scale logic. The
+  browser-style production proof in `out/live-medium-handoff-prod-20260530/`
+  kept the 520px probe as a `catalog_miss` in 0.138195s total-before-send, then
+  encoded the follow-up handoff as a 117276-byte WebP (0.169 of the original
+  691922-byte PNG). The handoff returned `catalog-shape-match:provider-ui-label`,
+  `austin-tesla`, confidence 0.72, evidence IoU 0.593816, area ratio 0.854940,
+  and 0.628838s total-before-send; the new frontend acceptance guard accepts
+  that provider-UI evidence even though the tiny probe's weak best slug was
+  `dallas-tesla`, so the UI can stop before uploading the full PNG.
