@@ -880,9 +880,10 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
         order.append("preload")
         return {"geocoder_seed_entries": 1, "osm_place_seed_entries": 1, "road_seed_entries": 1}
 
-    def fake_fit_georeference(*_args, **_kwargs):
+    def fake_fit_georeference(*_args, **kwargs):
         order.append("fit")
         assert "preload" in order
+        assert kwargs["anchor_marker_dots"] is False
         return georef
 
     ocr_rgb_shapes: list[tuple[int, ...]] = []

@@ -1923,6 +1923,58 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         self.assertAlmostEqual(marker_x, 32.5)
         self.assertAlmostEqual(marker_y, 30.5)
 
+    def test_georeference_can_skip_marker_dot_anchoring(self) -> None:
+        labels = [OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96)]
+        context = CityContext(
+            query="Dallas",
+            center=GeocodeResult(
+                label="Dallas",
+                lon=-96.797,
+                lat=32.776,
+                display_name="Dallas, Dallas County, Texas, United States",
+                bbox=(-97.0, 32.6, -96.5, 33.0),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+        result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Dallas",
+                lon=-96.8,
+                lat=32.8,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=13.5,
+                rotation_radians=0.0,
+                confidence=0.9,
+                source="test",
+            ),
+            control_points=[],
+            residual_median_m=0.0,
+            residual_p90_m=0.0,
+        )
+
+        with (
+            patch(
+                "map_boundary_builder.georeference.anchor_labels_to_marker_dots",
+                side_effect=AssertionError("marker anchoring should be skipped"),
+            ) as anchor,
+            patch("map_boundary_builder.georeference.resolve_city_contexts", return_value=[context]),
+            patch("map_boundary_builder.georeference.georeference_from_label_context", return_value=result),
+        ):
+            georef = georeference_from_labels(
+                labels,
+                "input.png",
+                None,
+                width=680,
+                height=551,
+                anchor_marker_dots=False,
+            )
+
+        self.assertIs(georef, result)
+        anchor.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

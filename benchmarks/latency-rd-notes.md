@@ -5600,3 +5600,22 @@ with zero failures in 0.531s.
   Treat this as deterministic georeference cleanup; it is not strong enough on
   its own for a production promotion because end-to-end latency remains OCR
   dominated.
+- Accepted a guarded marker-anchor skip for non-dark extraction styles. A
+  throwaway identity-anchor probe over the active no-catalog fixtures preserved
+  every active IoU, source, and confidence while cutting total duration to
+  2.603024s, showing that bright-blue and gray-fill screenshots were paying the
+  marker detector only to discover there were no dark-map marker dots. The
+  runner now passes `anchor_marker_dots=False` into OCR/georeference fitting
+  unless the extracted style is `dark-teal`; direct georeference helper calls
+  still default to the old marker behavior. Focused tests cover both the runner
+  handoff and the explicit georeference opt-out. Clean validation stayed green:
+  `out/skip-marker-nocatalog-clean-20260530/full-report.json` passed 8/8 scored
+  fixtures with seven `reference_mismatch` skips, avg IoU 0.961733, min IoU
+  0.931476, active total 2.83s, and georeference stage total 0.419045s versus
+  0.446078s in the BILINEAR baseline; default catalog
+  `out/skip-marker-default-clean-20260530/full-report.json` passed 8/8 with avg
+  IoU 0.992917 and active total 0.35s; Waymo-only changed-market smoke
+  `out/skip-marker-waymo-drift-smoke-20260530/full-report.json` kept Houston,
+  Miami, and Bay Area Waymo on OCR/georeference with null catalog slugs; and
+  dark-teal no-catalog stress `out/skip-marker-dark-stress-20260530` succeeded
+  3/3 so Zoox-style maps still retain marker anchoring.

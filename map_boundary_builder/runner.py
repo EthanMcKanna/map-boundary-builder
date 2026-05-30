@@ -751,6 +751,7 @@ def build_boundary(
         label_y_min=label_y_min,
         label_y_max=label_y_max,
         road_feature_distance=road_feature_distance,
+        anchor_marker_dots=should_anchor_marker_dots(extraction.style),
         progress=progress,
     )
     if should_fallback_fast_text_ocr(labels_future_filtered, georef, style=extraction.style):
@@ -786,6 +787,7 @@ def build_boundary(
             label_y_min=label_y_min,
             label_y_max=label_y_max,
             road_feature_distance=road_feature_distance,
+            anchor_marker_dots=should_anchor_marker_dots(extraction.style),
             progress=progress,
         )
     if georef is None:
@@ -1393,7 +1395,8 @@ def fit_georeference(
     label_y_max: float | None,
     context_hints: list[CityContext] | None = None,
     road_feature_distance: Any | None = None,
-    progress: ProgressCallback | None,
+    anchor_marker_dots: bool = True,
+    progress: ProgressCallback | None = None,
 ):
     emit_progress(
         progress,
@@ -1421,6 +1424,7 @@ def fit_georeference(
                 label_y_min=label_y_min,
                 label_y_max=label_y_max,
                 road_feature_distance=road_feature_distance,
+                anchor_marker_dots=anchor_marker_dots,
             )
             if is_credible_context_hint_georeference(georef):
                 return georef
@@ -1465,6 +1469,7 @@ def fit_georeference(
             label_y_min=label_y_min,
             label_y_max=label_y_max,
             road_feature_distance=road_feature_distance,
+            anchor_marker_dots=anchor_marker_dots,
         )
 
     if georef is None and road_context_candidates and road_network_context_fallback_enabled():
@@ -1476,6 +1481,10 @@ def fit_georeference(
             progress=progress,
         )
     return georef
+
+
+def should_anchor_marker_dots(style: str) -> bool:
+    return style == "dark-teal"
 
 
 def road_network_context_fallback_enabled() -> bool:

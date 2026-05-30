@@ -505,6 +505,7 @@ def georeference_from_labels(
     label_y_min: float | None = None,
     label_y_max: float | None = None,
     road_feature_distance: np.ndarray | None = None,
+    anchor_marker_dots: bool = True,
 ) -> GeoreferenceResult | None:
     control_labels = labels
     if label_y_min is not None:
@@ -514,7 +515,8 @@ def georeference_from_labels(
     allow_two_control_fit = label_y_min is not None
     if allow_two_control_fit:
         control_labels = [label for label in control_labels if not is_top_left_title_label(label, width, height)]
-    control_labels = anchor_labels_to_marker_dots(control_labels, image_path, rgb=rgb)
+    if anchor_marker_dots:
+        control_labels = anchor_labels_to_marker_dots(control_labels, image_path, rgb=rgb)
     city_contexts = resolve_city_contexts(labels, city)
     best: tuple[float, GeoreferenceResult, CityContext] | None = None
     for city_context in city_contexts:
