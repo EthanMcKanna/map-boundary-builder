@@ -6732,3 +6732,30 @@ with zero failures in 0.531s.
   `out/current-profile-nocatalog-20260530/full-report.json`; default catalog
   `out/cache-hint-noise-default-20260530/full-report.json` passed 8/8 with zero
   regression issues against `out/realistic-warmup-active-20260530j/full-report.json`.
+- Direct hinted current-catalog shortcut: profiled the remaining direct-upload
+  catalog path for drifted Houston/Miami/Bay Area maps. Lowering
+  `CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION` from 875px to 580-760px preserved
+  Houston/Miami current-catalog IoU 1.0 in repeated A/B runs, but the timing
+  delta was noisy and too small to ship as a real win. A stronger structural
+  fix was to reuse the existing provider+area+shape guarded
+  `filename_hinted_current_catalog_shape_match` before OCR for normal direct
+  hinted uploads, not just after a catalog-probe handoff. The shortcut is still
+  disabled for `catalog_probe_only` so probe-only near-hit rules remain intact,
+  and it still requires a provider hint, unique active current-catalog entry,
+  compatible style, high extraction confidence, rough shape IoU, and sane area
+  ratio. Direct hinted Houston/Miami current-catalog scoring improved from the
+  prior label-shape OCR path (roughly 0.5-1.0s for the two fixtures in
+  `out/catalog-label-dim-875-20260530/`) to
+  `out/direct-hinted-filename-shape-guarded-20260530/full-report.json`: 2/2
+  at IoU 1.0, total 0.17s, sources `catalog-shape-match:filename-shape`.
+  The wider drift-aware current-catalog gate
+  `out/direct-filename-shape-drift-current-catalog-20260530/full-report.json`
+  passed 6/6 at IoU 1.0 in 0.26s, with Houston, Miami, and Bay Area Waymo using
+  `catalog-shape-match:filename-shape`. Validation passed focused runner/catalog
+  tests 66/66, full tests 272 plus 9 subtests, `compileall -q api
+  map_boundary_builder tests`, `node --check map_boundary_builder/web_assets/app.js`,
+  `git diff --check`, strict no-catalog active gate
+  `out/direct-filename-shape-nocatalog-20260530/full-report.json` with zero IoU
+  regression issues, and default active catalog gate
+  `out/direct-filename-shape-default-20260530/full-report.json` with zero IoU
+  regression issues.

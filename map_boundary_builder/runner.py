@@ -427,6 +427,27 @@ def build_boundary(
                     progress=progress,
                     georeference_source="catalog-shape-match:low-res-shape",
                 )
+            if not catalog_probe_only_enabled(opts):
+                catalog_match = filename_hinted_current_catalog_shape_match(
+                    extraction,
+                    city_input=city_input,
+                    filename_hint=filename_hint,
+                )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:filename-shape",
+                    )
             catalog_match = filename_hinted_avride_light_fill_catalog_match(
                 extraction,
                 filename_hint=filename_hint,
