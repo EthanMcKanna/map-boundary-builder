@@ -7109,3 +7109,23 @@ with zero failures in 0.531s.
   `out/gray-provider-nocatalog-20260530/full-report.json`, current changed-
   market scoring `out/gray-provider-current-changed-market-score-20260530/full-report.json`,
   full 290 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.
+- Gray-fill provider crop size candidate: the wider gray-fill crop path above
+  solved the generic no-city bottleneck, but it still used the shared 750px
+  provider crop cap. A direct OCR sweep on the prepared provider crops showed
+  that 700, 650, 600, 550, 500, 450, and 400px all preserved the generic
+  Austin match plus Tesla Bay Area, Houston, Austin, and Dallas matches. The
+  accepted candidate uses a style-specific 450px gray-fill cap as the safer
+  point before the 400px edge while leaving the dark-teal focused OCR path at
+  750px. Local proof `out/gray-provider-450-proof-20260530/` kept the generic
+  upload on `austin-tesla` via `catalog-shape-match:provider-ui-label` in
+  0.276889s with 22 cropped labels, kept Tesla Bay Area on
+  `bay-area-tesla` via cropped provider labels in 0.089297s, kept Tesla Houston
+  on a direct catalog match, and kept the hard dark Zoox screenshot on
+  `las-vegas-zoox` via `catalog-shape-match:provider-ui-focus-label` in
+  0.195153s. Validation passed 166 focused tests, default active regression
+  `out/gray-provider-450-default-20260530/full-report.json`, no-catalog
+  regression `out/gray-provider-450-nocatalog-20260530/full-report.json`,
+  current changed-market scoring
+  `out/gray-provider-450-current-changed-market-score-20260530/full-report.json`
+  for Houston, Miami, and Bay Area against current catalog data, full 291 tests
+  plus 9 subtests, compileall, JS syntax, and `git diff --check`.

@@ -102,6 +102,10 @@ PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_PROVIDER_UI_CROP_OCR_MAX_DIMENSION", "750")),
 )
+PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION", "450")),
+)
 PROVIDER_UI_CROP_PAD_RATIO = 0.25
 PROVIDER_UI_CROP_MIN_PAD_PX = 80.0
 PROVIDER_UI_FOCUS_CROP_ENABLED = os.environ.get("MAP_BOUNDARY_PROVIDER_UI_FOCUS_CROP", "1") != "0"
@@ -759,10 +763,9 @@ def build_boundary(
                     percent=42,
                     details={
                         "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
-                        "crop_rapidocr_max_dimension": (
-                            PROVIDER_UI_CROP_OCR_MAX_DIMENSION
-                            if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
-                            else None
+                        "crop_rapidocr_max_dimension": provider_ui_crop_ocr_max_dimension_for_style(
+                            extraction.style,
+                            rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                         ),
                     },
                 )
@@ -807,10 +810,9 @@ def build_boundary(
                 percent=43,
                 details={
                     "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
-                    "crop_rapidocr_max_dimension": (
-                        PROVIDER_UI_CROP_OCR_MAX_DIMENSION
-                        if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
-                        else None
+                    "crop_rapidocr_max_dimension": provider_ui_crop_ocr_max_dimension_for_style(
+                        extraction.style,
+                        rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                     ),
                 },
             )
@@ -1284,10 +1286,9 @@ def extract_provider_ui_labels_from_rgb(
         crop, offset_x, offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
     else:
         crop, offset_x, offset_y = provider_ui_ocr_crop(rgb, extraction.pixel_geometry.bounds)
-    crop_max_dimension = (
-        PROVIDER_UI_CROP_OCR_MAX_DIMENSION
-        if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
-        else rapidocr_max_dimension
+    crop_max_dimension = provider_ui_crop_ocr_max_dimension_for_style(
+        extraction.style,
+        rapidocr_max_dimension=rapidocr_max_dimension,
     )
     labels = extract_ocr_labels_from_rgb(
         str(image_path),
@@ -1316,6 +1317,18 @@ def provider_ui_focus_crop_enabled(extraction) -> bool:
         and PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
         and extraction.style in PROVIDER_UI_FOCUS_CROP_STYLES
     )
+
+
+def provider_ui_crop_ocr_max_dimension_for_style(style: str | None, *, rapidocr_max_dimension: int | None) -> int | None:
+    crop_max_dimension = (
+        PROVIDER_UI_CROP_OCR_MAX_DIMENSION
+        if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+        else rapidocr_max_dimension
+    )
+    if style == "gray-fill" and PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION > 0:
+        if crop_max_dimension is None or PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION < crop_max_dimension:
+            return PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION
+    return crop_max_dimension
 
 
 def provider_ui_focus_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
