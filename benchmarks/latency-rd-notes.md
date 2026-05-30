@@ -5308,3 +5308,21 @@ with zero failures in 0.531s.
   min IoU 0.931476, and active total 3.02s. Houston/Miami/Bay Area smoke
   `out/lowres-catalog-rgb-changed-smoke-20260530/full-report.json` passed all
   six user-confirmed `reference_mismatch` fixtures with zero smoke failures.
+- Deployed the low-resolution hinted catalog RGB path. Preview
+  `dpl_2ip2BCspepcrBz3dXQbDPAke4SGZ` reported
+  `pipeline-9d0b69512d8fe50c`, health OK, and `api/index.py (91.9MB) [sfo1]`.
+  Preview live smokes preserved catalog outputs: current Houston full upload
+  returned `houston-waymo` at `build_boundary_s: 0.207951`; current Miami full
+  upload returned `miami-waymo` at `build_boundary_s: 0.301052`; and an
+  LA/Santa Monica city-contained upload returned `los-angeles-waymo` at
+  `build_boundary_s: 0.145898`. A direct same-byte production comparison before
+  promotion on the LA/Santa Monica upload measured old production
+  `pipeline-bac75e416ecf253a` at `build_boundary_s: 0.256261` with the same
+  `catalog-shape-match:city-contained` output, so the preview was materially
+  faster on the same class of request. Promoted production deployment
+  `dpl_DygRubdoKZXdxjWj7LTRAeYBv4Gi` to `https://mapboundary.app`; health
+  returned OK on `pipeline-9d0b69512d8fe50c` and warm status OK. Post-promote
+  production cache-miss proofs kept the expected catalog outputs and improved
+  server generation versus the prior production samples: LA/Santa Monica warm
+  miss `build_boundary_s: 0.144924` / `total_before_send_s: 0.152522`,
+  Houston `0.206408` / `0.215907`, and Miami `0.245721` / `0.251349`.
