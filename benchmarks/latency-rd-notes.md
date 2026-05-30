@@ -5163,3 +5163,22 @@ with zero failures in 0.531s.
   preserved geometry at IoU 0.999525 or 1.0; `miami.png` improved from
   0.388208s full OCR to 0.342062s filtered OCR at confidence 0.716, and
   `waymo-n.webp` improved from 0.253391s to 0.197419s at confidence 0.762.
+- Rejected the next obvious OCR-runtime swap and a stricter fast-text cutoff.
+  The separate `rapidocr` 3.8.1 package was tested locally on the LA stress
+  screenshot with ONNX PP-OCRv4 and PP-OCRv5. PP-OCRv4 ran about 0.50-0.69s
+  with 54 items and more road-number noise; PP-OCRv5 ran about 0.58-0.66s with
+  63 items and still more road-number noise. The current checked-in
+  `rapidocr-onnxruntime` path remained faster and cleaner on the same image,
+  about 0.36-0.40s with the 800px fast-text filter and 41 labels, so the package
+  swap was not shipped. A fast-text min-area sweep found 900px can pass the
+  core no-catalog gate but was mixed on stress timings, while 950px and 1000px
+  failed the strict no-regression bar via a Phoenix IoU drop. Keep the 800px
+  default for robustness unless a broader benchmark proves otherwise. Houston,
+  Miami, and Bay Area remain known changed service areas from the saved base
+  ground truth, so those fixtures should stay `reference_mismatch` smoke checks
+  rather than scored accuracy gates until refreshed from current source data.
+- Accepted exposing the fast-text OCR runtime knobs in `/api/health` by moving
+  `FAST_TEXT_OCR_STYLES`, `FAST_TEXT_OCR_MIN_AREA`, and
+  `FAST_TEXT_OCR_FALLBACK_CONFIDENCE` into `runtime_config.py`. This is not a
+  geometry-path behavior change, but it makes production observability match the
+  runner's current performance-critical defaults.

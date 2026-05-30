@@ -12,6 +12,14 @@ def env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return max(minimum, value)
 
 
+def env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(minimum, value)
+
+
 def env_bool(name: str, default: bool) -> bool:
     value = os.environ.get(name)
     if value is None:
@@ -58,6 +66,12 @@ ONNXRUNTIME_ALLOW_SPINNING = env_bool(
     "MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING",
     True,
 )
+FAST_TEXT_OCR_STYLES = frozenset({"bright-blue", "gray-fill"})
+FAST_TEXT_OCR_MIN_AREA = env_float("MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA", 800.0)
+FAST_TEXT_OCR_FALLBACK_CONFIDENCE = env_float(
+    "MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE",
+    0.70,
+)
 
 
 def rapidocr_warm_detector_limit() -> int:
@@ -91,4 +105,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,
+        "fast_text_ocr_styles": sorted(FAST_TEXT_OCR_STYLES),
+        "fast_text_ocr_min_area": FAST_TEXT_OCR_MIN_AREA,
+        "fast_text_ocr_fallback_confidence": FAST_TEXT_OCR_FALLBACK_CONFIDENCE,
     }

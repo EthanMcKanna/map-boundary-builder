@@ -48,6 +48,9 @@ from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
 from .runtime_config import (
+    FAST_TEXT_OCR_FALLBACK_CONFIDENCE,
+    FAST_TEXT_OCR_MIN_AREA,
+    FAST_TEXT_OCR_STYLES,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
@@ -83,12 +86,6 @@ PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
-FAST_TEXT_OCR_STYLES = {"bright-blue", "gray-fill"}
-FAST_TEXT_OCR_MIN_AREA = max(0.0, float(os.environ.get("MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA", "800")))
-FAST_TEXT_OCR_FALLBACK_CONFIDENCE = max(
-    0.0,
-    float(os.environ.get("MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE", "0.70")),
-)
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
