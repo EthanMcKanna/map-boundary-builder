@@ -70,7 +70,7 @@ def load_rgb_at_max_dimension(path: str | Path, max_dimension: int) -> np.ndarra
                         max(1, round(rgb_image.width * scale)),
                         max(1, round(rgb_image.height * scale)),
                     ),
-                    Image.Resampling.BOX,
+                    Image.Resampling.BILINEAR,
                 )
         return np.array(rgb_image, dtype=np.uint8, copy=True)
 

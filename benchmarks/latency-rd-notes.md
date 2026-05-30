@@ -5535,3 +5535,33 @@ with zero failures in 0.531s.
   total 3.143s, avg IoU 0.957850, min IoU 0.930273, with San Antonio dropping
   from the current 0.944136 to 0.930458 and both Tesla fixtures also lower.
   Keep `rapidocr-onnxruntime` 1.4.4 as the production OCR engine.
+- Restored the low-resolution catalog rescue for the real Avride Dallas web
+  screenshot after a stress rerun exposed a resize-kernel edge. The accepted
+  240px hinted catalog path loaded via Pillow `BOX`, which made
+  `/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp` extract
+  as light-fill but score only 0.916002 shape IoU against `dallas-avride`, just
+  below the 0.92 filename-hinted Avride guard. Direct filter probes at the same
+  240px cap scored `BILINEAR` 0.925675, `BICUBIC` 0.925842, `LANCZOS`
+  0.922987, and `NEAREST` 0.862834, so the low-res RGB decode now uses
+  `BILINEAR`. Focused local proof with network blocked returned
+  `catalog-shape-match:filename-hint`, `catalog_slug: dallas-avride`, shape IoU
+  0.925675, and confidence 0.922 in 0.018191s. The production-shaped active
+  gate `out/bilinear-lowres-default-20260530/full-report.json` passed 8/8
+  scored fixtures with seven `reference_mismatch` skips, avg IoU 0.992917, min
+  IoU 0.943345, active total 0.36s, and zero regression issues against
+  `out/prewarm-cancel-default-20260530`. The strict arbitrary no-catalog gate
+  `out/bilinear-lowres-nocatalog-20260530/full-report.json` passed 8/8 scored
+  with seven skips, avg IoU 0.961733, min IoU 0.931476, active total 2.89s, and
+  zero regression issues against `out/prewarm-cancel-nocatalog-20260530`. A
+  Waymo-only stale-market smoke
+  `out/bilinear-lowres-waymo-drift-smoke-20260530/full-report.json` kept the
+  old Houston, Miami, and Bay Area Waymo saved screenshots on OCR/georeference
+  with null catalog slugs; the broader all-provider smoke intentionally allows
+  current-verified Tesla/Zoox catalog hits in those changed markets because the
+  catalog metadata is refreshed/current, not the stale benchmark reference.
+  The real Downloads stress set
+  `out/bilinear-lowres-stress-20260530/stress-summary.json` succeeded 13/13:
+  the Avride web screenshot returned in 0.010343s via filename-hinted catalog,
+  current `h-waymo.png` and `miami.png` hit refreshed current catalog geometry
+  in 0.068048s and 0.098221s, and `bay-area-waymo.png` correctly stayed on
+  OCR/georeference with `catalog_slug: null`.
