@@ -5433,3 +5433,23 @@ with zero failures in 0.531s.
   and `total_before_send_s: 0.408703`; a warm pixel-distinct repeat preserved
   the same output with no overlay artifact at `build_boundary_s: 0.055766` and
   `total_before_send_s: 0.059676`.
+- Rejected another narrow fast-text/recognition sweep on the current arbitrary
+  no-catalog path. `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA=850` preserved active
+  IoU but slowed the full no-catalog gate to 5.59s and put Phoenix just over
+  the 1s fixture budget. `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=16` and `24`
+  were worse after the fast-text changes, preserving IoU but taking 7.54s and
+  7.46s respectively with several Waymo fixtures over 1s. Keep the current
+  800px fast-text area and recognition batch 12 defaults.
+- Accepted overlapping the frontend tiny catalog probe with browser cache-key
+  construction. Previously submit built full-image local cache keys before
+  starting the 520px catalog probe, so large known-service-area screenshots
+  could wait on full-upload hashing/decoding before the fastest network path
+  even began. The frontend now starts `tryCatalogProbe()` immediately after
+  preparing the upload and runs it while `buildRunCacheKeys()` works; a local
+  cache hit or submit error aborts the probe via `AbortController`, and the
+  catalog response is still only accepted for auditable catalog-run payloads.
+  The in-app browser was unavailable (`iab` not available), so validation fell
+  back to deterministic checks: `node --check`, focused asset test, full pytest
+  238 tests plus 9 subtests, `compileall`, `git diff --check`, a local HTTP
+  index asset-hash check, and source-order checks proving the probe starts
+  before cache-key await and is aborted on cache-hit/error paths.

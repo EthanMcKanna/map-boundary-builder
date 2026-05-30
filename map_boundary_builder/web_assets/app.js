@@ -361,10 +361,15 @@ form.addEventListener("submit", async (event) => {
   cancelPendingGenerationRuntimePrewarm();
   startEstimatedProgress();
 
+  let catalogProbeAbortController = null;
   try {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    catalogProbeAbortController = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const catalogProbePromise = tryCatalogProbe(uploadFile, formData, {
+      signal: catalogProbeAbortController?.signal,
+    });
     markProgressStep("prepare", "running", "Checking local cache.");
     setStatus("Checking browser cache", 6, "running", {
       step: "prepare",
@@ -376,13 +381,14 @@ form.addEventListener("submit", async (event) => {
     pendingRunCacheKeysPromise = cacheLookup.cacheKeysPromise;
     const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);
     if (cachedEntry) {
+      catalogProbeAbortController?.abort();
       restoreCachedHistoryEntry(cachedEntry);
       pendingRunCacheKey = null;
       pendingRunCacheKeys = [];
       pendingRunCacheKeysPromise = null;
       return;
     }
-    const catalogProbeResult = await tryCatalogProbe(uploadFile, formData);
+    const catalogProbeResult = await catalogProbePromise;
     if (catalogProbeResult?.payload) {
       applyInlineRun(catalogProbeResult.payload, {
         cacheKey: pendingRunCacheKey,
@@ -421,6 +427,7 @@ form.addEventListener("submit", async (event) => {
     pendingRunCacheKey = null;
     pendingRunCacheKeys = [];
     pendingRunCacheKeysPromise = null;
+    catalogProbeAbortController?.abort();
     finishWithError(error.message);
   }
 });
@@ -796,7 +803,7 @@ async function prepareRunImage(file) {
   });
 }
 
-async function tryCatalogProbe(file, formData) {
+async function tryCatalogProbe(file, formData, options = {}) {
   if (!shouldTryCatalogProbe(file)) return null;
   markProgressStep("prepare", "running", "Checking known service areas.");
   setStatus("Checking known service areas", 7, "running", {
@@ -817,12 +824,15 @@ async function tryCatalogProbe(file, formData) {
     const response = await fetch("/api/runs", {
       method: "POST",
       body: probeData,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     const payload = await response.json().catch(() => null);
     if (response.ok && isCatalogRunPayload(payload)) return { payload };
     if (response.ok && payload?.status === "catalog_miss") return { missed: true };
   } catch (error) {
-    console.warn("Known service-area probe failed", error);
+    if (error?.name !== "AbortError") {
+      console.warn("Known service-area probe failed", error);
+    }
   }
   return null;
 }
