@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, features
 
-from map_boundary_builder.extract import load_rgb, write_overlay_png
+from map_boundary_builder.extract import load_rgb, write_overlay_image, write_overlay_png
 from map_boundary_builder.image_io import normalize_image_for_processing, safe_image_extension
 
 
@@ -153,6 +153,20 @@ class OverlayPreviewTests(unittest.TestCase):
 
             with Image.open(out_path) as overlay:
                 self.assertEqual(overlay.size, (20, 40))
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_overlay_preview_can_write_webp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "overlay.webp"
+            rgb = np.full((20, 20, 3), 255, dtype=np.uint8)
+            mask = np.zeros((20, 20), dtype=bool)
+            mask[5:15, 5:15] = True
+
+            write_overlay_image("unused.png", mask, out_path, rgb=rgb)
+
+            with Image.open(out_path) as overlay:
+                self.assertEqual(overlay.format, "WEBP")
+                self.assertEqual(overlay.size, (20, 20))
 
 
 if __name__ == "__main__":

@@ -187,6 +187,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(preview_max_dimension=1200),
         )
+        changed_overlay_format = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(overlay_format="webp"),
+        )
         changed_mask_options = run_result_cache_key(
             b"image-a",
             None,
@@ -225,6 +230,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_options)
         self.assertNotEqual(base, changed_filename)
         self.assertNotEqual(base, changed_preview_options)
+        self.assertNotEqual(base, changed_overlay_format)
         self.assertNotEqual(base, changed_mask_options)
         self.assertNotEqual(base, changed_catalog_probe_options)
         self.assertNotEqual(base, changed_catalog_probe_missed_options)
@@ -808,6 +814,18 @@ class ApiRunCacheTests(unittest.TestCase):
         decoded = base64.b64decode(data_url.split(",", 1)[1])
         with Image.open(BytesIO(decoded)) as preview:
             self.assertLessEqual(max(preview.size), 1200)
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_inline_overlay_preserves_existing_webp_preview(self) -> None:
+        with NamedTemporaryFile(suffix=".webp") as handle:
+            image = Image.effect_noise((240, 240), 64).convert("RGB")
+            image.save(handle.name, format="WEBP", quality=82)
+
+            data_url = inline_overlay(Path(handle.name))
+
+        self.assertIsNotNone(data_url)
+        assert data_url is not None
+        self.assertTrue(data_url.startswith("data:image/webp;base64,"))
 
 
 if __name__ == "__main__":

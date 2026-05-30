@@ -40,8 +40,8 @@ from .extract import (
     load_rgb,
     load_rgb_at_max_dimension,
     rescale_extraction_result,
+    write_overlay_image,
     write_mask_png,
-    write_overlay_png,
 )
 from .georeference import (
     CityContext,
@@ -152,6 +152,7 @@ class BoundaryBuildOptions:
     min_confidence: float = 0.55
     min_control_points: int = 3
     preview_max_dimension: int | None = None
+    overlay_format: str = "png"
     write_mask_artifact: bool = True
     allow_catalog: bool = True
     catalog_probe_only: bool = False
@@ -2009,11 +2010,12 @@ def finish_boundary_result(
     overlay_path: Path | None = None
     if debug_path:
         stem = output_path.stem
-        overlay_path = debug_path / f"{stem}.overlay.png"
+        overlay_extension = "webp" if opts.overlay_format == "webp" else "png"
+        overlay_path = debug_path / f"{stem}.overlay.{overlay_extension}"
         if opts.write_mask_artifact:
             mask_path = debug_path / f"{stem}.mask.png"
             write_mask_png(extraction.mask, mask_path)
-        write_overlay_png(
+        write_overlay_image(
             image_path,
             extraction.mask,
             overlay_path,

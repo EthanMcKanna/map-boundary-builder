@@ -813,6 +813,17 @@ def write_overlay_png(
     rgb: np.ndarray | None = None,
     max_dimension: int | None = None,
 ) -> None:
+    write_overlay_image(rgb_path, mask, path, rgb=rgb, max_dimension=max_dimension)
+
+
+def write_overlay_image(
+    rgb_path: str | Path,
+    mask: np.ndarray,
+    path: str | Path,
+    *,
+    rgb: np.ndarray | None = None,
+    max_dimension: int | None = None,
+) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     if rgb is None:
         rgb = load_rgb(rgb_path)
@@ -846,4 +857,8 @@ def write_overlay_png(
     if contours:
         outline_width = max(2, min(6, round(min(mask.shape) / 360)))
         cv2.drawContours(out, contours, -1, outline_color, thickness=outline_width, lineType=cv2.LINE_AA)
-    Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), mode="RGB").save(path)
+    image = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), mode="RGB")
+    if Path(path).suffix.lower() == ".webp":
+        image.save(path, format="WEBP", quality=82, method=2)
+    else:
+        image.save(path)

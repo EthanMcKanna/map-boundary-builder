@@ -201,6 +201,7 @@ class handler(BaseHTTPRequestHandler):
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
             include_overlay=include_overlay,
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
+            overlay_format="webp" if include_overlay else "png",
             write_mask_artifact=False,
             catalog_probe_only=catalog_probe_only,
             catalog_probe_missed=catalog_probe_missed,
@@ -500,8 +501,8 @@ def inline_overlay(path: Path | None) -> str | None:
     if path is None or not path.exists():
         return None
     data = path.read_bytes()
-    mime = "image/png"
-    if len(data) > INLINE_OVERLAY_OPTIMIZE_BYTES:
+    mime = "image/webp" if path.suffix.lower() == ".webp" else "image/png"
+    if mime == "image/png" and len(data) > INLINE_OVERLAY_OPTIMIZE_BYTES:
         optimized = optimized_overlay_bytes(path, original_size=len(data))
         if optimized is not None:
             mime, data = optimized
@@ -730,6 +731,7 @@ def run_result_cache_key_for_hash(
         "min_control_points": int(options.min_control_points),
         "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
+        "overlay_format": getattr(options, "overlay_format", "png"),
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
         "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),

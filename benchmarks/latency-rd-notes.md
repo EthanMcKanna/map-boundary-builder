@@ -6847,3 +6847,29 @@ with zero failures in 0.531s.
   default overlay response path also preserved output but still took 1.117736s
   before send because overlay/export artifacts added roughly 0.29s; treat
   overlay generation as the next remaining user-facing latency target.
+- Direct WebP overlay previews are the accepted overlay-path latency win. The
+  API now asks the runner for `boundary.overlay.webp` when an inline overlay is
+  requested, while CLI/debug callers still default to PNG. This avoids writing a
+  large PNG and then reading/re-encoding it in `inline_overlay`; existing WebP
+  previews are inlined directly and the overlay format is part of the run-result
+  cache key so old PNG-overlay payloads cannot satisfy new WebP-overlay runs.
+  Local focused tests passed 70/70, full validation passed 277 tests plus 9
+  subtests, `compileall`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check`. Drift-aware active gates respected the user-confirmed
+  Houston/Miami/Bay Area reference drift: default
+  `out/overlay-webp-active-20260530/full-report.json` passed 8/8 active scored
+  fixtures with 7 stale `reference_mismatch` skips and zero IoU regressions
+  against `out/realistic-warmup-active-20260530j/full-report.json`; no-catalog
+  `out/overlay-webp-nocatalog-20260530/full-report.json` passed 8/8 active
+  scored fixtures with 7 stale skips and zero IoU regressions against
+  `out/current-profile-nocatalog-20260530/full-report.json`.
+  Preview deploy `dpl_Dn8ScCthPxgej6EuVvwAFKirDydn` reports
+  `pipeline-d7b93826dd958941`. Three fresh cache-miss default-overlay A/B runs
+  of the neutral Dallas Avride WebP preserved identical bbox
+  `[-96.8209832, 32.767271, -96.7593743, 32.8342594]`, confidence 0.855, five
+  controls, and `ocr-georeference:nominatim-label-fit`. Preview total-before-send
+  times were 1.000140s, 0.869225s, and 0.855087s, averaging 0.908151s, versus
+  current production at 1.276501s, 1.087479s, and 1.057017s, averaging
+  1.140332s. The preview artifact packaging step averaged 0.000163s versus
+  production PNG-overlay packaging at 0.069132s, and inline overlay payloads
+  dropped from 75,347 to 57,963 characters.
