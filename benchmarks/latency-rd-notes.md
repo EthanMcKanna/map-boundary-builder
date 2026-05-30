@@ -5790,3 +5790,30 @@ with zero failures in 0.531s.
   the 900px candidate built in 1.733464s with OCR at 1.465556s. The public
   `mapboundary.app` alias remained on `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`, so
   the runtime default was backed out to 800px.
+- Rejected low-resolution OCR probe reuse as a general shortcut. A 520px probe
+  matches the current tiny catalog-probe scale, but direct no-catalog runs on
+  downscaled Houston/Miami/Bay Area/Phoenix screenshots showed it is too lossy:
+  Miami, Bay Area, and Phoenix could not georeference reliably, and Houston only
+  fit a weak 3-control-point transform with a visibly shrunken bbox. A 1000px
+  probe looked promising on individual stale-area handoffs, with local OCR
+  around 0.14-0.22s and valid Houston/Miami/Bay Area bboxes, but it failed the
+  active no-catalog safety gate when used as the source image:
+  `out/probe1000-nocatalog-20260530/full-report.json` dropped average IoU to
+  0.921695 and Phoenix to 0.817878. A more isolated test that reused 1000px OCR
+  labels scaled onto the full-size extracted mask still failed broad accuracy:
+  Dallas Tesla could not georeference, Orlando dropped to IoU 0.782579, Phoenix
+  to 0.821365, and Los Angeles to 0.898382. This remains interesting only if a
+  strong equivalence validator can cheaply prove the low-res transform matches
+  the full-res transform before skipping full OCR.
+- Rejected RapidOCR v3.8.1 as a drop-in production OCR backend. Upstream
+  RapidOCR is now on the v3.x line with PP-OCRv5-related work, so it was tested
+  in an isolated `/tmp/map-boundary-rapidocr3` target without changing
+  production dependencies. The default v3.8.1 ONNXRuntime engine downloaded
+  PP-OCRv4 mobile detection/classification/recognition models and was locally
+  fast on some full-size Waymo screenshots: Houston OCR elapsed about 0.50s and
+  Miami about 0.68s in the engine output. However, an active fixture sweep using
+  v3 labels with the existing georeference stack was not accuracy-safe: Dallas
+  Tesla failed georeference, Orlando dropped to IoU 0.862297, Nashville dropped
+  to 0.980838, and classifier mode did not recover the failures. Do not replace
+  the current OCR backend unless a hybrid route can validate and fall back
+  without making high-confidence-but-wrong transforms possible.
