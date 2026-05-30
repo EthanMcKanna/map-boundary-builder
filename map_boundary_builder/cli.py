@@ -28,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Bypass bundled service-area catalog matching and force OCR/georeference inference.",
     )
+    parser.add_argument(
+        "--catalog-probe-missed",
+        action="store_true",
+        help="Skip the low-resolution catalog probe after a prior probe miss and run the full handoff path.",
+    )
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")
     parser.add_argument(
         "--profile-events",
@@ -66,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
                 min_confidence=args.min_confidence,
                 min_control_points=args.min_control_points,
                 allow_catalog=not args.no_catalog,
+                catalog_probe_missed=args.catalog_probe_missed,
+                filename_hint=image_path.name,
             ),
             progress=progress if args.profile_events else None,
         )

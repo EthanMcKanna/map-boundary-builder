@@ -213,7 +213,7 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     calls = []
 
     def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
-        calls.append((fixture.slug, kwargs["score_reference"]))
+        calls.append((fixture.slug, kwargs["score_reference"], kwargs["catalog_probe_missed"]))
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
@@ -247,10 +247,12 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
         only_filters=[],
         fixture_config=config_path,
         smoke_skipped=True,
+        catalog_probe_missed=True,
     )
 
-    assert calls == [("houston-waymo", False)]
+    assert calls == [("houston-waymo", False, True)]
     assert report["summary"]["passed"] is True
+    assert report["thresholds"]["catalog_probe_missed"] is True
     assert report["summary"]["scored_fixtures"] == 0
     assert report["summary"]["skipped_fixtures"] == 1
     assert report["summary"]["smoked_skipped_fixtures"] == 1
@@ -730,12 +732,14 @@ def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, m
         timeout_seconds=30,
         city_overrides=False,
         no_catalog=True,
+        catalog_probe_missed=True,
         execution="subprocess",
         debug_artifacts=False,
     )
 
     assert "--print-summary" in seen_commands[0]
     assert "--profile-events" in seen_commands[0]
+    assert "--catalog-probe-missed" in seen_commands[0]
     assert score.passed is False
     assert score.error == "could not infer a reliable map location"
     assert score.stage_elapsed_s == {"inspect": 0.01, "ocr": 0.2}
@@ -782,6 +786,8 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
                 "city": city,
                 "debug_dir": debug_dir,
                 "allow_catalog": options.allow_catalog,
+                "catalog_probe_missed": options.catalog_probe_missed,
+                "filename_hint": options.filename_hint,
                 "write_mask_artifact": options.write_mask_artifact,
             }
         )
@@ -810,6 +816,7 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
         min_iou=0.99,
         city_overrides=True,
         no_catalog=True,
+        catalog_probe_missed=True,
         debug_artifacts=False,
     )
 
@@ -822,6 +829,8 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
             "city": "Phoenix",
             "debug_dir": None,
             "allow_catalog": False,
+            "catalog_probe_missed": True,
+            "filename_hint": image_path.name,
             "write_mask_artifact": False,
         }
     ]

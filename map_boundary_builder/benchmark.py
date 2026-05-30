@@ -128,6 +128,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="For --mode full, bypass catalog matching so OCR/georeference inference remains benchmarked.",
     )
     parser.add_argument(
+        "--catalog-probe-missed",
+        action="store_true",
+        help="For --mode full, exercise the production handoff path after a low-resolution catalog probe miss.",
+    )
+    parser.add_argument(
         "--execution",
         choices=("subprocess", "in-process"),
         default="subprocess",
@@ -239,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         city_overrides=args.city_overrides,
         no_catalog=args.no_catalog,
+        catalog_probe_missed=args.catalog_probe_missed,
         only_filters=args.only,
         fixture_config=args.fixture_config,
         execution=args.execution,
@@ -297,6 +303,7 @@ def run_benchmark(
     only_filters: list[str],
     fixture_config: Path,
     no_catalog: bool = False,
+    catalog_probe_missed: bool = False,
     execution: str = "subprocess",
     debug_artifacts: bool = True,
     smoke_skipped: bool = False,
@@ -335,6 +342,7 @@ def run_benchmark(
                             timeout_seconds=timeout_seconds,
                             city_overrides=city_overrides,
                             no_catalog=no_catalog,
+                            catalog_probe_missed=catalog_probe_missed,
                             execution=execution,
                             debug_artifacts=debug_artifacts,
                             score_reference=True,
@@ -349,6 +357,7 @@ def run_benchmark(
                         timeout_seconds=timeout_seconds,
                         city_overrides=city_overrides,
                         no_catalog=no_catalog,
+                        catalog_probe_missed=catalog_probe_missed,
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=False,
@@ -375,6 +384,7 @@ def run_benchmark(
                         timeout_seconds=timeout_seconds,
                         city_overrides=city_overrides,
                         no_catalog=no_catalog,
+                        catalog_probe_missed=catalog_probe_missed,
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=True,
@@ -403,6 +413,7 @@ def run_benchmark(
             "min_iou": min_iou,
             "mean_iou": mean_iou,
             "no_catalog": no_catalog,
+            "catalog_probe_missed": catalog_probe_missed,
             "execution": execution,
             "debug_artifacts": debug_artifacts,
             "smoke_skipped": smoke_skipped,
@@ -586,6 +597,7 @@ def score_full_fixture(
     no_catalog: bool,
     execution: str,
     debug_artifacts: bool,
+    catalog_probe_missed: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
@@ -599,6 +611,7 @@ def score_full_fixture(
             min_iou=min_iou,
             city_overrides=city_overrides,
             no_catalog=no_catalog,
+            catalog_probe_missed=catalog_probe_missed,
             debug_artifacts=debug_artifacts,
             score_reference=score_reference,
             reference_geometry=reference_geometry,
@@ -622,6 +635,8 @@ def score_full_fixture(
         command.extend(["--city", fixture.area])
     if no_catalog:
         command.append("--no-catalog")
+    if catalog_probe_missed:
+        command.append("--catalog-probe-missed")
     started = time.perf_counter()
     try:
         completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout_seconds, check=False)
@@ -700,6 +715,7 @@ def score_full_fixture_in_process(
     city_overrides: bool,
     no_catalog: bool,
     debug_artifacts: bool,
+    catalog_probe_missed: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
@@ -720,6 +736,8 @@ def score_full_fixture_in_process(
             debug_dir=debug_dir,
             options=BoundaryBuildOptions(
                 allow_catalog=not no_catalog,
+                catalog_probe_missed=catalog_probe_missed,
+                filename_hint=fixture.image_path.name,
                 write_mask_artifact=debug_artifacts,
             ),
             progress=progress,

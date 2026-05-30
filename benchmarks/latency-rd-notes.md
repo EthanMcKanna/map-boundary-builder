@@ -5740,3 +5740,25 @@ with zero failures in 0.531s.
   `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`. The deployability exclude cleanup is kept,
   but the OpenVINO runtime/dependency code should stay out until a lighter or
   demonstrably faster production recognizer path is found.
+- Accepted a narrower refine cap for the production catalog-probe-miss handoff.
+  The public API already sends `catalog_probe_missed` after a low-resolution
+  catalog probe fails, so the handoff path can refine mask extraction at a
+  smaller 1200px cap instead of the previous 1400px cap while leaving the
+  general no-catalog OCR/georeference path unchanged. The benchmark harness and
+  CLI now expose `--catalog-probe-missed` so this production path can be tested
+  directly with the same filename hints used by the API. Baseline handoff
+  validation at the old 1400px cap
+  `out/catalog-probe-missed-1400-20260530/full-report.json` passed 8/8 active
+  fixtures with avg IoU 0.992917, min IoU 0.943345, and total 0.563764s. The
+  1200px candidate `out/catalog-probe-missed-1200-20260530/full-report.json`
+  preserved the same avg/min IoU with zero regression issues, reduced total
+  handoff duration to 0.514304s, and cut the max active fixture from 0.098350s
+  to 0.090035s. The Houston/Miami/Bay Area drift smoke
+  `out/catalog-probe-missed-1200-drift-smoke-20260530/full-report.json` passed
+  all three user-confirmed stale `reference_mismatch` checks as null-catalog
+  OCR/georeference handoffs, and the arbitrary no-catalog safety gate
+  `out/catalog-miss-cap1200-nocatalog-20260530/full-report.json` passed 8/8
+  scored active fixtures with avg IoU 0.961733, min IoU 0.931476, and zero IoU
+  regression against `out/webp-decode-nocatalog-20260530/full-report.json`.
+  Focused benchmark tests, the full pytest suite, compileall, and
+  `git diff --check` passed before production build/deploy validation.
