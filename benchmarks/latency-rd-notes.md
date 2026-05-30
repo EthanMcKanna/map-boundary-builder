@@ -102,6 +102,35 @@ with zero failures in 0.531s.
   against `out/current-profile-nocatalog-20260530/full-report.json`. Keep these
   markets out of scored accuracy gates until their source/reference pairs are
   refreshed.
+- May 30 follow-up on the changed-market caveat: the stale saved truth and the
+  current catalog are separate contracts. The focused drift tests passed 4/4.
+  A no-catalog arbitrary-image smoke
+  `out/user-stepin-drift-nocatalog-smoke-20260530/full-report.json` ran the six
+  Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` checks with
+  zero failures and no catalog hits. The current-catalog audit
+  `out/user-stepin-current-catalog-audit-20260530/full-report.json` also passed
+  6/6 against refreshed/current catalog geometry, avg IoU 1.000, min IoU 1.000,
+  total 2.68s. Do not require drift fixtures to miss catalog unless the run is
+  explicitly testing the no-catalog OCR path; current-sourced catalog entries
+  are allowed to serve as production latency shortcuts.
+- Revisited the fast-text OCR area filter after the changed-market correction.
+  Raising `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` from 1300 to 1500/1800 preserved
+  all eight scored non-drift fixtures and reduced one warm in-process no-catalog
+  pass from 3.83s to 3.57s/3.46s, but it changed current no-catalog drift-market
+  geometry: 1500 moved Bay Area Waymo to 0.875 self-IoU versus the current
+  default and 1800 moved Miami Waymo to 0.803. A guarded 1500 prototype recovered
+  Bay Area but still moved Houston Waymo to 0.948 self-IoU. Rejected this lane;
+  keep the 1300 default until a filter can prove output stability on changed
+  markets as well as scored fixtures.
+- Rejected an OCR recognition-volume cap for filtered RapidOCR runs. Scratch
+  cap sweeps looked promising and preserved exact active IoUs at 48/40/36 boxes,
+  while 32 started moving Orlando and 28 regressed Phoenix. Production proof was
+  harsher: cap 40 shifted filename-hinted Phoenix from 0.886 confidence/5
+  controls to 0.848/4, and cap 48 preserved geometry but was slower on a
+  protected production cache-miss smoke (2.55s candidate generation versus
+  2.20s current production). The cap-48 candidate deployment
+  `dpl_DUvjHwDR6d7jrxXTzxMeLnZ9kT4R` was not promoted. Keep filtered OCR
+  uncapped until a production smoke proves both stability and speed.
 - May 30 upload-transport probe: rejected browser-side lossless PNG
   normalization. A Pillow `optimize=True` encode preserved decoded RGBA pixels
   and shrank Tesla screenshots by about 20-24%, but big Waymo screenshots only
@@ -7433,3 +7462,56 @@ with zero failures in 0.531s.
   0.794177, max 0.572761s. A concurrent benchmark attempt was discarded as
   artificial local OCR contention; it preserved geometry but polluted the
   latency budget.
+- User step-in drift validation follow-up: rechecked the Houston/Miami/Bay Area
+  correction live after the warm-detector deploy. Focused stale-reference tests
+  passed, `out/user-stepin-drift-smoke-live-20260530/full-report.json` ran all
+  six Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` OCR
+  smoke checks with zero failures and no catalog shortcuts, and
+  `out/user-stepin-active-nocatalog-live-20260530/full-report.json` passed 8/8
+  scored non-drift fixtures with seven `reference_mismatch` smoke checks, avg
+  IoU 0.964230, min IoU 0.931476, active total 3.178757s, and max active
+  fixture 0.683500s. A separate current-catalog audit at
+  `out/user-stepin-current-catalog-live-20260530/full-report.json` scored the
+  six changed-market fixtures against current catalog geometry at 6/6, avg/min
+  IoU 1.0, total 0.55s. Do not score those stale saved reference polygons as
+  model regressions; use smoke checks or current catalog geometry depending on
+  what the hypothesis is testing. Public production remains on
+  `pipeline-14096adef2d34bea` with shape-aware OCR filtering and warm detector
+  limits `[608, 544]`. A warmed, cache-busted Phoenix no-catalog production
+  probe still took 2.274920s before send, with 1.900170s in OCR, so the
+  remaining arbitrary-image production bottleneck is still OCR-bound and no new
+  deployable speed change was found from this validation alone. The normal
+  production catalog path for the user-confirmed changed markets remains fast
+  against current geometry: cache-busted full uploads returned `houston-waymo`
+  in 0.217084s solo before send, `miami-waymo` in 0.228685s, and
+  `bay-area-waymo` in 0.302393s; an earlier parallel Houston check inflated
+  total time to 0.991163s while build time stayed 0.347976s.
+- Rejected two recognizer/model-layer OCR probes. ONNX Runtime dynamic
+  quantization could not quantize the PP-OCRv4 detector cleanly
+  (`conv2d_394.w_0` was not an initializer). A recognizer-only MatMul/Gemm
+  quantized model preserved sampled Phoenix labels in direct OCR and looked
+  faster in a micro-benchmark, but the full no-catalog gate
+  `out/qrec-active-nocatalog-20260530a/full-report.json` was slower and pushed
+  Phoenix to 1.102573s with one skipped-fixture smoke failure, so it is not a
+  deployable runtime swap. Lowering `rec_img_shape` width to 256 also preserved
+  scored IoUs and drift smokes once, but same-session A/B showed it was slower
+  than the default overall (`out/rec-width-ab-w256a-20260530` 3.510499s versus
+  `out/rec-width-ab-default1-20260530` 3.485341s; repeat 3.901304s versus
+  3.807883s). Keep the default recognizer model and 320px base width.
+- Vercel cron realignment finding: `npx -y vercel@latest inspect
+  https://mapboundary.app` showed public production on
+  `dpl_5t7nF67tQ1K21YNKujJ7kRZMaFCU` / `pipeline-14096adef2d34bea`, but
+  `vercel api /v9/projects/prj_wetyqzXVDGg1zl1ToD0hKvvcJV6o --raw` showed the
+  project cron definition attached to staged deployment
+  `dpl_DUvjHwDR6d7jrxXTzxMeLnZ9kT4R` at host
+  `map-boundary-builder-7khxsfpwb-ethanmckannas-projects.vercel.app`, which is
+  SSO-protected on direct curl and was a rejected OCR-cap candidate. That means
+  scheduled warmup can drift away from the public alias after protected
+  production candidates. Before realigning, focused stale-reference/API tests
+  passed, `git diff --check` and `node --check` passed, and
+  `out/predeploy-cron-realign-active-nocatalog-20260530/full-report.json`
+  passed 8/8 scored non-drift fixtures with seven `reference_mismatch` smokes,
+  avg IoU 0.964230, min IoU 0.931476, active total 3.315656s, and zero latency
+  budget issues under the relaxed predeploy budget. A fresh production deploy
+  of the current validated runtime is a reliability/speed-warmup fix even
+  though it does not change arbitrary OCR accuracy.
