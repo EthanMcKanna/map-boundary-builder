@@ -574,6 +574,77 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
     assert max_dimensions == [0, runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION]
 
 
+def test_catalog_probe_only_retries_without_area_hint_before_miss(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "h-waymo probe.jpg"
+    Image.new("RGB", (520, 520), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((520, 520, 3), 245, dtype=np.uint8)
+    mask = np.zeros((520, 520), dtype=bool)
+    mask[120:420, 80:430] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(80, 120), (430, 120), (430, 420), (80, 420)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    max_dimensions: list[int] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
+        max_dimensions.append(max_dimension)
+        return extraction
+
+    def fake_match_service_area_catalog(*_args, **_kwargs):
+        if max_dimensions[-1] == runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION:
+            return SimpleNamespace(
+                entry=SimpleNamespace(slug="houston-waymo"),
+                iou=0.968,
+                confidence=0.88,
+                margin=0.35,
+                area_ratio=1.01,
+            )
+        return None
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("catalog probes must not fall through to OCR")
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **_kwargs):
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": _kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            catalog_probe_only=True,
+            filename_hint="h-waymo probe.jpg",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert max_dimensions == [
+        runner.CATALOG_EXTRACT_MAX_DIMENSION,
+        runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
+    ]
+    assert result.summary["catalog_slug"] == "houston-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:retry"
+
+
 def test_catalog_probe_missed_skips_low_res_probes_but_keeps_full_catalog_match(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "Waymo Bay Area.png"
     Image.new("RGB", (2400, 2400), (245, 245, 245)).save(image_path)

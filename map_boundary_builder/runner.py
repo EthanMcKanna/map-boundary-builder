@@ -393,6 +393,7 @@ def build_boundary(
             allow_pre_ocr_catalog=allow_pre_ocr_catalog,
             used_catalog_scaled_extraction=used_catalog_scaled_extraction,
             catalog_style_can_match=catalog_style_can_match,
+            catalog_probe_only=catalog_probe_only_enabled(opts),
         ):
             emit_progress(
                 progress,
@@ -1125,6 +1126,7 @@ def should_retry_pre_ocr_catalog(
     allow_pre_ocr_catalog: bool,
     used_catalog_scaled_extraction: bool,
     catalog_style_can_match: bool = True,
+    catalog_probe_only: bool = False,
 ) -> bool:
     if not allow_pre_ocr_catalog or not used_catalog_scaled_extraction:
         return False
@@ -1134,6 +1136,8 @@ def should_retry_pre_ocr_catalog(
         return False
     if CATALOG_RETRY_EXTRACT_MAX_DIMENSION >= CATALOG_MISS_REFINE_MAX_DIMENSION:
         return False
+    if catalog_probe_only:
+        return True
     return (
         has_active_catalog_area_hint(city_input)
         or has_active_catalog_city_hint(city_input)

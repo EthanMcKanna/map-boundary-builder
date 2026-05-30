@@ -5888,3 +5888,32 @@ with zero failures in 0.531s.
   roughly tied at 1.578678s public versus 1.595018s candidate. The custom
   domain stayed on `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`, and the `"fluid": true`
   config probe was reverted.
+- Accepted a bounded no-hint catalog-probe retry for production. The frontend
+  sends a 520px `catalog_probe_only` image before full uploads, but the server
+  only retried from 240px to 400px when the filename/city already contained an
+  active area hint. A current Houston probe named like `h-waymo` missed at
+  240px even though the same 400px probe shape matched `houston-waymo` at IoU
+  0.968657 with 0.353752 margin. The runner now lets probe-only requests take
+  that bounded 400px retry even without an area hint, still returning
+  `CatalogProbeMiss` before OCR or full-refine when no strict catalog match is
+  found. Focused probe/API tests passed 7 tests, full pytest passed 250 tests
+  and 9 subtests, compileall and `git diff --check` passed. Local sips-generated
+  520px probes showed the intended split: current Houston flipped to
+  `houston-waymo` via `catalog-shape-match:retry`, current Miami already hit
+  `miami-waymo`, current Bay Area still missed, and the old saved
+  Houston/Miami/Bay Area probes all still missed.
+- Protected production candidate `dpl_DmTy5AnhpEHzosT2xKww2aeKSB1G`
+  (`map-boundary-builder-fpyfr1w4z-ethanmckannas-projects.vercel.app`) passed
+  `/api/health?warm=ocr` on `pipeline-98930576fb78a091`. Live candidate probe
+  smokes preserved the stale-market guard and proved the new fast path: current
+  Houston's 520px probe returned `catalog_slug: houston-waymo` /
+  `catalog-shape-match:retry` in 0.209534s before send, while public production
+  still returned `catalog_miss` for the same probe in 0.035070s before needing
+  the full 1.1MB upload. Current Miami still hit `miami-waymo` in 0.024637s,
+  current Bay Area still returned `catalog_miss`, and old saved
+  Houston/Miami/Bay Area probes stayed `catalog_miss` at about 0.054-0.059s.
+  Warmed full `catalog_probe_missed=1` OCR fallbacks on the candidate matched
+  current production behavior without a latency regression: old Houston
+  completed with null catalog, confidence 0.865, and 1.401395s build time; old
+  Miami null catalog, confidence 0.864, and 1.406341s; old Bay Area null
+  catalog, confidence 0.877, and 1.557404s.
