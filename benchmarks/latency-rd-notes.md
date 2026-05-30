@@ -6419,3 +6419,13 @@ with zero failures in 0.531s.
   six as unscored `reference_mismatch` smoke checks. The shortcut cap now lives
   in `runtime_config.py` and appears in `/api/health` as
   `current_catalog_label_ocr_max_dimension` for production verification.
+- Production deployment `dpl_HKS3EaqUsY6cjTu2afAeMEqJBwuS` is aliased to
+  `https://mapboundary.app` with backend `pipeline-3c16077ba036d439`, and
+  `/api/health` reports `current_catalog_label_ocr_max_dimension: 875`.
+  The first q92 cache-miss replay was mixed, so I repeated before accepting the
+  change. The repeat in
+  `out/prod-verify-875-current-drift-q92-repeat-20260530c/` returned current
+  catalog label-shape matches for all three Waymo drift cases with server times
+  before send of 0.66855s for Houston, 0.611208s for Miami, and 0.811415s for
+  Bay Area, improving the previous restored-900 production proof of 1.094655s,
+  0.876646s, and 1.000582s respectively.
