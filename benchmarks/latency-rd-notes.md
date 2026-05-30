@@ -225,7 +225,19 @@ with zero failures in 0.531s.
   `out/fitfast-default-20260530/full-report.json` preserved avg IoU
   0.992917/min 0.943345, and Houston/Miami/Bay Area smoke
   `out/fitfast-drift-smoke-20260530/full-report.json` passed six
-  `reference_mismatch` checks with zero failures.
+  `reference_mismatch` checks with zero failures. Preview deployment
+  `dpl_BtSVGV2ZSFJLESnH8XFYvBwMe4Hg` reported
+  `pipeline-5c0ca55ab7f2da6b`; a cache-miss 1796px LA/Santa Monica arbitrary
+  OCR proof preserved bbox/source/confidence and geometry IoU 1.0 against
+  current production while moving server time before send from 2.632935s to
+  2.538012s and georeference time from 0.308037s to 0.231050s. Production
+  deployment `dpl_Hh7XZJ2W3qnstkgehbGwuQC5kpjY` is aliased to
+  `https://mapboundary.app`, reports the same pipeline, and public health
+  returned OK with headless OpenCV and RapidOCR healthy. A post-deploy warmed
+  1796px LA/Santa Monica cache-miss preserved geometry IoU 1.0 against the
+  pre-deploy proof while reducing server time before send to 2.442234s; an
+  unseen 1784px variant kept IoU 0.996589 against the pre-deploy resized proof
+  and completed before send in 2.576028s with georeference at 0.239332s.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
