@@ -6257,3 +6257,16 @@ with zero failures in 0.531s.
   1100px was much faster locally but dropped the active neutral gate min IoU
   from 0.931476 to 0.901198 and moved LA/Dallas geometry; 1400/1200 failed
   scored Waymo fixtures, while 1300/1000 produced San Antonio stalls above 46s.
+- Accepted a Bay Area Waymo catalog refresh from the current visible service
+  area after the user reiterated that Houston, Miami, and Bay Area had drifted.
+  The previous Bay catalog used the larger
+  `/Users/ethanmckanna/Downloads/waymo bay area expanded.geojson`, while the
+  live/default Bay screenshot now produces a smaller 15-control OCR geometry.
+  Replacing only `bay-area-waymo` with that current OCR output makes the catalog
+  path return the same bbox and 0.877 confidence as the slow OCR path, but in
+  about 0.33s locally instead of about 1.56s. Targeted current-catalog scoring
+  for `bay-area-waymo` passed with IoU 1.0 in
+  `out/bay-refresh-current-reference-20260530a/`. A broader current-catalog
+  scoring run over all Houston/Miami/Bay skipped fixtures intentionally failed
+  Houston/Miami because those saved screenshots remain stale relative to their
+  current catalog geometries; keep those as `reference_mismatch` data debt.
