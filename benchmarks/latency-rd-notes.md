@@ -7266,3 +7266,16 @@ with zero failures in 0.531s.
   app with the same Tesla Austin image also completed from the catalog-probe
   request only with `austin-tesla`, `catalog-shape-match:low-res-shape`, no
   overlay, and 0.097839s server `total_before_send_s`.
+- Drift-score safety follow-up: a fresh no-catalog R&D pass re-tested
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1400` against the active OCR/
+  georeference gate. It remains rejected: Nashville fell to IoU 0.758698 and
+  Phoenix slowed to 0.811914s, so global OCR downscaling is not a robust
+  generalization win. The useful fix was in the validation harness instead:
+  `--score-skipped-catalog-references` now automatically requires source-image
+  catalog evidence so a stale screenshot cannot score 1.0 by returning the
+  current catalog polygon. Focused tests passed 4/4, and the real
+  Houston/Miami/Bay Area Waymo current-catalog scoring run correctly failed
+  Houston (`catalog_shape_iou` 0.573456, area ratio 1.254616) and Miami
+  (`catalog_shape_iou` 0.609024, area ratio 0.722535) while allowing Bay Area's
+  strong filename-near-hit evidence (`catalog_shape_iou` 0.960519, area ratio
+  1.009283).

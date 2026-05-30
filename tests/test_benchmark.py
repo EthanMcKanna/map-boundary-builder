@@ -373,6 +373,7 @@ def test_score_skipped_catalog_references_scores_against_current_catalog_geometr
     assert score_kwargs["score_reference"] is True
     assert score_kwargs["reference_geometry"] is catalog_geometry
     assert report["thresholds"]["score_skipped_catalog_references"] is True
+    assert report["thresholds"]["require_scored_catalog_evidence"] is True
     assert report["summary"]["passed"] is True
     assert report["summary"]["scored_fixtures"] == 1
     assert report["summary"]["skipped_fixtures"] == 0
@@ -382,7 +383,7 @@ def test_score_skipped_catalog_references_scores_against_current_catalog_geometr
     assert report["scores"][0]["catalog_area_ratio"] == 1.03
 
 
-def test_score_skipped_catalog_reference_evidence_requirement_fails_weak_catalog_match(
+def test_score_skipped_catalog_references_require_source_image_catalog_evidence_by_default(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -450,7 +451,6 @@ def test_score_skipped_catalog_reference_evidence_requirement_fails_weak_catalog
         only_filters=[],
         fixture_config=config_path,
         score_skipped_catalog_references=True,
-        require_scored_catalog_evidence=True,
     )
 
     score = report["scores"][0]

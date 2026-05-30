@@ -186,9 +186,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-scored-catalog-evidence",
         action="store_true",
         help=(
-            "With --score-skipped-catalog-references, fail catalog outputs whose recorded "
-            "image-to-catalog shape evidence is weak. This prevents exact catalog geometry "
-            "from scoring as a tautological 1.0 without a strong source-image match."
+            "Fail catalog outputs whose recorded image-to-catalog shape evidence is weak. "
+            "This is enabled automatically by --score-skipped-catalog-references so exact "
+            "catalog geometry cannot score as a tautological 1.0 without a strong "
+            "source-image match."
         ),
     )
     parser.add_argument(
@@ -300,7 +301,9 @@ def main(argv: list[str] | None = None) -> int:
         debug_artifacts=not args.no_debug_artifacts,
         smoke_skipped=args.smoke_skipped,
         score_skipped_catalog_references=args.score_skipped_catalog_references,
-        require_scored_catalog_evidence=args.require_scored_catalog_evidence,
+        require_scored_catalog_evidence=(
+            args.require_scored_catalog_evidence or args.score_skipped_catalog_references
+        ),
         min_scored_catalog_shape_iou=args.min_scored_catalog_shape_iou,
         min_scored_catalog_area_ratio=args.min_scored_catalog_area_ratio,
         max_scored_catalog_area_ratio=args.max_scored_catalog_area_ratio,
@@ -370,6 +373,9 @@ def run_benchmark(
     require_smoked_catalog_miss: bool = False,
     block_network: bool = False,
 ) -> dict[str, Any]:
+    require_scored_catalog_evidence = bool(
+        require_scored_catalog_evidence or score_skipped_catalog_references
+    )
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
     filters = normalize_only_filters(only_filters)
