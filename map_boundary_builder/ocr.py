@@ -20,6 +20,8 @@ from PIL import Image
 
 from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
+    FAST_TEXT_OCR_RESCUE_MIN_AREA,
+    FAST_TEXT_OCR_RESCUE_MIN_ASPECT,
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
@@ -541,6 +543,8 @@ def ocr_cache_key_for_digest(
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
             f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
+            f"fast-text-rescue-area={round(float(FAST_TEXT_OCR_RESCUE_MIN_AREA), 4)}:"
+            f"fast-text-rescue-aspect={round(float(FAST_TEXT_OCR_RESCUE_MIN_ASPECT), 4)}:"
             f"rapidocr-min-text-area={round(float(rapidocr_min_text_area or 0.0), 4)}:"
             f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:"
             f"deps={ocr_cache_dependency_signature()}:"
@@ -707,7 +711,11 @@ def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_tex
     dt_boxes, _det_elapsed = engine.auto_text_det(img)
     if dt_boxes is None:
         return None
-    selected = [box for box in dt_boxes if rapidocr_box_area(box) >= min_text_area]
+    selected = [
+        box
+        for box in dt_boxes
+        if rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
+    ]
     if not selected:
         return None
     crop_images = engine.get_crop_img_list(img, selected)
@@ -721,6 +729,21 @@ def rapidocr_box_area(box: np.ndarray) -> float:
     width = max(float(np.linalg.norm(box[0] - box[1])), float(np.linalg.norm(box[2] - box[3])))
     height = max(float(np.linalg.norm(box[0] - box[3])), float(np.linalg.norm(box[1] - box[2])))
     return width * height
+
+
+def rapidocr_box_aspect(box: np.ndarray) -> float:
+    width = max(float(np.linalg.norm(box[0] - box[1])), float(np.linalg.norm(box[2] - box[3])))
+    height = max(float(np.linalg.norm(box[0] - box[3])), float(np.linalg.norm(box[1] - box[2])))
+    return width / max(height, 1.0)
+
+
+def rapidocr_rescue_text_box(box: np.ndarray) -> bool:
+    if FAST_TEXT_OCR_RESCUE_MIN_AREA <= 0.0 or FAST_TEXT_OCR_RESCUE_MIN_ASPECT <= 0.0:
+        return False
+    return (
+        rapidocr_box_area(box) >= FAST_TEXT_OCR_RESCUE_MIN_AREA
+        and rapidocr_box_aspect(box) >= FAST_TEXT_OCR_RESCUE_MIN_ASPECT
+    )
 
 
 def rapidocr_detector_limit_for_input(

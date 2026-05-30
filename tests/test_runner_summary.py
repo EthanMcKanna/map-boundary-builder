@@ -354,12 +354,12 @@ def test_classify_style_for_ocr_keeps_small_images_unscaled(monkeypatch) -> None
 
 
 def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
-    monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1200.0)
+    monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1300.0)
 
-    assert runner.fast_text_ocr_min_area_for_style("bright-blue") == 1200.0
-    assert runner.fast_text_ocr_min_area_for_style("gray-fill") == 1200.0
+    assert runner.fast_text_ocr_min_area_for_style("bright-blue") == 1300.0
+    assert runner.fast_text_ocr_min_area_for_style("gray-fill") == 1300.0
     assert runner.fast_text_ocr_min_area_for_style("dark-teal") is None
-    assert runner.fast_text_ocr_min_area_for_style("light-fill") == 1200.0
+    assert runner.fast_text_ocr_min_area_for_style("light-fill") == 1300.0
     assert runner.fast_text_ocr_min_area_for_style(None) is None
 
 
@@ -506,7 +506,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
     assert ocr_kwargs == [
         {
-            "rapidocr_min_text_area": 800.0,
+            "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "cache": False,
         }
@@ -577,7 +577,7 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
     assert ocr_kwargs == [
         {
             "rapidocr_max_dimension": runner.CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
-            "rapidocr_min_text_area": 800.0,
+            "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "cache": False,
         }
@@ -2142,7 +2142,7 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
     assert ocr_rgb_shapes == [(800, 1200, 3)]
     assert ocr_kwargs == [
         {
-            "rapidocr_min_text_area": 800.0,
+            "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "cache": False,
         }

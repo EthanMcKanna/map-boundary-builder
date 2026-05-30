@@ -7343,3 +7343,74 @@ with zero failures in 0.531s.
   0.919041, min IoU 0.794177, max 0.627946s, total 2.281819s. This is a narrow
   safe speed/config hook, not the larger sub-second arbitrary-image
   breakthrough; keep the main latency goal active.
+- OCR runtime R&D follow-up: profiled the no-catalog current-drift gate after
+  the bright-blue detector-limit deployment. The stage profile still points at
+  OCR as the bottleneck: the current Houston/Miami/Bay Area gate passed 6/6
+  with avg IoU 0.919041, but OCR took 0.607433s on current Houston and
+  0.399704s on current Miami in `out/current-drift-profile-20260530/`.
+  Increasing `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` to 1200 preserved the
+  current-drift avg IoU and reduced that gate to 2.310206s, but it materially
+  regressed the broader active no-catalog suite: Phoenix fell to IoU 0.851108
+  and lost road refinement, so the higher text-area filter remains rejected.
+  Raising `MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE` to 0.80/0.85/0.90
+  recovered active geometry but blew the 1s latency budget with Phoenix around
+  1.82s, so speculative high-threshold OCR plus fallback is also rejected.
+  ONNX Runtime knob sweeps were mixed: disabling both CPU memory arena and
+  spinning looked promising on the drift suite, but the patched default failed
+  the broader active gate (`out/onnx-default-active-nocatalog-20260530/`) with
+  Los Angeles 1.377834s, Phoenix 1.096298s, and Nashville 1.090536s. Disabling
+  only CPU memory arena passed but did not reliably beat the old defaults in a
+  same-session active comparison, so the runtime defaults stayed unchanged.
+  RapidOCR recognition batch sweeps (8/12/16/24/32/48) kept geometry unchanged
+  but did not beat the default 12 on the drift gate, and native-array threshold
+  sweeps showed the existing 1000px default as the best active-suite tradeoff.
+  No production change shipped from this batch.
+- OCR/thread/context R&D continuation: tested RapidOCR ONNX thread limits by
+  monkey-patching `intra_op_num_threads` / `inter_op_num_threads` before engine
+  construction. The active no-catalog suite preserved exact geometry for all
+  tested settings, but most were slower than the package default. `4/1` and
+  `4/2` were close on active total duration (about 3.53s versus 3.70s for the
+  same-session default), but both slowed the current Houston/Miami/Bay Area
+  drift gate (about 2.38s versus 2.22s), so explicit thread limits remain
+  rejected. Repeated bright-blue detector sweeps also kept geometry unchanged
+  at 544 and 608; 608 helped some current-drift repeats, likely by sharing the
+  default warmed detector session, but broader active repeats were mixed, so the
+  shipped 544 style-specific default stays unchanged. A structural no-OCR test
+  tried `georeference_from_city_context` directly from city hints and extracted
+  shapes. It was not accurate enough: Tesla Austin scored only IoU 0.538594,
+  Bay Area Tesla 0.446310, Dallas Tesla 0.182348, Houston Tesla 0.0, and the
+  Waymo cases mostly returned no city-context result. Do not add a pre-OCR
+  city-context shortcut without a substantially stronger road/shape verifier.
+- Accepted shape-aware fast OCR filter: the higher text-box area filter was
+  recoverable once the rejected pure area threshold was replaced with an
+  area-or-shape rule. Phoenix showed why: labels like `Biltmore`, `Scottsdale`,
+  and `Chandler` sit below a 1200px box-area cutoff but are wide enough to be
+  useful map text, while many discarded artifacts are smaller or square-ish.
+  The new default raises `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` from 800 to 1300
+  for the safe fast-text styles, then rescues medium horizontal detections at
+  area >= 900 and aspect >= 2.8. The rescue values are in the health payload
+  and OCR cache key. Same-session A/B against the old 800px filter preserved or
+  improved scored geometry: active no-catalog stayed 8/8 with avg IoU improving
+  from 0.961733 to 0.964230 and total active duration improving from 3.666053s
+  to 3.443311s in the first pair, then 3.698508s to 3.026135s and 3.285597s to
+  3.172131s in repeat pairs. Current Houston/Miami/Bay Area current-catalog
+  audit preserved avg IoU 0.919041 while improving total duration from
+  2.348388s to 2.200372s in the first pair; repeats were mostly faster with
+  one noise-level slower candidate run.
+- May 30 user step-in reconfirmed Houston, Miami, and Bay Area have changed
+  from the base saved ground truth. Revalidated the guardrails after the
+  shape-aware OCR filter: focused stale-reference tests passed 5/5, and
+  `out/user-stepin-drift-smoke-20260530/full-report.json` ran all six
+  Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` smoke checks
+  with zero failures, zero stale-reference scoring, and no catalog slugs. The
+  scored active no-catalog gate `out/final-rescue1300-active-nocatalog-20260530`
+  passed 8/8 non-drift fixtures with seven `reference_mismatch` skips, avg IoU
+  0.964230, min IoU 0.931476, total active duration 3.089979s, and max active
+  fixture 0.675277s. The separate changed-market current-catalog audit
+  `out/final-rescue1300-current-catalog-audit-20260530` passed 6/6 with avg
+  IoU 0.919041, min IoU 0.794177, total 2.213917s, and max 0.662674s, but it
+  is evidence against current catalog geometry rather than proof against the
+  stale saved ground truth. The normal catalog path
+  `out/final-rescue1300-catalog-20260530` passed 8/8 scored non-drift fixtures
+  with seven skips, avg IoU 0.992917, min IoU 0.943345, total 0.388396s, and
+  max 0.068739s.

@@ -699,6 +699,18 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_default, key_filtered)
 
+    def test_ocr_cache_key_depends_on_fast_text_rescue_filter(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "FAST_TEXT_OCR_RESCUE_MIN_AREA", 1000.0):
+                key_1000 = ocr_cache_key(image_path, use_tesseract=False, rapidocr_min_text_area=1200)
+            with patch.object(ocr_module, "FAST_TEXT_OCR_RESCUE_MIN_AREA", 1100.0):
+                key_1100 = ocr_cache_key(image_path, use_tesseract=False, rapidocr_min_text_area=1200)
+
+        self.assertNotEqual(key_1000, key_1100)
+
     def test_rapidocr_box_area_uses_detected_quad_size(self) -> None:
         box = np.array(
             [
@@ -737,6 +749,39 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(len(engine.selected_boxes), 1)
         self.assertTrue(np.array_equal(engine.selected_boxes[0], large_box))
         self.assertEqual([label.text for label in labels], ["Austin"])
+
+    def test_rapidocr_min_text_area_rescues_medium_horizontal_boxes(self) -> None:
+        medium_horizontal_box = np.array(
+            [[0.0, 0.0], [60.0, 0.0], [60.0, 18.0], [0.0, 18.0]],
+            dtype=np.float32,
+        )
+        medium_square_box = np.array(
+            [[0.0, 0.0], [33.0, 0.0], [33.0, 33.0], [0.0, 33.0]],
+            dtype=np.float32,
+        )
+        large_box = np.array(
+            [[0.0, 0.0], [80.0, 0.0], [80.0, 30.0], [0.0, 30.0]],
+            dtype=np.float32,
+        )
+        engine = FakeFilteredRapidOcrEngine([medium_horizontal_box, medium_square_box, large_box])
+
+        with (
+            patch.object(
+                ocr_module,
+                "rapidocr_input_array",
+                return_value=(np.zeros((100, 100, 3), dtype=np.uint8), 1.0, 1.0),
+            ),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
+            patch.object(ocr_module, "FAST_TEXT_OCR_RESCUE_MIN_AREA", 1000.0),
+            patch.object(ocr_module, "FAST_TEXT_OCR_RESCUE_MIN_ASPECT", 3.0),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_min_text_area=1200)
+
+        self.assertEqual(len(engine.selected_boxes), 2)
+        self.assertTrue(np.array_equal(engine.selected_boxes[0], medium_horizontal_box))
+        self.assertTrue(np.array_equal(engine.selected_boxes[1], large_box))
+        self.assertEqual([label.text for label in labels], ["Austin", "Austin"])
 
     def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:
