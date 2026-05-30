@@ -5363,3 +5363,23 @@ with zero failures in 0.531s.
   production repeat returned `build_boundary_s: 0.246133` and
   `total_before_send_s: 0.319959`, confirming the reliability fix without
   losing the subsecond known-catalog path.
+- Fixed a first-run UI warmup contention bug. The browser schedules
+  `/api/health?warm=ocr` when an image is selected, but
+  `cancelPendingGenerationRuntimePrewarm()` returned immediately when a warmup
+  fetch was already in flight. That let the warmup request compete with the real
+  `/api/runs` request exactly when the user clicked generate. The function now
+  clears the scheduled/running latch and aborts the warmup fetch through its
+  `AbortController`, so the real generation request gets the lane. Local checks:
+  `node --check map_boundary_builder/web_assets/app.js`, full pytest 236 tests
+  plus 9 subtests, `compileall`, and `git diff --check` all passed. The local
+  web server served the updated asset with `pipeline-8c261c51d45ddcff` and the
+  expected abort call in `app.js`. Geometry gates were unchanged: default
+  `out/prewarm-cancel-default-20260530/full-report.json` passed 8/8 scored with
+  zero IoU regression against `out/overlay-rgb-resize-default-20260530`, avg IoU
+  0.992917, min IoU 0.943345, active total 0.36s; strict no-catalog
+  `out/prewarm-cancel-nocatalog-20260530/full-report.json` passed 8/8 scored
+  with zero IoU regression against
+  `out/overlay-rgb-resize-nocatalog-20260530`, avg IoU 0.961733, min IoU
+  0.931476, active total 2.62s, and every active fixture under one second. The
+  in-app browser connector was unavailable (`iab` not available), so browser
+  verification fell back to local HTTP asset checks.
