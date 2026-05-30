@@ -5453,3 +5453,14 @@ with zero failures in 0.531s.
   238 tests plus 9 subtests, `compileall`, `git diff --check`, a local HTTP
   index asset-hash check, and source-order checks proving the probe starts
   before cache-key await and is aborted on cache-hit/error paths.
+- Deployed the catalog-probe/cache-key overlap to production. Production
+  deployment `dpl_2s7L8V4282RHMrZFff6XxgJES2FN` is `Ready` and aliased to
+  `https://mapboundary.app`; public HTML references
+  `asset-3845b26ca5ec16ee` and `/api/health` reports backend
+  `pipeline-c69d42a455f16bce`. The public hashed JS verifies that the catalog
+  probe starts before `buildRunCacheKeys()`, cache hits/errors abort the probe,
+  the probe fetch receives an abort signal, and `AbortError` is suppressed. A
+  fresh live production catalog-probe smoke using a pixel-distinct Los Angeles
+  image returned HTTP 201, `status: complete`, `catalog-shape-match`,
+  `los-angeles-waymo`, no overlay artifact, `build_boundary_s: 0.079465`, and
+  `total_before_send_s: 0.14166`.
