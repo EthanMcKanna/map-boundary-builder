@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image
 
 from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
@@ -766,10 +767,12 @@ def rapidocr_input_array(
     max_ocr_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
     if max_ocr_dimension <= 0:
         return source_path, 1.0, 1.0
+    prepared_shape: tuple[int, int] | None = None
     if prepared_bgr is None:
         bgr, composited_alpha = load_rapidocr_bgr(source_path)
     else:
         bgr = prepared_bgr
+        prepared_shape = bgr.shape[:2]
     if bgr is None:
         return source_path, 1.0, 1.0
     height, width = bgr.shape[:2]
@@ -784,6 +787,8 @@ def rapidocr_input_array(
             return bgr, 1.0, 1.0
         if composited_alpha:
             return bgr, 1.0, 1.0
+        if prepared_shape is not None and prepared_shape != source_image_shape(source_path):
+            return bgr, 1.0, 1.0
         return source_path, 1.0, 1.0
     scale = max_ocr_dimension / float(max_dimension)
     resized = cv2.resize(
@@ -792,6 +797,15 @@ def rapidocr_input_array(
         interpolation=cv2.INTER_AREA,
     )
     return resized, scale, scale
+
+
+def source_image_shape(image_path: Path) -> tuple[int, int] | None:
+    try:
+        with Image.open(image_path) as image:
+            width, height = image.size
+    except Exception:
+        return None
+    return height, width
 
 
 def load_rapidocr_bgr(image_path: str | Path) -> tuple[np.ndarray | None, bool]:

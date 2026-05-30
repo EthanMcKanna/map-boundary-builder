@@ -7018,3 +7018,28 @@ with zero failures in 0.531s.
   `out/dupguard-nocatalog-20260530/full-report.json`, and current changed-market
   catalog scoring
   `out/dupguard-current-changed-market-score2-20260530/full-report.json`.
+- Provider-UI crop OCR candidate: production stress probes on the guard-tightened
+  deployment showed arbitrary no-city phone screenshots still dominated by OCR:
+  a generic map upload took 1.207293s, Zoox Las Vegas `IMG_0071.PNG` took
+  1.210761s with 1.044578s in OCR, and dark Zoox `IMG_0226.PNG` took 1.963905s
+  with 1.583880s in OCR. The accepted prototype defers dark-teal no-city OCR
+  until after refined extraction, crops OCR around the extracted polygon with a
+  750px cap, preserves prepared OCR crops instead of accidentally reading the
+  full source file when the crop is below the native-array threshold, and only
+  infers a provider from style when exactly one provider owns that style. Local
+  real-image proof in `out/provider-ui-crop-proof3-20260530/` kept both Zoox
+  screenshots on `catalog-shape-match:provider-ui-label` with `las-vegas-zoox`
+  while reducing local elapsed time to 0.354727s for `IMG_0071.PNG` and
+  0.387604s for `IMG_0226.PNG`. Focused tests passed 162/162. Default active
+  regression `out/provider-ui-crop-default-20260530/full-report.json` preserved
+  the scored 8/8 fixtures with zero IoU regression and kept stale
+  Houston/Miami/Bay Area saved fixtures as `reference_mismatch` data debt.
+  No-catalog regression
+  `out/provider-ui-crop-nocatalog-20260530/full-report.json` preserved avg IoU
+  0.961733, min IoU 0.931476, and zero regression. Current changed-market
+  catalog scoring
+  `out/provider-ui-crop-current-changed-market-score-20260530/full-report.json`
+  scored Houston, Miami, and Bay Area Waymo against current catalog evidence
+  with 3/3 passing, avg/min IoU 1.0, and evidence IoUs 0.980523, 0.986200, and
+  0.960519. Full validation passed 287 tests plus 9 subtests, compileall, JS
+  syntax, and `git diff --check`.

@@ -162,6 +162,51 @@ def test_provider_ui_label_provider_accepts_glued_ocr_provider_text() -> None:
     assert runner.provider_ui_label_provider(labels) == "zoox"
 
 
+def test_provider_ui_label_catalog_match_infers_unique_provider_from_style() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))
+    extraction = ExtractionResult(
+        mask=np.zeros((1600, 800), dtype=np.uint8),
+        style="dark-teal",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.15,
+        contour_count=1,
+        confidence=1.0,
+    )
+    min_x, min_y, max_x, max_y = pixel_geometry.bounds
+    labels = [
+        OcrLabel(
+            text="Las Vegas",
+            x=(min_x + max_x) / 2,
+            y=(min_y + max_y) / 2,
+            width=150,
+            height=32,
+            confidence=99,
+        )
+    ]
+
+    match = runner.provider_ui_label_catalog_match(extraction, labels)
+
+    assert runner.unique_catalog_provider_for_style("dark-teal") == "zoox"
+    assert match is not None
+    assert match.entry.slug == "las-vegas-zoox"
+
+
+def test_unique_catalog_provider_for_style_rejects_ambiguous_style(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runner,
+        "PROVIDER_STYLES",
+        {
+            "alpha": {"shared-style"},
+            "beta": {"shared-style"},
+            "gamma": {"single-style"},
+        },
+    )
+
+    assert runner.unique_catalog_provider_for_style("shared-style") is None
+    assert runner.unique_catalog_provider_for_style("single-style") == "gamma"
+
+
 def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))

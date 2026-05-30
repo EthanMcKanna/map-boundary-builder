@@ -55,7 +55,7 @@ from .georeference import (
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
-from .ocr import extract_ocr_labels_from_rgb
+from .ocr import OcrLabel, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
 from .runtime_config import (
     FAST_TEXT_OCR_FALLBACK_CONFIDENCE,
@@ -97,6 +97,12 @@ PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
+PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_PROVIDER_UI_CROP_OCR_MAX_DIMENSION", "750")),
+)
+PROVIDER_UI_CROP_PAD_RATIO = 0.45
+PROVIDER_UI_CROP_MIN_PAD_PX = 80.0
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
@@ -595,18 +601,27 @@ def build_boundary(
             ensure_full_rgb()
             if labels_future is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
+                provider_ui_crop_after_refine = (
+                    city_input is None
+                    and allow_catalog
+                    and provider_ui_fast_ocr_max_dimension is not None
+                    and PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+                )
                 if (
                     city_input is None
                     and allow_catalog
                     and provider_ui_fast_ocr_max_dimension is not None
+                    and PROVIDER_UI_CROP_OCR_MAX_DIMENSION <= 0
                 ):
                     provider_ui_labels_future = ocr_executor.submit(
-                        extract_ocr_labels_from_rgb,
+                        extract_provider_ui_labels_from_rgb,
                         str(image_path),
                         rgb,
+                        extraction=extraction,
                         rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
-                        cache=runner_ocr_cache_enabled(),
                     )
+                elif provider_ui_crop_after_refine:
+                    pass
                 else:
                     labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
                     shortcut_ocr = current_catalog_label_shape_shortcut_enabled(
@@ -733,14 +748,21 @@ def build_boundary(
                 stage="ocr",
                 message="Reading provider area labels",
                 percent=43,
-                details={"rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension},
+                details={
+                    "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
+                    "crop_rapidocr_max_dimension": (
+                        PROVIDER_UI_CROP_OCR_MAX_DIMENSION
+                        if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+                        else None
+                    ),
+                },
             )
             if provider_ui_labels_future is None:
-                provider_ui_labels = extract_ocr_labels_from_rgb(
+                provider_ui_labels = extract_provider_ui_labels_from_rgb(
                     str(image_path),
                     rgb,
+                    extraction=extraction,
                     rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
-                    cache=runner_ocr_cache_enabled(),
                 )
             else:
                 provider_ui_labels = provider_ui_labels_future.result()
@@ -1191,6 +1213,56 @@ def submit_ocr_labels_from_rgb(
         rgb,
         **kwargs,
     )
+
+
+def extract_provider_ui_labels_from_rgb(
+    image_path: str | Path,
+    rgb,
+    *,
+    extraction,
+    rapidocr_max_dimension: int | None,
+) -> list[Any]:
+    crop, offset_x, offset_y = provider_ui_ocr_crop(rgb, extraction.pixel_geometry.bounds)
+    crop_max_dimension = (
+        PROVIDER_UI_CROP_OCR_MAX_DIMENSION
+        if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+        else rapidocr_max_dimension
+    )
+    labels = extract_ocr_labels_from_rgb(
+        str(image_path),
+        crop,
+        rapidocr_max_dimension=crop_max_dimension,
+        cache=runner_ocr_cache_enabled(),
+    )
+    if offset_x == 0 and offset_y == 0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + offset_x,
+            y=label.y + offset_y,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
+
+
+def provider_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
+    height, width = rgb.shape[:2]
+    min_x, min_y, max_x, max_y = bounds
+    polygon_width = max(1.0, max_x - min_x)
+    polygon_height = max(1.0, max_y - min_y)
+    pad_x = max(PROVIDER_UI_CROP_MIN_PAD_PX, polygon_width * PROVIDER_UI_CROP_PAD_RATIO)
+    pad_y = max(PROVIDER_UI_CROP_MIN_PAD_PX, polygon_height * PROVIDER_UI_CROP_PAD_RATIO)
+    left = max(0, int(min_x - pad_x))
+    top = max(0, int(min_y - pad_y))
+    right = min(width, int(max_x + pad_x))
+    bottom = min(height, int(max_y + pad_y))
+    if right <= left or bottom <= top:
+        return rgb, 0.0, 0.0
+    return rgb[top:bottom, left:right], float(left), float(top)
 
 
 def classify_style_for_ocr(rgb):
@@ -1889,7 +1961,7 @@ def filename_hinted_current_catalog_shape_match(
 
 
 def provider_ui_label_catalog_match(extraction, labels: list[Any]):
-    provider = provider_ui_label_provider(labels)
+    provider = provider_ui_label_provider(labels) or unique_catalog_provider_for_style(extraction.style)
     if provider is None or extraction.style not in PROVIDER_STYLES.get(provider, set()):
         return None
 
@@ -1921,6 +1993,17 @@ def provider_ui_label_catalog_match(extraction, labels: list[Any]):
         max_area_ratio=PROVIDER_UI_LABEL_MAX_AREA_RATIO,
         confidence_override=PROVIDER_UI_LABEL_CONFIDENCE,
     )
+
+
+def unique_catalog_provider_for_style(style: str | None) -> str | None:
+    providers = [
+        provider
+        for provider, styles in PROVIDER_STYLES.items()
+        if style in styles
+    ]
+    if len(providers) != 1:
+        return None
+    return providers[0]
 
 
 def provider_ui_label_provider(labels: list[Any]) -> str | None:
