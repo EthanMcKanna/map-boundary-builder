@@ -7171,3 +7171,15 @@ with zero failures in 0.531s.
   passed Houston, Miami, and Bay Area against refreshed current inputs with
   avg/min IoU 1.0; Bay Area used the new direct near-hit in 0.072986s while
   Houston and Miami stayed on the stricter direct current catalog path.
+  Production commit `e82ac6b` deployed as
+  `dpl_B4BEkGywEowsQXLcM3aFmaTrU3aV` with
+  `pipeline-f712d93565f7fe9a`. Three cache-busted raw direct Bay Area Waymo
+  uploads in `out/live-direct-nearhit-prod-20260530/` preserved
+  `bay-area-waymo`, source-image evidence IoU 0.960519, area ratio 1.009283,
+  and cache misses while completing in 0.413682s, 0.285480s, and 0.277808s
+  total-before-send via `catalog-shape-match:filename-near-hit`. The prior raw
+  full-size production samples from
+  `out/live-gray-provider-450-prod-20260530/` took 0.726585s, 1.770560s, and
+  1.608629s before the shortcut, so the direct API tail is now subsecond. A
+  gray-fill generic sanity upload stayed on `austin-tesla` in 0.677229s, and a
+  hard dark Zoox sanity upload stayed on `las-vegas-zoox` in 0.824846s.
