@@ -715,7 +715,7 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
-            b"const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 2000;",
+            b"const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 1600;",
             app_js,
         )
         self.assertIn(

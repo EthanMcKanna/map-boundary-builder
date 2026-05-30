@@ -6493,3 +6493,35 @@ with zero failures in 0.531s.
   Houston, 1.91-2.30s for Miami, and 0.82-0.86s for Bay Area; first Houston and
   Miami reps were cold OCR/runtime outliers but still returned the same catalog
   outputs with `cache_hit: miss`.
+- Compact handoff dimension sweep after the overlap deploy: local direct
+  `catalog_probe_missed` builds in
+  `out/handoff-dimension-sweep-20260530g/summary.json` showed 1600px WebP q92
+  preserved current catalog matches for Houston Waymo, Miami Waymo, and Bay
+  Area Waymo while reducing handoff bytes about 20-25% versus 2000px. Fresh
+  production direct handoff posts in
+  `out/prod-handoff-dim-sweep-20260530g/summary.json` confirmed the same slug
+  and confidence at 1600px: Houston improved from 0.996871s before-send at
+  2000px to 0.752025s at 1600px; Miami improved from 0.740994s to 0.655883s;
+  and forced Bay Area handoff improved from 0.906924s to 0.211774s via
+  `catalog-shape-match:probe-miss-full`. A 1200px handoff was faster for
+  Houston/Miami, but Bay Area regressed to 1.654817s with OCR, so the production
+  handoff cap moves only to the safer 1600px.
+- Local browser validation for the 1600px cap in
+  `out/handoff1600-browser-local-20260530g/browser-summary.json` confirmed the
+  frontend sends the smaller handoff: Houston uploaded 114862 bytes and returned
+  `houston-waymo`; Miami uploaded 92352 bytes and returned `miami-waymo`; Bay
+  Area stayed on a single 16764-byte probe-near-hit request with no handoff.
+  Full pytest passed 264/264 again, `compileall -q api map_boundary_builder
+  tests`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check` passed.
+- Production deployment `dpl_ELKG3k582GLQfGJsAoAB1pnrbgeA` now serves the
+  1600px handoff frontend on `https://mapboundary.app` after CDN stabilization.
+  Public browser verification in
+  `out/prod-handoff1600-browser-20260530g/browser-summary-096529.json` and the
+  warmed repeat `out/prod-handoff1600-browser-20260530g/browser-repeat-134281.json`
+  confirmed Houston and Miami use `probe` -> `fast-handoff` with smaller
+  uploads (about 114.9KB for Houston and 92.3KB for Miami), while Bay Area stays
+  on a single 16.8KB probe-near-hit request. The warmed repeat returned
+  Houston Waymo in 1.973s wall / 0.771907s before-send, Miami Waymo in 1.590s
+  / 0.620985s, and Bay Area Waymo in 0.655s / 0.064674s, all fresh cache misses
+  with current catalog slugs preserved.
