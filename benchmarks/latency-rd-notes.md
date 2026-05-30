@@ -5875,3 +5875,16 @@ with zero failures in 0.531s.
   Los Angeles high-confidence but lower-IoU outputs. Do not ship OCR box
   pruning without a stronger validator that catches those cases before
   returning a result.
+- Rejected Vercel Fluid Compute as a production latency change for this
+  CPU-bound Python OCR path. Current Vercel docs say top-level `"fluid": true`
+  supports Python and can reduce cold starts through optimized concurrency and
+  production pre-warming, so a protected production candidate was built and
+  deployed as `dpl_6MNgaUXvRT74FAXUcSJSCfwXr8PS`
+  (`map-boundary-builder-5wxzh011v-ethanmckannas-projects.vercel.app`). Health
+  passed on the same `pipeline-1cb38992e8b0b5a7`, but cache-busted
+  catalog-probe-miss smokes did not beat the current public deployment:
+  Houston slowed from 1.430557s public build time to 2.026986s on the Fluid
+  candidate, Miami slowed from 1.417456s to 2.296480s, and Bay Area was only
+  roughly tied at 1.578678s public versus 1.595018s candidate. The custom
+  domain stayed on `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`, and the `"fluid": true`
+  config probe was reverted.
