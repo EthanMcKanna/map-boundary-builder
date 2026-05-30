@@ -470,7 +470,13 @@ class OcrGroupingTests(unittest.TestCase):
             second_bgr = rgb_to_bgr(np.array(bordered, dtype=np.uint8))
             calls: list[str] = []
 
-            def fake_rapidocr(image_path, *, prepared_bgr=None, composited_alpha=False):
+            def fake_rapidocr(
+                image_path,
+                *,
+                prepared_bgr=None,
+                composited_alpha=False,
+                rapidocr_detector_limit_side_len=None,
+            ):
                 calls.append(Path(image_path).name)
                 return [OcrLabel("Dallas", x=10, y=8, width=6, height=5, confidence=99)]
 
@@ -744,6 +750,20 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_608, key_640)
 
+    def test_ocr_cache_key_depends_on_detector_limit_override(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(image_path, use_tesseract=False)
+            key_512 = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_detector_limit_side_len=512,
+            )
+
+        self.assertNotEqual(key_default, key_512)
+
     def test_ocr_cache_key_depends_on_native_rapidocr_array_threshold(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -863,6 +883,30 @@ class OcrGroupingTests(unittest.TestCase):
             labels = ocr_module.run_rapidocr_words("unused.png")
 
         rapidocr.assert_called_once_with(640)
+        self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
+
+    def test_rapidocr_detector_limit_override_wins_for_large_arrays(self) -> None:
+        engine = FakeRapidOcrEngine(
+            {
+                False: [
+                    [unit_ocr_box(), "Orlando", 0.98],
+                    [unit_ocr_box(x=100.0), "Southchase", 0.97],
+                ]
+            }
+        )
+        image = np.zeros((1200, 1600, 3), dtype=np.uint8)
+
+        with (
+            patch.object(ocr_module, "rapidocr_input_array", return_value=(image, 1.0, 1.0)),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine) as rapidocr,
+            patch.object(ocr_module, "RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN", 640),
+        ):
+            labels = ocr_module.run_rapidocr_words(
+                "unused.png",
+                rapidocr_detector_limit_side_len=512,
+            )
+
+        rapidocr.assert_called_once_with(512)
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_keeps_base_detector_limit_for_small_inputs(self) -> None:

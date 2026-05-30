@@ -7321,3 +7321,25 @@ with zero failures in 0.531s.
   0.794177, max fixture 0.697564s, total 2.469896s, and zero one-second latency
   budget issues. This gives the changed service areas a fair current-market
   regression gate while preserving the old stale-pair status as data debt.
+- Bright-blue OCR detector-limit follow-up: retested global OCR scale and crop
+  ideas against the current Houston/Miami/Bay Area drift gate before shipping
+  anything. Global `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION` remains rejected:
+  1500/1450/1400/1300/1200 all either lowered average IoU materially or failed
+  Bay Area/Nashville. Cropped OCR was also rejected because Houston and Bay Area
+  produced unstable IoU. Global RapidOCR detector caps at 576/544/512/480 kept
+  the Waymo drift gate mostly intact but hurt gray-fill Tesla geometry, so those
+  are not robust enough for arbitrary screenshots. The safe variant is
+  style-specific only: bright-blue screenshots now use a separate
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN` default of 544, and the
+  value is included in OCR cache keys plus the health payload. Style-aware 512
+  preserved geometry but was slower from extra OCR-session churn, so it stayed
+  rejected. The accepted 544 default passed the catalog gate
+  `out/bright-blue-det544-default-20260530/` at 8/8, avg IoU 0.992917, max
+  0.068617s; passed active no-catalog
+  `out/bright-blue-det544-defaultenv-nocatalog-20260530/` at 8/8, avg IoU
+  0.961733, max 0.657687s, total 3.382343s; and passed the current
+  Houston/Miami/Bay Area no-catalog drift gate
+  `out/bright-blue-det544-defaultenv-current-drift-20260530/` at 6/6, avg IoU
+  0.919041, min IoU 0.794177, max 0.627946s, total 2.281819s. This is a narrow
+  safe speed/config hook, not the larger sub-second arbitrary-image
+  breakthrough; keep the main latency goal active.

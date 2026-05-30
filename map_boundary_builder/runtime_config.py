@@ -44,6 +44,10 @@ RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN",
     608,
 )
+RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN",
+    544,
+)
 RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION",
     1000,
@@ -100,6 +104,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "current_catalog_label_ocr_max_dimension": CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
         "rapidocr_detector_limit_side_len": RAPIDOCR_DET_LIMIT_SIDE_LEN,
         "rapidocr_large_image_detector_limit_side_len": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
+        "rapidocr_bright_blue_detector_limit_side_len": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,

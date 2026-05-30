@@ -62,6 +62,7 @@ from .runtime_config import (
     FAST_TEXT_OCR_MIN_AREA,
     FAST_TEXT_OCR_STYLES,
     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
+    RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
@@ -341,6 +342,9 @@ def build_boundary(
                 labels_future_current_catalog_shortcut = True
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+            rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
+            if rapidocr_detector_limit is not None:
+                ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
             labels_future = ocr_executor.submit(
                 extract_ocr_labels_from_rgb,
                 str(image_path),
@@ -369,6 +373,9 @@ def build_boundary(
                 labels_future_current_catalog_shortcut = True
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+            rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
+            if rapidocr_detector_limit is not None:
+                ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
             labels_future = ocr_executor.submit(
                 extract_ocr_labels_from_rgb,
                 str(image_path),
@@ -1284,6 +1291,9 @@ def submit_ocr_labels_from_rgb(
     kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    if rapidocr_detector_limit is not None:
+        kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     return executor.submit(
@@ -1401,13 +1411,21 @@ def classify_style_for_ocr(rgb):
 
 def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str) -> list[Any]:
     rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    ocr_kwargs: dict[str, Any] = {
+        "cache": runner_ocr_cache_enabled(),
+    }
     if rapidocr_max_dimension is None:
-        return extract_ocr_labels_from_rgb(str(image_path), rgb, cache=runner_ocr_cache_enabled())
+        if rapidocr_detector_limit is not None:
+            ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+        return extract_ocr_labels_from_rgb(str(image_path), rgb, **ocr_kwargs)
+    if rapidocr_detector_limit is not None:
+        ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
     return extract_ocr_labels_from_rgb(
         str(image_path),
         rgb,
         rapidocr_max_dimension=rapidocr_max_dimension,
-        cache=runner_ocr_cache_enabled(),
+        **ocr_kwargs,
     )
 
 
@@ -1447,6 +1465,14 @@ def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
     if RAPIDOCR_PURPLE_FILL_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
         return None
     return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+
+
+def rapidocr_detector_limit_for_ocr_style(style: str | None) -> int | None:
+    if style != "bright-blue":
+        return None
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+        return None
+    return RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN
 
 
 def current_catalog_label_shape_shortcut_enabled(

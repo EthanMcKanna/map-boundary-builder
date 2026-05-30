@@ -23,6 +23,7 @@ from .runtime_config import (
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
+    RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
@@ -75,6 +76,7 @@ def extract_ocr_labels(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
     cache: bool = True,
 ) -> list[OcrLabel]:
@@ -84,6 +86,7 @@ def extract_ocr_labels(
             image_path,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if cache
@@ -110,6 +113,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if visual_cache_key is not None and visual_cache_key != cache_key:
@@ -122,6 +126,7 @@ def extract_ocr_labels(
             canonical_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         canonical_trimmed = canonical_ocr_bgr_trimmed(prepared_bgr, canonical_bgr, canonical_origin)
@@ -142,6 +147,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
@@ -156,6 +162,7 @@ def extract_ocr_labels(
             prepared_bgr,
             use_tesseract=use_tesseract,
             rapidocr_max_dimension=rapidocr_max_dimension,
+            rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if coarse_visual_cache_key is not None and coarse_visual_cache_key not in {
@@ -203,6 +210,7 @@ def extract_ocr_labels(
         image_path,
         prepared_bgr=prepared_bgr,
         composited_alpha=prepared_composited_alpha,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         **rapidocr_kwargs,
     )
     words: list[OcrLabel] = list(rapid_words)
@@ -254,6 +262,7 @@ def extract_ocr_labels_from_rgb(
     rgb: np.ndarray,
     *,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
     cache: bool = True,
 ) -> list[OcrLabel]:
@@ -261,6 +270,7 @@ def extract_ocr_labels_from_rgb(
         image_path,
         prepared_bgr=rgb_to_bgr(rgb),
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
         cache=cache,
     )
@@ -277,6 +287,7 @@ def ocr_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     try:
@@ -288,6 +299,7 @@ def ocr_cache_key(
         digest,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -297,6 +309,7 @@ def ocr_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     if bgr is None:
@@ -310,6 +323,7 @@ def ocr_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -319,12 +333,14 @@ def ocr_near_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
         mask=OCR_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr6-sha256",
@@ -337,12 +353,14 @@ def ocr_coarse_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
         bgr,
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
         mask=OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr5-sha256",
@@ -355,6 +373,7 @@ def ocr_quantized_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
     mask: int,
     digest_kind: str,
@@ -372,6 +391,7 @@ def ocr_quantized_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -381,6 +401,7 @@ def ocr_canonical_visual_cache_key(
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     if bgr is None:
@@ -394,6 +415,7 @@ def ocr_canonical_visual_cache_key(
         digest.hexdigest(),
         use_tesseract=use_tesseract,
         rapidocr_max_dimension=rapidocr_max_dimension,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -490,12 +512,19 @@ def effective_rapidocr_max_dimension(rapidocr_max_dimension: int | None = None) 
     return max(0, int(rapidocr_max_dimension))
 
 
+def effective_rapidocr_detector_limit_override(rapidocr_detector_limit_side_len: int | None = None) -> int:
+    if rapidocr_detector_limit_side_len is None:
+        return 0
+    return max(0, int(rapidocr_detector_limit_side_len))
+
+
 def ocr_cache_key_for_digest(
     digest_kind: str,
     digest: str,
     *,
     use_tesseract: bool,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str:
     engine = "tesseract" if use_tesseract else "rapidocr"
@@ -503,8 +532,10 @@ def ocr_cache_key_for_digest(
     return hashlib.sha256(
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={effective_max_dimension}:"
+            f"rapidocr-det-limit-override={effective_rapidocr_detector_limit_override(rapidocr_detector_limit_side_len)}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
+            f"rapidocr-bright-blue-det-limit={RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
             f"rapidocr-native-array-min={RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
@@ -637,6 +668,7 @@ def run_rapidocr_words(
     prepared_bgr: np.ndarray | None = None,
     composited_alpha: bool = False,
     rapidocr_max_dimension: int | None = None,
+    rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> list[OcrLabel]:
     ocr_input, scale_x, scale_y = rapidocr_input_array(
@@ -645,7 +677,10 @@ def run_rapidocr_words(
         composited_alpha=composited_alpha,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
-    detector_limit = rapidocr_detector_limit_for_input(ocr_input)
+    detector_limit = rapidocr_detector_limit_for_input(
+        ocr_input,
+        rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
+    )
     min_text_area = max(0.0, float(rapidocr_min_text_area or 0.0))
     try:
         engine = rapidocr_engine(detector_limit)
@@ -688,7 +723,14 @@ def rapidocr_box_area(box: np.ndarray) -> float:
     return width * height
 
 
-def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
+def rapidocr_detector_limit_for_input(
+    ocr_input: Path | np.ndarray,
+    *,
+    rapidocr_detector_limit_side_len: int | None = None,
+) -> int:
+    detector_override = effective_rapidocr_detector_limit_override(rapidocr_detector_limit_side_len)
+    if detector_override > 0:
+        return detector_override
     if (
         RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN <= 0
         or RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION <= 0

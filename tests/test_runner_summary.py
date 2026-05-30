@@ -389,6 +389,14 @@ def test_light_fill_label_fits_skip_road_refinement() -> None:
     assert runner.should_allow_label_fit_road_refinement("light-fill") is False
 
 
+def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 512)
+
+    assert runner.rapidocr_detector_limit_for_ocr_style("bright-blue") == 512
+    assert runner.rapidocr_detector_limit_for_ocr_style("gray-fill") is None
+    assert runner.rapidocr_detector_limit_for_ocr_style(None) is None
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 
@@ -496,7 +504,13 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
-    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
+    assert ocr_kwargs == [
+        {
+            "rapidocr_min_text_area": 800.0,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "cache": False,
+        }
+    ]
 
 
 def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_path, monkeypatch) -> None:
@@ -564,6 +578,7 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
         {
             "rapidocr_max_dimension": runner.CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
             "rapidocr_min_text_area": 800.0,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "cache": False,
         }
     ]
@@ -2125,4 +2140,10 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
 
     assert order == ["preload", "fit"]
     assert ocr_rgb_shapes == [(800, 1200, 3)]
-    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
+    assert ocr_kwargs == [
+        {
+            "rapidocr_min_text_area": 800.0,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "cache": False,
+        }
+    ]
