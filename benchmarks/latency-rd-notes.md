@@ -6364,14 +6364,19 @@ with zero failures in 0.531s.
   `out/user-drift-current-catalog-20260530b/full-report.json` passed all six against
   current catalog geometry with avg IoU 1.0, min IoU 0.999999, total duration
   2.434565s, and max duration 0.809781s.
-- Sequential shortcut OCR cap repeats on the same drifted-current gate showed
-  700px is the best current default candidate: 900px passed at total 0.982726s,
-  avg 0.163788s, max 0.288178s; 700px passed at total 0.825979s, avg 0.137663s,
+- Sequential shortcut OCR cap repeats on the same full-PNG drifted-current gate
+  showed 700px can be faster there: 900px passed at total 0.982726s, avg
+  0.163788s, max 0.288178s; 700px passed at total 0.825979s, avg 0.137663s,
   max 0.209011s; 600px passed but was slightly slower at total 0.891556s; and
-  500px preserved current geometry but fell back into a 2.403245s total. The
-  default shortcut OCR cap is now 700px, with full-detail OCR still retried if
-  the low-detail label/shape guard does not match.
-- Post-change validation with the 700px default passed full pytest
+  500px preserved current geometry but fell back into a 2.403245s total.
+  However, the browserlike 2000px WebP q92 gate rejected the 700px default:
+  900px passed all six current-catalog fixtures in
+  `out/q92-drift-current-catalog-cap900-20260530b/full-report.json` with total
+  duration 1.50259s and Bay Area Waymo at 0.462663s, while 700px took total
+  1.742189s and Bay Area Waymo regressed to 1.020797s. Production q92 repeat
+  evidence after the 700px deploy also showed Bay Area Waymo at 1.965411s
+  server time, so the default shortcut OCR cap is restored to 900px.
+- Validation with the attempted 700px default passed full pytest
   (264 tests plus 9 subtests), `compileall`, `node --check`, and
   `git diff --check`. The active production-shaped benchmark
   `out/ocr700-default-20260530b/full-report.json` preserved the previous
@@ -6384,3 +6389,9 @@ with zero failures in 0.531s.
   0.999999, total duration 0.734572s, and max duration 0.20797s, while
   `out/ocr700-current-drift-smoke-20260530b/full-report.json` kept the same six
   as unscored `reference_mismatch` smoke checks.
+- Restoring the 900px default re-passed the browserlike q92 current-catalog
+  gate in `out/q92-default-restored-current-drift-20260530b/full-report.json`:
+  six scored current-catalog fixtures, avg IoU 1.0, min IoU 0.999999, total
+  duration 1.28042s, max duration 0.38406s, and Bay Area Waymo 0.341734s. This
+  keeps the production default aligned with the browser-compressed case instead
+  of overfitting the full-PNG local sweep.
