@@ -7129,3 +7129,21 @@ with zero failures in 0.531s.
   `out/gray-provider-450-current-changed-market-score-20260530/full-report.json`
   for Houston, Miami, and Bay Area against current catalog data, full 291 tests
   plus 9 subtests, compileall, JS syntax, and `git diff --check`.
+  Production commit `9db0df7` deployed as
+  `dpl_3zhGDmRCrsAkmaNBeuMDwVy25BWw` with
+  `pipeline-0c88278cd0d417ec`. Three cache-busted generic gray-fill no-city
+  uploads in `out/live-gray-provider-450-prod-20260530/` preserved
+  `catalog-shape-match:provider-ui-label`, `austin-tesla`, and cache misses
+  while improving total-before-send time to 0.814330s, 0.704388s, and
+  0.672632s versus the prior 750px production proof at 1.138081s, 0.924233s,
+  and 0.932157s. The hard dark Zoox sanity stayed on
+  `catalog-shape-match:provider-ui-focus-label`, `las-vegas-zoox`, and
+  0.805653s / 0.793673s total-before-send versus the prior 0.790645s /
+  0.784931s, keeping that path subsecond with the same output. Current-market
+  production probes preserved refreshed Houston and Miami Waymo current catalog
+  outputs in 0.242336s and 0.224080s total-before-send with source-image
+  evidence IoUs 0.980523 and 0.986200. The representative Bay Area frontend
+  path completed at the 520px catalog probe in 0.194671s with
+  `bay-area-waymo`; direct raw full-size Bay Area uploads that intentionally
+  bypass the frontend probe can still tail above one second, so that remains a
+  separate direct-API latency target.
