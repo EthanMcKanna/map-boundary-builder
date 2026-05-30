@@ -5917,3 +5917,15 @@ with zero failures in 0.531s.
   completed with null catalog, confidence 0.865, and 1.401395s build time; old
   Miami null catalog, confidence 0.864, and 1.406341s; old Bay Area null
   catalog, confidence 0.877, and 1.557404s.
+- Promoted the bounded no-hint catalog-probe retry to production by aliasing
+  `dpl_DmTy5AnhpEHzosT2xKww2aeKSB1G` to `https://mapboundary.app` and
+  `https://map-boundary-builder.vercel.app`. Public health reports
+  `pipeline-98930576fb78a091` with warm status OK. Post-deploy public probes
+  confirmed the win and the guard: current Houston's 520px probe now returns
+  `houston-waymo` via `catalog-shape-match:retry` in 0.077711s before send,
+  current Miami returns `miami-waymo` in 0.023963s, current Bay Area remains a
+  catalog miss, and the old saved Houston/Miami/Bay Area probes all remain
+  catalog misses at 0.051-0.058s. Public full fallback smokes also stayed on
+  null catalog OCR/georeference for the old saved changed-market screenshots:
+  Houston 1.462839s build / confidence 0.865, Miami 1.453690s / confidence
+  0.864, and Bay Area 1.556886s / confidence 0.877.
