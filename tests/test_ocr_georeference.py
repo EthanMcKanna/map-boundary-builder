@@ -601,6 +601,22 @@ class OcrGroupingTests(unittest.TestCase):
             self.assertEqual(scale_x, 1.0)
             self.assertEqual(scale_y, 1.0)
 
+    def test_rapidocr_input_array_uses_loaded_array_for_webp(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.webp"
+            Image.new("RGB", (20, 10), (12, 34, 56)).save(image_path, format="WEBP", lossless=True)
+
+            with (
+                patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 40),
+                patch.object(ocr_module, "RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION", 1000),
+            ):
+                ocr_input, scale_x, scale_y = rapidocr_input_array(image_path)
+
+            self.assertIsInstance(ocr_input, np.ndarray)
+            self.assertEqual(ocr_input.shape[:2], (10, 20))
+            self.assertEqual(scale_x, 1.0)
+            self.assertEqual(scale_y, 1.0)
+
     def test_rapidocr_input_array_composites_transparent_png(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"

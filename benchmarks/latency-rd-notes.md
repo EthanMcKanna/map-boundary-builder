@@ -6108,3 +6108,34 @@ with zero failures in 0.531s.
   `*.catalog-probe.webp`; current `h-waymo.png` still hit `houston-waymo`,
   current `miami.png` still hit `miami-waymo`, and the old saved
   `waymo bay area.png` still returned `catalog_miss`.
+- Continued upload-transport R&D after the WebP probe deploy. A split prototype
+  that kept original-pixel extraction but fed WebP q95/q98/q100 images to OCR
+  showed why lossy full-upload compression is still unsafe: q95 cut OCR bytes to
+  about 24% of originals but dropped Orlando to IoU 0.865341; q98 cut bytes to
+  about 29% and preserved the 0.931476 min IoU, but still lowered mean IoU to
+  0.958994 by moving Dallas/LA enough to fail the no-regression bar; q100
+  regressed like q95. Pillow lossless WebP was much more interesting, preserving
+  decoded RGB exactly while shrinking active fixtures to 41-65% of original
+  bytes (`out/lossless-webp-transport-probe-20260530a/report.json`), but native
+  browser WebP encoders are lossy and a browser-feasible gzipped canvas RGBA
+  path was mostly larger than the original Waymo PNGs
+  (`out/gzip-canvas-transport-probe-20260530a/report.json`). Keep lossless WebP
+  as a possible future WASM/native-encoder lane, not a deployable browser
+  default yet.
+- Accepted a narrow WebP OCR input cleanup: `rapidocr_input_array()` now keeps
+  small WebP uploads on the already decoded BGR array instead of allowing
+  RapidOCR to reopen the WebP path. This does not change the general PNG/JPEG
+  OCR policy, but it removes a redundant decode and keeps WebP extraction/OCR
+  on one decoded pixel source. Focused coverage passed in
+  `tests/test_ocr_georeference.py::OcrGroupingTests::test_rapidocr_input_array_uses_loaded_array_for_webp`
+  plus related image-I/O tests, and the lossless WebP active fixture smoke still
+  passed 8/8 with avg IoU 0.961/min IoU 0.931 in
+  `out/lossless-webp-array-nocatalog-20260530a/full-report.json` (timings from
+  that run were contention-heavy and should not be used as a speed proof).
+  Full validation passed with 252 tests plus 9 subtests, `compileall`,
+  `node --check`, and `git diff --check`. A clean active no-catalog benchmark
+  passed 8/8 with avg IoU 0.961733/min IoU 0.931476, total 3.30s, and zero
+  regression issues versus `out/continue-current-nocatalog-20260530a/`
+  (`out/post-webp-array-current-nocatalog-clean-20260530a/full-report.json`);
+  the user-confirmed Houston/Miami/Bay Area drift smoke still had 0 smoke
+  failures in `out/post-webp-array-drift-smoke-20260530a/full-report.json`.

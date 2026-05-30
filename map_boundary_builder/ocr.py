@@ -762,6 +762,8 @@ def rapidocr_input_array(
     height, width = bgr.shape[:2]
     max_dimension = max(width, height)
     if max_dimension <= max_ocr_dimension:
+        if source_path.suffix.lower() == ".webp":
+            return bgr, 1.0, 1.0
         if (
             RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION > 0
             and max_dimension >= RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION
