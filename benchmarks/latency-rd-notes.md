@@ -6160,3 +6160,15 @@ with zero failures in 0.531s.
   Full validation passed with 254 tests plus 9 subtests, `compileall`,
   `node --check`, and `git diff --check`; the Houston/Miami/Bay Area drift
   smoke still had 0 smoke failures in `out/sparse-label-drift-smoke-20260530a/`.
+- User confirmed Houston, Miami, and Bay Area have changed relative to the
+  saved benchmark ground truth, so those fixtures must remain drift/data-debt
+  smoke checks until refreshed screenshots and references are captured. Current
+  validation agrees: `out/user-drift-confirmed-smoke-20260530b/` passed with
+  6/6 stale fixtures smoke-checked and 0 smoke failures. A forced
+  `--score-skipped-catalog-references` run against the same stale screenshots
+  failed the three Waymo drift cases (`houston-waymo` IoU 0.411686,
+  `miami-waymo` IoU 0.546439, `bay-area-waymo` IoU 0.706116) while Tesla/Zoox
+  catalog hits scored 1.0 (`out/user-drift-current-catalog-score-20260530/`).
+  Do not treat those Waymo catalog-score failures as model regressions; they
+  are evidence that old screenshots cannot be scored against current service
+  areas.
