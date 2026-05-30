@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
+import cv2
 from PIL import Image
 from shapely.geometry import shape
 
@@ -100,6 +101,10 @@ FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
+EARLY_OCR_STYLE_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_EARLY_OCR_STYLE_MAX_DIMENSION", "800")),
+)
 
 
 @dataclass(frozen=True)
@@ -246,7 +251,7 @@ def build_boundary(
             allow_catalog=allow_catalog,
             filename_hint=filename_hint,
         ):
-            early_ocr_style = classify_style(rgb)
+            early_ocr_style = classify_style_for_ocr(rgb)
             ocr_executor = ThreadPoolExecutor(max_workers=1)
             rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
             labels_future_filtered = rapidocr_min_text_area is not None
@@ -266,7 +271,7 @@ def build_boundary(
             filename_hint=filename_hint,
         ):
             if early_ocr_style is None:
-                early_ocr_style = classify_style(rgb)
+                early_ocr_style = classify_style_for_ocr(rgb)
             ocr_executor = ThreadPoolExecutor(max_workers=1)
             rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
             labels_future_filtered = rapidocr_min_text_area is not None
@@ -914,6 +919,23 @@ def submit_ocr_labels_from_rgb(
         rgb,
         **kwargs,
     )
+
+
+def classify_style_for_ocr(rgb):
+    max_dimension = EARLY_OCR_STYLE_MAX_DIMENSION
+    if max_dimension <= 0:
+        return classify_style(rgb)
+    height, width = rgb.shape[:2]
+    largest = max(width, height)
+    if largest <= max_dimension:
+        return classify_style(rgb)
+    scale = max_dimension / float(largest)
+    sampled = cv2.resize(
+        rgb,
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        interpolation=cv2.INTER_AREA,
+    )
+    return classify_style(sampled)
 
 
 def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str) -> list[Any]:

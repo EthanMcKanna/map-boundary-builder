@@ -4,12 +4,14 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import numpy as np
+import cv2
 
 import map_boundary_builder.extract as extract_module
 from map_boundary_builder.extract import (
     _EXTRACTION_MEMORY_CACHE,
     extract_service_area,
     extraction_cache_dependency_signature,
+    classify_style,
     keep_main_components,
     repair_mask,
     remove_small_components,
@@ -64,6 +66,44 @@ class MaskRepairTests(unittest.TestCase):
             cleaned = keep_main_components(mask, max_components=2)
 
         np.testing.assert_array_equal(cleaned, mask)
+
+    def test_classify_style_shortcuts_obvious_dark_teal(self) -> None:
+        rgb = np.full((120, 120, 3), 18, dtype=np.uint8)
+        teal_hsv = np.zeros((1, 1, 3), dtype=np.uint8)
+        teal_hsv[0, 0] = (85, 150, 130)
+        teal_rgb = cv2.cvtColor(teal_hsv, cv2.COLOR_HSV2RGB)[0, 0]
+        rgb[24:96, 24:96] = teal_rgb
+
+        with (
+            patch.object(
+                extract_module,
+                "purple_service_mask",
+                side_effect=AssertionError("obvious dark teal should not need purple mask"),
+            ),
+            patch.object(
+                extract_module,
+                "light_fill_service_mask",
+                side_effect=AssertionError("obvious dark teal should not need light-fill component pass"),
+            ),
+        ):
+            self.assertEqual(classify_style(rgb), "dark-teal")
+
+    def test_classify_style_shortcuts_obvious_gray_fill(self) -> None:
+        rgb = np.full((100, 100, 3), 30, dtype=np.uint8)
+
+        with (
+            patch.object(
+                extract_module,
+                "purple_service_mask",
+                side_effect=AssertionError("obvious gray fill should not need purple mask"),
+            ),
+            patch.object(
+                extract_module,
+                "light_fill_service_mask",
+                side_effect=AssertionError("obvious gray fill should not need light-fill component pass"),
+            ),
+        ):
+            self.assertEqual(classify_style(rgb), "gray-fill")
 
     def test_downscaled_extraction_returns_original_coordinate_space(self) -> None:
         rgb = np.full((240, 240, 3), 255, dtype=np.uint8)

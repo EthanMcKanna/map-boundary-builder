@@ -5670,3 +5670,28 @@ with zero failures in 0.531s.
   `out/component-noop-waymo-drift-smoke-20260530/full-report.json` passed all
   three user-confirmed `reference_mismatch` smoke checks with null catalog
   slugs.
+- Accepted a bounded early-style classifier for OCR overlap plus conservative
+  full-classifier shortcuts for obvious dark-teal and gray-fill maps. The
+  OCR-overlap path now classifies a max-800px sample before submitting RapidOCR,
+  leaving the exact extraction classifier and mask generation unchanged; if the
+  sample ever chooses a filtered style that disagrees with extraction, the
+  existing full-OCR fallback still protects georeference accuracy. The exact
+  classifier now returns early only when dark-teal or gray-fill evidence is
+  already decisive, avoiding purple/light-fill component passes on those obvious
+  maps. A real-image style parity sweep across the service-area screenshots plus
+  local Zoox/Avride/phone uploads preserved sampled style equality for all
+  checked images. Focused tests passed 4/4, full pytest passed 247 tests and 9
+  subtests, compileall, `node --check`, and `git diff --check` passed. The
+  strict no-catalog gate `out/early-style-nocatalog-20260530/full-report.json`
+  passed 8/8 scored active fixtures with seven `reference_mismatch` skips, avg
+  IoU 0.961733, min IoU 0.931476, zero IoU regression versus
+  `out/skip-marker-nocatalog-clean-20260530/full-report.json`, and active total
+  2.580951s versus the 2.832181s baseline. The default catalog gate
+  `out/early-style-default-20260530/full-report.json` passed 8/8 scored with avg
+  IoU 0.992917, min IoU 0.943345, zero regression issues, and total 0.382613s.
+  Houston/Miami/Bay Area drift smoke
+  `out/early-style-waymo-drift-smoke-20260530/full-report.json` ran all six
+  user-confirmed stale fixtures as unscored `reference_mismatch` checks with
+  zero failures and null catalog slugs, and Zoox dark/light stress
+  `out/early-style-dark-stress-20260530/full-report.json` passed 2/2 smoke
+  checks.

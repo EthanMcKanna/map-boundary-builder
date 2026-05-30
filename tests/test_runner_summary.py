@@ -216,6 +216,36 @@ def test_runner_ocr_cache_can_be_enabled_for_disk_or_override(monkeypatch) -> No
     assert runner.runner_ocr_cache_enabled() is True
 
 
+def test_classify_style_for_ocr_uses_bounded_sample(monkeypatch) -> None:
+    rgb = np.zeros((1600, 3200, 3), dtype=np.uint8)
+    calls: list[tuple[int, ...]] = []
+
+    def fake_classify_style(sampled_rgb):
+        calls.append(tuple(sampled_rgb.shape))
+        return "bright-blue"
+
+    monkeypatch.setattr(runner, "EARLY_OCR_STYLE_MAX_DIMENSION", 800)
+    monkeypatch.setattr(runner, "classify_style", fake_classify_style)
+
+    assert runner.classify_style_for_ocr(rgb) == "bright-blue"
+    assert calls == [(400, 800, 3)]
+
+
+def test_classify_style_for_ocr_keeps_small_images_unscaled(monkeypatch) -> None:
+    rgb = np.zeros((400, 600, 3), dtype=np.uint8)
+    calls: list[tuple[int, ...]] = []
+
+    def fake_classify_style(sampled_rgb):
+        calls.append(tuple(sampled_rgb.shape))
+        return "gray-fill"
+
+    monkeypatch.setattr(runner, "EARLY_OCR_STYLE_MAX_DIMENSION", 800)
+    monkeypatch.setattr(runner, "classify_style", fake_classify_style)
+
+    assert runner.classify_style_for_ocr(rgb) == "gray-fill"
+    assert calls == [(400, 600, 3)]
+
+
 def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
     monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1200.0)
 

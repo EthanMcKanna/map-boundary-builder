@@ -427,6 +427,11 @@ def classify_style(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> str:
     green_pixels = (
         ((hue >= 55) & (hue <= 90) & (sat >= 45) & (val >= 80) & (g.astype(np.int16) > r.astype(np.int16) + 25))
     ).mean()
+    if dark_pixels > 0.35 and teal_pixels > 0.08 and green_pixels > 0.015:
+        return "dark-teal"
+    saturated_bright_pixels = ((sat >= 45) & (val >= 80)).mean()
+    if dark_pixels > 0.80 and teal_pixels < 0.01 and bright_blue < 0.01 and saturated_bright_pixels < 0.01:
+        return "gray-fill"
     purple_fill = purple_service_mask(rgb, hsv=hsv).mean()
     if purple_fill > 0.02:
         return "purple-fill"
