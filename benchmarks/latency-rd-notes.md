@@ -5817,3 +5817,15 @@ with zero failures in 0.531s.
   to 0.980838, and classifier mode did not recover the failures. Do not replace
   the current OCR backend unless a hybrid route can validate and fall back
   without making high-confidence-but-wrong transforms possible.
+- Rejected recognition-batch and 1000px catalog-miss-cap tuning. Smaller
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM` values preserved local no-catalog
+  accuracy but did not speed up the user-confirmed Houston/Miami/Bay Area
+  catalog-probe-miss smoke path; batch size 1 raised drift-smoke total to 1.63s
+  and batch size 4 was roughly tied at 1.46s, so the production default stays
+  12. A 1000px `CATALOG_MISS_REFINE_MAX_DIMENSION` also passed local active and
+  stale smoke gates, but protected production deployment
+  `dpl_9EpvcK67WHNqmUBvr9kVcMXGiJTY` was still slower than the known-faster
+  public deployment: warmed Houston built in 1.792976s with OCR at 1.518985s,
+  versus the protected old deployment's 1.468012s / 1.177167s control. The
+  public `mapboundary.app` alias remained on `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`,
+  and the runtime cap was backed out to 1400px.
