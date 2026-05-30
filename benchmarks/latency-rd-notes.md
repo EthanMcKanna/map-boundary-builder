@@ -247,6 +247,12 @@ with zero failures in 0.531s.
   budget under OCR variance despite preserving avg/min IoU. The source change
   was reverted; keep the current classifier order until a production-shaped
   extraction win is measurable.
+- Rejected city-provided road-network-only georeferencing as a from-scratch OCR
+  bypass. Direct `georeference_from_city_context` after pixel extraction failed
+  to return a transform for most active Waymo fixtures (Dallas, Los Angeles,
+  Nashville, Orlando, San Antonio, Phoenix) and produced poor Tesla fits
+  instead of a usable shortcut: Austin Tesla IoU 0.538594 and Dallas Tesla IoU
+  0.182348. The existing OCR label fit remains necessary for arbitrary maps.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
