@@ -216,6 +216,35 @@ def test_runner_ocr_cache_can_be_enabled_for_disk_or_override(monkeypatch) -> No
     assert runner.runner_ocr_cache_enabled() is True
 
 
+def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1200.0)
+
+    assert runner.fast_text_ocr_min_area_for_style("bright-blue") == 1200.0
+    assert runner.fast_text_ocr_min_area_for_style("gray-fill") == 1200.0
+    assert runner.fast_text_ocr_min_area_for_style("dark-teal") is None
+    assert runner.fast_text_ocr_min_area_for_style("light-fill") is None
+    assert runner.fast_text_ocr_min_area_for_style(None) is None
+
+
+def test_fast_text_ocr_can_be_disabled(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 0.0)
+
+    assert runner.fast_text_ocr_min_area_for_style("bright-blue") is None
+
+
+def test_fast_text_ocr_fallback_guard(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1200.0)
+    monkeypatch.setattr(runner, "FAST_TEXT_OCR_FALLBACK_CONFIDENCE", 0.80)
+    low_confidence = SimpleNamespace(transform=SimpleNamespace(confidence=0.79))
+    high_confidence = SimpleNamespace(transform=SimpleNamespace(confidence=0.80))
+
+    assert runner.should_fallback_fast_text_ocr(False, None, style="bright-blue") is False
+    assert runner.should_fallback_fast_text_ocr(True, None, style="bright-blue") is True
+    assert runner.should_fallback_fast_text_ocr(True, low_confidence, style="bright-blue") is True
+    assert runner.should_fallback_fast_text_ocr(True, high_confidence, style="bright-blue") is False
+    assert runner.should_fallback_fast_text_ocr(True, high_confidence, style="dark-teal") is True
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 
@@ -323,7 +352,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION == runner.DEFAULT_CATALOG_MISS_REFINE_MAX_DIMENSION
     assert runner.CATALOG_MISS_REFINE_MAX_DIMENSION < runner.GENERAL_EXTRACT_MAX_DIMENSION
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
-    assert ocr_kwargs == [{"cache": False}]
+    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
 
 
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
@@ -824,4 +853,4 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
 
     assert order == ["preload", "fit"]
     assert ocr_rgb_shapes == [(800, 1200, 3)]
-    assert ocr_kwargs == [{"cache": False}]
+    assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]

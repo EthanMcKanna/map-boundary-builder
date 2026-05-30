@@ -52,6 +52,7 @@ from map_boundary_builder.ocr import (
     ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
     ocr_visual_cache_key,
+    rapidocr_box_area,
     rapidocr_detector_limit_for_input,
     rapidocr_input_array,
     rapidocr_input_image,
@@ -72,6 +73,37 @@ class FakeRapidOcrEngine:
     def __call__(self, _image, *, use_cls=None):
         self.use_cls_calls.append(use_cls)
         return self.responses.get(use_cls, []), 0.0
+
+
+class FakeFilteredRapidOcrEngine:
+    def __init__(self, boxes: list[np.ndarray]) -> None:
+        self.boxes = boxes
+        self.selected_boxes: list[np.ndarray] = []
+
+    def load_img(self, image):
+        return image
+
+    def preprocess(self, image):
+        return image, 1.0, 1.0
+
+    def maybe_add_letterbox(self, image, op_record):
+        return image, op_record
+
+    def auto_text_det(self, _image):
+        return self.boxes, 0.0
+
+    def get_crop_img_list(self, _image, selected):
+        self.selected_boxes = list(selected)
+        return [np.zeros((8, 8, 3), dtype=np.uint8) for _box in selected]
+
+    def text_rec(self, crop_images, _use_cls):
+        return [("Austin", 0.98) for _crop in crop_images], 0.0
+
+    def _get_origin_points(self, selected, _op_record, _raw_h, _raw_w):
+        return selected
+
+    def get_final_res(self, origin_boxes, _cls_res, rec_res, *_elapsed):
+        return [[box, text, confidence] for box, (text, confidence) in zip(origin_boxes, rec_res)], 0.0
 
 
 def unit_ocr_box(x: float = 0.0) -> list[list[float]]:
@@ -612,6 +644,59 @@ class OcrGroupingTests(unittest.TestCase):
             )
 
         self.assertNotEqual(key_default, key_1000)
+
+    def test_ocr_cache_key_depends_on_rapidocr_min_text_area(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(image_path, use_tesseract=False)
+            key_filtered = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_min_text_area=1200,
+            )
+
+        self.assertNotEqual(key_default, key_filtered)
+
+    def test_rapidocr_box_area_uses_detected_quad_size(self) -> None:
+        box = np.array(
+            [
+                [10.0, 5.0],
+                [110.0, 5.0],
+                [110.0, 25.0],
+                [10.0, 25.0],
+            ],
+            dtype=np.float32,
+        )
+
+        self.assertEqual(rapidocr_box_area(box), 2000.0)
+
+    def test_rapidocr_min_text_area_filters_boxes_before_recognition(self) -> None:
+        small_box = np.array(
+            [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]],
+            dtype=np.float32,
+        )
+        large_box = np.array(
+            [[0.0, 0.0], [80.0, 0.0], [80.0, 30.0], [0.0, 30.0]],
+            dtype=np.float32,
+        )
+        engine = FakeFilteredRapidOcrEngine([small_box, large_box])
+
+        with (
+            patch.object(
+                ocr_module,
+                "rapidocr_input_array",
+                return_value=(np.zeros((100, 100, 3), dtype=np.uint8), 1.0, 1.0),
+            ),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_min_text_area=1200)
+
+        self.assertEqual(len(engine.selected_boxes), 1)
+        self.assertTrue(np.array_equal(engine.selected_boxes[0], large_box))
+        self.assertEqual([label.text for label in labels], ["Austin"])
 
     def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:

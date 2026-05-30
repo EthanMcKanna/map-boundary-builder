@@ -26,6 +26,7 @@ from .catalog_match import (
 )
 from .extract import (
     DEFAULT_SIMPLIFY_PX,
+    classify_style,
     extract_service_area,
     extraction_scale_factor,
     load_rgb,
@@ -82,6 +83,12 @@ PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
+FAST_TEXT_OCR_STYLES = {"bright-blue", "gray-fill"}
+FAST_TEXT_OCR_MIN_AREA = max(0.0, float(os.environ.get("MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA", "800")))
+FAST_TEXT_OCR_FALLBACK_CONFIDENCE = max(
+    0.0,
+    float(os.environ.get("MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE", "0.80")),
+)
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
@@ -186,6 +193,7 @@ def build_boundary(
         width, height = img.size
 
     labels_future: Future[list[Any]] | None = None
+    labels_future_filtered = False
     provider_ui_labels_future: Future[list[Any]] | None = None
     provider_ui_fast_ocr_max_dimension: int | None = None
     ocr_executor: ThreadPoolExecutor | None = None
@@ -210,17 +218,24 @@ def build_boundary(
             details={"width": width, "height": height},
         )
         rgb = load_rgb(image_path)
+        early_ocr_style: str | None = None
         if should_overlap_ocr_with_extraction(
             city_input=city_input,
             allow_catalog=allow_catalog,
             filename_hint=filename_hint,
         ):
+            early_ocr_style = classify_style(rgb)
             ocr_executor = ThreadPoolExecutor(max_workers=1)
+            rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
+            labels_future_filtered = rapidocr_min_text_area is not None
+            ocr_kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
+            if rapidocr_min_text_area is not None:
+                ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             labels_future = ocr_executor.submit(
                 extract_ocr_labels_from_rgb,
                 str(image_path),
                 rgb,
-                cache=runner_ocr_cache_enabled(),
+                **ocr_kwargs,
             )
             ensure_georeference_resource_preload()
         if should_overlap_probe_miss_ocr(
@@ -228,12 +243,19 @@ def build_boundary(
             city_input=city_input,
             filename_hint=filename_hint,
         ):
+            if early_ocr_style is None:
+                early_ocr_style = classify_style(rgb)
             ocr_executor = ThreadPoolExecutor(max_workers=1)
+            rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
+            labels_future_filtered = rapidocr_min_text_area is not None
+            ocr_kwargs = {"cache": runner_ocr_cache_enabled()}
+            if rapidocr_min_text_area is not None:
+                ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             labels_future = ocr_executor.submit(
                 extract_ocr_labels_from_rgb,
                 str(image_path),
                 rgb,
-                cache=runner_ocr_cache_enabled(),
+                **ocr_kwargs,
             )
             ensure_georeference_resource_preload()
         extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else (
@@ -412,6 +434,7 @@ def build_boundary(
                         cache=runner_ocr_cache_enabled(),
                     )
                 else:
+                    labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
                     labels_future = submit_ocr_labels_from_rgb(
                         ocr_executor,
                         image_path,
@@ -568,6 +591,7 @@ def build_boundary(
         if labels_future is None:
             if ocr_executor is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
+            labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
             labels_future = submit_ocr_labels_from_rgb(
                 ocr_executor,
                 image_path,
@@ -603,6 +627,9 @@ def build_boundary(
             "top_labels": [label.text for label in labels[:8]],
         },
     )
+    if labels_future_filtered and fast_text_ocr_min_area_for_style(extraction.style) is None:
+        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels_future_filtered = False
     if city_input is None and allow_catalog:
         provider_ui_match = provider_ui_label_catalog_match(extraction, labels)
         if provider_ui_match is not None:
@@ -691,6 +718,41 @@ def build_boundary(
         road_feature_distance=road_feature_distance,
         progress=progress,
     )
+    if should_fallback_fast_text_ocr(labels_future_filtered, georef, style=extraction.style):
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Retrying map labels at full detail",
+            percent=47,
+        )
+        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels_future_filtered = False
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Full-detail map labels read",
+            percent=48,
+            details={
+                "label_count": len(labels),
+                "top_labels": [label.text for label in labels[:8]],
+            },
+        )
+        georef = fit_georeference(
+            labels,
+            image_path,
+            extraction.pixel_geometry,
+            rgb=rgb,
+            city_input=city_input,
+            context_hints=filename_city_contexts(filename_hint) if city_input is None else None,
+            width=width,
+            height=height,
+            coverage_ratio=extraction.coverage_ratio,
+            min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+            road_feature_distance=road_feature_distance,
+            progress=progress,
+        )
     if georef is None:
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
@@ -803,16 +865,46 @@ def submit_ocr_labels_from_rgb(
     style: str,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
-    use_cache = runner_ocr_cache_enabled()
-    if rapidocr_max_dimension is None:
-        return executor.submit(extract_ocr_labels_from_rgb, str(image_path), rgb, cache=use_cache)
+    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
+    kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
+    if rapidocr_max_dimension is not None:
+        kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+    if rapidocr_min_text_area is not None:
+        kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     return executor.submit(
         extract_ocr_labels_from_rgb,
         str(image_path),
         rgb,
-        rapidocr_max_dimension=rapidocr_max_dimension,
-        cache=use_cache,
+        **kwargs,
     )
+
+
+def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str) -> list[Any]:
+    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    if rapidocr_max_dimension is None:
+        return extract_ocr_labels_from_rgb(str(image_path), rgb, cache=runner_ocr_cache_enabled())
+    return extract_ocr_labels_from_rgb(
+        str(image_path),
+        rgb,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+        cache=runner_ocr_cache_enabled(),
+    )
+
+
+def fast_text_ocr_min_area_for_style(style: str | None) -> float | None:
+    if FAST_TEXT_OCR_MIN_AREA <= 0.0 or style not in FAST_TEXT_OCR_STYLES:
+        return None
+    return FAST_TEXT_OCR_MIN_AREA
+
+
+def should_fallback_fast_text_ocr(filtered: bool, georef, *, style: str) -> bool:
+    if not filtered:
+        return False
+    if fast_text_ocr_min_area_for_style(style) is None:
+        return True
+    if georef is None:
+        return True
+    return georef.transform.confidence < FAST_TEXT_OCR_FALLBACK_CONFIDENCE
 
 
 def runner_ocr_cache_enabled() -> bool:

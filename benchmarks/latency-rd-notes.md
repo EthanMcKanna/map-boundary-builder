@@ -5120,3 +5120,26 @@ with zero failures in 0.531s.
   `total_before_send_s` to 2.226233. This is a small but real production win on
   the arbitrary OCR/georeference path, while the local no-catalog gate shows the
   larger expected benefit across active fixtures.
+- Accepted a guarded large-text RapidOCR prepass for bright-blue and gray-fill
+  map styles. The prepass runs detection first, recognizes only text boxes with
+  area >= 800px, uses separate OCR cache keys, and falls back to full OCR if the
+  style is not in the safe set or the fitted transform confidence is below 0.80.
+  A 1200px cutoff was rejected because it preserved scored IoU but made Phoenix
+  fall back to full OCR and miss the sub-second budget (`max_duration_s:
+  1.530728`) in `out/fasttext-nocatalog-20260530/full-report.json`. The 800px
+  cutoff passed strict no-catalog A/B in
+  `out/fasttext-defaultcode-nocatalog-20260530/full-report.json`: 8/8 scored
+  fixtures, seven `reference_mismatch` skips for the user-confirmed stale
+  Houston/Miami/Bay Area data, avg IoU 0.961733, min IoU 0.931476, zero active
+  IoU drops against `out/current-nocatalog-refresh-20260530/full-report.json`,
+  active total 3.040119s, and max active duration 0.664241s. Default catalog
+  mode `out/fasttext-default-20260530/full-report.json` also passed with avg
+  IoU 0.992917, min IoU 0.943345, zero active IoU drops, active total 0.421965s,
+  and max active duration 0.078325s. Drift smoke
+  `out/fasttext-drift-all-smoke-20260530/full-report.json` passed all six
+  Houston/Miami/Bay Area reference-mismatch screenshots; the stricter Waymo-only
+  catalog-miss smoke `out/fasttext-drift-waymo-smoke-20260530/full-report.json`
+  passed three screenshots with `catalog_slug: null`. A broader local
+  no-catalog stress comparison over ten Downloads images preserved geometry at
+  IoU 0.999525 or 1.0 versus the full-OCR baseline, including `zoox-sf.webp` at
+  IoU 1.0 after the dark-teal style gate.
