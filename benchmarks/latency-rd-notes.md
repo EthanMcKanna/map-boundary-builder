@@ -200,6 +200,16 @@ with zero failures in 0.531s.
   output but slowed from 0.244486s to 0.325160s before send. The change was
   reverted locally and not promoted; keep the NumPy reductions until production
   proves an extraction implementation faster.
+- Rejected dynamic ONNX quantization for the legacy RapidOCR models. Detector
+  quantization failed because the Paddle-exported graph has a convolution weight
+  node that is not an initializer (`Expected conv2d_394.w_0 to be an
+  initializer`). Recognition-only dynamic quantization for MatMul/Gemm produced
+  larger model files and slower/noisier local OCR timing: baseline custom-model
+  runs measured LA 0.6045s, Phoenix 2.334s, Dallas 0.729s, Orlando 0.801s;
+  QUInt8 measured LA 2.087s, Phoenix 3.038s, Dallas 0.668s, Orlando 0.835s;
+  QInt8 measured LA 1.801s, Phoenix 2.825s, Dallas 0.787s, Orlando 0.699s.
+  This is not a production candidate without a different quantization flow or a
+  model family exported for quantization.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
