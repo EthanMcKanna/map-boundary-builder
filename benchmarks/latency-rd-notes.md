@@ -5840,3 +5840,38 @@ with zero failures in 0.531s.
   San Antonio rising from 0.090s to 0.404s and Phoenix from 0.098s to 0.310s.
   Keep the current provider-hint guard unless a more precise stale/current
   discriminator is available from the client or catalog probe response.
+- Re-anchored the May 30 continuation after the user again noted Houston,
+  Miami, and Bay Area have changed from the base saved ground truth. The
+  existing fixture config already carries area-level `reference_mismatch`
+  overrides for those markets, and the focused guard passed:
+  `tests/test_benchmark.py -k 'stale_reference or changed_area or smoke_skipped
+  or changed_reference'` ran 5 tests with 14 deselected. Production cron warmup
+  is registered and active: `vercel crons list` shows only
+  `/api/cron/warm-generation-v2` at `* * * * *`, `CRON_SECRET` is present in
+  Production, unauthenticated public cron calls return 401, `vercel crons run
+  /api/cron/warm-generation-v2` triggered successfully, and recent Vercel logs
+  show minute-by-minute 200s for the warm path on
+  `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`.
+- Fresh cache-busted public production changed-market smokes with
+  `catalog_probe_missed=1`, overlays disabled, and normalized cache disabled
+  preserved the stale-market guard while running faster than the earlier noisy
+  checks: Waymo Houston returned `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit`, confidence 0.865,
+  `build_boundary_s` 1.406047 / OCR 1.123805; Waymo Miami returned
+  `catalog_slug: null`, `ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  confidence 0.864, `build_boundary_s` 1.383020 / OCR 1.044090; and Waymo Bay
+  Area returned `catalog_slug: null`, `ocr-georeference:nominatim-label-fit`,
+  confidence 0.877, `build_boundary_s` 1.600403 / OCR 1.311376. These remain
+  smoke evidence only because the saved references are stale.
+- Rejected two more OCR recognition-pruning shortcuts. Raising
+  `FAST_TEXT_OCR_MIN_AREA` to 1000/1200 for catalog-probe-miss style smokes
+  preserved Houston/Miami/Bay Area local outputs, but the active
+  catalog-probe-miss regression check slowed versus
+  `out/catalog-probe-missed-1400-20260530/full-report.json` even at the current
+  800px default, so there was no clean local win to deploy. A first-principles
+  region/top-N OCR probe that recognized only boxes near the extracted service
+  area or the largest detected text boxes also failed robustness: Dallas Tesla
+  lost georeference under region pruning, and top-N pruning produced Phoenix and
+  Los Angeles high-confidence but lower-IoU outputs. Do not ship OCR box
+  pruning without a stronger validator that catches those cases before
+  returning a result.
