@@ -46,6 +46,14 @@ RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = env_int(
 )
 RAPIDOCR_CLS_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", 24, minimum=1)
 RAPIDOCR_REC_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", 12, minimum=1)
+RAPIDOCR_INTRA_OP_NUM_THREADS = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_INTRA_OP_NUM_THREADS",
+    4,
+)
+RAPIDOCR_INTER_OP_NUM_THREADS = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_INTER_OP_NUM_THREADS",
+    1,
+)
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = env_int(
     "MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS",
     2,
@@ -98,6 +106,8 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,
+        "rapidocr_intra_op_num_threads": RAPIDOCR_INTRA_OP_NUM_THREADS,
+        "rapidocr_inter_op_num_threads": RAPIDOCR_INTER_OP_NUM_THREADS,
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),

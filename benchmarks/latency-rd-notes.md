@@ -6037,3 +6037,36 @@ with zero failures in 0.531s.
   available for controlled experiments, but the deployable UI stays on the
   known-faster public handoff behavior until the overlap path has a real
   production win.
+- Rejected lazy road-feature future handoff for the arbitrary/no-catalog path.
+  The hypothesis was that when bright-blue screenshots precompute
+  `image_feature_distance` during OCR, passing the unfinished future into
+  georeference and waiting only inside OSM road refinement would avoid duplicate
+  road-feature extraction on Phoenix/Nashville/Miami-like cases. The prototype
+  preserved geometry but did not improve latency: the strict no-catalog gate
+  against `out/continue-baseline-nocatalog-20260530b/full-report.json` kept
+  8/8 scored fixtures with avg IoU 0.961733/min 0.931476, but failed the
+  latency regression check after active total rose to 3.54s and Austin Tesla
+  slowed from 0.277s to 0.461s. The road-focused repeat was also slower, with
+  Phoenix at 0.89s and Nashville at 0.60s. Backed the code out; the existing
+  non-blocking `ready_future_result` behavior remains the safer default because
+  waiting on the background road-feature work can add contention or tail delay.
+- Accepted for protected-production validation: bound RapidOCR/ONNX Runtime
+  session thread pools to `intra_op_num_threads=4` and
+  `inter_op_num_threads=1`, with `MAP_BOUNDARY_RAPIDOCR_INTRA_OP_NUM_THREADS`
+  and `MAP_BOUNDARY_RAPIDOCR_INTER_OP_NUM_THREADS` overrides plus health
+  reporting. The package's `OrtInferSession` already supports these config keys,
+  and the hypothesis is that bounded inference reduces local CPU contention with
+  overlapping extraction/georeference work while preserving OCR output. A
+  monkeypatch sweep showed `intra=1` and `intra=2` were much slower, but
+  `intra=4/inter=1` preserved 8/8 active no-catalog fixtures with avg IoU
+  0.961733/min 0.931476 and passed the strict regression check in
+  `out/ort-threads-intra4-nocatalog-20260530a/`; a same-style unlimited control
+  was slower at 3.513650s total. The checked-in default had one noisy failed
+  pass due to Phoenix latency (`out/ort-thread-default4-nocatalog-20260530b/`),
+  then passed the same strict gate in
+  `out/ort-thread-default4-nocatalog-20260530c/` with zero regression issues.
+  Drift smokes for user-confirmed stale Houston/Miami/Bay Area also passed as
+  OCR/georeference `reference_mismatch` checks in
+  `out/ort-thread-default4-drift-smoke-20260530a/` (Houston 0.76s, Miami 0.63s,
+  Bay Area 0.58s). This still needs protected Vercel A/B before any public
+  alias because Vercel's effective CPU count may differ from local.
