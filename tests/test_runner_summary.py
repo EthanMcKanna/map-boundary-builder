@@ -708,6 +708,83 @@ def test_filename_shape_shortcut_runs_before_ocr_for_direct_hinted_upload(tmp_pa
     assert shortcut_calls[0]["filename_hint"] == "Waymo Houston.png"
 
 
+def test_direct_provider_area_near_hit_returns_before_refine_and_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Bay Area.png"
+    Image.new("RGB", (2400, 2400), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    low_rgb = np.full((400, 400, 3), 245, dtype=np.uint8)
+    low_mask = np.zeros((400, 400), dtype=bool)
+    low_mask[80:320, 70:330] = True
+    extraction = ExtractionResult(
+        mask=low_mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(70, 80), (330, 80), (330, 320), (70, 320)]),
+        coverage_ratio=float(low_mask.mean()),
+        contour_count=1,
+        confidence=1.0,
+    )
+    match = SimpleNamespace(entry=SimpleNamespace(slug="bay-area-waymo"))
+    extract_dimensions: list[int] = []
+    near_hit_calls: list[dict[str, object]] = []
+
+    def fake_extract_service_area(*_args, max_dimension=None, **_kwargs):
+        extract_dimensions.append(max_dimension)
+        return extraction
+
+    def fake_near_hit(seen_extraction, *, city_input, filename_hint):
+        near_hit_calls.append(
+            {
+                "extraction": seen_extraction,
+                "city_input": city_input,
+                "filename_hint": filename_hint,
+            }
+        )
+        return match
+
+    def unexpected_full_rgb(_path):
+        raise AssertionError("direct provider/area near-hit should not decode full RGB")
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("direct provider/area near-hit should avoid OCR")
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **kwargs):
+        return BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb_at_max_dimension", lambda _path, _max_dimension: low_rgb)
+    monkeypatch.setattr(runner, "load_rgb", unexpected_full_rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_near_hit_match", fake_near_hit)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            filename_hint="Waymo Bay Area.png",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert result.summary["catalog_slug"] == "bay-area-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:filename-near-hit"
+    assert extract_dimensions == [0]
+    assert len(near_hit_calls) == 1
+    assert near_hit_calls[0]["city_input"] is None
+    assert near_hit_calls[0]["filename_hint"] == "Waymo Bay Area.png"
+
+
 def test_filename_shape_shortcut_requires_provider_hint(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((40, 40), dtype=bool),
@@ -801,6 +878,51 @@ def test_filename_shape_shortcut_accepts_exact_provider_area_shape(monkeypatch) 
     assert match.entry.slug == "houston-waymo"
     assert match.iou == pytest.approx(1.0)
     assert match.confidence == pytest.approx(runner.CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE)
+
+
+def test_filename_near_hit_shortcut_requires_provider_and_active_area(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(400, 300), (1300, 300), (1300, 1200), (400, 1200)]),
+        coverage_ratio=0.32,
+        contour_count=1,
+        confidence=1.0,
+    )
+    match = SimpleNamespace(entry=SimpleNamespace(slug="bay-area-waymo"))
+    calls: list[tuple[str | None, str | None]] = []
+
+    def fake_catalog_probe_near_hit_match(_extraction, *, city_input, filename_hint):
+        calls.append((city_input, filename_hint))
+        return match
+
+    monkeypatch.setattr(runner, "catalog_probe_near_hit_match", fake_catalog_probe_near_hit_match)
+
+    assert (
+        runner.filename_hinted_current_catalog_near_hit_match(
+            extraction,
+            city_input=None,
+            filename_hint="Bay Area.png",
+        )
+        is None
+    )
+    assert (
+        runner.filename_hinted_current_catalog_near_hit_match(
+            extraction,
+            city_input=None,
+            filename_hint="Waymo map.png",
+        )
+        is None
+    )
+
+    accepted = runner.filename_hinted_current_catalog_near_hit_match(
+        extraction,
+        city_input=None,
+        filename_hint="Waymo Bay Area.png",
+    )
+
+    assert accepted is match
+    assert calls == [(None, "Waymo Bay Area.png")]
 
 
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:

@@ -480,6 +480,26 @@ def build_boundary(
                         progress=progress,
                         georeference_source="catalog-shape-match:filename-shape",
                     )
+                catalog_match = filename_hinted_current_catalog_near_hit_match(
+                    extraction,
+                    city_input=city_input,
+                    filename_hint=filename_hint,
+                )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:filename-near-hit",
+                    )
             catalog_match = filename_hinted_avride_light_fill_catalog_match(
                 extraction,
                 filename_hint=filename_hint,
@@ -1889,6 +1909,28 @@ def catalog_probe_unhinted_near_hit_match(extraction):
         margin=margin,
         fitted_mercator_geometry=best_fitted,
         rotation_degrees=best_rotation,
+    )
+
+
+def filename_hinted_current_catalog_near_hit_match(
+    extraction,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> ServiceAreaCatalogMatch | None:
+    if extraction.confidence < CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE:
+        return None
+    if not catalog_style_supported(extraction.style):
+        return None
+    hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
+    if catalog_provider_hint(hint_text) is None:
+        return None
+    if not has_active_catalog_area_hint(hint_text):
+        return None
+    return catalog_probe_near_hit_match(
+        extraction,
+        city_input=city_input,
+        filename_hint=filename_hint,
     )
 
 

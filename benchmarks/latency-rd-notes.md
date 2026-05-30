@@ -7147,3 +7147,27 @@ with zero failures in 0.531s.
   `bay-area-waymo`; direct raw full-size Bay Area uploads that intentionally
   bypass the frontend probe can still tail above one second, so that remains a
   separate direct-API latency target.
+- Direct current-catalog filename near-hit candidate: the next tail was the
+  raw direct API path for full-size current Bay Area Waymo uploads that bypass
+  the browser's 520px catalog probe. The baseline local direct CLI profile
+  `out/direct-bay-current-baseline-20260530/` returned the correct current
+  `bay-area-waymo` catalog geometry in 0.471129s, but spent 0.258722s refining
+  from the initial low-res extraction before the catalog match. The accepted
+  candidate reuses the existing catalog-probe near-hit guard for direct uploads
+  only when the filename/city hint includes both a provider and an active
+  current area, so generic uploads and area-only filenames do not inherit the
+  looser guard. Local proof
+  `out/direct-bay-current-nearhit-20260530/boundary.geojson` returned the same
+  current `bay-area-waymo` geometry via
+  `catalog-shape-match:filename-near-hit` in 0.087748s total, with source-image
+  evidence IoU 0.960519 and area ratio 1.009283. Validation passed 56 focused
+  runner tests, 189 focused catalog/benchmark tests, full 293 tests plus 9
+  subtests, compileall, JS syntax, and `git diff --check`. Default active
+  regression `out/direct-nearhit-default-20260530/full-report.json` preserved
+  8/8 scored fixtures with zero IoU regression. No-catalog regression
+  `out/direct-nearhit-nocatalog-20260530/full-report.json` preserved 8/8 OCR/
+  georeference fixtures with zero IoU regression. Current changed-market
+  scoring `out/direct-nearhit-current-changed-market-score-20260530/full-report.json`
+  passed Houston, Miami, and Bay Area against refreshed current inputs with
+  avg/min IoU 1.0; Bay Area used the new direct near-hit in 0.072986s while
+  Houston and Miami stayed on the stricter direct current catalog path.
