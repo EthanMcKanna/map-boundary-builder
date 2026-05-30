@@ -5383,3 +5383,20 @@ with zero failures in 0.531s.
   0.931476, active total 2.62s, and every active fixture under one second. The
   in-app browser connector was unavailable (`iab` not available), so browser
   verification fell back to local HTTP asset checks.
+- Deployed the first-run UI warmup contention fix to production. Preview
+  promotion did not move the custom domain, so I ran an explicit production
+  deploy from committed head. Production deployment
+  `dpl_EQfgWPMHEzVnhEsQYwRdaeej2giB` is now aliased to
+  `https://mapboundary.app`; public `/static/app.js?v=180c1bc` contains the
+  `generationRuntimePrewarmAbortController.abort()` cancellation path. Public
+  health and `/api/health?warm=ocr` returned OK on backend
+  `pipeline-e92714f32798fe7c`; that pipeline hash is unchanged because the
+  backend signature does not include frontend static assets. A live production
+  catalog-probe generation using `/tmp/mbb-la-small-overlay.png` returned HTTP
+  201, `catalog-shape-match`, `los-angeles-waymo`, confidence 0.859,
+  `build_boundary_s: 0.264175`, and `total_before_send_s: 0.555048`. The user
+  re-confirmed that Houston, Miami, and Bay Area service areas have drifted from
+  the saved ground truth; `benchmarks/service-area-fixtures.json` keeps all six
+  Houston/Miami/Bay Area fixtures as `reference_mismatch` smoke-only checks, so
+  these changed markets do not count as accuracy regressions until references
+  are refreshed.
