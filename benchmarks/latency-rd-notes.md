@@ -6021,3 +6021,19 @@ with zero failures in 0.531s.
   `catalog_miss` against `bay-area-waymo` at IoU 0.604887 in 0.118795s. Do not
   alias this candidate to public unless a follow-up change turns the changed-area
   low-IoU fallback into a reliable Vercel speedup.
+- May 30 continuation after the user re-confirmed Houston/Miami/Bay Area drift:
+  refreshed the package/backend availability check and found no dependency bump
+  to test. PyPI still reports `rapidocr-onnxruntime` latest/installed 1.4.4,
+  `onnxruntime` latest/installed 1.26.0, and standalone `rapidocr` latest 3.8.1
+  (already rejected as a drop-in backend above). A same-process prewarm probe was
+  too noisy to justify changing cron warmup: fresh local Dallas/Phoenix/LA
+  subprocess-style runs varied from about 2.4-6.5s without prewarm and 3.2-6.9s
+  after `prewarm_generation_runtime()`, so representative warmup is not a clean
+  latency lever from current evidence. Explicit city-context no-catalog probes
+  were also mixed: Dallas improved in one noisy in-process sample, while Phoenix
+  and Los Angeles slowed. Because protected Vercel validation did not prove the
+  low-IoU overlap path faster, the browser no longer sends
+  `catalog_probe_miss_low_iou=1` on normal uploads; the backend/CLI hook remains
+  available for controlled experiments, but the deployable UI stays on the
+  known-faster public handoff behavior until the overlap path has a real
+  production win.

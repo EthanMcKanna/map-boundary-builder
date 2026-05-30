@@ -399,9 +399,6 @@ form.addEventListener("submit", async (event) => {
     }
     if (catalogProbeResult?.missed) {
       formData.set("catalog_probe_missed", "1");
-      if (catalogProbeResult.lowIou) {
-        formData.set("catalog_probe_miss_low_iou", "1");
-      }
     }
     markProgressStep("prepare", "running", "Uploading image.");
     setStatus("Uploading image", 8, "running", {
@@ -834,7 +831,6 @@ async function tryCatalogProbe(file, formData, options = {}) {
     if (response.ok && payload?.status === "catalog_miss") {
       return {
         missed: true,
-        lowIou: payload.catalog_probe_miss?.active_shape_iou_is_low === true,
       };
     }
   } catch (error) {
