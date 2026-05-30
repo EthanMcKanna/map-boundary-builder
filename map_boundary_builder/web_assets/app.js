@@ -100,6 +100,7 @@ const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const CATALOG_PROBE_MAX_DIMENSION = 520;
 const CATALOG_PROBE_MIN_BYTES = 180_000;
 const CATALOG_PROBE_GENERIC_MIN_BYTES = 650_000;
+const CATALOG_PROBE_WEBP_QUALITY = 0.80;
 const CATALOG_PROBE_JPEG_QUALITY = 0.82;
 const CATALOG_PROBE_HINT_PATTERNS = [
   /\bwaymo\b/,
@@ -871,15 +872,27 @@ async function catalogProbeCandidate(file, formData) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
-  const blob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
-  if (!blob || blob.size >= file.size * 0.75) return { file: null, skippedMiss: !looksServiceAreaLike };
+  const probeBlob = await catalogProbeBlob(canvas);
+  if (!probeBlob || probeBlob.blob.size >= file.size * 0.75) {
+    return { file: null, skippedMiss: !looksServiceAreaLike };
+  }
   return {
-    file: new File([blob], `${fileBaseName(file.name)}.catalog-probe.jpg`, {
-      type: "image/jpeg",
+    file: new File([probeBlob.blob], `${fileBaseName(file.name)}.catalog-probe.${probeBlob.extension}`, {
+      type: probeBlob.type,
       lastModified: file.lastModified,
     }),
     skippedMiss: false,
   };
+}
+
+async function catalogProbeBlob(canvas) {
+  const webpBlob = await canvasToBlob(canvas, "image/webp", CATALOG_PROBE_WEBP_QUALITY);
+  if (webpBlob?.type === "image/webp") {
+    return { blob: webpBlob, extension: "webp", type: "image/webp" };
+  }
+  const jpegBlob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
+  if (!jpegBlob) return null;
+  return { blob: jpegBlob, extension: "jpg", type: "image/jpeg" };
 }
 
 function catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file) {

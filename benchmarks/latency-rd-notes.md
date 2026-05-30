@@ -90,6 +90,14 @@ with zero failures in 0.531s.
   wheel to validate parity before deployment. Current PyPI metadata still shows
   `rapidocr-onnxruntime` at 1.4.4, `onnxruntime` at 1.26.0, and `rapidocr` at
   3.8.1, so there is no newly proven drop-in dependency upgrade lane.
+- May 30 upload-transport probe: rejected browser-side lossless PNG
+  normalization. A Pillow `optimize=True` encode preserved decoded RGBA pixels
+  and shrank Tesla screenshots by about 20-24%, but big Waymo screenshots only
+  shrank about 3-4% while costing 350-530ms locally. A real Chrome canvas
+  `toBlob("image/png")` probe preserved browser pixels but made every sampled
+  PNG larger: Tesla files grew roughly 5-10%, Waymo files grew roughly 25-46%,
+  and Zoox SF grew roughly 33%. Keep sending original raster bytes unless a
+  future encoder proves pixel-exact server parity and a net transfer win.
 - Added an opt-in current-catalog audit for stale fixtures:
   `--score-skipped-catalog-references` promotes non-active full-benchmark
   fixtures only for that run and scores their generated GeoJSON against the
@@ -6081,3 +6089,22 @@ with zero failures in 0.531s.
   The slowdown was concentrated in OCR (`1.435s` candidate versus `1.129s`
   public on the repeat), so ONNX thread limiting is not a production win on the
   current Vercel Python runtime.
+- Rejected three OCR-path shortcuts and accepted a smaller catalog-probe
+  transport candidate. Lowering `MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE`
+  from 0.70 to 0.65 preserved active IoUs, but failed the strict latency gate
+  against `out/continue-baseline-nocatalog-20260530b/full-report.json` after
+  Phoenix/Nashville and total active time regressed
+  (`out/fasttext-fallback065-nocatalog-20260530a/`). Neutralizing the colored
+  service-area fill before OCR was a hard accuracy regression, dropping the
+  active average IoU to 0.910 and failing four fixtures
+  (`out/neutralized-fill-ocr-nocatalog-20260530a/`). Cropping OCR to the blue
+  service-area bounds plus margin also regressed Phoenix/San Antonio IoU and
+  slowed total active time to 4.19s
+  (`out/cropped-fill-ocr-nocatalog-20260530a/`). A browser-encoded WebP catalog
+  probe, however, preserved the important catalog hit/miss split while cutting
+  probe bytes by roughly 27-54% versus the existing browser JPEG probe across
+  18 current/stale samples (`out/browser-webp-probe-20260530/results.json`).
+  Browser/API smokes confirmed the new frontend candidate creates
+  `*.catalog-probe.webp`; current `h-waymo.png` still hit `houston-waymo`,
+  current `miami.png` still hit `miami-waymo`, and the old saved
+  `waymo bay area.png` still returned `catalog_miss`.
