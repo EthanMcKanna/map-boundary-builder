@@ -57,6 +57,39 @@ with zero failures in 0.531s.
   batch sizes 8 and 24 were both slower than the current 12; and a larger
   synthetic OCR warmup only moved LA OCR from 0.506s to 0.501s after adding
   extra warmup cost.
+- May 30 continuation checkpoint after another user reminder that Houston,
+  Miami, and Bay Area have drifted: the focused stale-reference tests
+  `test_known_stale_reference_fixtures_are_reference_mismatches`,
+  `test_changed_area_config_marks_new_provider_fixture_reference_mismatch`,
+  `test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference`, and
+  `test_changed_reference_mismatch_catalog_entries_use_verified_current_sources`
+  passed 4/4. The strict no-catalog refresh
+  `out/current-nocatalog-refresh-20260530/full-report.json` passed 8/8 scored
+  fixtures with seven `reference_mismatch` skips, avg IoU 0.961733, min IoU
+  0.931476, total active duration 3.718479s, and max active fixture 0.843678s.
+  The targeted no-network drift smoke
+  `out/user-confirmed-drift-refresh-20260530/full-report.json` ran all six
+  Houston/Miami/Bay Area screenshots as unscored `reference_mismatch` checks
+  with zero failures. Production-shaped cache-busted Waymo drift smokes with
+  `include_overlay=0`, normalized cache disabled, and the catalog-probe-miss
+  handoff also preserved current behavior rather than stale catalog geometry:
+  Houston stayed on `ocr-georeference:nominatim-label-fit` with
+  `catalog_slug: null`, confidence 0.865, and 1.795553s before send; Miami used
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, `catalog_slug: null`,
+  confidence 0.864, and 2.261429s before send; Bay Area used
+  `ocr-georeference:nominatim-label-fit`, `catalog_slug: null`, confidence
+  0.877, and 2.564176s before send. Treat these as stale-market smoke evidence,
+  not scored accuracy proof. A runner extraction-cache-disable monkeypatch
+  preserved exact IoUs but was too noisy to ship: four repeat pairs alternated
+  between a 0.28s total win and a 0.50s total loss, so keep the current
+  extraction cache policy. A throwaway OpenVINO OCR backend probe is also
+  blocked for this Python 3.12 deployment line because
+  `rapidocr-openvino==1.4.4` pins
+  `openvino<=2024.0.0`, which did not provide a compatible local Python 3.12
+  install candidate; `onnxruntime-openvino` has Linux wheels but no local macOS
+  wheel to validate parity before deployment. Current PyPI metadata still shows
+  `rapidocr-onnxruntime` at 1.4.4, `onnxruntime` at 1.26.0, and `rapidocr` at
+  3.8.1, so there is no newly proven drop-in dependency upgrade lane.
 - Added an opt-in current-catalog audit for stale fixtures:
   `--score-skipped-catalog-references` promotes non-active full-benchmark
   fixtures only for that run and scores their generated GeoJSON against the
