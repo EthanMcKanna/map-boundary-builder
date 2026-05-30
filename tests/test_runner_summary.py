@@ -196,6 +196,38 @@ def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> N
     assert runner.provider_ui_label_catalog_match(extraction, labels) is None
 
 
+def test_sparse_low_res_label_catalog_match_recovers_tiny_ocr_typo() -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((60, 130), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (129, 0), (129, 59), (0, 59)]),
+        coverage_ratio=0.79,
+        contour_count=1,
+        confidence=1.0,
+    )
+    labels = [OcrLabel("Naslvillk", x=80, y=30, width=33, height=7, confidence=88.9)]
+
+    match = runner.sparse_low_res_label_catalog_match(extraction, labels, width=130, height=60)
+
+    assert match is not None
+    assert match.entry.slug == "nashville-waymo"
+    assert match.confidence == runner.SPARSE_LABEL_CATALOG_CONFIDENCE
+
+
+def test_sparse_low_res_label_catalog_match_rejects_larger_map_crops() -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((236, 420), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (419, 0), (419, 235), (0, 235)]),
+        coverage_ratio=0.79,
+        contour_count=1,
+        confidence=1.0,
+    )
+    labels = [OcrLabel("Nashville", x=250, y=99, width=37, height=10, confidence=98.1)]
+
+    assert runner.sparse_low_res_label_catalog_match(extraction, labels, width=420, height=236) is None
+
+
 def test_runner_ocr_cache_defaults_off_without_disk_cache(monkeypatch) -> None:
     monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
     monkeypatch.delenv("MAP_BOUNDARY_OCR_DISK_CACHE", raising=False)

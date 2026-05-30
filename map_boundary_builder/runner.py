@@ -25,8 +25,10 @@ from .catalog_match import (
     match_catalog_entry,
     match_service_area_catalog_for_city_hint,
     match_service_area_catalog,
+    normalize_catalog_area_tokens,
     PROVIDER_STYLES,
     score_catalog_entry,
+    ServiceAreaCatalogMatch,
 )
 from .extract import (
     DEFAULT_SIMPLIFY_PX,
@@ -100,6 +102,12 @@ LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
+SPARSE_LABEL_CATALOG_MAX_DIMENSION = 180
+SPARSE_LABEL_CATALOG_MAX_PIXELS = 20_000
+SPARSE_LABEL_CATALOG_MIN_COVERAGE = 0.70
+SPARSE_LABEL_CATALOG_MIN_CONFIDENCE = 0.55
+SPARSE_LABEL_CATALOG_MIN_LABEL_CONFIDENCE = 85.0
+SPARSE_LABEL_CATALOG_CONFIDENCE = 0.72
 CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD = 0.80
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
@@ -760,6 +768,30 @@ def build_boundary(
                 rgb=rgb,
                 progress=progress,
             )
+    if city_input is None and allow_catalog:
+        sparse_catalog_match = sparse_low_res_label_catalog_match(
+            extraction,
+            labels,
+            width=width,
+            height=height,
+        )
+        if sparse_catalog_match is not None:
+            return finish_catalog_boundary_result(
+                extraction,
+                sparse_catalog_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input="Auto",
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                rgb=rgb,
+                progress=progress,
+                georeference_source="catalog-label-match:sparse-low-res",
+                catalog_label_hints=high_confidence_label_texts(labels)[:5],
+                shape_match=False,
+            )
     wait_future_result(georef_resource_future)
     georef = fit_georeference(
         labels,
@@ -1324,6 +1356,107 @@ def label_near_extracted_geometry(label: Any, bounds: tuple[float, float, float,
     return (min_x - pad_x) <= label.x <= (max_x + pad_x) and (min_y - pad_y) <= label.y <= (max_y + pad_y)
 
 
+def sparse_low_res_label_catalog_match(
+    extraction,
+    labels: list[Any],
+    *,
+    width: int,
+    height: int,
+) -> ServiceAreaCatalogMatch | None:
+    if max(width, height) > SPARSE_LABEL_CATALOG_MAX_DIMENSION:
+        return None
+    if width * height > SPARSE_LABEL_CATALOG_MAX_PIXELS:
+        return None
+    if extraction.coverage_ratio < SPARSE_LABEL_CATALOG_MIN_COVERAGE:
+        return None
+    if extraction.confidence < SPARSE_LABEL_CATALOG_MIN_CONFIDENCE:
+        return None
+    if not catalog_style_supported(extraction.style):
+        return None
+
+    label_texts = [
+        label.text
+        for label in labels
+        if label.text.strip() and label.confidence >= SPARSE_LABEL_CATALOG_MIN_LABEL_CONFIDENCE
+    ]
+    if not label_texts:
+        return None
+
+    candidates = {}
+    for entry in load_catalog_entries():
+        if not entry.is_active or extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        if any(sparse_label_matches_catalog_area(entry.area, text) for text in label_texts):
+            candidates[entry.slug] = entry
+    if len(candidates) != 1:
+        return None
+
+    entry = next(iter(candidates.values()))
+    min_x, min_y, max_x, max_y = extraction.pixel_geometry.bounds
+    ref_min_x, ref_min_y, ref_max_x, ref_max_y = entry.mercator_geometry.bounds
+    pixel_width = max(1.0, max_x - min_x)
+    pixel_height = max(1.0, max_y - min_y)
+    meters_per_pixel = ((ref_max_x - ref_min_x) / pixel_width + (ref_max_y - ref_min_y) / pixel_height) / 2.0
+    origin_x = (min_x + max_x) / 2.0
+    origin_y = (min_y + max_y) / 2.0
+
+    return ServiceAreaCatalogMatch(
+        entry=entry,
+        iou=0.0,
+        area_ratio=1.0,
+        margin=0.0,
+        fitted_mercator_geometry=entry.mercator_geometry,
+        fitted_lonlat_geometry=entry.geometry,
+        meters_per_pixel=meters_per_pixel,
+        origin_lon=entry.geometry.centroid.x,
+        origin_lat=entry.geometry.centroid.y,
+        origin_x=origin_x,
+        origin_y=origin_y,
+        rotation_degrees=0.0,
+        confidence_override=SPARSE_LABEL_CATALOG_CONFIDENCE,
+    )
+
+
+def sparse_label_matches_catalog_area(area: str, text: str) -> bool:
+    if catalog_area_matches_text(area, text):
+        return True
+    area_tokens = normalize_catalog_area_tokens(area)
+    text_tokens = normalize_catalog_area_tokens(text)
+    if not area_tokens or not text_tokens:
+        return False
+    return all(
+        any(
+            len(area_token) >= 7
+            and len(text_token) >= 5
+            and edit_distance_at_most(area_token, text_token, max_edits=2)
+            for text_token in text_tokens
+        )
+        for area_token in area_tokens
+    )
+
+
+def edit_distance_at_most(left: str, right: str, *, max_edits: int) -> bool:
+    if abs(len(left) - len(right)) > max_edits:
+        return False
+    previous = list(range(len(right) + 1))
+    for i, left_char in enumerate(left, start=1):
+        current = [i]
+        row_min = current[0]
+        for j, right_char in enumerate(right, start=1):
+            cost = 0 if left_char == right_char else 1
+            value = min(
+                previous[j] + 1,
+                current[j - 1] + 1,
+                previous[j - 1] + cost,
+            )
+            current.append(value)
+            row_min = min(row_min, value)
+        if row_min > max_edits:
+            return False
+        previous = current
+    return previous[-1] <= max_edits
+
+
 def finish_catalog_boundary_result(
     extraction,
     catalog_match,
@@ -1338,6 +1471,8 @@ def finish_catalog_boundary_result(
     rgb,
     progress: ProgressCallback | None,
     georeference_source: str = "catalog-shape-match",
+    catalog_label_hints: list[str] | None = None,
+    shape_match: bool = True,
 ) -> BoundaryBuildResult:
     data = catalog_feature_collection(
         extraction,
@@ -1349,16 +1484,23 @@ def finish_catalog_boundary_result(
     )
     properties = data["features"][0]["properties"]
     properties["georeference_source"] = georeference_source
+    if catalog_label_hints:
+        properties["catalog_label_hints"] = catalog_label_hints
+    if not shape_match:
+        properties["catalog_shape_iou"] = None
+        properties["catalog_shape_margin"] = None
+        properties["catalog_area_ratio"] = None
     combined_confidence = properties["combined_confidence"]
     emit_progress(
         progress,
         stage="georeference",
-        message="Matched known service-area shape",
+        message="Matched known service-area label" if not shape_match else "Matched known service-area shape",
         percent=78,
         details={
             "source": georeference_source,
             "catalog_slug": catalog_match.entry.slug,
-            "shape_iou": round(catalog_match.iou, 3),
+            "shape_iou": round(catalog_match.iou, 3) if shape_match else None,
+            "label_hints": catalog_label_hints[:5] if catalog_label_hints else None,
             "combined_confidence": combined_confidence,
             "control_points": 0,
             "median_residual_m": 0.0,

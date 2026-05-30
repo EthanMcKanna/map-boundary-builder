@@ -6139,3 +6139,24 @@ with zero failures in 0.531s.
   (`out/post-webp-array-current-nocatalog-clean-20260530a/full-report.json`);
   the user-confirmed Houston/Miami/Bay Area drift smoke still had 0 smoke
   failures in `out/post-webp-array-drift-smoke-20260530a/full-report.json`.
+- Accepted a guarded sparse-label catalog recovery for tiny known service-area
+  crops. The old issue-5 stress images show why this matters for "snap any map":
+  `out/issue5-center.png` is only 90x33 and previously failed after reading a
+  single "Nashville" label, while `out/issue5-bigcenter.png` read the OCR typo
+  "Naslvillk" and failed after a slower georeference/full-OCR retry. The new
+  path only applies when the upload is tiny (<=180px max dimension and <=20k
+  pixels), high coverage (>=0.70), provider-style-compatible, and has exactly
+  one active catalog area matched by high-confidence label text with a
+  two-edit fuzzy allowance for long area names. It returns
+  `catalog-label-match:sparse-low-res` with null shape-IoU metadata instead of
+  pretending a shape match happened. Focused tests passed, `issue5-center.png`
+  now completes as `nashville-waymo` in 0.73s, and `issue5-bigcenter.png`
+  recovers the typo path in 0.65s. The standard no-catalog active benchmark
+  still passed 8/8 with avg IoU 0.961733/min IoU 0.931476 and zero regression
+  issues against `out/continue-current-nocatalog-20260530a/`
+  (`out/sparse-label-current-nocatalog-20260530a/full-report.json`); the normal
+  catalog-enabled active benchmark remained 8/8 with avg IoU 0.993/min IoU
+  0.943 and 0 regression issues (`out/sparse-label-default-20260530a/`).
+  Full validation passed with 254 tests plus 9 subtests, `compileall`,
+  `node --check`, and `git diff --check`; the Houston/Miami/Bay Area drift
+  smoke still had 0 smoke failures in `out/sparse-label-drift-smoke-20260530a/`.
