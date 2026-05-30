@@ -227,6 +227,11 @@ def test_provider_ui_focus_ocr_crop_targets_geometry_interior() -> None:
     assert offset_y == 160.0
 
 
+def test_provider_ui_fast_ocr_allows_gray_fill_non_tall_screens() -> None:
+    assert runner.provider_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1200, height=1014) == 1200
+    assert runner.provider_ui_fast_ocr_max_dimension_for_style("dark-teal", width=1200, height=1014) is None
+
+
 def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))

@@ -7092,3 +7092,20 @@ with zero failures in 0.531s.
   completed in 0.326216-0.438518s total before send, and the hard
   `IMG_0226.PNG` crossed below one second at 0.801312-0.836180s total before
   send, with build time 0.791048-0.826130s and OCR down to 0.542589-0.564102s.
+- Gray-fill provider crop candidate: broader production profiling on
+  `pipeline-9edbbfda2aac66db` found the next live bottleneck in a generic
+  gray-fill no-city upload, which still spent 1.017206s in full-image OCR and
+  completed in 1.296849s total before send before returning `austin-tesla` via
+  `catalog-shape-match:provider-ui-label`. The accepted prototype enables the
+  cropped provider-label OCR path for `gray-fill` while keeping the tall-screen
+  guard on `dark-teal`; gray-fill deliberately uses the wider provider crop
+  rather than the focused interior crop because Bay Area/Houston labels can sit
+  near the crop edge. Local proof `out/gray-provider-proof-20260530/` kept the
+  generic upload on `austin-tesla` via cropped provider labels in 0.330830s;
+  Tesla Austin, Dallas, and Houston still matched directly by catalog shape,
+  while Tesla Bay Area matched via cropped provider labels. Validation passed
+  165 focused tests, default active regression
+  `out/gray-provider-default-20260530/full-report.json`, no-catalog regression
+  `out/gray-provider-nocatalog-20260530/full-report.json`, current changed-
+  market scoring `out/gray-provider-current-changed-market-score-20260530/full-report.json`,
+  full 290 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.

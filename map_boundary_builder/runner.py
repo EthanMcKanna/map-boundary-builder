@@ -95,7 +95,8 @@ PROVIDER_UI_LABEL_MIN_IOU = 0.50
 PROVIDER_UI_LABEL_MIN_AREA_RATIO = 0.55
 PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
-PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal"}
+PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
+PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
 PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
     0,
@@ -1432,7 +1433,9 @@ def current_catalog_label_shape_shortcut_enabled(
 def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, height: int) -> int | None:
     if style not in PROVIDER_UI_FAST_OCR_STYLES:
         return None
-    if width <= 0 or height <= 0 or height < width * PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO:
+    if width <= 0 or height <= 0:
+        return None
+    if style in PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES and height < width * PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO:
         return None
     if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
         return None
