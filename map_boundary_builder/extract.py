@@ -391,8 +391,8 @@ def classify_style(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> str:
     hue = hsv[:, :, 0]
     sat = hsv[:, :, 1]
     val = hsv[:, :, 2]
-    bright_blue = hsv_range_ratio(hsv, (92, 90, 130), (116, 255, 255))
-    teal_pixels = hsv_range_ratio(hsv, (78, 45, 50), (104, 255, 190))
+    bright_blue = ((hue >= 92) & (hue <= 116) & (sat >= 90) & (val >= 130)).mean()
+    teal_pixels = ((hue >= 78) & (hue <= 104) & (sat >= 45) & (val >= 50) & (val <= 190)).mean()
     if bright_blue > 0.02 and bright_blue > teal_pixels * 1.5:
         return "bright-blue"
 
@@ -423,19 +423,14 @@ def classify_style(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> str:
 def blue_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
     if hsv is None:
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    hue = hsv[:, :, 0]
+    sat = hsv[:, :, 1]
+    val = hsv[:, :, 2]
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
 
-    saturated_blue = cv2.inRange(hsv, (92, 75, 105), (116, 255, 255)) > 0
-    app_blue = (b >= 145) & (g >= 80) & (r <= 95) & (cv2.subtract(b, r) >= 80)
+    saturated_blue = (hue >= 92) & (hue <= 116) & (sat >= 75) & (val >= 105)
+    app_blue = (b >= 145) & (g >= 80) & (r <= 95) & ((b.astype(np.int16) - r.astype(np.int16)) >= 80)
     return saturated_blue | app_blue
-
-
-def hsv_range_ratio(
-    hsv: np.ndarray,
-    lower: tuple[int, int, int],
-    upper: tuple[int, int, int],
-) -> float:
-    return cv2.countNonZero(cv2.inRange(hsv, lower, upper)) / float(hsv.shape[0] * hsv.shape[1])
 
 
 def purple_service_mask(rgb: np.ndarray, *, hsv: np.ndarray | None = None) -> np.ndarray:
