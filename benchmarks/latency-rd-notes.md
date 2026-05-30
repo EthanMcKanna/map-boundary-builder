@@ -6801,3 +6801,17 @@ with zero failures in 0.531s.
   passed 8/8 scored fixtures with avg IoU 0.993, min IoU 0.943, total 0.42s;
   no-catalog `out/nocatalog-after-catalog-evidence-reporting-20260530/full-report.json`
   passed 8/8 with avg IoU 0.962, min IoU 0.931, total 3.20s.
+- Rejected another OCR text-area cutoff lane. Raising the global fast-text OCR
+  area filter above the current 800 did not produce a safe active speedup:
+  900 and 1000 preserved the scored no-catalog set but were slower/noisy, while
+  1200 and 1500 regressed Phoenix Waymo to IoU 0.851 in
+  `out/fast-text-area-1200-20260530/full-report.json` and
+  `out/fast-text-area-1500-20260530/full-report.json`. A light-fill-specific
+  prototype looked promising in a low-level RapidOCR probe on
+  `/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp`, where
+  a 1500 area cutoff reduced recognized boxes to large context labels and could
+  reproduce the same Dallas bbox in one monkeypatched path. The real runner
+  validation did not hold: with neutral or Dallas filename hints the guarded
+  light-fill pass still fell back to full OCR, yielding no validated production
+  win and sometimes adding a second OCR pass. The prototype was backed out.
+  Focused runner/API tests after backing out passed 78/78.
