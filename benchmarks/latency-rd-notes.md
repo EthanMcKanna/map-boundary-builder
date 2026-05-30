@@ -5347,3 +5347,19 @@ with zero failures in 0.531s.
   Houston/Miami/Bay Area drift smoke
   `out/overlay-rgb-resize-drift-smoke-20260530/full-report.json` passed all six
   user-confirmed `reference_mismatch` fixtures with zero smoke failures.
+- Deployed the low-res catalog overlay reliability fix. Preview
+  `dpl_9p89GigcymVb2jeyWFPDRCNkdsWC` reported
+  `pipeline-e92714f32798fe7c`, health OK, and `api/index.py (91.9MB) [sfo1]`.
+  Protected-preview repro on `/tmp/mbb-la-small-overlay.png` returned HTTP 201,
+  `catalog-shape-match:city-contained`, `los-angeles-waymo`, and a valid inline
+  WebP overlay instead of the local shape-mismatch crash. Current production
+  before promotion reproduced the bug on the same 800px LA/Santa Monica upload:
+  HTTP 500 with `boolean index did not match indexed array along axis 0; size of
+  axis is 240 but size of corresponding boolean axis is 800`. Promoted
+  production deployment `dpl_4HDatrXtfFSN7jqyk7JnA2GZ6wBU` to
+  `https://mapboundary.app`; public health returned OK on
+  `pipeline-e92714f32798fe7c`. The same production repro now returns HTTP 201
+  with the expected catalog output and inline overlay. A pixel-distinct warm
+  production repeat returned `build_boundary_s: 0.246133` and
+  `total_before_send_s: 0.319959`, confirming the reliability fix without
+  losing the subsecond known-catalog path.
