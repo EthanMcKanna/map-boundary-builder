@@ -14,6 +14,7 @@ PIPELINE_VERSION_PACKAGES = (
     "onnxruntime",
     "opencv-python",
     "opencv-python-headless",
+    "openvino",
     "pillow",
     "rapidocr-onnxruntime",
     "shapely",

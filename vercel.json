@@ -12,7 +12,7 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "excludeFiles": "{docs/**,.github/**,benchmarks/**,tests/**,promo-video/**,out/**,output/**,input/**,.cache/**,.venv/**,build/**,**/__pycache__/**,**/*.pyc}"
+        "excludeFiles": "{docs/**,.github/**,benchmarks/**,tests/**,promo-video/**,out/**,output/**,input/**,.cache/**,.venv/**,_uv/**,.playwright-cli/**,.pytest_cache/**,build/**,*.egg-info/**,.DS_Store,**/__pycache__/**,**/*.pyc}"
       }
     }
   ],

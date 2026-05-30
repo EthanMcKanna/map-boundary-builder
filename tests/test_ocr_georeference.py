@@ -698,6 +698,80 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertTrue(np.array_equal(engine.selected_boxes[0], large_box))
         self.assertEqual([label.text for label in labels], ["Austin"])
 
+    def test_filtered_rapidocr_uses_openvino_recognizer_when_available(self) -> None:
+        class Engine:
+            text_rec = object()
+
+        crop_images = [np.zeros((8, 8, 3), dtype=np.uint8)]
+
+        with patch.object(
+            ocr_module,
+            "run_openvino_text_recognition",
+            return_value=[("Miami", 0.97)],
+        ) as openvino_recognize:
+            rec_res, elapsed = ocr_module.recognize_rapidocr_crops(Engine(), crop_images)
+
+        openvino_recognize.assert_called_once()
+        self.assertIs(openvino_recognize.call_args.args[0], Engine.text_rec)
+        self.assertEqual(openvino_recognize.call_args.args[1], crop_images)
+        self.assertEqual(rec_res, [("Miami", 0.97)])
+        self.assertEqual(elapsed, 0.0)
+
+    def test_filtered_rapidocr_falls_back_to_onnx_recognizer(self) -> None:
+        class Engine:
+            def __init__(self) -> None:
+                self.calls: list[tuple[list[np.ndarray], bool]] = []
+
+            def text_rec(self, crop_images, use_cls):
+                self.calls.append((crop_images, use_cls))
+                return [("Austin", 0.98)], 0.12
+
+        engine = Engine()
+        crop_images = [np.zeros((8, 8, 3), dtype=np.uint8)]
+
+        with patch.object(ocr_module, "run_openvino_text_recognition", return_value=None):
+            rec_res, elapsed = ocr_module.recognize_rapidocr_crops(engine, crop_images)
+
+        self.assertEqual(engine.calls, [(crop_images, False)])
+        self.assertEqual(rec_res, [("Austin", 0.98)])
+        self.assertEqual(elapsed, 0.12)
+
+    def test_openvino_recognizer_disables_after_runtime_error(self) -> None:
+        crop_images = [np.zeros((8, 8, 3), dtype=np.uint8)]
+        was_unavailable = ocr_module._OPENVINO_RECOGNIZER_UNAVAILABLE
+        try:
+            ocr_module._OPENVINO_RECOGNIZER_UNAVAILABLE = False
+            with (
+                patch.object(ocr_module, "OPENVINO_RECOGNIZER_ENABLED", True),
+                patch.object(ocr_module, "OPENVINO_RECOGNIZER_MIN_CROPS", 1),
+                patch.object(
+                    ocr_module,
+                    "run_openvino_text_recognition_or_raise",
+                    side_effect=RuntimeError("openvino unavailable"),
+                ) as openvino_impl,
+            ):
+                self.assertIsNone(ocr_module.run_openvino_text_recognition(object(), crop_images))
+                self.assertIsNone(ocr_module.run_openvino_text_recognition(object(), crop_images))
+
+            self.assertTrue(ocr_module._OPENVINO_RECOGNIZER_UNAVAILABLE)
+            self.assertEqual(openvino_impl.call_count, 1)
+        finally:
+            ocr_module._OPENVINO_RECOGNIZER_UNAVAILABLE = was_unavailable
+
+    def test_openvino_recognizer_skips_small_crop_batches(self) -> None:
+        crop_images = [np.zeros((8, 8, 3), dtype=np.uint8)]
+
+        with (
+            patch.object(ocr_module, "OPENVINO_RECOGNIZER_ENABLED", True),
+            patch.object(ocr_module, "OPENVINO_RECOGNIZER_MIN_CROPS", 2),
+            patch.object(
+                ocr_module,
+                "run_openvino_text_recognition_or_raise",
+                side_effect=AssertionError("small batches should stay on ONNX recognition"),
+            ),
+        ):
+            self.assertIsNone(ocr_module.run_openvino_text_recognition(object(), crop_images))
+
     def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -738,6 +812,18 @@ class OcrGroupingTests(unittest.TestCase):
                 ocr_cache_dependency_signature.cache_clear()
 
         self.assertNotEqual(key_1, key_2)
+
+    def test_ocr_cache_key_depends_on_openvino_recognizer_threshold(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "OPENVINO_RECOGNIZER_MIN_CROPS", 4):
+                key_4 = ocr_cache_key(image_path, use_tesseract=False)
+            with patch.object(ocr_module, "OPENVINO_RECOGNIZER_MIN_CROPS", 8):
+                key_8 = ocr_cache_key(image_path, use_tesseract=False)
+
+        self.assertNotEqual(key_4, key_8)
 
     def test_ocr_cache_key_depends_on_rapidocr_classifier_batch(self) -> None:
         with TemporaryDirectory() as workdir:
