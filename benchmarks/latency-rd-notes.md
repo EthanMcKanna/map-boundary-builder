@@ -6243,3 +6243,17 @@ with zero failures in 0.531s.
   run also did not produce a meaningful win (`out/opencv-threads0-default-20260530a/`).
   Leave OpenCV threading on its upstream default unless a future production-like
   concurrency benchmark proves otherwise.
+- Accepted frontend propagation of low-IoU catalog probe misses into the full
+  upload handoff. The backend already reports
+  `catalog_probe_miss.active_shape_iou_is_low`, and the runner already overlaps
+  OCR for that low-IoU miss case; the browser was discarding the signal and only
+  setting `catalog_probe_missed`. Production probes on the current Bay Area
+  screenshot showed the low-IoU handoff improving generation from about 2.21s
+  (`bay-handoff`) to 1.59s (`bay-handoff-lowiou`) without changing the OCR
+  georeference output. This is a latency handoff fix, not a catalog-geometry
+  shortcut: current Bay Area still does not meet the catalog shape-IoU bar, so
+  it must remain OCR/georeference until the shape/reference issue is resolved.
+  Also rejected lowering `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION` as a default:
+  1100px was much faster locally but dropped the active neutral gate min IoU
+  from 0.931476 to 0.901198 and moved LA/Dallas geometry; 1400/1200 failed
+  scored Waymo fixtures, while 1300/1000 produced San Antonio stalls above 46s.
