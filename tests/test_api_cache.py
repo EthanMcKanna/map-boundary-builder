@@ -238,6 +238,9 @@ class ApiRunCacheTests(unittest.TestCase):
         same_context_cache_bust = BoundaryBuildOptions(
             filename_hint="Dallas pipeline-version-1780067151-e527924-ui.png"
         )
+        same_generic_probe_words = BoundaryBuildOptions(
+            filename_hint="Dallas map repeat after-roadskip-1780067151.png"
+        )
 
         self.assertEqual(filename_hint_cache_value(options.filename_hint), "png:dallas")
         self.assertEqual(
@@ -248,9 +251,29 @@ class ApiRunCacheTests(unittest.TestCase):
             run_result_cache_key(b"image-a", None, options),
             run_result_cache_key(b"image-a", None, same_context_cache_bust),
         )
+        self.assertEqual(
+            run_result_cache_key(b"image-a", None, options),
+            run_result_cache_key(b"image-a", None, same_generic_probe_words),
+        )
+        self.assertEqual(
+            raw_run_result_cache_key(b"image-a", None, options),
+            raw_run_result_cache_key(b"image-a", None, same_generic_probe_words),
+        )
         self.assertNotEqual(
             run_result_cache_key(b"image-a", None, options),
             run_result_cache_key(b"image-a", None, different_basename),
+        )
+
+    def test_run_cache_filename_hint_ignores_generic_probe_tokens(self) -> None:
+        self.assertEqual(
+            filename_hint_cache_value("neutral-map-after-roadskip-1780146244.webp"),
+            "webp:",
+        )
+        self.assertEqual(filename_hint_cache_value("neutral-map-1780145995.webp"), "webp:")
+        self.assertEqual(filename_hint_cache_value("uploaded-map.png"), "png:")
+        self.assertEqual(
+            filename_hint_cache_value("dallas-map-repeat-1780146013-1.webp"),
+            "webp:dallas",
         )
 
     def test_run_cache_filename_hint_preserves_provider_and_multiword_area(self) -> None:

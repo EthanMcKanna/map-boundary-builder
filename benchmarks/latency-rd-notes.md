@@ -6694,3 +6694,41 @@ with zero failures in 0.531s.
   passed 270 tests plus 9 subtests, `compileall -q api map_boundary_builder
   tests`, `node --check map_boundary_builder/web_assets/app.js`, and
   `git diff --check`.
+- Post-road-skip production and OCR experiments: after deployment
+  `pipeline-97651281cbd1feac`, a neutral-filename Dallas Avride upload
+  (`neutral-map-after-roadskip-1780146244.webp`) confirmed the earlier
+  georeference bottleneck was removed even without filename context:
+  `build_boundary_s` 1.671381s, extract 0.025397s, OCR 1.592783s,
+  georeference 0.052052s, five controls, confidence 0.855, and the same bbox
+  `[-96.8209832, 32.767271, -96.7593743, 32.8342594]`. Rejected light-fill
+  fast-text OCR filtering as a default: area 800 preserved the output but had
+  noisy/no convincing local speed gains, while area 1000 changed the Dallas fit
+  to confidence 0.769 / three controls / diagnostic catalog IoU 0.647. Rejected
+  service-area-bounds OCR cropping: padding 0-180px changed OCR text enough to
+  move the geometry, with diagnostic catalog IoUs ranging roughly 0.646-0.777;
+  only effectively full-width padding reproduced the known output. Rejected
+  light-fill OCR downscaling for now: max dimensions below 680px changed the
+  Dallas geometry/control fit despite faster OCR; 520px was closest but still
+  changed bbox/confidence, so it is not a no-regression optimization without a
+  stronger Avride ground-truth set.
+- Drift-aware validation and cache-key cleanup: confirmed Houston, Miami, and
+  Bay Area fixtures are `reference_mismatch` data debt, not active stale-truth
+  scores. Targeted smoke
+  `out/drifted-service-areas-smoke-20260530/full-report.json` passed six
+  drifted screenshots with zero smoke failures in 2.03s; current-catalog scoring
+  `out/drifted-service-areas-current-catalog-20260530/full-report.json` passed
+  6/6 at IoU 1.0 in 1.55s. Found a safe repeat-upload cache miss where generic
+  filename words (`neutral`, `after`, `roadskip`, `repeat`, `uploaded`) were
+  included in the run-result cache key even though provider/area tokens already
+  carry the semantic hint. Stripping only those noise tokens makes
+  `dallas-map-repeat-...` reuse the same raw-byte cache key as `dallas-map`
+  while preserving distinctions such as `waymo bay area` vs `tesla bay area`.
+  Focused API/benchmark tests passed 57/57, full tests passed 271 plus 9
+  subtests, `compileall -q api map_boundary_builder tests`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  Strict active gates also passed: no-catalog
+  `out/cache-hint-noise-nocatalog-20260530/full-report.json` passed 8/8 scored
+  fixtures with zero regression issues against
+  `out/current-profile-nocatalog-20260530/full-report.json`; default catalog
+  `out/cache-hint-noise-default-20260530/full-report.json` passed 8/8 with zero
+  regression issues against `out/realistic-warmup-active-20260530j/full-report.json`.
