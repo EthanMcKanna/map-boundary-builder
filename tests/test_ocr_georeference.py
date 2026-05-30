@@ -1912,6 +1912,17 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
         self.assertEqual(markers, [])
 
+    def test_detect_label_marker_dots_uses_sampled_background_gate(self) -> None:
+        rgb = np.full((64, 64, 3), 42, dtype=np.uint8)
+        rgb[28:34, 30:36] = 210
+
+        markers = detect_label_marker_dots("missing.png", rgb=rgb)
+
+        self.assertEqual(len(markers), 1)
+        marker_x, marker_y = markers[0]
+        self.assertAlmostEqual(marker_x, 32.5)
+        self.assertAlmostEqual(marker_y, 30.5)
+
 
 if __name__ == "__main__":
     unittest.main()

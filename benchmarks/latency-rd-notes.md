@@ -5565,3 +5565,38 @@ with zero failures in 0.531s.
   current `h-waymo.png` and `miami.png` hit refreshed current catalog geometry
   in 0.068048s and 0.098221s, and `bay-area-waymo.png` correctly stayed on
   OCR/georeference with `catalog_slug: null`.
+- Rejected two current arbitrary-path scheduling/input probes after fresh
+  evidence. Disabling road-feature precompute entirely preserved active IoU and
+  first looked promising at `out/no-road-precompute-nocatalog-probe-20260530`
+  with 2.652439s active total versus the 2.894807s BILINEAR baseline, but
+  alternating repeat runs were mixed: current precompute totals were 2.620998s,
+  2.409018s, and 2.333697s, while no-precompute totals were 2.493258s,
+  2.373417s, and 2.549346s. A smarter prototype that passed the in-flight road
+  feature future into road refinement avoided duplicate distance-transform work
+  only when road matching was needed, but the formal gate
+  `out/road-future-nocatalog-20260530/full-report.json` slowed to 3.01s while
+  preserving IoU, so it was reverted. The same pass rejected changing
+  `RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION`: forcing native arrays for all OCR
+  inputs lowered Austin Tesla IoU from 0.973925 to 0.965638, and forcing file
+  inputs for all <=1600px images preserved IoU but did not beat the current
+  1000px threshold. Keep the existing road precompute and RapidOCR input policy.
+- Accepted a small marker-dot georeference micro-optimization, but did not
+  deploy it as a production latency win. `detect_label_marker_dots` only needs
+  to know whether the map background is dark before scanning for tiny light
+  markers, so it now computes that median over every eighth pixel instead of
+  partitioning the full grayscale image. On local probes this preserved the
+  dark/light decision across the checked service-area fixtures and recent
+  Downloads stress images, while reducing the median gate from 0.535151s to
+  0.013297s over 200 iterations on `Waymo Los Angeles.png`, from 1.257433s to
+  0.023259s on `waymo phoenix.png`, and from 0.860116s to 0.021100s on
+  `zoox-sf.webp`. Focused marker tests passed, default catalog
+  `out/marker-sample-default-20260530/full-report.json` passed 8/8 active with
+  zero IoU regression, strict no-catalog
+  `out/marker-sample-nocatalog2-20260530/full-report.json` passed 8/8 active
+  with zero IoU regression but took 2.94s total versus the 2.89s BILINEAR
+  baseline, and the Waymo-only Houston/Miami/Bay Area drift smoke
+  `out/marker-sample-waymo-drift-smoke-20260530/full-report.json` kept all
+  three stale saved screenshots on OCR/georeference with null catalog slugs.
+  Treat this as deterministic georeference cleanup; it is not strong enough on
+  its own for a production promotion because end-to-end latency remains OCR
+  dominated.

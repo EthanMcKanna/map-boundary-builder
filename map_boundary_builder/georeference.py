@@ -36,6 +36,7 @@ DIRECT_CONTEXT_QUERY_LIMIT = 6
 DIRECT_CONTEXT_MAX_QUERIES = 10
 DIRECT_CONTEXT_LIVE_QUERY_LIMIT = 3
 DIRECT_CONTEXT_MAX_LIVE_QUERIES = 5
+MARKER_DOT_BACKGROUND_SAMPLE_STRIDE = 8
 PROMOTED_DIRECT_CONTEXT_LABEL_SCORE = 95.0
 STRONG_DIRECT_CONTEXT_MIN_SCORE = 115.0
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
@@ -604,7 +605,11 @@ def detect_label_marker_dots(image_path: str, *, rgb: np.ndarray | None = None) 
     except Exception:
         return []
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    if float(np.median(gray)) > 115.0:
+    background_sample = gray[
+        ::MARKER_DOT_BACKGROUND_SAMPLE_STRIDE,
+        ::MARKER_DOT_BACKGROUND_SAMPLE_STRIDE,
+    ]
+    if float(np.median(background_sample)) > 115.0:
         return []
     mask = (gray >= 105).astype(np.uint8)
     component_count, _, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
