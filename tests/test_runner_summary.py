@@ -429,13 +429,74 @@ def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkey
 
     result = build_boundary(image_path, "Tesla Bay Area", output_path)
 
-    assert max_dimensions == [
-        runner.CATALOG_EXTRACT_MAX_DIMENSION,
-        runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
-    ]
+    assert max_dimensions == [0, runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION]
     assert cache_flags == [False, False]
     assert result.summary["catalog_slug"] == "bay-area-tesla"
     assert result.summary["georeference_source"] == "catalog-shape-match:retry"
+
+
+def test_active_catalog_hit_uses_low_res_rgb_before_full_decode(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Houston.png"
+    Image.new("RGB", (2400, 1200), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    low_rgb = np.full((120, 240, 3), 245, dtype=np.uint8)
+    low_mask = np.zeros((120, 240), dtype=bool)
+    low_mask[20:90, 50:190] = True
+    extraction = ExtractionResult(
+        mask=low_mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(50, 20), (190, 20), (190, 90), (50, 90)]),
+        coverage_ratio=float(low_mask.mean()),
+        contour_count=1,
+        confidence=1.0,
+    )
+    loader_dimensions: list[int] = []
+    extract_dimensions: list[int] = []
+
+    def fake_load_rgb_at_max_dimension(_path, max_dimension):
+        loader_dimensions.append(max_dimension)
+        return low_rgb
+
+    def unexpected_full_rgb(_path):
+        raise AssertionError("active catalog hits should not decode the full image before returning")
+
+    def fake_extract_service_area(*_args, max_dimension=None, rgb=None, **_kwargs):
+        extract_dimensions.append(max_dimension)
+        assert rgb is low_rgb
+        return extraction
+
+    def fake_match_service_area_catalog(*_args, **_kwargs):
+        return SimpleNamespace(
+            entry=SimpleNamespace(slug="houston-waymo"),
+            iou=0.979470,
+            confidence=0.88,
+            margin=0.36,
+            area_ratio=1.0,
+        )
+
+    def fake_finish_catalog_boundary_result(extraction, catalog_match, *, output_path, **_kwargs):
+        assert extraction.mask.shape == (1200, 2400)
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": _kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb_at_max_dimension", fake_load_rgb_at_max_dimension)
+    monkeypatch.setattr(runner, "load_rgb", unexpected_full_rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(image_path, "Houston", output_path)
+
+    assert loader_dimensions == [runner.CATALOG_EXTRACT_MAX_DIMENSION]
+    assert extract_dimensions == [0]
+    assert result.summary["catalog_slug"] == "houston-waymo"
 
 
 def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monkeypatch) -> None:
@@ -480,10 +541,7 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
             ),
         )
 
-    assert max_dimensions == [
-        runner.CATALOG_EXTRACT_MAX_DIMENSION,
-        runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
-    ]
+    assert max_dimensions == [0, runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION]
 
 
 def test_catalog_probe_missed_skips_low_res_probes_but_keeps_full_catalog_match(tmp_path, monkeypatch) -> None:
@@ -781,10 +839,7 @@ def test_unsupported_style_catalog_miss_skips_catalog_retry(tmp_path, monkeypatc
 
     build_boundary(image_path, None, output_path)
 
-    assert max_dimensions == [
-        runner.CATALOG_EXTRACT_MAX_DIMENSION,
-        runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
-    ]
+    assert max_dimensions == [0, runner.CATALOG_MISS_REFINE_MAX_DIMENSION]
 
 
 def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, monkeypatch) -> None:

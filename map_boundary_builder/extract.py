@@ -54,18 +54,43 @@ class ExtractionResult:
 
 def load_rgb(path: str | Path) -> np.ndarray:
     with Image.open(path) as image:
-        if image.mode == "RGB":
-            return np.array(image, dtype=np.uint8, copy=True)
-        if "A" not in image.getbands():
-            return np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
+        return pil_image_to_rgb_array(image)
 
-        rgba_image = image.convert("RGBA")
-        if rgba_image.getchannel("A").getextrema()[0] == 255:
-            rgba = np.array(rgba_image, dtype=np.uint8, copy=True)
-            return np.array(rgba[:, :, :3], dtype=np.uint8, copy=True)
-        background = Image.new("RGBA", rgba_image.size, (255, 255, 255, 255))
-        background.alpha_composite(rgba_image)
-        return np.array(background.convert("RGB"), dtype=np.uint8, copy=True)
+
+def load_rgb_at_max_dimension(path: str | Path, max_dimension: int) -> np.ndarray:
+    with Image.open(path) as image:
+        rgb_image = pil_image_to_rgb(image)
+        max_dimension = max(0, int(max_dimension))
+        if max_dimension > 0:
+            largest = max(rgb_image.size)
+            if largest > max_dimension:
+                scale = max_dimension / float(largest)
+                rgb_image = rgb_image.resize(
+                    (
+                        max(1, round(rgb_image.width * scale)),
+                        max(1, round(rgb_image.height * scale)),
+                    ),
+                    Image.Resampling.BOX,
+                )
+        return np.array(rgb_image, dtype=np.uint8, copy=True)
+
+
+def pil_image_to_rgb_array(image: Image.Image) -> np.ndarray:
+    return np.array(pil_image_to_rgb(image), dtype=np.uint8, copy=True)
+
+
+def pil_image_to_rgb(image: Image.Image) -> Image.Image:
+    if image.mode == "RGB":
+        return image.copy()
+    if "A" not in image.getbands():
+        return image.convert("RGB")
+
+    rgba_image = image.convert("RGBA")
+    if rgba_image.getchannel("A").getextrema()[0] == 255:
+        return rgba_image.convert("RGB")
+    background = Image.new("RGBA", rgba_image.size, (255, 255, 255, 255))
+    background.alpha_composite(rgba_image)
+    return background.convert("RGB")
 
 
 def extract_service_area(

@@ -32,6 +32,8 @@ from .extract import (
     extract_service_area,
     extraction_scale_factor,
     load_rgb,
+    load_rgb_at_max_dimension,
+    rescale_extraction_result,
     write_mask_png,
     write_overlay_png,
 )
@@ -216,7 +218,28 @@ def build_boundary(
             percent=18,
             details={"width": width, "height": height},
         )
-        rgb = load_rgb(image_path)
+        low_res_catalog_rgb = should_load_low_res_catalog_rgb(
+            city_input=city_input,
+            filename_hint=filename_hint,
+            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+        )
+        rgb = (
+            load_rgb_at_max_dimension(image_path, CATALOG_EXTRACT_MAX_DIMENSION)
+            if low_res_catalog_rgb
+            else load_rgb(image_path)
+        )
+        low_res_catalog_scale = (
+            max(rgb.shape[1] / max(width, 1), rgb.shape[0] / max(height, 1))
+            if low_res_catalog_rgb
+            else 1.0
+        )
+
+        def ensure_full_rgb() -> None:
+            nonlocal rgb, low_res_catalog_rgb
+            if low_res_catalog_rgb:
+                rgb = load_rgb(image_path)
+                low_res_catalog_rgb = False
+
         early_ocr_style: str | None = None
         if should_overlap_ocr_with_extraction(
             city_input=city_input,
@@ -261,15 +284,23 @@ def build_boundary(
             CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
         )
         used_catalog_scaled_extraction = (
-            allow_pre_ocr_catalog and extraction_scale_factor(rgb, extraction_max_dimension) < 1.0
+            allow_pre_ocr_catalog
+            and (low_res_catalog_rgb or extraction_scale_factor(rgb, extraction_max_dimension) < 1.0)
         )
         extraction = extract_service_area(
             image_path,
-            simplify_px=opts.simplify_px,
+            simplify_px=opts.simplify_px * low_res_catalog_scale if low_res_catalog_rgb else opts.simplify_px,
             rgb=rgb,
-            max_dimension=extraction_max_dimension,
+            max_dimension=0 if low_res_catalog_rgb else extraction_max_dimension,
             cache=not allow_pre_ocr_catalog,
         )
+        if low_res_catalog_rgb:
+            extraction = rescale_extraction_result(
+                extraction,
+                width=width,
+                height=height,
+                scale=low_res_catalog_scale,
+            )
         emit_progress(
             progress,
             stage="extract",
@@ -365,6 +396,7 @@ def build_boundary(
                 percent=37,
                 details={"width": width, "height": height},
             )
+            ensure_full_rgb()
             retry_extraction = extract_service_area(
                 image_path,
                 simplify_px=opts.simplify_px,
@@ -419,6 +451,7 @@ def build_boundary(
             raise CatalogProbeMiss("No known service-area shape matched the catalog probe.")
 
         if used_catalog_scaled_extraction:
+            ensure_full_rgb()
             if labels_future is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
                 if (
@@ -590,6 +623,7 @@ def build_boundary(
                     georeference_source="catalog-shape-match:provider-ui-label",
                 )
         if labels_future is None:
+            ensure_full_rgb()
             if ocr_executor is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
             labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
@@ -1045,6 +1079,19 @@ def should_try_pre_ocr_catalog(
     if city_input is None:
         return not is_stale_only_catalog_hint(filename_hint)
     return has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input)
+
+
+def should_load_low_res_catalog_rgb(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    allow_pre_ocr_catalog: bool,
+) -> bool:
+    if not allow_pre_ocr_catalog or CATALOG_EXTRACT_MAX_DIMENSION <= 0:
+        return False
+    if city_input is not None:
+        return has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input)
+    return has_active_catalog_area_hint(filename_hint)
 
 
 def should_retry_pre_ocr_catalog(

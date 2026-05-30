@@ -5283,3 +5283,28 @@ with zero failures in 0.531s.
   worse, dropping Nashville to 0.758698, Phoenix to 0.853339, Orlando to
   0.862403, and average IoU to 0.910073. Even with explicit city context, OCR
   resolution downscaling is not safe without a stronger validator/fallback.
+- Accepted a low-resolution RGB decode for hinted pre-OCR catalog passes. The
+  old path decoded the full upload before immediately downscaling to the 240px
+  catalog guard; the new path loads a 240px RGB array first only when an active
+  city/area hint can return from catalog matching, rescales the extracted
+  geometry/mask back to original coordinates, and loads the full RGB only if
+  the catalog pass misses and the normal retry/OCR path is needed. A first
+  prototype was rejected in-place because it used the full-resolution simplify
+  tolerance on the low-res image and forced Houston/Miami into the 400px retry;
+  the accepted version scales simplify tolerance by the low-res factor. Focused
+  runner/catalog/API tests passed 50/50, full pytest passed 235 tests plus 9
+  subtests, `compileall`, `node --check`, and `git diff --check` passed. Local
+  same-process A/Bs preserved exact bboxes and sources while improving Miami
+  current catalog uploads 0.061855s -> 0.045418s and LA/Santa Monica
+  city-contained uploads 0.047169s -> 0.034958s; Houston was effectively tied
+  at 0.056271s -> 0.054395s. Default catalog benchmark
+  `out/lowres-catalog-rgb-default-20260530/full-report.json` passed 8/8 scored
+  fixtures with zero regression issues against
+  `out/city-contained-default-20260530/full-report.json`, avg IoU 0.992917,
+  min IoU 0.943345, active total 0.33s, and max active 0.06s. Strict
+  no-catalog `out/lowres-catalog-rgb-nocatalog-20260530/full-report.json`
+  passed 8/8 scored with zero regression issues against
+  `out/city-contained-nocatalog-20260530/full-report.json`, avg IoU 0.961733,
+  min IoU 0.931476, and active total 3.02s. Houston/Miami/Bay Area smoke
+  `out/lowres-catalog-rgb-changed-smoke-20260530/full-report.json` passed all
+  six user-confirmed `reference_mismatch` fixtures with zero smoke failures.
