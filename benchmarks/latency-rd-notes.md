@@ -6671,3 +6671,26 @@ with zero failures in 0.531s.
   passed 269 tests plus 9 subtests, `compileall -q api map_boundary_builder
   tests`, `node --check map_boundary_builder/web_assets/app.js`, and
   `git diff --check`.
+- Light-fill road-refinement latency guard after production Dallas verification:
+  production confirmed the alias rollout was live, but a neutral filename upload
+  still spent 10.930890s in georeference while inferring Dallas from labels, and
+  a non-provider Dallas filename spent 2.725259s in georeference. The accepted
+  output had no road match; the expensive road-refine branch was attempted only
+  to be discarded. Added a conservative guard so `light-fill` label fits skip
+  label-fit road refinement while preserving road refinement for existing
+  bright-blue Waymo paths. Local Dallas Avride no-catalog with
+  `filename_hint='dallas-map.webp'` preserved the exact bbox/confidence/control
+  output and improved same-process timings to 0.562750s first run, then
+  0.236230s and 0.213334s warm repeats. Focused tests passed 2/2. The strict
+  drift-aware no-catalog gate
+  `out/lightfill-skip-road-nocatalog-20260530/full-report.json` passed 8/8
+  scored fixtures, skipped seven `reference_mismatch` fixtures, avg IoU 0.962,
+  min IoU 0.931, total 3.12s, and zero regression issues against
+  `out/current-profile-nocatalog-20260530/full-report.json`; Phoenix and
+  Nashville remained on `ocr-georeference:nominatim-label-fit+osm-road-refine`.
+  The default catalog gate `out/lightfill-skip-road-default-20260530/full-report.json`
+  passed 8/8 with zero regression issues against
+  `out/realistic-warmup-active-20260530j/full-report.json`. Full validation
+  passed 270 tests plus 9 subtests, `compileall -q api map_boundary_builder
+  tests`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`.

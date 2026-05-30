@@ -307,6 +307,13 @@ def test_fast_text_ocr_fallback_guard(monkeypatch) -> None:
     assert runner.should_fallback_fast_text_ocr(True, high_confidence, style="dark-teal") is True
 
 
+def test_light_fill_label_fits_skip_road_refinement() -> None:
+    assert runner.should_allow_label_fit_road_refinement("bright-blue") is True
+    assert runner.should_allow_label_fit_road_refinement("gray-fill") is True
+    assert runner.should_allow_label_fit_road_refinement(None) is True
+    assert runner.should_allow_label_fit_road_refinement("light-fill") is False
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 
