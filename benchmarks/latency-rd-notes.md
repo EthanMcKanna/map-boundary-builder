@@ -5965,3 +5965,21 @@ with zero failures in 0.531s.
   Larger 640px/800px probes raised upload sizes without recovering any of those
   stale changed-market misses, so the current 520px client probe remains the
   right latency/accuracy tradeoff.
+- Rejected another batch of post-deploy OCR/runtime handoff probes. PyPI
+  reports the current environment is already on latest `onnxruntime` 1.26.0
+  and `rapidocr-onnxruntime` 1.4.4, so there was no dependency bump to test.
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=1` preserved active and changed-market
+  geometry, but the fresh active+smoke comparison only moved total active time
+  from 3.041s to 3.011s (`out/default-active-smoke-20260530c/` versus
+  `out/recbatch1-active-smoke-20260530c/`), which is benchmark noise rather
+  than a production-worthy speedup. `REC_BATCH_NUM=4` was worse against the
+  saved warm baseline, adding 0.094s on Nashville and 0.140s on Phoenix in
+  `out/recbatch4-active-smoke-20260530c/`. Disabling ONNX Runtime spinning or
+  the CPU memory arena was much slower under local contention and offered no
+  accuracy upside. Client-side full-upload downscaling after a catalog probe
+  miss was also rejected: 1600px JPEG and PNG variants both changed active
+  fixture geometry and slowed enough cases to fail strict regression checks
+  (`out/client-downscale1600-q92-active-smoke-20260530c/` and
+  `out/client-downscale1600-png-active-smoke-20260530c/`). Keep the original
+  full-image handoff until a lossless transport or server-side path proves both
+  faster and geometry-identical.
