@@ -6873,3 +6873,18 @@ with zero failures in 0.531s.
   1.140332s. The preview artifact packaging step averaged 0.000163s versus
   production PNG-overlay packaging at 0.069132s, and inline overlay payloads
   dropped from 75,347 to 57,963 characters.
+  Production deploy `dpl_D1CWnGVRcGGZ4NYnpz7pKzVqu5NL` was attempted from
+  commit `6eb7242` and reported the same `pipeline-d7b93826dd958941`, but the
+  live `mapboundary.app` end-to-end cache-miss timings did not meet the no-
+  regression bar after promotion. The WebP overlay itself was correct and fast:
+  post-deploy responses used `boundary.overlay.webp`, had 57,963-character
+  overlay data URLs, and averaged 0.000109s in `build_artifacts_s`. Accuracy
+  stayed identical on every neutral Dallas Avride check. The bottleneck moved
+  to production OCR/runtime variance: the last six promoted-production overlay
+  runs averaged 1.257097s total before send with OCR averaging 1.156432s, while
+  the direct old production deployment averaged 1.087535s total before send
+  across four protected checks. The production alias was therefore rolled back
+  to `dpl_EvicxyLeLFT5iuQLTEmZB8DN1DWL` / `pipeline-b54156429dd92594`. Keep the
+  WebP overlay patch as a validated code-level artifact/export improvement, but
+  do not count it as a completed production latency win until a deployment also
+  beats the live end-to-end production baseline.
