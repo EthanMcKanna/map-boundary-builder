@@ -7046,3 +7046,19 @@ with zero failures in 0.531s.
   kept explicit `Las Vegas` labels, but production `dpl_FgbJhcUwAXYbhbcwqsdsFhTzru16`
   was slower on the hard dark screenshot (1.229795-1.297677s total before send)
   than the 750px deployment, so the 600px cap was rejected and reverted.
+- Provider-UI tight crop padding candidate: after the 600px OCR cap failed in
+  production, a crop-shape audit showed the default provider crop still covered
+  53.76% of `IMG_0071.PNG` and 64.07% of `IMG_0226.PNG` because the extracted
+  dark-teal geometry spanned most of the phone screenshot width. Reducing the
+  pad ratio from 0.45 to 0.25 kept the required area labels while cutting OCR
+  area. Local proof `out/provider-ui-tightpad-proof-20260530/` preserved
+  `catalog-shape-match:provider-ui-label`, `las-vegas-zoox`, shape IoUs
+  0.524784 and 0.532996, and explicit `Las Vegas` / `Las Vegas Paradise` label
+  evidence, with elapsed times 0.240631s for `IMG_0071.PNG` and 0.251318s for
+  `IMG_0226.PNG`. Validation passed 163 focused tests, default active
+  regression `out/provider-ui-tightpad-default-20260530/full-report.json`,
+  no-catalog regression
+  `out/provider-ui-tightpad-nocatalog-20260530/full-report.json`, current
+  changed-market scoring
+  `out/provider-ui-tightpad-current-changed-market-score-20260530/full-report.json`,
+  full 288 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.

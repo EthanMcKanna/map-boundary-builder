@@ -207,6 +207,16 @@ def test_unique_catalog_provider_for_style_rejects_ambiguous_style(monkeypatch) 
     assert runner.unique_catalog_provider_for_style("single-style") == "gamma"
 
 
+def test_provider_ui_ocr_crop_uses_tight_geometry_padding() -> None:
+    rgb = np.zeros((1000, 500, 3), dtype=np.uint8)
+
+    crop, offset_x, offset_y = runner.provider_ui_ocr_crop(rgb, (100.0, 200.0, 400.0, 600.0))
+
+    assert crop.shape[:2] == (600, 460)
+    assert offset_x == 20.0
+    assert offset_y == 100.0
+
+
 def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))
