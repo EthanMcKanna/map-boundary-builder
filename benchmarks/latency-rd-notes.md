@@ -5972,8 +5972,12 @@ with zero failures in 0.531s.
   geometry, but the fresh active+smoke comparison only moved total active time
   from 3.041s to 3.011s (`out/default-active-smoke-20260530c/` versus
   `out/recbatch1-active-smoke-20260530c/`), which is benchmark noise rather
-  than a production-worthy speedup. `REC_BATCH_NUM=4` was worse against the
-  saved warm baseline, adding 0.094s on Nashville and 0.140s on Phoenix in
+  than a production-worthy speedup. Making `1` the actual code default then
+  failed the stricter active+smoke regression gate in
+  `out/recbatch1-default-active-smoke-20260530d/`, raising total active time to
+  4.166s and slowing Austin, Dallas, Nashville, and Orlando. `REC_BATCH_NUM=4`
+  was worse against the saved warm baseline, adding 0.094s on Nashville and
+  0.140s on Phoenix in
   `out/recbatch4-active-smoke-20260530c/`. Disabling ONNX Runtime spinning or
   the CPU memory arena was much slower under local contention and offered no
   accuracy upside. Client-side full-upload downscaling after a catalog probe
