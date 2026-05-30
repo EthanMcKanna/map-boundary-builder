@@ -5143,3 +5143,23 @@ with zero failures in 0.531s.
   no-catalog stress comparison over ten Downloads images preserved geometry at
   IoU 0.999525 or 1.0 versus the full-OCR baseline, including `zoox-sf.webp` at
   IoU 1.0 after the dark-teal style gate.
+- Accepted lowering the fast-text OCR fallback threshold from 0.80 to 0.70.
+  The 0.80 threshold was overly conservative for arbitrary maps whose full-OCR
+  transform is naturally in the 0.7x confidence range: it ran filtered OCR, fit
+  the same transform, then paid for redundant full OCR. With 0.70 as the code
+  default, strict no-catalog
+  `out/fasttext-threshold-default-nocatalog-20260530/full-report.json` passed
+  8/8 scored fixtures with zero IoU drops against
+  `out/current-nocatalog-refresh-20260530/full-report.json`, avg IoU 0.961733,
+  min IoU 0.931476, active total 3.010115s, and max active duration 0.683373s.
+  Default catalog `out/fasttext-threshold-default-20260530/full-report.json`
+  passed with zero IoU drops, avg IoU 0.992917, min IoU 0.943345, active total
+  0.453623s, and max active duration 0.080108s. The user-confirmed changed
+  Waymo drift smoke
+  `out/fasttext-threshold-drift-waymo-smoke-20260530/full-report.json` passed
+  all three screenshots with `catalog_slug: null`. The reusable stress report
+  `out/fasttext-threshold-stress-20260530/report.json` compared the checked-in
+  default against full-OCR no-catalog outputs on ten Downloads images and
+  preserved geometry at IoU 0.999525 or 1.0; `miami.png` improved from
+  0.388208s full OCR to 0.342062s filtered OCR at confidence 0.716, and
+  `waymo-n.webp` improved from 0.253391s to 0.197419s at confidence 0.762.
