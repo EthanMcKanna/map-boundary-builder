@@ -6395,3 +6395,27 @@ with zero failures in 0.531s.
   duration 1.28042s, max duration 0.38406s, and Bay Area Waymo 0.341734s. This
   keeps the production default aligned with the browser-compressed case instead
   of overfitting the full-PNG local sweep.
+- A tighter browserlike q92 cap sweep found 875px is a smaller safe improvement
+  over the restored 900px default without the 700px Bay Area failure. In
+  `out/q92-current-cap875-repeat-14910-20260530c/full-report.json`, 875px
+  passed all six current-catalog q92 fixtures with total duration 0.981314s and
+  max 0.254239s; the adjacent 900px run took 0.996288s total and max 0.346309s.
+  The second repeat `out/q92-current-cap875-repeat-4251-20260530c/full-report.json`
+  passed at total 0.857076s and max 0.245706s, again ahead of the adjacent
+  900px repeat at total 0.886084s and max 0.277938s. The new code-default
+  875px gate `out/default875-q92-current-drift-20260530c/full-report.json`
+  passed all six current-catalog q92 fixtures at avg IoU 1.0, total duration
+  0.956779s, max 0.338606s, Houston Waymo 0.152328s, Miami Waymo 0.128939s,
+  and Bay Area Waymo 0.338606s.
+- Broader validation for the 875px default preserved the active and fallback
+  gates: `out/ocr875-default-20260530c/full-report.json` passed 8/8 scored
+  active fixtures against the previous baseline with avg IoU 0.992917 and min
+  IoU 0.943345; `out/ocr875-neutral-nocatalog-20260530c/full-report.json`
+  preserved no-catalog avg IoU 0.961733 and min IoU 0.931476; the full-PNG
+  drifted current-catalog gate `out/default875-current-drift-score-20260530c/full-report.json`
+  passed all six Houston/Miami/Bay Area fixtures at avg IoU 1.0, total duration
+  2.104893s, and max 0.695029s; and
+  `out/default875-current-drift-smoke-20260530c/full-report.json` kept the same
+  six as unscored `reference_mismatch` smoke checks. The shortcut cap now lives
+  in `runtime_config.py` and appears in `/api/health` as
+  `current_catalog_label_ocr_max_dimension` for production verification.
