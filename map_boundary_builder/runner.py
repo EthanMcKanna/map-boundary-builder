@@ -105,6 +105,8 @@ LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
+FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_IOU = 0.90
+FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_MARGIN = 0.24
 SPARSE_LABEL_CATALOG_MAX_DIMENSION = 180
 SPARSE_LABEL_CATALOG_MAX_PIXELS = 20_000
 SPARSE_LABEL_CATALOG_MIN_COVERAGE = 0.70
@@ -1327,7 +1329,17 @@ def filename_hinted_avride_light_fill_catalog_match(
     if catalog_provider_hint(filename_hint) != "avride":
         return None
     if not has_active_catalog_area_hint(filename_hint):
-        return None
+        match = match_service_area_catalog(
+            extraction.pixel_geometry,
+            style="purple-fill",
+            min_iou=FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_IOU,
+            min_margin=FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_MARGIN,
+        )
+        if match is None:
+            return None
+        if getattr(match.entry, "catalog_source", None) not in CURRENT_CATALOG_COMPLETION_SOURCES:
+            return None
+        return match
     return match_service_area_catalog(
         extraction.pixel_geometry,
         style="purple-fill",

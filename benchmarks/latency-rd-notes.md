@@ -6888,3 +6888,24 @@ with zero failures in 0.531s.
   WebP overlay patch as a validated code-level artifact/export improvement, but
   do not count it as a completed production latency win until a deployment also
   beats the live end-to-end production baseline.
+- Provider-only Avride current-catalog shortcut candidate: the neutral Dallas
+  Avride upload was still paying OCR because the extractor classifies the real
+  image as `light-fill`, while the catalog uses the Avride `purple-fill` shape
+  lane and the earlier filename-hinted shortcut required an area/city token. The
+  new guard keeps this provider-specific: it only runs for light-fill uploads
+  whose filename has an Avride provider hint, only uses current/verified catalog
+  sources, and requires provider-only shape IoU >= 0.90 with margin >= 0.24
+  before skipping OCR. Local neutral Avride default-overlay proof
+  `out/avride-provider-only-shortcut-20260530/boundary.geojson` skipped OCR,
+  returned current `dallas-avride` catalog geometry with confidence 0.922,
+  shape IoU 0.926926, area ratio 0.982535, WebP overlay bytes 42,832, and
+  completed in 0.125846s. Focused tests passed 118/118. Full validation passed
+  278 tests plus 9 subtests, `compileall`, `node --check`, and
+  `git diff --check`. Drift-aware gates stayed clean: default
+  `out/avride-provider-active-20260530/full-report.json` passed 8/8 active
+  scored fixtures with 7 stale `reference_mismatch` skips and zero IoU
+  regressions; no-catalog `out/avride-provider-nocatalog-20260530/full-report.json`
+  passed 8/8 active scored fixtures with 7 stale skips and zero IoU
+  regressions. This candidate is worth protected Vercel A/B because it attacks
+  the production OCR/runtime variance directly for current Avride maps instead
+  of only shrinking overlay export overhead.

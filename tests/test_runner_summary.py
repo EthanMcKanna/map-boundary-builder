@@ -1531,6 +1531,54 @@ def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monke
     }
 
 
+def test_avride_light_fill_provider_hint_can_use_current_catalog_without_area_hint(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="light-fill",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    match_calls: list[dict] = []
+
+    def fake_match_service_area_catalog(pixel_geometry, *, style, min_iou=None, min_margin=None, area_hint_texts=None):
+        match_calls.append(
+            {
+                "style": style,
+                "min_iou": min_iou,
+                "min_margin": min_margin,
+                "area_hint_texts": area_hint_texts,
+            }
+        )
+        return SimpleNamespace(
+            entry=SimpleNamespace(slug="dallas-avride", catalog_source="current-verified-ocr-output"),
+            iou=0.927,
+            confidence=0.922,
+            margin=0.927,
+            area_ratio=0.98,
+        )
+
+    monkeypatch.setattr(runner, "has_active_catalog_area_hint", lambda _hint: False)
+    monkeypatch.setattr(runner, "match_service_area_catalog", fake_match_service_area_catalog)
+
+    match = runner.filename_hinted_avride_light_fill_catalog_match(
+        extraction,
+        filename_hint="neutral-avride-upload.webp",
+    )
+
+    assert match is not None
+    assert match.entry.slug == "dallas-avride"
+    assert match_calls == [
+        {
+            "style": "purple-fill",
+            "min_iou": runner.FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_IOU,
+            "min_margin": runner.FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_MARGIN,
+            "area_hint_texts": None,
+        }
+    ]
+
+
 def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "avride dallas.png"
     Image.new("RGB", (1400, 933), (245, 245, 245)).save(image_path)
