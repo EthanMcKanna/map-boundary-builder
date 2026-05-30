@@ -6334,7 +6334,7 @@ with zero failures in 0.531s.
   shortcuts are disabled.
 - Added a probe-miss handoff shortcut for current catalog screenshots with
   strong label and shape evidence. When the frontend tiny catalog probe misses,
-  the full handoff now runs a 1000px OCR label pass first, accepts only active
+  the full handoff now runs a 900px OCR label pass first, accepts only active
   current catalog sources whose provider/style and high-confidence area labels
   match, requires extraction confidence >= 0.95, shape IoU >= 0.55, and
   extracted/catalog area ratio from 0.50 to 1.35, then returns the current
@@ -6349,3 +6349,9 @@ with zero failures in 0.531s.
   to total duration 1.20131s, average duration 0.200218s, max duration
   0.388867s, with Houston Waymo 0.211509s, Miami Waymo 0.151769s, and Bay Area
   Waymo 0.388867s, all IoU 1.0 against current catalog geometry.
+- Dropping the shortcut OCR cap from 1000px to 900px preserved the same
+  network-blocked current-drift accuracy in
+  `out/label-shape-ocr900-probemiss-current-drift-neutral-blocknet-20260530a/full-report.json`
+  and reduced the local gate to total duration 1.0542s, average duration
+  0.1757s, max duration 0.299868s, with Houston Waymo 0.180927s, Miami Waymo
+  0.135614s, and Bay Area Waymo 0.299868s.
