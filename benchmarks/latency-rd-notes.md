@@ -238,6 +238,15 @@ with zero failures in 0.531s.
   pre-deploy proof while reducing server time before send to 2.442234s; an
   unseen 1784px variant kept IoU 0.996589 against the pre-deploy resized proof
   and completed before send in 2.576028s with georeference at 0.239332s.
+- Rejected moving gray-fill style guards ahead of purple/light-fill checks.
+  The reorder preserved fixture style classifications and focused tests passed
+  44/44, but it did not produce a reliable latency win: the default gate
+  `out/grayfast-default-20260530/full-report.json` was slower than the
+  fit-solver default baseline, and the strict no-catalog gate
+  `out/grayfast-nocatalog-20260530/full-report.json` failed the 1s per-fixture
+  budget under OCR variance despite preserving avg/min IoU. The source change
+  was reverted; keep the current classifier order until a production-shaped
+  extraction win is measurable.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
