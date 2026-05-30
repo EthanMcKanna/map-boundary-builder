@@ -6355,3 +6355,32 @@ with zero failures in 0.531s.
   and reduced the local gate to total duration 1.0542s, average duration
   0.1757s, max duration 0.299868s, with Houston Waymo 0.180927s, Miami Waymo
   0.135614s, and Bay Area Waymo 0.299868s.
+- After the user re-confirmed that Houston, Miami, and Bay Area are drifted
+  from the saved base truth, I re-ran the focused current-truth gates instead
+  of scoring against stale references. The smoke-only gate
+  `out/user-drift-smoke-20260530b/full-report.json` kept all six changed fixtures as
+  `reference_mismatch`, scored zero stale references, and smoke-passed in
+  2.334s. The current-catalog scoring gate
+  `out/user-drift-current-catalog-20260530b/full-report.json` passed all six against
+  current catalog geometry with avg IoU 1.0, min IoU 0.999999, total duration
+  2.434565s, and max duration 0.809781s.
+- Sequential shortcut OCR cap repeats on the same drifted-current gate showed
+  700px is the best current default candidate: 900px passed at total 0.982726s,
+  avg 0.163788s, max 0.288178s; 700px passed at total 0.825979s, avg 0.137663s,
+  max 0.209011s; 600px passed but was slightly slower at total 0.891556s; and
+  500px preserved current geometry but fell back into a 2.403245s total. The
+  default shortcut OCR cap is now 700px, with full-detail OCR still retried if
+  the low-detail label/shape guard does not match.
+- Post-change validation with the 700px default passed full pytest
+  (264 tests plus 9 subtests), `compileall`, `node --check`, and
+  `git diff --check`. The active production-shaped benchmark
+  `out/ocr700-default-20260530b/full-report.json` preserved the previous
+  baseline at 8/8 scored, avg IoU 0.992917, min IoU 0.943345, total duration
+  0.429603s, and max duration 0.067315s. The neutral no-catalog fallback gate
+  `out/ocr700-neutral-nocatalog-20260530b/full-report.json` preserved avg IoU
+  0.961733 and min IoU 0.931476. The drifted Houston/Miami/Bay Area
+  current-catalog score gate `out/ocr700-current-drift-score-20260530b/full-report.json`
+  passed all six against current catalog geometry at avg IoU 1.0, min IoU
+  0.999999, total duration 0.734572s, and max duration 0.20797s, while
+  `out/ocr700-current-drift-smoke-20260530b/full-report.json` kept the same six
+  as unscored `reference_mismatch` smoke checks.
