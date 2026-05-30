@@ -188,6 +188,18 @@ with zero failures in 0.531s.
   cache-miss repeat preserved IoU 1.0 with `build_boundary_s` 3.042712s and
   `total_before_send_s` 3.098748s, a 1.35x server-time speedup over the
   immediately preceding production proof.
+- Rejected OpenCV `inRange`/`countNonZero` bright-blue extraction after
+  production A/B. Local parity was excellent: every fixture kept the same style,
+  bright-blue masks matched byte-for-byte, focused tests and full pytest passed,
+  and the isolated no-catalog gate moved from 3.848029s to 3.540074s with zero
+  IoU drops. But preview deployment `dpl_2jcooKVp9jggDtpjtRgTCq2tiNhi` on
+  `pipeline-575f40a2af608eb3` did not validate the speedup in production. The
+  LA/Santa Monica no-catalog proof preserved bbox/confidence/source and IoU 1.0
+  but was slower than current production (2.505097s vs 2.355423s server time
+  before send on the warm repeat), and a Phoenix catalog proof also preserved
+  output but slowed from 0.244486s to 0.325160s before send. The change was
+  reverted locally and not promoted; keep the NumPy reductions until production
+  proves an extraction implementation faster.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
