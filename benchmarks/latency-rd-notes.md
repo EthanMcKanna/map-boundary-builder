@@ -6588,3 +6588,31 @@ with zero failures in 0.531s.
   intended cache-hit path: `cached: true`, `cache_hit: raw`,
   `raw_cache_lookup_s: 0.000647`, and `total_before_send_s: 0.001042`, with
   the same `houston-waymo` filename-shape output.
+- Drift re-confirmed on May 30: the user stepped in again to call out that the
+  saved base ground-truth service areas have changed for Houston, Miami, and Bay
+  Area. Keep those saved screenshot/reference pairs out of the normal accuracy
+  score unless they are explicitly refreshed. The fresh drift-aware current
+  catalog check
+  `out/drift-aware-current-catalog-20260530j/full-report.json` scored all six
+  Houston/Miami/Bay Area catalog-backed fixtures against current catalog
+  geometry at 6/6, avg IoU 1.000, min IoU 1.000, total 1.78s. Focused benchmark
+  tests passed 20/20.
+- Realistic RapidOCR warmup: the old cron/API warmup ran a tiny 128x384 OCR
+  sample, but cold profiling showed the first real 1600px arbitrary screenshot
+  still paid shape/workload-specific ONNX/RapidOCR cost. A high-resolution
+  synthetic warmup prototype cut same-process no-catalog Phoenix from 1.938s
+  cold to 0.869s and Orlando from 0.855s after Phoenix to 0.408s. After changing
+  `warm_rapidocr_runtime()` to use a capped map-sized square text sample, a fresh
+  process measured warmup at 0.621s, then Phoenix at 0.729s and Orlando at
+  0.323s with unchanged georeference sources/confidence. Full validation passed
+  268 tests plus 9 subtests, `compileall -q api map_boundary_builder tests`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  Active catalog gate `out/realistic-warmup-active-20260530j/full-report.json`
+  passed 8/8 with zero regression issues. The ordinary no-catalog gate
+  `out/realistic-warmup-nocatalog-20260530j/full-report.json` passed 8/8 with
+  avg IoU 0.962/min IoU 0.931 and zero regression issues. The warm-instance
+  no-catalog report
+  `out/prewarmed-realistic-warmup-nocatalog-20260530j/full-report.json` passed
+  8/8, avg IoU 0.962, min IoU 0.931, total active duration 2.741s, average
+  0.343s, max 0.556s, and zero regression issues against
+  `out/current-profile-nocatalog-20260530/full-report.json`.

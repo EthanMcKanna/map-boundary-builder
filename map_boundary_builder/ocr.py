@@ -703,23 +703,36 @@ def rapidocr_detector_limit_for_input(ocr_input: Path | np.ndarray) -> int:
 @lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
     try:
-        sample = np.full((128, 384, 3), 255, dtype=np.uint8)
-        cv2.putText(
-            sample,
-            "Miami",
-            (18, 78),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            2.0,
-            (0, 0, 0),
-            4,
-            cv2.LINE_AA,
-        )
+        sample = rapidocr_warm_sample()
         for detector_limit in rapidocr_warm_detector_limits():
             engine = rapidocr_engine(detector_limit)
             engine(sample, use_cls=False)
     except Exception:
         return False
     return True
+
+
+def rapidocr_warm_sample() -> np.ndarray:
+    warm_side = effective_rapidocr_max_dimension()
+    if warm_side <= 0:
+        warm_side = 1600
+    warm_side = max(384, min(1600, warm_side))
+    sample = np.full((warm_side, warm_side, 3), 255, dtype=np.uint8)
+    font_scale = max(1.0, warm_side / 400.0)
+    thickness = max(2, round(warm_side / 200))
+    origin_x = max(18, round(warm_side * 0.1))
+    for text, y_ratio in (("Miami", 0.28), ("Downtown", 0.52), ("Houston", 0.76)):
+        cv2.putText(
+            sample,
+            text,
+            (origin_x, round(warm_side * y_ratio)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 0),
+            thickness,
+            cv2.LINE_AA,
+        )
+    return sample
 
 
 def should_retry_rapidocr_with_classifier(labels: list[OcrLabel]) -> bool:
