@@ -177,7 +177,17 @@ with zero failures in 0.531s.
   preserved avg IoU 0.961733/min 0.931476 with zero active IoU drops and moved
   active total duration from `out/continue-baseline-nocatalog-20260530` at
   4.008732s to 3.848029s; default catalog and Houston/Miami/Bay Area drift
-  smoke gates also passed.
+  smoke gates also passed. Preview deployment
+  `dpl_BMtH4fC7gvGZ8kZTR8ACvMoZuMwj` passed health on
+  `pipeline-7034c69833e0b7b2`; the cache-miss LA/Santa Monica no-catalog proof
+  preserved source `ocr-georeference:nominatim-label-fit`, confidence 0.855,
+  bbox `[-118.5324802, 33.9303557, -118.2265349, 34.1191264]`, and IoU 1.0
+  against current production while moving server time before send from 4.189094s
+  to 3.110109s. Production deploy `dpl_B9E7vxhGtv1qe9DcKTf3rw34TeAG` is aliased
+  to `https://mapboundary.app`, reports the same pipeline, and a fresh public
+  cache-miss repeat preserved IoU 1.0 with `build_boundary_s` 3.042712s and
+  `total_before_send_s` 3.098748s, a 1.35x server-time speedup over the
+  immediately preceding production proof.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
