@@ -188,6 +188,20 @@ with zero failures in 0.531s.
   cache-miss repeat preserved IoU 1.0 with `build_boundary_s` 3.042712s and
   `total_before_send_s` 3.098748s, a 1.35x server-time speedup over the
   immediately preceding production proof.
+- Bright-blue extraction now uses OpenCV `inRange`/`countNonZero` for the
+  decisive style checks and saturated-blue mask instead of equivalent NumPy
+  boolean reductions. A fixture-wide parity probe confirmed every saved
+  screenshot kept the same style, and all bright-blue masks matched the old
+  logic byte-for-byte. Focused extract/catalog/runner tests passed 50 tests,
+  full pytest passed 225 tests plus 9 subtests, compileall, `node --check`, and
+  `git diff --check` passed. Phoenix 2400px direct extraction moved to about
+  0.052s average locally. The isolated strict no-catalog gate
+  `out/cv-blue-nocatalog2-20260530/full-report.json` preserved avg IoU
+  0.961733/min 0.931476 with zero active IoU drops and moved active total
+  duration from `out/bgr-cvt-nocatalog-20260530` at 3.848029s to 3.540074s,
+  while the default catalog, extraction-only, and Houston/Miami/Bay Area drift
+  smoke gates also passed. A parallel no-catalog run failed only latency checks
+  from local CPU contention and is superseded by the isolated passing gate.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
