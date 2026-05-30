@@ -125,6 +125,22 @@ def test_catalog_area_aliases_understand_bay_area_text() -> None:
     assert catalog_area_matches_text("Bay Area", "SF")
     assert catalog_area_matches_text("Bay Area", "Zoox SF")
     assert catalog_area_matches_text("Bay Area", "zoox-sf.webp")
+    assert catalog_area_matches_text("San Francisco", "Zoox SF")
+    assert catalog_area_matches_text("San Francisco", "zoox-sf.webp")
+
+
+def test_san_francisco_zoox_verified_shape_matches_exact_catalog_entry() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "san-francisco-zoox")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    match = match_service_area_catalog(pixel_geometry, style="dark-teal", area_hint_texts=["zoox-sf.webp"])
+
+    assert entry.is_active
+    assert entry.use_exact_geometry
+    assert entry.max_confidence == 0.946
+    assert match is not None
+    assert match.entry.slug == "san-francisco-zoox"
+    assert match.confidence == 0.946
 
 
 def test_catalog_area_hints_distinguish_active_and_stale_markets() -> None:

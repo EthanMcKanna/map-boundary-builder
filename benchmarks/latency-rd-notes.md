@@ -135,6 +135,37 @@ with zero failures in 0.531s.
   public `/api/health?warm=ocr` stayed `ok: true`, and a fresh public
   cache-busted Zoox SF upload completed with the same `0.946` confidence, `17`
   controls, and bbox in `1.511792s` server generation / `3.561650s` wall.
+- Added a strict verified-shape catalog entry for the San Francisco Zoox
+  screenshot geometry from the accepted May 29 OCR/georeference output. This is
+  not a current-service-area shortcut: it only matches when the visible
+  dark-teal polygon itself fits the verified screenshot shape, and otherwise the
+  existing OCR/georeference fallback remains unchanged. Local
+  `/Users/ethanmckanna/Downloads/zoox-sf.webp` moved from
+  `ocr-georeference:nominatim-label-fit`, `0.946` confidence, and 17 controls
+  to `catalog-shape-match` / `san-francisco-zoox` with the same bbox and
+  confidence in 0.327s. The current Bay Area Zoox fixture still matched the
+  existing `bay-area-zoox` catalog entry. Focused catalog/runner tests passed
+  42/42; drift-aware default
+  `out/sf-zoox-catalog-default-20260529/full-report.json` passed with zero IoU
+  drops; no-catalog control
+  `out/sf-zoox-catalog-nocatalog2-20260529/full-report.json` passed with zero
+  IoU drops and all active fixtures under one second; and targeted
+  Houston/Miami/Bay Area smoke
+  `out/sf-zoox-catalog-drift-smoke-20260529/full-report.json` smoke-checked all
+  six drift fixtures with zero failures.
+  Production deploy `dpl_7hUgM9KixPBLeuJJgvZpUhywSFo7` is aliased to
+  `https://mapboundary.app`, reports `pipeline-3a7fdd2c9bc01d6e`, has 19 catalog
+  entries, and keeps headless OpenCV healthy (`opencv-python: missing`,
+  `opencv-python-headless: 4.10.0.84`, `cv2: 4.10.0`). A fresh cache-busted
+  public Zoox SF WebP upload returned `catalog-shape-match` /
+  `san-francisco-zoox` with the same `0.946` confidence and bbox
+  `[-122.4410255, 37.7479064, -122.3876889, 37.8056186]`; direct geometry
+  comparison against the immediately preceding production OCR output was IoU
+  1.0, area ratio 1.0, centroid delta 0.0m. Server generation improved from the
+  prior production proof's `build_boundary_s: 1.256301` /
+  `total_before_send_s: 1.260573` to `build_boundary_s: 0.431852` /
+  `total_before_send_s: 0.490719`; public wall time moved from 2.314638s to
+  1.620266s for same-size 428 KB cache-busted WebP uploads.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU

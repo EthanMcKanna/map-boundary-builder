@@ -378,6 +378,8 @@ def catalog_area_matches_text(area: str, text: str) -> bool:
         "sf" in text_tokens or {"san", "francisco"} <= set(text_tokens)
     ):
         return True
+    if area_tokens == ("san", "francisco") and "sf" in text_tokens:
+        return True
     return bool(area_tokens) and all(
         any(catalog_area_token_matches(area_token, text_token) for text_token in text_tokens)
         for area_token in area_tokens

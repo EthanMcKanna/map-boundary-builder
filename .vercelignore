@@ -4,6 +4,8 @@
 venv/
 .cache/
 .playwright-cli/
+_uv/
+build/
 benchmarks/
 out/
 output/
