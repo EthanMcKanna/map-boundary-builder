@@ -5182,3 +5182,30 @@ with zero failures in 0.531s.
   `FAST_TEXT_OCR_FALLBACK_CONFIDENCE` into `runtime_config.py`. This is not a
   geometry-path behavior change, but it makes production observability match the
   runner's current performance-critical defaults.
+- Production verification for health observability commit `2154f74` deployed
+  `dpl_32CtCPg3bukQHX5NKghsHmuubSwP` to `https://mapboundary.app` with
+  `pipeline-77e0a15c22693706`. Production `/api/health?warm=ocr` returned HTTP
+  200 with warm status OK and exposed `fast_text_ocr_styles:
+  ["bright-blue","gray-fill"]`, `fast_text_ocr_min_area: 800.0`, and
+  `fast_text_ocr_fallback_confidence: 0.7`. A cache-miss LA/Santa Monica live
+  probe preserved the expected no-catalog output, bbox
+  `[-118.5324802,33.9303557,-118.2265349,34.1191264]`, confidence 0.855, and
+  source `ocr-georeference:nominatim-label-fit`. Current production miss timing
+  was noisy at 2.64-2.85s server time after warmup, with one profiled run
+  spending 2.655s of 2.847s in OCR, 0.131s in extraction, and 0.058s in
+  georeference. A direct protected-deployment comparison via `vercel curl`
+  preserved identical output but did not prove a new speed win for this
+  observability-only commit: prior production `dpl_CjPFUZgtgEMuGoS2KfweLQdvhmgY`
+  measured `build_boundary_s: 2.690542`, while the new production deployment
+  measured `build_boundary_s: 2.780634` on the same one-pixel-distinct LA input.
+  Treat this commit as deployed reliability/observability, not as a latency
+  breakthrough.
+- Rejected global RapidOCR input-size reductions for the safe fast-text path.
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200` with equivalent
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA=450` passed the latency budget at 2.91s
+  total but failed strict no-regression against
+  `out/current-nocatalog-refresh-20260530/full-report.json`: Orlando IoU dropped
+  from 0.931476 to 0.781303 and average IoU dropped from 0.961733 to 0.941997.
+  A gentler 1400px/612.5px probe also failed, dropping Nashville to 0.758698,
+  Phoenix to 0.853339, and average IoU to 0.910073. The production OCR bottleneck
+  is real, but shrinking OCR input globally is not safe.
