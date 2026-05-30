@@ -6002,3 +6002,22 @@ with zero failures in 0.531s.
   `out/lowiou-*-candidate-seq-20260530/`). Full pytest passed 251 tests plus 9
   subtests, compileall passed, and `git diff --check` passed. Next gate is a
   protected Vercel candidate before any public alias move.
+- Protected Vercel validation did not justify public promotion. The first
+  protected candidate exposed a cache-key bug: `catalog_probe_miss_low_iou`
+  changed generation behavior but was not part of the API run-result cache key,
+  so the new handoff could reuse a plain `catalog_probe_missed` response. Fixed
+  that in `7f799c0`, with cache-key coverage and another full pytest pass
+  (251 tests plus 9 subtests), compileall, and `git diff --check`. The fresh
+  candidate `dpl_45zYxi4QVPxVPLDkkvmpL9Wvruyc`
+  (`pipeline-15489ec8d94c7d46`) correctly produced uncached low-IoU handoffs,
+  but the production timing was mixed against public
+  `pipeline-98930576fb78a091`: Bay Area warmed candidate 1.861720s before send
+  versus public 1.630800s, Houston 1.518114s versus 1.478256s, and Miami
+  warmed candidate 1.460885s versus public 1.503504s. Outputs matched the
+  public OCR/georeference path and confidence for the changed saved
+  screenshots, but the average was not faster. Current probe behavior was still
+  good on the protected candidate: Houston hit `houston-waymo` in 0.081312s,
+  Miami hit `miami-waymo` in 0.024170s, and Bay Area returned a low-IoU
+  `catalog_miss` against `bay-area-waymo` at IoU 0.604887 in 0.118795s. Do not
+  alias this candidate to public unless a follow-up change turns the changed-area
+  low-IoU fallback into a reliable Vercel speedup.
