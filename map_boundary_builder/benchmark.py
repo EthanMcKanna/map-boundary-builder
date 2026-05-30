@@ -23,6 +23,9 @@ DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/
 DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
 DEFAULT_OUT_DIR = Path("out/service-area-benchmark")
 DEFAULT_FIXTURE_CONFIG = Path("benchmarks/service-area-fixtures.json")
+DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_IOU = 0.70
+DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_AREA_RATIO = 0.85
+DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO = 1.15
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 AREA_ALIASES = {
@@ -61,6 +64,8 @@ class BenchmarkScore:
     georeference_source: str | None = None
     combined_confidence: float | None = None
     catalog_slug: str | None = None
+    catalog_shape_iou: float | None = None
+    catalog_area_ratio: float | None = None
     stage_elapsed_s: dict[str, float] | None = None
     error: str | None = None
     status: str = "active"
@@ -81,6 +86,8 @@ class BenchmarkScore:
             "georeference_source": self.georeference_source,
             "combined_confidence": round(self.combined_confidence, 6) if self.combined_confidence is not None else None,
             "catalog_slug": self.catalog_slug,
+            "catalog_shape_iou": round(self.catalog_shape_iou, 6) if self.catalog_shape_iou is not None else None,
+            "catalog_area_ratio": round(self.catalog_area_ratio, 6) if self.catalog_area_ratio is not None else None,
             "stage_elapsed_s": self.stage_elapsed_s,
             "error": self.error,
             "status": self.status,
@@ -176,6 +183,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--require-scored-catalog-evidence",
+        action="store_true",
+        help=(
+            "With --score-skipped-catalog-references, fail catalog outputs whose recorded "
+            "image-to-catalog shape evidence is weak. This prevents exact catalog geometry "
+            "from scoring as a tautological 1.0 without a strong source-image match."
+        ),
+    )
+    parser.add_argument(
+        "--min-scored-catalog-shape-iou",
+        type=float,
+        default=DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_IOU,
+        help="Minimum catalog_shape_iou required by --require-scored-catalog-evidence.",
+    )
+    parser.add_argument(
+        "--min-scored-catalog-area-ratio",
+        type=float,
+        default=DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_AREA_RATIO,
+        help="Minimum catalog_area_ratio required by --require-scored-catalog-evidence.",
+    )
+    parser.add_argument(
+        "--max-scored-catalog-area-ratio",
+        type=float,
+        default=DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO,
+        help="Maximum catalog_area_ratio required by --require-scored-catalog-evidence.",
+    )
+    parser.add_argument(
         "--require-smoked-catalog-miss",
         action="store_true",
         help=(
@@ -266,6 +300,10 @@ def main(argv: list[str] | None = None) -> int:
         debug_artifacts=not args.no_debug_artifacts,
         smoke_skipped=args.smoke_skipped,
         score_skipped_catalog_references=args.score_skipped_catalog_references,
+        require_scored_catalog_evidence=args.require_scored_catalog_evidence,
+        min_scored_catalog_shape_iou=args.min_scored_catalog_shape_iou,
+        min_scored_catalog_area_ratio=args.min_scored_catalog_area_ratio,
+        max_scored_catalog_area_ratio=args.max_scored_catalog_area_ratio,
         require_smoked_catalog_miss=args.require_smoked_catalog_miss,
         block_network=args.block_network,
     )
@@ -325,6 +363,10 @@ def run_benchmark(
     debug_artifacts: bool = True,
     smoke_skipped: bool = False,
     score_skipped_catalog_references: bool = False,
+    require_scored_catalog_evidence: bool = False,
+    min_scored_catalog_shape_iou: float = DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_IOU,
+    min_scored_catalog_area_ratio: float = DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_AREA_RATIO,
+    max_scored_catalog_area_ratio: float = DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO,
     require_smoked_catalog_miss: bool = False,
     block_network: bool = False,
 ) -> dict[str, Any]:
@@ -351,23 +393,29 @@ def run_benchmark(
                         status="active",
                         note=fixture_catalog_reference_note(fixture),
                     )
-                    scores.append(
-                        score_full_fixture(
-                            score_fixture,
-                            out_dir=out_dir,
-                            min_iou=min_iou,
-                            timeout_seconds=timeout_seconds,
-                            city_overrides=city_overrides,
-                            no_catalog=no_catalog,
-                            catalog_probe_missed=catalog_probe_missed,
-                            catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
-                            neutral_filename_hint=neutral_filename_hint,
-                            execution=execution,
-                            debug_artifacts=debug_artifacts,
-                            score_reference=True,
-                            reference_geometry=catalog_reference,
-                        )
+                    score = score_full_fixture(
+                        score_fixture,
+                        out_dir=out_dir,
+                        min_iou=min_iou,
+                        timeout_seconds=timeout_seconds,
+                        city_overrides=city_overrides,
+                        no_catalog=no_catalog,
+                        catalog_probe_missed=catalog_probe_missed,
+                        catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                        neutral_filename_hint=neutral_filename_hint,
+                        execution=execution,
+                        debug_artifacts=debug_artifacts,
+                        score_reference=True,
+                        reference_geometry=catalog_reference,
                     )
+                    if require_scored_catalog_evidence:
+                        score = require_current_catalog_evidence(
+                            score,
+                            min_shape_iou=min_scored_catalog_shape_iou,
+                            min_area_ratio=min_scored_catalog_area_ratio,
+                            max_area_ratio=max_scored_catalog_area_ratio,
+                        )
+                    scores.append(score)
                 elif mode == "full" and smoke_skipped:
                     score = score_full_fixture(
                         fixture,
@@ -443,6 +491,10 @@ def run_benchmark(
             "debug_artifacts": debug_artifacts,
             "smoke_skipped": smoke_skipped,
             "score_skipped_catalog_references": score_skipped_catalog_references,
+            "require_scored_catalog_evidence": require_scored_catalog_evidence,
+            "min_scored_catalog_shape_iou": max(0.0, float(min_scored_catalog_shape_iou)),
+            "min_scored_catalog_area_ratio": max(0.0, float(min_scored_catalog_area_ratio)),
+            "max_scored_catalog_area_ratio": max(0.0, float(max_scored_catalog_area_ratio)),
             "require_smoked_catalog_miss": require_smoked_catalog_miss,
             "block_network": block_network,
         },
@@ -723,6 +775,8 @@ def score_full_fixture(
             georeference_source=summary.get("georeference_source"),
             combined_confidence=summary.get("combined_confidence"),
             catalog_slug=summary.get("catalog_slug") or properties.get("catalog_slug"),
+            catalog_shape_iou=first_float(summary.get("catalog_shape_iou"), properties.get("catalog_shape_iou")),
+            catalog_area_ratio=first_float(summary.get("catalog_area_ratio"), properties.get("catalog_area_ratio")),
             stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
             status=fixture.status,
             note=fixture.note,
@@ -805,6 +859,14 @@ def score_full_fixture_in_process(
             georeference_source=result.summary.get("georeference_source"),
             combined_confidence=result.summary.get("combined_confidence"),
             catalog_slug=result.summary.get("catalog_slug") or properties.get("catalog_slug"),
+            catalog_shape_iou=first_float(
+                result.summary.get("catalog_shape_iou"),
+                properties.get("catalog_shape_iou"),
+            ),
+            catalog_area_ratio=first_float(
+                result.summary.get("catalog_area_ratio"),
+                properties.get("catalog_area_ratio"),
+            ),
             stage_elapsed_s=stage_elapsed_seconds(events),
             status=fixture.status,
             note=fixture.note,
@@ -856,6 +918,60 @@ def catalog_reference_geometry_for_fixture(fixture: BenchmarkFixture) -> Polygon
 def fixture_catalog_reference_note(fixture: BenchmarkFixture) -> str:
     base_note = fixture.note.rstrip(".") if fixture.note else "Saved benchmark reference is stale"
     return f"{base_note}. Scored against current catalog geometry instead of the stale saved reference."
+
+
+def require_current_catalog_evidence(
+    score: BenchmarkScore,
+    *,
+    min_shape_iou: float,
+    min_area_ratio: float,
+    max_area_ratio: float,
+) -> BenchmarkScore:
+    if not score.passed or not score.catalog_slug:
+        return score
+    min_shape_iou = max(0.0, float(min_shape_iou))
+    min_area_ratio = max(0.0, float(min_area_ratio))
+    max_area_ratio = max(0.0, float(max_area_ratio))
+    if max_area_ratio < min_area_ratio:
+        min_area_ratio, max_area_ratio = max_area_ratio, min_area_ratio
+
+    evidence_issues: list[str] = []
+    if score.catalog_shape_iou is None:
+        evidence_issues.append("missing catalog_shape_iou")
+    elif score.catalog_shape_iou < min_shape_iou:
+        evidence_issues.append(
+            f"catalog_shape_iou {score.catalog_shape_iou:.6f} < required {min_shape_iou:.6f}"
+        )
+    if score.catalog_area_ratio is None:
+        evidence_issues.append("missing catalog_area_ratio")
+    elif not (min_area_ratio <= score.catalog_area_ratio <= max_area_ratio):
+        evidence_issues.append(
+            f"catalog_area_ratio {score.catalog_area_ratio:.6f} outside "
+            f"{min_area_ratio:.6f}-{max_area_ratio:.6f}"
+        )
+
+    if not evidence_issues:
+        return score
+    return replace(
+        score,
+        passed=False,
+        error=(
+            f"catalog_slug={score.catalog_slug} matched current catalog reference, "
+            "but source-image catalog evidence is weak: "
+            + "; ".join(evidence_issues)
+        ),
+    )
+
+
+def first_float(*values: Any) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def failed_full_score(

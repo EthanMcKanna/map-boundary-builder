@@ -135,6 +135,8 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "georeference_source": None,
             "combined_confidence": None,
             "catalog_slug": None,
+            "catalog_shape_iou": None,
+            "catalog_area_ratio": None,
             "stage_elapsed_s": None,
             "error": None,
             "status": "reference_mismatch",
@@ -337,6 +339,8 @@ def test_score_skipped_catalog_references_scores_against_current_catalog_geometr
             georeference_source="catalog-shape-match",
             combined_confidence=0.98,
             catalog_slug="houston-waymo",
+            catalog_shape_iou=0.92,
+            catalog_area_ratio=1.03,
             stage_elapsed_s={"match_catalog": 0.01},
             status=fixture.status,
             note=fixture.note,
@@ -374,6 +378,88 @@ def test_score_skipped_catalog_references_scores_against_current_catalog_geometr
     assert report["summary"]["skipped_fixtures"] == 0
     assert report["scores"][0]["status"] == "active"
     assert report["scores"][0]["iou"] == 1.0
+    assert report["scores"][0]["catalog_shape_iou"] == 0.92
+    assert report["scores"][0]["catalog_area_ratio"] == 1.03
+
+
+def test_score_skipped_catalog_reference_evidence_requirement_fails_weak_catalog_match(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "houston-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Houston.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "houston-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "catalog_reference_geometry_for_fixture",
+        lambda _fixture: Polygon([(-95.5, 29.6), (-95.2, 29.6), (-95.2, 29.9), (-95.5, 29.9)]),
+    )
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **_kwargs) -> BenchmarkScore:
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=1.0,
+            area_ratio=1.0,
+            centroid_distance_m=0.0,
+            vertices=42,
+            style="bright-blue",
+            duration_s=0.12,
+            georeference_source="catalog-shape-match:georef-contained",
+            combined_confidence=0.84,
+            catalog_slug="houston-waymo",
+            catalog_shape_iou=0.411686,
+            catalog_area_ratio=0.513975,
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        score_skipped_catalog_references=True,
+        require_scored_catalog_evidence=True,
+    )
+
+    score = report["scores"][0]
+    assert report["summary"]["passed"] is False
+    assert report["summary"]["failed_fixtures"] == 1
+    assert score["iou"] == 1.0
+    assert score["catalog_shape_iou"] == 0.411686
+    assert "source-image catalog evidence is weak" in score["error"]
+    assert "catalog_shape_iou 0.411686" in score["error"]
 
 
 def test_score_output_geometry_accepts_direct_reference_geometry() -> None:

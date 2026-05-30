@@ -6784,3 +6784,20 @@ with zero failures in 0.531s.
   passed 8/8 with zero IoU regression. Full validation passed 274 tests plus 9
   subtests, `python -m compileall -q api map_boundary_builder tests`,
   `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+- Added a stricter current-catalog evidence gate for the opt-in stale-fixture
+  audit. `--score-skipped-catalog-references` can now record
+  `catalog_shape_iou` and `catalog_area_ratio`, and
+  `--require-scored-catalog-evidence` fails catalog-scored stale fixtures unless
+  the source image itself meets shape IoU >= 0.70 and area ratio 0.85-1.15.
+  This prevents exact current-catalog geometry from producing a tautological
+  IoU 1.0 when the image-to-catalog evidence is weak. The focused benchmark
+  suite passed 21/21. The new audit
+  `out/current-catalog-evidence-gate-20260530d/full-report.json` intentionally
+  failed Houston Waymo (`catalog_shape_iou=0.411686`, area ratio `0.513975`)
+  and Miami Waymo (`0.546439`, `0.550369`), while Bay Area Waymo, Bay Area
+  Tesla, Bay Area Zoox, and Houston Tesla passed with strong source-image
+  evidence. Normal active gates stayed green: default catalog
+  `out/default-after-catalog-evidence-reporting-20260530/full-report.json`
+  passed 8/8 scored fixtures with avg IoU 0.993, min IoU 0.943, total 0.42s;
+  no-catalog `out/nocatalog-after-catalog-evidence-reporting-20260530/full-report.json`
+  passed 8/8 with avg IoU 0.962, min IoU 0.931, total 3.20s.
