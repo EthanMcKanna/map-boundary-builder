@@ -5234,3 +5234,15 @@ with zero failures in 0.531s.
   and no-catalog `out/city-contained-nocatalog-20260530/full-report.json`
   passed with zero regression issues and latency-budget issues against
   `out/fasttext-threshold-default-nocatalog-20260530/full-report.json`.
+- Deployed the city-contained catalog fast path to production as
+  `dpl_8PxbicCSiTTPd8GKN2U6JyyByY2w`, aliased to `https://mapboundary.app`,
+  with health reporting `pipeline-bac75e416ecf253a` and warm status OK. Preview
+  proof on `dpl_EmCAaJrbiSqo9RvJs1prrEWXoE45` returned the LA/Santa Monica
+  cache-miss as `catalog-shape-match:city-contained` with
+  `build_boundary_s: 0.436757` and `total_before_send_s: 0.537492`. Production
+  then returned the same source and `catalog_slug: los-angeles-waymo` on a fresh
+  pixel-distinct LA/Santa Monica upload at `build_boundary_s: 0.295390` and
+  `total_before_send_s: 0.391140`, with no OCR stage. This replaces the prior
+  same-class production OCR path, which had measured about 2.64-3.06s server
+  time after warmup, so this is a roughly 6.8x-7.8x server-side improvement for
+  known catalog screenshots whose user prompt names an included subcity.
