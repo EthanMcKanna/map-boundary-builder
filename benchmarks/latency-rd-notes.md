@@ -5527,3 +5527,11 @@ with zero failures in 0.531s.
   `out/prewarm-cancel-nocatalog-20260530/full-report.json` at 2.62s. The default
   catalog gate stayed clean at 0.36s. Leave the plain connected-components call
   in place unless a broader extraction rewrite makes this reliably faster.
+- Rejected the newer `rapidocr` 3.8.1 package as a drop-in OCR backend. A
+  direct OCR probe was mixed (`Waymo Los Angeles` 0.439s vs current 0.521s,
+  `Waymo Phoenix` 0.695s vs current 0.616s, `Tesla Austin` 0.059s vs current
+  0.087s), and it emitted some labels without spaces. A throwaway no-network
+  monkeypatch benchmark completed all active fixtures but regressed accuracy:
+  total 3.143s, avg IoU 0.957850, min IoU 0.930273, with San Antonio dropping
+  from the current 0.944136 to 0.930458 and both Tesla fixtures also lower.
+  Keep `rapidocr-onnxruntime` 1.4.4 as the production OCR engine.
