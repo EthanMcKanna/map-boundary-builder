@@ -5987,3 +5987,18 @@ with zero failures in 0.531s.
   `out/client-downscale1600-png-active-smoke-20260530c/`). Keep the original
   full-image handoff until a lossless transport or server-side path proves both
   faster and geometry-identical.
+- Accepted a guarded low-IoU catalog-probe-miss handoff candidate for protected
+  production validation. Catalog-only probe misses now return the best active
+  catalog shape IoU, and the browser only marks the full upload as
+  `catalog_probe_miss_low_iou=1` when the tiny probe was far from active
+  catalog geometry. That keeps active catalog handoffs on the old no-overlap
+  path while allowing stale/changed low-IoU fallbacks to overlap OCR with
+  extraction. Local active catalog handoff passed 8/8 against
+  `out/catalog-probe-missed-1400-20260530/full-report.json` with zero
+  regression issues in `out/lowiou-protocol-active-default-full-20260530/`.
+  Sequential changed Waymo smokes improved without catalog false positives:
+  Houston 1.005s -> 0.805s, Miami 0.998s -> 0.814s, and Bay Area 0.837s ->
+  0.690s (`out/lowiou-*-baseline-seq-20260530/` versus
+  `out/lowiou-*-candidate-seq-20260530/`). Full pytest passed 251 tests plus 9
+  subtests, compileall passed, and `git diff --check` passed. Next gate is a
+  protected Vercel candidate before any public alias move.

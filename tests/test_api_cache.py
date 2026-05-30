@@ -695,6 +695,11 @@ class ApiRunCacheTests(unittest.TestCase):
             b"return { file: null, skippedMiss: true };",
             app_js,
         )
+        self.assertIn(
+            b"lowIou: payload.catalog_probe_miss?.active_shape_iou_is_low === true",
+            app_js,
+        )
+        self.assertIn(b'formData.set("catalog_probe_miss_low_iou", "1");', app_js)
 
     def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))

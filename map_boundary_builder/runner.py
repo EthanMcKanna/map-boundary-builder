@@ -26,6 +26,7 @@ from .catalog_match import (
     match_service_area_catalog_for_city_hint,
     match_service_area_catalog,
     PROVIDER_STYLES,
+    score_catalog_entry,
 )
 from .extract import (
     DEFAULT_SIMPLIFY_PX,
@@ -99,6 +100,7 @@ LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
+CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD = 0.80
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 EARLY_OCR_STYLE_MAX_DIMENSION = max(
@@ -117,11 +119,16 @@ class BoundaryBuildOptions:
     allow_catalog: bool = True
     catalog_probe_only: bool = False
     catalog_probe_missed: bool = False
+    catalog_probe_miss_low_iou: bool = False
     filename_hint: str | None = None
 
 
 class CatalogProbeMiss(ValueError):
     """Raised when a catalog-only probe does not match a known service area."""
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
 
 
 @dataclass(frozen=True)
@@ -207,6 +214,7 @@ def build_boundary(
     road_feature_executor: ThreadPoolExecutor | None = None
     georef_resource_future: Future[Any] | None = None
     georef_resource_executor: ThreadPoolExecutor | None = None
+    catalog_probe_miss_extraction: Any | None = None
 
     def ensure_georeference_resource_preload() -> None:
         nonlocal georef_resource_future, georef_resource_executor
@@ -269,6 +277,7 @@ def build_boundary(
             skip_redundant_probe=skip_redundant_probe,
             city_input=city_input,
             filename_hint=filename_hint,
+            catalog_probe_miss_low_iou=catalog_probe_miss_low_iou_enabled(opts),
         ):
             if early_ocr_style is None:
                 early_ocr_style = classify_style_for_ocr(rgb)
@@ -306,6 +315,7 @@ def build_boundary(
                 height=height,
                 scale=low_res_catalog_scale,
             )
+        catalog_probe_miss_extraction = extraction
         emit_progress(
             progress,
             stage="extract",
@@ -410,6 +420,7 @@ def build_boundary(
                 max_dimension=CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
                 cache=False,
             )
+            catalog_probe_miss_extraction = retry_extraction
             catalog_match, catalog_match_source = hinted_catalog_shape_match(
                 retry_extraction.pixel_geometry,
                 style=retry_extraction.style,
@@ -454,7 +465,14 @@ def build_boundary(
                 )
 
         if catalog_probe_only_enabled(opts):
-            raise CatalogProbeMiss("No known service-area shape matched the catalog probe.")
+            raise CatalogProbeMiss(
+                "No known service-area shape matched the catalog probe.",
+                details=catalog_probe_miss_details(
+                    catalog_probe_miss_extraction or extraction,
+                    city_input=city_input,
+                    filename_hint=filename_hint,
+                ),
+            )
 
         if used_catalog_scaled_extraction:
             ensure_full_rgb()
@@ -1086,8 +1104,13 @@ def should_overlap_probe_miss_ocr(
     skip_redundant_probe: bool,
     city_input: str | None,
     filename_hint: str | None,
+    catalog_probe_miss_low_iou: bool = False,
 ) -> bool:
-    if not skip_redundant_probe or city_input is not None:
+    if not skip_redundant_probe:
+        return False
+    if catalog_probe_miss_low_iou:
+        return True
+    if city_input is not None:
         return False
     hint_text = filename_hint or ""
     return not catalog_provider_hint(hint_text) and not has_active_catalog_area_hint(hint_text)
@@ -1161,6 +1184,10 @@ def catalog_probe_missed_enabled(options: Any) -> bool:
     return bool(getattr(options, "catalog_probe_missed", False)) and not catalog_probe_only_enabled(options)
 
 
+def catalog_probe_miss_low_iou_enabled(options: Any) -> bool:
+    return bool(getattr(options, "catalog_probe_miss_low_iou", False))
+
+
 def catalog_probe_missed_handoff_enabled(
     options: Any,
     *,
@@ -1182,6 +1209,47 @@ def high_confidence_label_texts(labels: list[Any]) -> list[str]:
         for label in labels
         if label.text.strip() and label.confidence >= CATALOG_LABEL_HINT_MIN_CONFIDENCE
     ]
+
+
+def catalog_probe_miss_details(
+    extraction,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> dict[str, Any]:
+    hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
+    provider_hint = catalog_provider_hint(hint_text)
+    scored: list[tuple[float, float, str, float]] = []
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if provider_hint is not None and entry.provider != provider_hint:
+            continue
+        if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        iou, area_ratio, scored_entry, _fitted, _rotation = score_catalog_entry(
+            extraction.pixel_geometry,
+            entry,
+            min_iou=entry.min_iou,
+        )
+        scored.append((iou, area_ratio, scored_entry.slug, scored_entry.min_iou))
+    if not scored:
+        return {
+            "style": extraction.style,
+            "active_shape_iou_is_low": True,
+            "active_shape_iou_threshold": CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD,
+        }
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_iou, best_area_ratio, best_slug, best_required_iou = scored[0]
+    return {
+        "style": extraction.style,
+        "best_active_catalog_slug": best_slug,
+        "best_active_catalog_iou": round(float(best_iou), 6),
+        "best_active_catalog_area_ratio": round(float(best_area_ratio), 6),
+        "best_active_catalog_required_iou": round(float(best_required_iou), 6),
+        "active_shape_iou_is_low": best_iou < CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD,
+        "active_shape_iou_threshold": CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD,
+    }
 
 
 def provider_ui_label_catalog_match(extraction, labels: list[Any]):

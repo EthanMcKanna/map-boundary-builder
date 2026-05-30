@@ -192,6 +192,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                         "status": "catalog_miss",
                         "percent": 100,
                         "error": str(exc),
+                        "catalog_probe_miss": exc.details,
                         "events": events[-20:],
                         "profile": profile,
                     },
@@ -232,6 +233,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
             catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
+            catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
         )
         record_event(
             state,

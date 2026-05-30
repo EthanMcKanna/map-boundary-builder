@@ -559,7 +559,16 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
 
-    with pytest.raises(runner.CatalogProbeMiss):
+    entry = SimpleNamespace(is_active=True, provider="waymo", slug="houston-waymo", min_iou=0.965)
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(
+        runner,
+        "score_catalog_entry",
+        lambda *_args, **_kwargs: (0.61, 1.0, entry, Polygon(), 0.0),
+    )
+
+    with pytest.raises(runner.CatalogProbeMiss) as exc_info:
         build_boundary(
             image_path,
             None,
@@ -572,6 +581,9 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
         )
 
     assert max_dimensions == [0, runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION]
+    assert exc_info.value.details["best_active_catalog_slug"] == "houston-waymo"
+    assert exc_info.value.details["best_active_catalog_iou"] == 0.61
+    assert exc_info.value.details["active_shape_iou_is_low"] is True
 
 
 def test_catalog_probe_only_retries_without_area_hint_before_miss(tmp_path, monkeypatch) -> None:
@@ -757,6 +769,26 @@ def test_catalog_probe_missed_skips_low_res_probes_for_generic_requests(tmp_path
     assert max_dimensions == [
         runner.CATALOG_MISS_REFINE_MAX_DIMENSION,
     ]
+
+
+def test_catalog_probe_low_iou_miss_allows_early_ocr_for_provider_hints() -> None:
+    assert (
+        runner.should_overlap_probe_miss_ocr(
+            skip_redundant_probe=True,
+            city_input=None,
+            filename_hint="Waymo Houston.png",
+        )
+        is False
+    )
+    assert (
+        runner.should_overlap_probe_miss_ocr(
+            skip_redundant_probe=True,
+            city_input=None,
+            filename_hint="Waymo Houston.png",
+            catalog_probe_miss_low_iou=True,
+        )
+        is True
+    )
 
 
 def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monkeypatch) -> None:

@@ -199,6 +199,7 @@ class handler(BaseHTTPRequestHandler):
             write_mask_artifact=False,
             catalog_probe_only=catalog_probe_only,
             catalog_probe_missed=catalog_probe_missed,
+            catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
             filename_hint=original_filename,
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
@@ -308,6 +309,7 @@ class handler(BaseHTTPRequestHandler):
                 "status": "catalog_miss",
                 "percent": 100,
                 "error": str(exc),
+                "catalog_probe_miss": exc.details,
                 "events": events[-20:],
                 "profile": profile,
             }
