@@ -6186,3 +6186,34 @@ with zero failures in 0.531s.
   240px to 200px stayed accurate but did not beat the current 240px default in
   repeated A/B runs (`out/catalog-ab-old240-*-20260530b/` versus
   `out/catalog-ab-new200-*-20260530b/`), so the default remains 240px.
+- Re-checked the user-confirmed drift handling after the user reiterated that
+  Houston, Miami, and Bay Area changed from the base saved ground truth. The
+  fixture config already marks those areas as `reference_mismatch`, and the
+  guard tests passed (`tests/test_benchmark.py`, 19 tests). The targeted
+  drift smoke passed 6/6 stale fixtures with 0 smoke failures in
+  `out/user-drift-smoke-20260530c/full-report.json`; Waymo Houston, Miami, and
+  Bay Area continued through OCR/georeference instead of being scored against
+  stale references, while Tesla/Zoox known-shape screenshots could still hit
+  active catalog geometry. Active production-quality gates also remained clean:
+  catalog-enabled active fixtures passed 8/8 with avg IoU 0.992917, min IoU
+  0.943345, total 0.433366s in `out/active-default-20260530c/full-report.json`;
+  no-catalog OCR/georeference active fixtures passed 8/8 with avg IoU
+  0.961733, min IoU 0.931476, total 2.956318s, max 0.553086s in
+  `out/active-nocatalog-20260530c/full-report.json`. Continue treating
+  Houston/Miami/Bay Area saved references as data debt until fresh screenshot
+  and reference pairs are captured.
+- Rejected an OpenCV 4.13.0.92 pin bump after an isolated dependency probe.
+  The temp venv at `/tmp/mbb-opencv413-1780130322` used cv2 4.13.0 with the
+  same NumPy 2.4.6 and ONNX Runtime 1.26.0; focused dependency-sensitive tests
+  passed (`tests/test_benchmark.py`, `tests/test_extract.py`,
+  `tests/test_ocr_georeference.py`, `tests/test_pipeline_version.py`,
+  `tests/test_api_cache.py`, 153 tests). Accuracy was unchanged. The
+  catalog-enabled active gate improved slightly versus the current 4.10 pin
+  (0.399125s total in `out/opencv413-default-20260530c/full-report.json`
+  versus 0.433366s in `out/active-default-20260530c/full-report.json`), but
+  the no-catalog OCR/georeference path got slower in a clean serial run:
+  3.104215s total and 0.635107s max in
+  `out/opencv413-nocatalog-serial-20260530c/full-report.json` versus 2.774516s
+  total and 0.508999s max for the current 4.10 pin in
+  `out/active-nocatalog-serial-20260530c/full-report.json`. Do not promote the
+  pin unless a future OCR/extraction change recovers that no-catalog loss.
