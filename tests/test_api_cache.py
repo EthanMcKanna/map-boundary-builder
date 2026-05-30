@@ -42,7 +42,7 @@ from api.index import (
     run_result_cache_key,
     write_run_result_cache,
 )
-from map_boundary_builder.asset_response import web_asset_response
+from map_boundary_builder.asset_response import web_asset_response, web_asset_version
 from map_boundary_builder.runner import (
     BoundaryBuildOptions,
     catalog_matching_enabled,
@@ -664,6 +664,14 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(mime, "text/html; charset=utf-8")
         self.assertIn(b"window.__MAP_BOUNDARY_PIPELINE_VERSION__ = \"pipeline-", html)
         self.assertNotIn(b'= "__MAP_BOUNDARY_PIPELINE_VERSION__";', html)
+
+    def test_index_asset_cache_busts_frontend_bundle(self) -> None:
+        html, _mime = web_asset_response("index.html")
+        asset_version = web_asset_version().encode("utf-8")
+
+        self.assertIn(b"/static/app.css?v=" + asset_version, html)
+        self.assertIn(b"/static/app.js?v=" + asset_version, html)
+        self.assertNotIn(b"__MAP_BOUNDARY_ASSET_VERSION__", html)
 
     def test_index_asset_skips_normalized_cache_lookup_for_ui_fresh_uploads(self) -> None:
         html, _mime = web_asset_response("index.html")
