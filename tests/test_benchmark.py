@@ -186,6 +186,82 @@ def test_changed_area_config_marks_new_provider_fixture_reference_mismatch(tmp_p
     ]
 
 
+def test_fixture_config_can_use_current_image_for_drifted_reference(tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    current_dir = tmp_path / "current"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+    current_dir.mkdir()
+
+    (polygon_dir / "miami-waymo.json").write_text("{}\n")
+    stale_image = image_dir / "Waymo Miami.png"
+    current_image = current_dir / "Miami Current.png"
+    stale_image.write_bytes(b"stale image")
+    current_image.write_bytes(b"current image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "miami-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                        "current_image": "../current/Miami Current.png",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+
+    fixtures, inventory = discover_fixtures(polygon_dir, image_dir, load_fixture_config(config_path))
+
+    assert len(fixtures) == 1
+    fixture = fixtures[0]
+    assert fixture.slug == "miami-waymo"
+    assert fixture.image_path == current_image.resolve()
+    assert fixture.reference_path == polygon_dir / "miami-waymo.json"
+    assert fixture.status == "reference_mismatch"
+    assert inventory["configured_image_overrides"] == {"miami-waymo": str(current_image.resolve())}
+    assert inventory["missing_configured_images"] == {}
+
+
+def test_missing_current_image_override_falls_back_to_discovered_image(tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "houston-waymo.json").write_text("{}\n")
+    stale_image = image_dir / "Waymo Houston.png"
+    stale_image.write_bytes(b"stale image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "houston-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                        "current_image": "../missing/Houston Current.png",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+
+    fixtures, inventory = discover_fixtures(polygon_dir, image_dir, load_fixture_config(config_path))
+
+    assert len(fixtures) == 1
+    assert fixtures[0].image_path == stale_image
+    assert inventory["configured_image_overrides"] == {}
+    assert inventory["missing_configured_images"] == {
+        "houston-waymo": str((image_dir / "../missing/Houston Current.png").resolve())
+    }
+
+
 def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     tmp_path: Path,
     monkeypatch,

@@ -551,6 +551,8 @@ def discover_fixtures(
     images = [path for path in sorted(image_dir.iterdir()) if path.suffix.lower() in IMAGE_SUFFIXES]
     fixtures: list[BenchmarkFixture] = []
     missing_references: list[str] = []
+    configured_image_overrides: dict[str, str] = {}
+    missing_configured_images: dict[str, str] = {}
     changed_area_config = config.get("changed_areas", {})
     fixture_config = config.get("fixtures", {})
     for image_path in images:
@@ -567,12 +569,20 @@ def discover_fixtures(
         if not isinstance(override, dict):
             raise ValueError(f"Fixture override for {slug} must be an object")
         merged_override = {**area_override, **override}
+        configured_image_path = configured_fixture_image_path(
+            image_dir=image_dir,
+            default_image_path=image_path,
+            fixture_slug=slug,
+            override=merged_override,
+            configured_image_overrides=configured_image_overrides,
+            missing_configured_images=missing_configured_images,
+        )
         fixtures.append(
             BenchmarkFixture(
                 slug=slug,
                 provider=provider,
                 area=area_name,
-                image_path=image_path,
+                image_path=configured_image_path,
                 reference_path=reference_path,
                 status=str(merged_override.get("status", "active")),
                 note=str(merged_override["note"]) if merged_override.get("note") else None,
@@ -585,8 +595,33 @@ def discover_fixtures(
         "fixture_config": str(config.get("path", "")),
         "matched_images": len(fixtures),
         "missing_reference_images": missing_references,
+        "configured_image_overrides": configured_image_overrides,
+        "missing_configured_images": missing_configured_images,
         "references_without_images": sorted(set(references) - covered),
     }
+
+
+def configured_fixture_image_path(
+    *,
+    image_dir: Path,
+    default_image_path: Path,
+    fixture_slug: str,
+    override: dict[str, Any],
+    configured_image_overrides: dict[str, str],
+    missing_configured_images: dict[str, str],
+) -> Path:
+    configured = override.get("current_image")
+    if not isinstance(configured, str) or not configured.strip():
+        return default_image_path
+    configured_path = Path(configured).expanduser()
+    if not configured_path.is_absolute():
+        configured_path = image_dir / configured_path
+    configured_path = configured_path.resolve()
+    if configured_path.exists() and configured_path.suffix.lower() in IMAGE_SUFFIXES:
+        configured_image_overrides[fixture_slug] = str(configured_path)
+        return configured_path
+    missing_configured_images[fixture_slug] = str(configured_path)
+    return default_image_path
 
 
 def parse_image_name(path: Path) -> tuple[str, str, str]:

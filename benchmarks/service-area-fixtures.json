@@ -32,7 +32,8 @@
     },
     "houston-waymo": {
       "status": "reference_mismatch",
-      "note": "The Houston service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+      "note": "The Houston service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy.",
+      "current_image": "../h-waymo.png"
     },
     "las-vegas-zoox": {
       "status": "reference_mismatch",
@@ -40,7 +41,8 @@
     },
     "miami-waymo": {
       "status": "reference_mismatch",
-      "note": "The Miami service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy."
+      "note": "The Miami service area has changed since the saved screenshot/reference pairing, so this fixture is tracked as data debt instead of scored as model accuracy.",
+      "current_image": "../miami.png"
     }
   }
 }

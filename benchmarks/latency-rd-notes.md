@@ -7304,3 +7304,20 @@ with zero failures in 0.531s.
   upload completed in 0.344391s `total_before_send_s`, proving the production
   switch can measure the arbitrary OCR/georeference path separately from catalog
   shortcuts.
+- Current-image drift gate: the Houston/Miami/Bay Area note from the user was
+  converted into a stronger benchmark contract instead of only skipping stale
+  saved references. `benchmarks/service-area-fixtures.json` can now point a
+  drifted fixture at a `current_image` relative to the benchmark image
+  directory; the harness records `configured_image_overrides` and
+  `missing_configured_images` in the inventory so stale screenshots are not
+  silently scored against current catalog geometry. The default image set now
+  uses `/Users/ethanmckanna/Downloads/h-waymo.png` for `houston-waymo` and
+  `/Users/ethanmckanna/Downloads/miami.png` for `miami-waymo`. The control run
+  without these current images failed Houston and Miami against the refreshed
+  current catalog references (`out/current-drift-nocatalog-score-20260530/`,
+  4/6 passed, min IoU 0.411807). With overrides, the same default-directory
+  no-catalog gate passed 6/6 current Houston/Miami/Bay Area fixtures in
+  `out/current-drift-overrides-nocatalog-20260530/`, avg IoU 0.919041, min IoU
+  0.794177, max fixture 0.697564s, total 2.469896s, and zero one-second latency
+  budget issues. This gives the changed service areas a fair current-market
+  regression gate while preserving the old stale-pair status as data debt.
