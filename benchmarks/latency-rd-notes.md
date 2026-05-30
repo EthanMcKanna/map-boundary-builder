@@ -7294,4 +7294,13 @@ with zero failures in 0.531s.
   0.943345, and 0.406006s total active duration; the explicit no-catalog gate
   `out/api-nocatalog-hook-nocatalog-20260530/` passed 8/8 OCR/georeference
   fixtures with avg IoU 0.961733, min IoU 0.931476, max fixture 0.680604s, and
-  zero latency-budget issues at `--max-duration-s 1.0`.
+  zero latency-budget issues at `--max-duration-s 1.0`. Production commit
+  `5094193` deployed as `dpl_FZKmVsL8iaZVFimBP4LmywETXbZr` with
+  `pipeline-9c2cb273ba9f4132`. A public cache-miss `no_catalog=1` Tesla Austin
+  upload on `https://mapboundary.app/api/runs` returned
+  `ocr-georeference:nominatim-label-fit`, `catalog_slug: null`, confidence
+  0.858, and 3 control points. The first cold-ish public sample took 1.895030s
+  before send; after `GET /api/health?warm=ocr`, a fresh semantic cache-busted
+  upload completed in 0.344391s `total_before_send_s`, proving the production
+  switch can measure the arbitrary OCR/georeference path separately from catalog
+  shortcuts.
