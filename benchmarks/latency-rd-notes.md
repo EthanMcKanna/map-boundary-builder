@@ -6909,3 +6909,19 @@ with zero failures in 0.531s.
   regressions. This candidate is worth protected Vercel A/B because it attacks
   the production OCR/runtime variance directly for current Avride maps instead
   of only shrinking overlay export overhead.
+  Preview deploy `dpl_E9Z4Fts5jPifpkFMoLkkssaLcxKW` reported
+  `pipeline-8b6f7fd23791a155` and passed protected A/B: three neutral Avride
+  default-overlay preview uploads returned `dallas-avride` current catalog
+  geometry, confidence 0.922, WebP overlay payloads of 57,135 characters, and
+  averaged 0.111904s total before send. Current production
+  `pipeline-d7b93826dd958941` averaged 1.044028s on matching neutral Avride
+  overlay uploads, still using OCR/georeference at confidence 0.855. Commit
+  `626f845` was deployed to production as `dpl_F81sMEazjjgkzk3DMcLANqE6meGR`,
+  aliased to `https://mapboundary.app`, with
+  `pipeline-8b6f7fd23791a155`. Post-deploy live cache-miss neutral Avride
+  default-overlay runs preserved the preview/current catalog output and measured
+  0.230638s, 0.058012s, and 0.058007s total before send, averaging 0.115552s.
+  The first run paid small cold extraction/export overhead; warm repeats were
+  about 58 ms end-to-end before send. This is a production latency win for the
+  Avride provider-hinted class and keeps the generic no-catalog OCR/georeference
+  path unchanged.
