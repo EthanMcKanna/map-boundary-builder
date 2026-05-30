@@ -202,6 +202,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(catalog_probe_missed=True),
         )
+        changed_catalog_probe_miss_low_iou_options = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(catalog_probe_missed=True, catalog_probe_miss_low_iou=True),
+        )
         changed_overlay_mode = run_result_cache_key(
             b"image-a",
             None,
@@ -223,6 +228,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_mask_options)
         self.assertNotEqual(base, changed_catalog_probe_options)
         self.assertNotEqual(base, changed_catalog_probe_missed_options)
+        self.assertNotEqual(changed_catalog_probe_missed_options, changed_catalog_probe_miss_low_iou_options)
         self.assertNotEqual(base, changed_overlay_mode)
 
     def test_run_cache_filename_hint_uses_semantic_basename(self) -> None:

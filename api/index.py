@@ -728,6 +728,7 @@ def run_result_cache_key_for_hash(
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
         "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
+        "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
