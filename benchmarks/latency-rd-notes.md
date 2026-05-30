@@ -5271,3 +5271,15 @@ with zero failures in 0.531s.
   cached-repeat returned in 0.260s wall / 0.000527s server. The initial Miami
   probe also matched catalog but had a one-off 0.469s raw cache lookup; repeat
   behavior was normal.
+- Rejected another targeted OCR downscale after checking the user-confirmed
+  drift split. The control city-context no-catalog run
+  `out/city-context-current-nocatalog-20260530/full-report.json` passed 8/8
+  scored fixtures with avg IoU 0.961733, min IoU 0.931476, active total 3.08s,
+  and seven `reference_mismatch` skips. Re-running with
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200` and proportionally scaled
+  fast-text area preserved the latency budget but failed zero-regression:
+  Orlando dropped 0.931476 -> 0.781303, Nashville dropped by 0.007617,
+  Phoenix by 0.003351, and average IoU fell to 0.941997. A 1400px variant was
+  worse, dropping Nashville to 0.758698, Phoenix to 0.853339, Orlando to
+  0.862403, and average IoU to 0.910073. Even with explicit city context, OCR
+  resolution downscaling is not safe without a stronger validator/fallback.
