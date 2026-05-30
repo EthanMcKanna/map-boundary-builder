@@ -5515,3 +5515,15 @@ with zero failures in 0.531s.
   `asset-e723d34ab06b7550`; public health is OK on backend
   `pipeline-c69d42a455f16bce`; and the public hashed JS contains the
   `looksServiceAreaLike` guard plus the non-service-like skipped-miss path.
+- Rejected forcing OpenCV's algorithm-selecting connected-component API for the
+  extraction helper. A microbench on current service-area masks showed
+  `connectedComponentsWithStatsWithAlgorithm(..., CCL_DEFAULT/CCL_BBDT)` can be
+  slightly faster than the plain API, and a same-process A/B preserved exact
+  active fixture IoUs with totals of 2.292s for `CCL_DEFAULT`, 2.307s for BBDT,
+  and 2.546s for the plain call. However, the authoritative in-process
+  no-catalog benchmark with the patch was slower than the current saved
+  baseline: `out/ccl-default-ip-nocatalog-20260530/full-report.json` passed
+  zero-regression accuracy but took 2.94s total versus
+  `out/prewarm-cancel-nocatalog-20260530/full-report.json` at 2.62s. The default
+  catalog gate stayed clean at 0.36s. Leave the plain connected-components call
+  in place unless a broader extraction rewrite makes this reliably faster.
