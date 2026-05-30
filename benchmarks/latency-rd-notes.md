@@ -5509,3 +5509,9 @@ with zero failures in 0.531s.
   small or inefficient-to-resize service-area-like uploads keep the older server
   catalog path. Focused checks passed 2/2, then full pytest passed 239 tests
   plus 9 subtests; `compileall`, `node --check`, and `git diff --check` passed.
+- Deployed the tightened skipped-probe heuristic to production. Production
+  deployment `dpl_D3yNUTfA6bhk8AakemTuYCVP9zgN` is `Ready` and aliased to
+  `https://mapboundary.app`; public HTML references
+  `asset-e723d34ab06b7550`; public health is OK on backend
+  `pipeline-c69d42a455f16bce`; and the public hashed JS contains the
+  `looksServiceAreaLike` guard plus the non-service-like skipped-miss path.
