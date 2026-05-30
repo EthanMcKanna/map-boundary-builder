@@ -618,6 +618,94 @@ def test_catalog_probe_only_miss_stops_before_ocr_and_full_refine(tmp_path, monk
     assert exc_info.value.details["active_shape_iou_is_low"] is True
 
 
+def test_catalog_probe_only_accepts_hinted_verified_near_hit(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Bay Area probe.webp"
+    Image.new("RGB", (520, 520), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((520, 520, 3), 245, dtype=np.uint8)
+    mask = np.zeros((520, 520), dtype=bool)
+    mask[120:420, 80:430] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(80, 120), (430, 120), (430, 420), (80, 420)]),
+        coverage_ratio=0.27,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Bay Area",
+        slug="bay-area-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("near-hit catalog probes must not fall through to OCR")
+
+    def fake_match_catalog_entry(_pixel_geometry, candidate, *, min_iou, min_area_ratio, max_area_ratio):
+        assert candidate is entry
+        assert min_iou == runner.CATALOG_PROBE_NEAR_HIT_MIN_IOU
+        assert min_area_ratio == runner.CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO
+        assert max_area_ratio == runner.CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO
+        return SimpleNamespace(entry=entry, iou=0.881, margin=0.881, area_ratio=1.03, confidence=0.877)
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **kwargs):
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "match_catalog_entry", fake_match_catalog_entry)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            catalog_probe_only=True,
+            filename_hint="Waymo Bay Area probe.webp",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert result.summary["catalog_slug"] == "bay-area-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:probe-near-hit"
+
+
+def test_catalog_probe_near_hit_requires_provider_hint() -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    assert (
+        runner.catalog_probe_near_hit_match(
+            extraction,
+            city_input=None,
+            filename_hint="Bay Area probe.webp",
+        )
+        is None
+    )
+
+
 def test_catalog_probe_only_retries_without_area_hint_before_miss(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "h-waymo probe.jpg"
     Image.new("RGB", (520, 520), (245, 245, 245)).save(image_path)

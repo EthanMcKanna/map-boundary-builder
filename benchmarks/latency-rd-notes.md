@@ -6270,3 +6270,16 @@ with zero failures in 0.531s.
   scoring run over all Houston/Miami/Bay skipped fixtures intentionally failed
   Houston/Miami because those saved screenshots remain stale relative to their
   current catalog geometries; keep those as `reference_mismatch` data debt.
+- Accepted a stricter browser-probe near-hit path for verified OCR-derived
+  catalog entries. Bay Area Waymo's 520px frontend probe identifies
+  `bay-area-waymo` at IoU 0.881275 and area ratio 1.031026, which is too low for
+  the normal shape threshold but strong enough when the filename/city hint also
+  names both provider and area and the catalog entry is an OCR-verified output
+  with a confidence cap. The scan
+  `out/catalog-probe-520-nearhit-scan-20260530.json` showed active probes still
+  matching their expected slugs, stale Houston/Miami/Las Vegas still missing,
+  and only `bay-area-waymo` moving from miss to
+  `catalog-shape-match:probe-near-hit`. This should let the browser complete
+  hinted current Bay Area Waymo uploads from the tiny probe instead of sending a
+  full image, while ambiguous filenames still fall through to the safer full
+  path.

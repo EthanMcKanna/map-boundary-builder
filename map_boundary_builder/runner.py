@@ -109,6 +109,13 @@ SPARSE_LABEL_CATALOG_MIN_CONFIDENCE = 0.55
 SPARSE_LABEL_CATALOG_MIN_LABEL_CONFIDENCE = 85.0
 SPARSE_LABEL_CATALOG_CONFIDENCE = 0.72
 CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD = 0.80
+CATALOG_PROBE_NEAR_HIT_MIN_IOU = 0.86
+CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO = 0.90
+CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO = 1.12
+OCR_DERIVED_CATALOG_SOURCES = {
+    "current-verified-ocr-output",
+    "verified-screenshot-ocr-output",
+}
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 EARLY_OCR_STYLE_MAX_DIMENSION = max(
@@ -473,6 +480,26 @@ def build_boundary(
                 )
 
         if catalog_probe_only_enabled(opts):
+            catalog_probe_match = catalog_probe_near_hit_match(
+                catalog_probe_miss_extraction or extraction,
+                city_input=city_input,
+                filename_hint=filename_hint,
+            )
+            if catalog_probe_match is not None:
+                return finish_catalog_boundary_result(
+                    catalog_probe_miss_extraction or extraction,
+                    catalog_probe_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:probe-near-hit",
+                )
             raise CatalogProbeMiss(
                 "No known service-area shape matched the catalog probe.",
                 details=catalog_probe_miss_details(
@@ -1282,6 +1309,38 @@ def catalog_probe_miss_details(
         "active_shape_iou_is_low": best_iou < CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD,
         "active_shape_iou_threshold": CATALOG_PROBE_MISS_LOW_IOU_THRESHOLD,
     }
+
+
+def catalog_probe_near_hit_match(
+    extraction,
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+):
+    hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
+    provider_hint = catalog_provider_hint(hint_text)
+    if provider_hint is None:
+        return None
+    candidates = [
+        entry
+        for entry in load_catalog_entries()
+        if (
+            entry.is_active
+            and entry.provider == provider_hint
+            and getattr(entry, "catalog_source", None) in OCR_DERIVED_CATALOG_SOURCES
+            and extraction.style in PROVIDER_STYLES.get(entry.provider, set())
+            and catalog_area_matches_text(entry.area, hint_text)
+        )
+    ]
+    if len(candidates) != 1:
+        return None
+    return match_catalog_entry(
+        extraction.pixel_geometry,
+        candidates[0],
+        min_iou=CATALOG_PROBE_NEAR_HIT_MIN_IOU,
+        min_area_ratio=CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO,
+        max_area_ratio=CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO,
+    )
 
 
 def provider_ui_label_catalog_match(extraction, labels: list[Any]):

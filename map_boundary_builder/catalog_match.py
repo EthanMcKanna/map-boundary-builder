@@ -44,6 +44,7 @@ class ServiceAreaCatalogEntry:
     area: str
     geometry: Polygon | MultiPolygon
     mercator_geometry: Polygon | MultiPolygon
+    catalog_source: str | None = None
     status: str = "active"
     stale_reason: str | None = None
     max_confidence: float | None = None
@@ -341,6 +342,7 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 area=area_from_slug(slug, provider),
                 geometry=geometry,
                 mercator_geometry=transform(lonlat_to_mercator, geometry),
+                catalog_source=parse_optional_text(properties.get("catalog_source")),
                 status=status,
                 stale_reason=parse_optional_text(properties.get("catalog_stale_reason")),
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
