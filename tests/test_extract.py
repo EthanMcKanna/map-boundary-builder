@@ -10,7 +10,9 @@ from map_boundary_builder.extract import (
     _EXTRACTION_MEMORY_CACHE,
     extract_service_area,
     extraction_cache_dependency_signature,
+    keep_main_components,
     repair_mask,
+    remove_small_components,
 )
 
 
@@ -34,6 +36,34 @@ class MaskRepairTests(unittest.TestCase):
         repaired = repair_mask(raw, "bright-blue")
 
         self.assertTrue(repaired[99, 80])
+
+    def test_remove_small_components_returns_noop_mask_without_reselecting(self) -> None:
+        mask = np.zeros((40, 40), dtype=bool)
+        mask[4:14, 4:14] = True
+        mask[24:34, 24:34] = True
+
+        with patch.object(
+            extract_module,
+            "select_component_labels",
+            side_effect=AssertionError("all components should be kept without relabel selection"),
+        ):
+            cleaned = remove_small_components(mask, min_area=20)
+
+        np.testing.assert_array_equal(cleaned, mask)
+
+    def test_keep_main_components_returns_noop_mask_without_reselecting(self) -> None:
+        mask = np.zeros((70, 70), dtype=bool)
+        mask[4:24, 4:24] = True
+        mask[44:64, 44:64] = True
+
+        with patch.object(
+            extract_module,
+            "select_component_labels",
+            side_effect=AssertionError("all main components should be kept without relabel selection"),
+        ):
+            cleaned = keep_main_components(mask, max_components=2)
+
+        np.testing.assert_array_equal(cleaned, mask)
 
     def test_downscaled_extraction_returns_original_coordinate_space(self) -> None:
         rgb = np.full((240, 240, 3), 255, dtype=np.uint8)

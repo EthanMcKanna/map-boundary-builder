@@ -619,6 +619,8 @@ def keep_main_components(mask: np.ndarray, max_components: int) -> np.ndarray:
         area = float(areas[label - 1])
         if area >= max(150.0, max_area * 0.015):
             keep.append(int(label))
+    if len(keep) == count:
+        return mask.astype(bool, copy=False)
     return select_component_labels(labels, keep)
 
 
@@ -660,6 +662,8 @@ def remove_small_components(mask: np.ndarray, *, min_area: int) -> np.ndarray:
     keep = keep[keep != 0]
     if len(keep) == 0:
         return np.zeros_like(mask, dtype=bool)
+    if len(keep) == count:
+        return mask.astype(bool, copy=False)
     return select_component_labels(labels, keep)
 
 

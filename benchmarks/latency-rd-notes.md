@@ -5639,3 +5639,34 @@ with zero failures in 0.531s.
   returned in 0.038286s with `catalog_slug: dallas-avride`, and a Miami drift
   OCR/georef upload returned in 1.572217s with `catalog_slug: null` and the same
   six-control-point bbox.
+- Probed the next arbitrary-path bottlenecks after the marker-anchor deploy.
+  OCR-cropping to an expanded service-area box was rejected as a general change:
+  tight 0.15/0.25 padding hurt or destabilized some active IoUs, while safe
+  0.4+ padding expanded back to full-image OCR for most large Waymo fixtures and
+  did not justify trading away the current OCR/extraction overlap. A heavier
+  synthetic RapidOCR warmup was also rejected: current warmup plus Phoenix
+  no-catalog repeats landed around 0.595-0.719s, while a many-label 1600px
+  synthetic warmup cost about 0.54-0.57s and did not improve the follow-on
+  Phoenix run beyond normal variance. Vercel's current docs also rule out
+  encoding a Fluid Compute memory bump in `vercel.json`; function memory is a
+  project setting when Fluid Compute is enabled, and this repo's legacy
+  `builds` block cannot be combined with a `functions` block just to chase CPU.
+- Accepted a small extraction no-op skip for component filtering. Both
+  `remove_small_components` and `keep_main_components` now return the original
+  boolean mask when connected-component stats prove every component is retained,
+  avoiding a full `selected[labels]` rebuild on clean masks. Focused tests cover
+  both no-op paths. Microbenchmarks on masks where all components are kept cut
+  the remove-small pass from about 0.0031s to 0.0010-0.0011s on Dallas/Nashville
+  Waymo. End-to-end validation is intentionally conservative: the default
+  catalog gate `out/component-noop-default-20260530/full-report.json` passed
+  8/8 scored with seven `reference_mismatch` skips, avg IoU 0.992917, min IoU
+  0.943345, total 0.354776s, zero regression issues, and the no-catalog
+  accuracy gate `out/component-noop-nocatalog-accuracy-20260530/full-report.json`
+  preserved 8/8 scored, avg IoU 0.961733, min IoU 0.931476, zero IoU
+  regression, and max active fixture below 1s. A stricter total-duration
+  no-catalog comparison was noisy/slower because OCR moved more than this
+  extraction micro-optimization, so this is not a production promotion by
+  itself. The Waymo-only Houston/Miami/Bay Area drift smoke
+  `out/component-noop-waymo-drift-smoke-20260530/full-report.json` passed all
+  three user-confirmed `reference_mismatch` smoke checks with null catalog
+  slugs.
