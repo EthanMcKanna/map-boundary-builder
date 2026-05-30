@@ -6172,3 +6172,17 @@ with zero failures in 0.531s.
   Do not treat those Waymo catalog-score failures as model regressions; they
   are evidence that old screenshots cannot be scored against current service
   areas.
+- Rejected another batch of OCR/catalog latency probes after the drift
+  correction. Lowering RapidOCR detector limits to 576/544/512/480 still
+  preserved most bright-blue Waymo outputs but regressed Tesla gray-fill IoU,
+  so it is not a safe global default (`out/detlimit-refresh-*-nocatalog-20260530b/`).
+  Raising `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` also failed the no-regression
+  bar: 900 was accuracy-safe but not faster than baseline after jitter, 1000
+  moved Phoenix IoU by 0.000568, and 1200+ caused much larger Phoenix/LA drops.
+  A current Bay Area full image from `out/live-current-split-20260529/` still
+  only scored about 0.60 shape IoU against the active Bay Area Waymo catalog
+  entry, so returning catalog geometry there would be an accuracy shortcut, not
+  a robustness win. Finally, lowering the pre-OCR catalog probe default from
+  240px to 200px stayed accurate but did not beat the current 240px default in
+  repeated A/B runs (`out/catalog-ab-old240-*-20260530b/` versus
+  `out/catalog-ab-new200-*-20260530b/`), so the default remains 240px.
