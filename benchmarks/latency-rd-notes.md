@@ -6925,3 +6925,53 @@ with zero failures in 0.531s.
   about 58 ms end-to-end before send. This is a production latency win for the
   Avride provider-hinted class and keeps the generic no-catalog OCR/georeference
   path unchanged.
+- Rejected globally skipping OSM road refinement for the arbitrary/no-catalog
+  path. Monkeypatching `should_try_road_refinement` to always return false kept
+  the minimum pass threshold but failed the no-regression bar: no-catalog
+  `out/no-road-refine-nocatalog-20260530/full-report.json` dropped average IoU
+  to 0.927602, with Nashville Waymo falling to 0.799036 and Phoenix Waymo to
+  0.898017. The speed saved in georeference is real, but those active geometry
+  regressions prove road refinement is still carrying necessary accuracy on
+  sparse/road-dependent maps.
+- Rejected disabling speculative bright-blue road-feature precompute. A
+  monkeypatched no-catalog run with `should_precompute_road_features` returning
+  false preserved exact active IoU in
+  `out/no-road-precompute-nocatalog-20260530/full-report.json`, but it was not a
+  real latency win: total active time was 3.178005s while a same-condition
+  current-code control in `out/road-precompute-control-nocatalog-20260530/full-report.json`
+  completed in 2.945446s. Phoenix and Nashville, the fixtures that still need
+  OSM road refinement, both got slower without the precomputed feature image.
+- Rejected two smaller OSM road-refine tuning attempts. Raising the coarse/fine
+  feature scales to 6/3 preserved active IoU but slowed the no-catalog control
+  to 3.081319s in `out/roadscale-6-3-nocatalog-20260530/full-report.json`.
+  Forcing road refinement to lock scale was faster at 2.725473s in
+  `out/road-lockscale-nocatalog-20260530/full-report.json`, but it was an
+  accuracy regression: Nashville Waymo dropped from 0.986282 IoU to 0.799036,
+  Phoenix Waymo dropped from 0.983820 to 0.962943, and average IoU dropped
+  from 0.961733 to 0.935718. Keep the current free-scale road search for the
+  sparse bright-blue path.
+- Area-hinted current catalog candidate: a live production recheck after the
+  user's Houston/Miami/Bay Area drift reminder showed current city-hinted
+  Houston and Miami Waymo uploads already returning refreshed catalog geometry
+  in 0.348506s and 0.241341s total before send, but Bay Area Waymo needed
+  0.870465s because the 240px/400px catalog attempts missed by a few tenths of
+  a point and the path fell through to the 1400px refine. The accepted guard is
+  intentionally narrow: only current-verified OCR-output catalog entries, only
+  when the best scored shape also matches the explicit area/city hint, only with
+  IoU at least max(0.95, entry minimum minus 0.01), margin at least 0.70, and
+  area ratio 0.98-1.04. Local Bay Area proof
+  `out/area-hinted-current-proof-20260530/boundary.geojson` now returns the
+  same exact `bay-area-waymo` current catalog geometry at
+  `catalog-shape-match:area-hint-current`, evidence IoU 0.959638, margin
+  0.796602, and 0.241595s locally instead of falling through to full refine.
+  Focused tests passed 92/92. Drift-aware validation stayed clean: default
+  active catalog `out/area-hinted-current-default-20260530/full-report.json`
+  passed 8/8 with zero IoU regression; no-catalog
+  `out/area-hinted-current-nocatalog-20260530/full-report.json` passed 8/8 with
+  zero IoU regression; and targeted city-override smoke
+  `out/area-hinted-current-drift-smoke-20260530/full-report.json` kept Houston,
+  Miami, and Bay Area Waymo as unscored `reference_mismatch` data debt while
+  Bay Area used the new fast current-catalog evidence. The stricter current-
+  catalog score audit intentionally still fails the old Houston/Miami saved
+  screenshots for weak source-image evidence, confirming those remain stale
+  screenshot debt rather than refreshed scored truth.

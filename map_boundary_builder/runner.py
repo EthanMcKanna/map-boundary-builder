@@ -138,6 +138,11 @@ CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.85
 CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.15
 CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE = 0.95
 CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE = 0.84
+AREA_HINTED_CURRENT_CATALOG_MIN_IOU = 0.95
+AREA_HINTED_CURRENT_CATALOG_MAX_IOU_RELAXATION = 0.01
+AREA_HINTED_CURRENT_CATALOG_MIN_MARGIN = 0.70
+AREA_HINTED_CURRENT_CATALOG_MIN_AREA_RATIO = 0.98
+AREA_HINTED_CURRENT_CATALOG_MAX_AREA_RATIO = 1.04
 FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO = 0.85
 FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO = 1.15
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
@@ -1282,6 +1287,13 @@ def hinted_catalog_shape_match(pixel_geometry, *, style: str, city_input: str | 
     )
     if match is not None or city_input is None:
         return match, None
+    area_hint_match = area_hinted_current_catalog_shape_match(
+        pixel_geometry,
+        style=style,
+        city_input=city_input,
+    )
+    if area_hint_match is not None:
+        return area_hint_match, "catalog-shape-match:area-hint-current"
     city_match = match_service_area_catalog_for_city_hint(
         pixel_geometry,
         style=style,
@@ -1290,6 +1302,59 @@ def hinted_catalog_shape_match(pixel_geometry, *, style: str, city_input: str | 
     if city_match is None:
         return None, None
     return city_match, "catalog-shape-match:city-contained"
+
+
+def area_hinted_current_catalog_shape_match(
+    pixel_geometry,
+    *,
+    style: str,
+    city_input: str | None,
+) -> ServiceAreaCatalogMatch | None:
+    if city_input is None or not catalog_style_supported(style):
+        return None
+    scored = []
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if entry.catalog_source != "current-verified-ocr-output":
+            continue
+        if style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        iou, area_ratio, scored_entry, fitted, rotation_degrees = score_catalog_entry(
+            pixel_geometry,
+            entry,
+            min_iou=entry.min_iou,
+        )
+        scored.append((iou, area_ratio, scored_entry, fitted, rotation_degrees))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_iou, best_area_ratio, best_entry, best_fitted, best_rotation = scored[0]
+    if not catalog_area_matches_text(best_entry.area, city_input):
+        return None
+    runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
+    margin = best_iou - runner_up_iou
+    required_iou = max(
+        AREA_HINTED_CURRENT_CATALOG_MIN_IOU,
+        best_entry.min_iou - AREA_HINTED_CURRENT_CATALOG_MAX_IOU_RELAXATION,
+    )
+    if best_iou < required_iou or margin < AREA_HINTED_CURRENT_CATALOG_MIN_MARGIN:
+        return None
+    if not (
+        AREA_HINTED_CURRENT_CATALOG_MIN_AREA_RATIO
+        <= best_area_ratio
+        <= AREA_HINTED_CURRENT_CATALOG_MAX_AREA_RATIO
+    ):
+        return None
+    return catalog_match_from_score(
+        pixel_geometry,
+        best_entry,
+        iou=best_iou,
+        area_ratio=best_area_ratio,
+        margin=margin,
+        fitted_mercator_geometry=best_fitted,
+        rotation_degrees=best_rotation,
+    )
 
 
 def low_resolution_shape_catalog_match(

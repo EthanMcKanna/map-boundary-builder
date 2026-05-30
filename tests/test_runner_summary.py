@@ -1250,6 +1250,96 @@ def test_current_catalog_label_shape_match_rejects_weak_shape(monkeypatch) -> No
     )
 
 
+def test_area_hinted_current_catalog_match_accepts_high_margin_verified_source(monkeypatch) -> None:
+    pixel_geometry = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    bay_area = SimpleNamespace(
+        slug="bay-area-waymo",
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        provider="waymo",
+        area="Bay Area",
+        min_iou=0.965,
+        mercator_geometry=Polygon([(0, 0), (200, 0), (200, 200), (0, 200)]),
+        geometry=Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
+        max_confidence=0.877,
+        use_exact_geometry=True,
+    )
+    phoenix = SimpleNamespace(
+        slug="phoenix-waymo",
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        provider="waymo",
+        area="Phoenix",
+        min_iou=0.97,
+        mercator_geometry=Polygon([(0, 0), (100, 0), (100, 100), (0, 100)]),
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        max_confidence=0.9,
+        use_exact_geometry=True,
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        assert min_iou == entry.min_iou
+        iou = 0.959 if entry.slug == "bay-area-waymo" else 0.2
+        return iou, 1.0, entry, entry.mercator_geometry, 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay_area, phoenix])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    match = runner.area_hinted_current_catalog_shape_match(
+        pixel_geometry,
+        style="bright-blue",
+        city_input="Bay Area",
+    )
+
+    assert match is not None
+    assert match.entry.slug == "bay-area-waymo"
+    assert match.iou == pytest.approx(0.959)
+    assert match.margin == pytest.approx(0.759)
+
+
+def test_area_hinted_current_catalog_match_rejects_when_best_shape_is_different_area(monkeypatch) -> None:
+    pixel_geometry = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    bay_area = SimpleNamespace(
+        slug="bay-area-waymo",
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        provider="waymo",
+        area="Bay Area",
+        min_iou=0.965,
+        mercator_geometry=Polygon([(0, 0), (200, 0), (200, 200), (0, 200)]),
+        geometry=Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]),
+        max_confidence=0.877,
+        use_exact_geometry=True,
+    )
+    phoenix = SimpleNamespace(
+        slug="phoenix-waymo",
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        provider="waymo",
+        area="Phoenix",
+        min_iou=0.97,
+        mercator_geometry=Polygon([(0, 0), (100, 0), (100, 100), (0, 100)]),
+        geometry=Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        max_confidence=0.9,
+        use_exact_geometry=True,
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        iou = 0.959 if entry.slug == "bay-area-waymo" else 0.97
+        return iou, 1.0, entry, entry.mercator_geometry, 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay_area, phoenix])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    match = runner.area_hinted_current_catalog_shape_match(
+        pixel_geometry,
+        style="bright-blue",
+        city_input="Bay Area",
+    )
+
+    assert match is None
+
+
 def test_catalog_probe_only_retries_without_area_hint_before_miss(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "h-waymo probe.jpg"
     Image.new("RGB", (520, 520), (245, 245, 245)).save(image_path)
