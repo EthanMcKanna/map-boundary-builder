@@ -109,6 +109,32 @@ with zero failures in 0.531s.
   `https://mapboundary.app/api/health?warm=ocr` also returned HTTP 200 with
   warm `status: ok`; no production deploy was made because the new work was
   benchmark tooling plus rejected/noisy probes, not a validated runtime speedup.
+- May 29 deploy recovery: the redundant runner OCR-cache hash skip was locally
+  faster, but three Vercel candidates built with the GUI `opencv-python` wheel
+  failed health because `cv2` was missing or tried to load `libGL.so.1`. The
+  safe deployment candidate removes `opencv-python`, keeps
+  `opencv-python-headless==4.10.0.84`, and commits the generated `uv.lock` so
+  runtime dependency installation consistently installs headless OpenCV. The
+  skip-domain candidate `dpl_2NmVPCsgAuvMLh9BGzQEL6L8D2JG`
+  (`map-boundary-builder-cashdf6h0-ethanmckannas-projects.vercel.app`) passed
+  `/api/health?warm=ocr` with `ok: true`, `pipeline-e96f570b8a61a32a`,
+  `opencv-python: missing`, `opencv-python-headless: 4.10.0.84`, and
+  `cv2: 4.10.0`. Production A/B with the same cache-busted Zoox SF image,
+  `include_overlay=0`, and normalized cache disabled preserved the exact
+  OCR/georeference output (`confidence 0.946`, `17` controls, bbox
+  `[-122.4410255, 37.7479064, -122.3876889, 37.8056186]`) while moving server
+  generation from `2.645013s` on current production to `1.802053s` on the
+  candidate. A second Austin arbitrary-map A/B preserved `confidence 0.991`, `13`
+  controls, and bbox `[-97.8098042, 30.2102607, -97.6775522, 30.2751504]`, with
+  server generation moving from `1.402680s` to `1.382366s`. Local validation after
+  the packaging change passed full pytest (`224 passed, 9 subtests`),
+  compile/checks, the default regression gate
+  `out/headless-only-default-20260529/full-report.json`, and the no-catalog
+  subsecond gate `out/headless-only-nocatalog-20260529/full-report.json`. After
+  promotion, `mapboundary.app` served `dpl_2NmVPCsgAuvMLh9BGzQEL6L8D2JG`;
+  public `/api/health?warm=ocr` stayed `ok: true`, and a fresh public
+  cache-busted Zoox SF upload completed with the same `0.946` confidence, `17`
+  controls, and bbox in `1.511792s` server generation / `3.561650s` wall.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU
