@@ -788,6 +788,25 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
 
+    def test_frontend_does_not_gate_catalog_probe_hit_on_cache_hashing(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        cache_start = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
+        deferred_cache = app_js.index(b"const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);")
+        probe_await = app_js.index(b"const catalogProbeResult = await catalogProbePromise;")
+        first_inline = app_js.index(b"applyInlineRun(catalogProbeResult.payload, {")
+        cache_await = app_js.index(b"const cacheLookup = await cacheLookupPromise;")
+        cached_entry = app_js.index(b"const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);")
+
+        self.assertLess(cache_start, deferred_cache)
+        self.assertLess(deferred_cache, probe_await)
+        self.assertLess(probe_await, first_inline)
+        self.assertLess(first_inline, cache_await)
+        self.assertLess(cache_await, cached_entry)
+        self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
+        self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
+
     def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))
         self.assertFalse(bool_field({"normalized_cache_lookup": "0"}, "normalized_cache_lookup", default=False))

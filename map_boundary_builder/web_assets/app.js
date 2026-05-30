@@ -388,25 +388,12 @@ form.addEventListener("submit", async (event) => {
       step: "prepare",
       note: "Looking for a matching image and settings in this browser.",
     });
-    const cacheLookup = await buildRunCacheKeys(uploadFile, formData);
-    pendingRunCacheKeys = cacheLookup.lookupKeys;
-    pendingRunCacheKey = pendingRunCacheKeys[0] || null;
-    pendingRunCacheKeysPromise = cacheLookup.cacheKeysPromise;
-    const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);
-    if (cachedEntry) {
-      catalogProbeAbortController?.abort();
-      restoreCachedHistoryEntry(cachedEntry);
-      pendingRunCacheKey = null;
-      pendingRunCacheKeys = [];
-      pendingRunCacheKeysPromise = null;
-      return;
-    }
+    const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);
+    const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);
     const catalogProbeResult = await catalogProbePromise;
     if (catalogProbeResult?.payload) {
       applyInlineRun(catalogProbeResult.payload, {
-        cacheKey: pendingRunCacheKey,
-        cacheKeys: pendingRunCacheKeys,
-        cacheKeysPromise: pendingRunCacheKeysPromise,
+        cacheKeysPromise: deferredCacheKeysPromise,
       });
       return;
     }
@@ -418,12 +405,23 @@ form.addEventListener("submit", async (event) => {
       const fastCatalogHandoffResult = await tryFastCatalogHandoff(formData, catalogProbeResult);
       if (fastCatalogHandoffResult?.payload) {
         applyInlineRun(fastCatalogHandoffResult.payload, {
-          cacheKey: pendingRunCacheKey,
-          cacheKeys: pendingRunCacheKeys,
-          cacheKeysPromise: pendingRunCacheKeysPromise,
+          cacheKeysPromise: deferredCacheKeysPromise,
         });
         return;
       }
+    }
+    const cacheLookup = await cacheLookupPromise;
+    pendingRunCacheKeys = cacheLookup.lookupKeys;
+    pendingRunCacheKey = pendingRunCacheKeys[0] || null;
+    pendingRunCacheKeysPromise = cacheLookup.cacheKeysPromise;
+    const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);
+    if (cachedEntry) {
+      catalogProbeAbortController?.abort();
+      restoreCachedHistoryEntry(cachedEntry);
+      pendingRunCacheKey = null;
+      pendingRunCacheKeys = [];
+      pendingRunCacheKeysPromise = null;
+      return;
     }
     markProgressStep("prepare", "running", "Uploading image.");
     setStatus("Uploading image", 8, "running", {
@@ -1897,6 +1895,18 @@ async function cacheKeysFromPromise(cacheKeysPromise) {
   try {
     const keys = await cacheKeysPromise;
     return Array.isArray(keys) ? keys : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+async function cacheKeysFromLookupPromise(cacheLookupPromise) {
+  try {
+    const lookup = await cacheLookupPromise;
+    return normalizedCacheKeys([
+      ...(Array.isArray(lookup?.lookupKeys) ? lookup.lookupKeys : []),
+      ...(await cacheKeysFromPromise(lookup?.cacheKeysPromise)),
+    ]);
   } catch (error) {
     return [];
   }

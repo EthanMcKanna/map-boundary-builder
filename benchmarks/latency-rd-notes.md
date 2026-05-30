@@ -7243,3 +7243,20 @@ with zero failures in 0.531s.
   and 0.628838s total-before-send; the new frontend acceptance guard accepts
   that provider-UI evidence even though the tiny probe's weak best slug was
   `dallas-tesla`, so the UI can stop before uploading the full PNG.
+- Frontend cache/probe race candidate: after the catalog-probe overlap and
+  compact handoff work, the submit flow still awaited browser cache-key
+  construction before accepting a successful catalog probe or handoff. The UI
+  now starts cache-key construction as a background promise; if the tiny
+  catalog probe or compact handoff returns a complete catalog result first, the
+  GeoJSON renders immediately while the same cache-key promise is still attached
+  to history saving. If the probe and handoff miss, the flow waits for the cache
+  lookup before the full upload as before, so local cache hits remain protected
+  on expensive fallback runs. Validation passed the focused frontend/static
+  tests, `tests/test_api_cache.py tests/test_runner_summary.py` (95 passed),
+  full pytest (294 passed, 9 subtests), compileall, JS syntax, `git diff
+  --check`, and the stale-reference guards (4 passed). A local Playwright
+  browser smoke against `http://127.0.0.1:8765` uploaded
+  `/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png` and
+  completed from the catalog-probe request only: `austin-tesla`,
+  `catalog-shape-match:low-res-shape`, no overlay, and 0.034206s server
+  `total_before_send_s`, with the UI rendering the boundary and history entry.
