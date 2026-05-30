@@ -9,12 +9,15 @@ from shapely.ops import transform
 
 from map_boundary_builder.catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
+    catalog_entry_contains_city_hint,
     catalog_area_matches_text,
     catalog_feature_collection,
     catalog_style_supported,
+    has_active_catalog_city_hint,
     has_active_catalog_area_hint,
     has_stale_catalog_area_hint,
     load_catalog_entries,
+    match_service_area_catalog_for_city_hint,
     match_service_area_catalog,
 )
 from map_boundary_builder.extract import ExtractionResult
@@ -118,6 +121,38 @@ def test_catalog_shape_match_respects_area_hints() -> None:
     assert match is not None
     assert match.entry.slug == "phoenix-waymo"
     assert wrong_city_match is None
+
+
+def test_catalog_city_hint_match_accepts_subcity_inside_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    direct_hint = match_service_area_catalog(pixel_geometry, style="bright-blue", area_hint_texts=["Santa Monica"])
+    contained_hint = match_service_area_catalog_for_city_hint(
+        pixel_geometry,
+        style="bright-blue",
+        city_hint="Santa Monica",
+    )
+
+    assert direct_hint is None
+    assert catalog_entry_contains_city_hint(entry, "Santa Monica")
+    assert has_active_catalog_city_hint("Santa Monica")
+    assert contained_hint is not None
+    assert contained_hint.entry.slug == "los-angeles-waymo"
+
+
+def test_catalog_city_hint_match_rejects_subcity_outside_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "los-angeles-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    contained_hint = match_service_area_catalog_for_city_hint(
+        pixel_geometry,
+        style="bright-blue",
+        city_hint="Dallas",
+    )
+
+    assert not catalog_entry_contains_city_hint(entry, "Dallas")
+    assert contained_hint is None
 
 
 def test_catalog_area_aliases_understand_bay_area_text() -> None:

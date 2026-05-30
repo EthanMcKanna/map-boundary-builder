@@ -17,10 +17,12 @@ from .catalog_match import (
     catalog_area_matches_text,
     catalog_style_supported,
     catalog_feature_collection,
+    has_active_catalog_city_hint,
     has_active_catalog_area_hint,
     has_stale_catalog_area_hint,
     load_catalog_entries,
     match_catalog_entry,
+    match_service_area_catalog_for_city_hint,
     match_service_area_catalog,
     PROVIDER_STYLES,
 )
@@ -288,10 +290,10 @@ def build_boundary(
             height=height,
         )
         if allow_pre_ocr_catalog and catalog_style_can_match:
-            catalog_match = match_service_area_catalog(
+            catalog_match, catalog_match_source = hinted_catalog_shape_match(
                 extraction.pixel_geometry,
                 style=extraction.style,
-                area_hint_texts=[city_input] if city_input is not None else None,
+                city_input=city_input,
             )
             if catalog_match is not None:
                 return finish_catalog_boundary_result(
@@ -306,6 +308,7 @@ def build_boundary(
                     opts=opts,
                     rgb=rgb,
                     progress=progress,
+                    georeference_source=catalog_match_source or "catalog-shape-match",
                 )
             catalog_match = low_resolution_shape_catalog_match(
                 extraction,
@@ -369,10 +372,10 @@ def build_boundary(
                 max_dimension=CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
                 cache=False,
             )
-            catalog_match = match_service_area_catalog(
+            catalog_match, catalog_match_source = hinted_catalog_shape_match(
                 retry_extraction.pixel_geometry,
                 style=retry_extraction.style,
-                area_hint_texts=[city_input] if city_input is not None else None,
+                city_input=city_input,
             )
             if catalog_match is not None:
                 return finish_catalog_boundary_result(
@@ -387,14 +390,14 @@ def build_boundary(
                     opts=opts,
                     rgb=rgb,
                     progress=progress,
-                    georeference_source="catalog-shape-match:retry",
+                    georeference_source=catalog_match_source or "catalog-shape-match:retry",
                 )
 
         if skip_redundant_probe and allow_catalog and catalog_style_can_match:
-            catalog_match = match_service_area_catalog(
+            catalog_match, catalog_match_source = hinted_catalog_shape_match(
                 extraction.pixel_geometry,
                 style=extraction.style,
-                area_hint_texts=[city_input] if city_input is not None else None,
+                city_input=city_input,
             )
             if catalog_match is not None:
                 return finish_catalog_boundary_result(
@@ -409,7 +412,7 @@ def build_boundary(
                     opts=opts,
                     rgb=rgb,
                     progress=progress,
-                    georeference_source="catalog-shape-match:probe-miss-full",
+                    georeference_source=catalog_match_source or "catalog-shape-match:probe-miss-full",
                 )
 
         if catalog_probe_only_enabled(opts):
@@ -465,10 +468,10 @@ def build_boundary(
                 },
             )
             if allow_pre_ocr_catalog and catalog_style_supported(extraction.style):
-                catalog_match = match_service_area_catalog(
+                catalog_match, catalog_match_source = hinted_catalog_shape_match(
                     extraction.pixel_geometry,
                     style=extraction.style,
-                    area_hint_texts=[city_input] if city_input is not None else None,
+                    city_input=city_input,
                 )
                 if catalog_match is not None:
                     return finish_catalog_boundary_result(
@@ -483,6 +486,7 @@ def build_boundary(
                         opts=opts,
                         rgb=rgb,
                         progress=progress,
+                        georeference_source=catalog_match_source or "catalog-shape-match",
                     )
                 catalog_match = low_resolution_shape_catalog_match(
                     extraction,
@@ -938,6 +942,24 @@ def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, heig
     return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
 
 
+def hinted_catalog_shape_match(pixel_geometry, *, style: str, city_input: str | None):
+    match = match_service_area_catalog(
+        pixel_geometry,
+        style=style,
+        area_hint_texts=[city_input] if city_input is not None else None,
+    )
+    if match is not None or city_input is None:
+        return match, None
+    city_match = match_service_area_catalog_for_city_hint(
+        pixel_geometry,
+        style=style,
+        city_hint=city_input,
+    )
+    if city_match is None:
+        return None, None
+    return city_match, "catalog-shape-match:city-contained"
+
+
 def low_resolution_shape_catalog_match(
     extraction,
     *,
@@ -997,7 +1019,7 @@ def should_overlap_ocr_with_extraction(
         return is_stale_only_catalog_hint(filename_hint)
     if is_stale_only_catalog_hint(city_input):
         return True
-    return not has_active_catalog_area_hint(city_input)
+    return not (has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input))
 
 
 def should_overlap_probe_miss_ocr(
@@ -1022,7 +1044,7 @@ def should_try_pre_ocr_catalog(
         return False
     if city_input is None:
         return not is_stale_only_catalog_hint(filename_hint)
-    return has_active_catalog_area_hint(city_input)
+    return has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input)
 
 
 def should_retry_pre_ocr_catalog(
@@ -1041,7 +1063,11 @@ def should_retry_pre_ocr_catalog(
         return False
     if CATALOG_RETRY_EXTRACT_MAX_DIMENSION >= CATALOG_MISS_REFINE_MAX_DIMENSION:
         return False
-    return has_active_catalog_area_hint(city_input) or has_active_catalog_area_hint(filename_hint)
+    return (
+        has_active_catalog_area_hint(city_input)
+        or has_active_catalog_city_hint(city_input)
+        or has_active_catalog_area_hint(filename_hint)
+    )
 
 
 def is_stale_only_catalog_hint(text: str | None) -> bool:

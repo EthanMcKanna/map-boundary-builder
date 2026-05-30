@@ -5209,3 +5209,28 @@ with zero failures in 0.531s.
   A gentler 1400px/612.5px probe also failed, dropping Nashville to 0.758698,
   Phoenix to 0.853339, and average IoU to 0.910073. The production OCR bottleneck
   is real, but shrinking OCR input globally is not safe.
+- Rejected pre-recognition crop caps and recognition batch-size changes. A
+  largest-box cap at 16-36 boxes was fast but repeatedly dropped Phoenix to IoU
+  0.851108. A grid-balanced selector with 40 boxes narrowed the issue to a tiny
+  Phoenix drop, 0.983820 -> 0.983252, but still failed the strict zero-drop
+  rule; fallback variants recovered accuracy only by paying the full OCR cost
+  and were slower than the no-cache control. Sequential `rec_batch_num` probes
+  at 6 and 24 preserved geometry but were slower than the current 12-batch
+  default. Keep the current RapidOCR crop and batch defaults.
+- Accepted a cached-only city-contained catalog fast path for subcity prompts.
+  Before this change, a known Waymo Los Angeles screenshot with `city=Santa
+  Monica` could not use the pre-OCR catalog path because `Santa Monica` did not
+  text-match the catalog area name `Los Angeles`, so it paid for OCR and local
+  proof measured about 0.710s with `ocr-georeference:nominatim-label-fit`. The
+  new path first requires the extracted service-area shape to pass the normal
+  catalog IoU/margin checks, then accepts the match only when a cached geocoder
+  result for the city hint is covered by the matched catalog polygon. The same
+  local pixel-distinct LA/Santa Monica proof now returns
+  `catalog-shape-match:city-contained`, `catalog_slug: los-angeles-waymo`,
+  `catalog_shape_iou: 0.983159`, and no OCR stage in 0.061866s. Focused
+  catalog/API tests passed 4/4, full pytest passed 234/234, default catalog
+  `out/city-contained-default-20260530/full-report.json` passed with zero
+  regression issues against `out/fasttext-threshold-default-20260530/full-report.json`,
+  and no-catalog `out/city-contained-nocatalog-20260530/full-report.json`
+  passed with zero regression issues and latency-budget issues against
+  `out/fasttext-threshold-default-nocatalog-20260530/full-report.json`.

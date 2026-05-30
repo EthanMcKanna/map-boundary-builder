@@ -10,11 +10,12 @@ import re
 from typing import Any
 
 import numpy as np
-from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, mapping, shape
 from shapely.affinity import rotate
 from shapely.ops import transform
 
 from .extract import ExtractionResult
+from .geocoder import geocode_cached_only
 from .georef_transform import lonlat_to_mercator, mercator_to_lonlat
 
 CATALOG_MIN_IOU = 0.97
@@ -117,6 +118,52 @@ def match_service_area_catalog(
         margin=margin,
         fitted_mercator_geometry=best_fitted,
         rotation_degrees=rotation_degrees,
+    )
+
+
+def match_service_area_catalog_for_city_hint(
+    pixel_geometry: Polygon | MultiPolygon,
+    *,
+    style: str,
+    city_hint: str | None,
+    min_iou: float = CATALOG_MIN_IOU,
+    min_margin: float = CATALOG_MIN_MARGIN,
+) -> ServiceAreaCatalogMatch | None:
+    if city_hint is None or not city_hint.strip():
+        return None
+    match = match_service_area_catalog(
+        pixel_geometry,
+        style=style,
+        min_iou=min_iou,
+        min_margin=min_margin,
+    )
+    if match is None:
+        return None
+    if not catalog_entry_contains_city_hint(match.entry, city_hint):
+        return None
+    return match
+
+
+def catalog_entry_contains_city_hint(entry: ServiceAreaCatalogEntry, city_hint: str) -> bool:
+    for result in geocode_cached_only(city_hint, limit=3):
+        point = Point(result.lon, result.lat)
+        if entry.geometry.buffer(0).covers(point):
+            return True
+    return False
+
+
+def has_active_catalog_city_hint(text: str | None) -> bool:
+    if text is None or not text.strip():
+        return False
+    provider_hint = catalog_provider_hint(text)
+    points = [Point(result.lon, result.lat) for result in geocode_cached_only(text, limit=3)]
+    if not points:
+        return False
+    return any(
+        entry.is_active
+        and catalog_provider_matches_hint(entry.provider, provider_hint)
+        and any(entry.geometry.buffer(0).covers(point) for point in points)
+        for entry in load_catalog_entries()
     )
 
 
