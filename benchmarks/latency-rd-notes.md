@@ -7414,3 +7414,22 @@ with zero failures in 0.531s.
   `out/final-rescue1300-catalog-20260530` passed 8/8 scored non-drift fixtures
   with seven skips, avg IoU 0.992917, min IoU 0.943345, total 0.388396s, and
   max 0.068739s.
+- Warmup coverage follow-up: after the bright-blue detector-specific path moved
+  to 544, production `/api/health?warm=ocr` still reported
+  `rapidocr_warm_detector_limits: [608]`. That left the actual Waymo-style
+  bright-blue no-catalog path colder than the health/cron warmup suggested; the
+  first post-deploy production no-catalog probes were materially slower than
+  the later warmed repeats even after a health warm call. Updated
+  `rapidocr_warm_detector_limits()` to include the distinct bright-blue
+  detector limit, so health/cron warmup now covers `[608, 544]`. Focused warmup
+  and health tests passed 3/3. A local real prewarm completed with
+  `rapidocr_inference_warmed: true`, `rapidocr_s: 0.676889`, and
+  `warm_limits: [608, 544]`. Sequential regression gates stayed clean:
+  `out/warm-detectors-active-nocatalog-seq-20260530/full-report.json` passed
+  8/8 scored non-drift fixtures with seven `reference_mismatch` skips, avg IoU
+  0.964230, min IoU 0.931476, max active fixture 0.681261s; and
+  `out/warm-detectors-current-drift-seq-20260530/full-report.json` passed 6/6
+  changed-market current-catalog audit fixtures with avg IoU 0.919041, min IoU
+  0.794177, max 0.572761s. A concurrent benchmark attempt was discarded as
+  artificial local OCR contention; it preserved geometry but polluted the
+  latency budget.
