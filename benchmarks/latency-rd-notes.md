@@ -6429,3 +6429,40 @@ with zero failures in 0.531s.
   before send of 0.66855s for Houston, 0.611208s for Miami, and 0.811415s for
   Bay Area, improving the previous restored-900 production proof of 1.094655s,
   0.876646s, and 1.000582s respectively.
+- After the user stepped in again to note Houston, Miami, and Bay Area have
+  changed from the saved base ground truth, I kept those saved screenshot pairs
+  out of stale-reference scoring and rechecked the guardrails. Focused
+  stale-reference tests passed 4/4. The smoke-only gate
+  `out/user-reminder-drift-smoke-20260530d/full-report.json` kept all six
+  Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` checks, and
+  `out/user-reminder-current-catalog-20260530d/full-report.json` scored the
+  same six only against current catalog geometry at 6/6, avg IoU 1.0.
+- Accepted for deployment validation: a guarded browser fast-handoff after a
+  tiny catalog-probe miss. The browser now reuses the decoded canvas to create a
+  2000px WebP q92 handoff only when the probe found a plausible active catalog
+  candidate. It accepts the compact response only when the server returns a
+  high-confidence catalog-shape match: hinted filenames/city text must match
+  the returned provider/area slug, while unhinted uploads must agree with the
+  probe's best slug. If the compact response is missing, non-catalog, low
+  confidence, or slug-conflicting, the browser falls back to the original upload.
+  A mocked Chromium flow proved same-slug accept stops after `probe` +
+  `handoff`, while wrong-slug handoff falls back through `probe` + `handoff` +
+  `original` with zero console warnings. Real local Chromium showed the intended
+  upload savings for hinted drift cases: Houston Waymo moved from 1.151s wall
+  with the original-upload fallback to 0.682s with the compact handoff, and
+  Miami Waymo moved from 0.769s to 0.713s. Bay Area Waymo still completes from
+  the one-shot 520px probe-near-hit path in 0.360s locally, so it does not need
+  the handoff.
+- Validation for the fast-handoff frontend change: full pytest passed 264/264,
+  `compileall -q api map_boundary_builder tests`, `node --check`, and
+  `git diff --check` passed. The q92 current-catalog handoff accuracy gate
+  `out/fast-handoff-q92-current-catalog-repeat-20260530d/full-report.json`
+  passed 6/6 Houston/Miami/Bay Area current-catalog fixtures at avg IoU 1.0.
+  The active production-shaped gate
+  `out/fast-handoff-active-default-seq-20260530d/full-report.json` passed 8/8
+  scored fixtures with seven `reference_mismatch` skips, avg IoU 0.992917, min
+  IoU 0.943345. The neutral no-catalog fallback gate
+  `out/fast-handoff-neutral-nocatalog-seq-20260530d/full-report.json` preserved
+  avg IoU 0.961733 and min IoU 0.931476. One parallel benchmark batch was
+  discarded as CPU-contended latency noise because it preserved IoU exactly but
+  inflated every fixture's timing while three heavy gates were running at once.

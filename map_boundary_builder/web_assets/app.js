@@ -102,6 +102,12 @@ const CATALOG_PROBE_MIN_BYTES = 180_000;
 const CATALOG_PROBE_GENERIC_MIN_BYTES = 650_000;
 const CATALOG_PROBE_WEBP_QUALITY = 0.80;
 const CATALOG_PROBE_JPEG_QUALITY = 0.82;
+const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 2000;
+const FAST_CATALOG_HANDOFF_MIN_BYTES = 500_000;
+const FAST_CATALOG_HANDOFF_MAX_SIZE_RATIO = 0.75;
+const FAST_CATALOG_HANDOFF_WEBP_QUALITY = 0.92;
+const FAST_CATALOG_HANDOFF_MIN_PROBE_IOU = 0.5;
+const FAST_CATALOG_HANDOFF_MIN_CONFIDENCE = 0.84;
 const CATALOG_PROBE_HINT_PATTERNS = [
   /\bwaymo\b/,
   /\btesla\b/,
@@ -118,6 +124,8 @@ const CATALOG_PROBE_HINT_PATTERNS = [
   /\b(?:bay\s+area|san\s+francisco|sf)\b/,
   /\b(?:las\s+vegas|los\s+angeles|san\s+antonio)\b/,
 ];
+const CATALOG_PROBE_AREA_HINT_PATTERN = /\b(?:atlanta|austin|dallas|houston|miami|nashville|orlando|phoenix|bay\s+area|san\s+francisco|sf|las\s+vegas|los\s+angeles|san\s+antonio)\b/;
+const CATALOG_PROBE_PROVIDER_HINT_PATTERN = /\b(?:waymo|tesla|zoox|avride)\b/;
 const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
   "app",
   "boundary",
@@ -402,6 +410,15 @@ form.addEventListener("submit", async (event) => {
       formData.set("catalog_probe_missed", "1");
       if (catalogProbeResult.lowIou) {
         formData.set("catalog_probe_miss_low_iou", "1");
+      }
+      const fastCatalogHandoffResult = await tryFastCatalogHandoff(formData, catalogProbeResult);
+      if (fastCatalogHandoffResult?.payload) {
+        applyInlineRun(fastCatalogHandoffResult.payload, {
+          cacheKey: pendingRunCacheKey,
+          cacheKeys: pendingRunCacheKeys,
+          cacheKeysPromise: pendingRunCacheKeysPromise,
+        });
+        return;
       }
     }
     markProgressStep("prepare", "running", "Uploading image.");
@@ -833,14 +850,62 @@ async function tryCatalogProbe(file, formData, options = {}) {
     const payload = await response.json().catch(() => null);
     if (response.ok && isCatalogRunPayload(payload)) return { payload };
     if (response.ok && payload?.status === "catalog_miss") {
-      return {
+      const miss = payload.catalog_probe_miss || {};
+      const result = {
         missed: true,
-        lowIou: payload.catalog_probe_miss?.active_shape_iou_is_low === true,
+        lowIou: miss.active_shape_iou_is_low === true,
+        bestActiveCatalogSlug: typeof miss.best_active_catalog_slug === "string"
+          ? miss.best_active_catalog_slug
+          : null,
+        bestActiveCatalogIou: Number.isFinite(Number(miss.best_active_catalog_iou))
+          ? Number(miss.best_active_catalog_iou)
+          : null,
+        hasCatalogHint: probeCandidate.hasHint === true,
+        catalogHintText: probeCandidate.hintText || "",
+      };
+      result.fastHandoffFile = await fastCatalogHandoffCandidate(file, probeCandidate, result);
+      return {
+        ...result,
       };
     }
   } catch (error) {
     if (error?.name !== "AbortError") {
       console.warn("Known service-area probe failed", error);
+    }
+  }
+  return null;
+}
+
+async function tryFastCatalogHandoff(formData, catalogProbeResult) {
+  if (!catalogProbeResult?.fastHandoffFile) return null;
+  markProgressStep("prepare", "running", "Checking current catalog.");
+  setStatus("Checking current catalog", 7, "running", {
+    step: "prepare",
+    note: "Trying a compact current-shape handoff before the full upload.",
+  });
+  try {
+    const fastData = new FormData();
+    formData.forEach((value, name) => {
+      if (name !== "image" && name !== "catalog_probe_miss_low_iou") {
+        fastData.append(name, value);
+      }
+    });
+    fastData.set("image", catalogProbeResult.fastHandoffFile, catalogProbeResult.fastHandoffFile.name);
+    fastData.set("fast_catalog_handoff", "1");
+    fastData.set("catalog_probe_missed", "1");
+    fastData.set("include_overlay", "0");
+    fastData.set("normalized_cache_lookup", "0");
+    const response = await fetch("/api/runs", {
+      method: "POST",
+      body: fastData,
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && isFastCatalogHandoffPayload(payload, catalogProbeResult)) {
+      return { payload };
+    }
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      console.warn("Fast current-catalog handoff failed", error);
     }
   }
   return null;
@@ -852,21 +917,32 @@ function shouldTryCatalogProbe(file) {
 }
 
 function hasCatalogProbeHint(file, formData) {
+  return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(catalogProbeHintText(file, formData)));
+}
+
+function catalogProbeHintText(file, formData) {
   const city = String(formData.get("city") || "");
-  const hintText = `${file.name || ""} ${city}`.toLowerCase().replace(/[_-]+/g, " ");
-  return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
+  return `${file.name || ""} ${city}`.toLowerCase().replace(/[_-]+/g, " ");
 }
 
 async function catalogProbeCandidate(file, formData) {
-  const hasHint = hasCatalogProbeHint(file, formData);
+  const hintText = catalogProbeHintText(file, formData);
+  const hasHint = CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
   const sourceCanvas = await imageFileToCanvas(file);
   const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
   const looksServiceAreaLike = hasHint || catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file);
+  const metadata = {
+    hasHint,
+    hintText,
+    looksServiceAreaLike,
+    maxDimension,
+    sourceCanvas,
+  };
   if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) {
-    return { file: null, skippedMiss: !looksServiceAreaLike };
+    return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };
   }
   if (!looksServiceAreaLike) {
-    return { file: null, skippedMiss: true };
+    return { file: null, skippedMiss: true, ...metadata };
   }
   const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
   const canvas = document.createElement("canvas");
@@ -878,7 +954,7 @@ async function catalogProbeCandidate(file, formData) {
   context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
   const probeBlob = await catalogProbeBlob(canvas);
   if (!probeBlob || probeBlob.blob.size >= file.size * 0.75) {
-    return { file: null, skippedMiss: !looksServiceAreaLike };
+    return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };
   }
   return {
     file: new File([probeBlob.blob], `${fileBaseName(file.name)}.catalog-probe.${probeBlob.extension}`, {
@@ -886,6 +962,7 @@ async function catalogProbeCandidate(file, formData) {
       lastModified: file.lastModified,
     }),
     skippedMiss: false,
+    ...metadata,
   };
 }
 
@@ -960,6 +1037,67 @@ function isCatalogRunPayload(payload) {
   return payload?.status === "complete"
     && Boolean(payload?.summary?.catalog_slug)
     && source.startsWith("catalog-shape-match");
+}
+
+function isFastCatalogHandoffPayload(payload, catalogProbeResult) {
+  if (!isCatalogRunPayload(payload)) return false;
+  const summary = payload.summary || {};
+  if (CATALOG_PROBE_AREA_HINT_PATTERN.test(catalogProbeResult.catalogHintText || "")) {
+    if (!catalogSlugMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText)) return false;
+  } else if (catalogProbeResult.bestActiveCatalogSlug && summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug) {
+    return false;
+  }
+  const confidence = Number(summary.combined_confidence);
+  return Number.isFinite(confidence) && confidence >= FAST_CATALOG_HANDOFF_MIN_CONFIDENCE;
+}
+
+function catalogSlugMatchesHint(slug, hintText) {
+  if (!slug || !hintText) return false;
+  const parts = String(slug).toLowerCase().split("-").filter(Boolean);
+  if (parts.length < 2) return false;
+  const provider = parts.at(-1);
+  if (CATALOG_PROBE_PROVIDER_HINT_PATTERN.test(hintText) && !hintTextHasToken(hintText, provider)) {
+    return false;
+  }
+  const areaTokens = parts.slice(0, -1);
+  const area = areaTokens.join(" ");
+  if (area === "bay area") return /\b(?:bay\s+area|san\s+francisco|sf)\b/.test(hintText);
+  if (area === "san francisco") return /\b(?:san\s+francisco|sf)\b/.test(hintText);
+  return areaTokens.every((token) => hintTextHasToken(hintText, token));
+}
+
+function hintTextHasToken(hintText, token) {
+  return new RegExp(`\\b${token}\\b`).test(hintText);
+}
+
+async function fastCatalogHandoffCandidate(file, probeCandidate, catalogProbeResult) {
+  if (!shouldTryFastCatalogHandoff(file, probeCandidate, catalogProbeResult)) return null;
+  const sourceCanvas = probeCandidate.sourceCanvas;
+  const maxDimension = probeCandidate.maxDimension || Math.max(sourceCanvas.width, sourceCanvas.height);
+  if (maxDimension <= FAST_CATALOG_HANDOFF_MAX_DIMENSION) return null;
+  const scale = FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+  const blob = await canvasToBlob(canvas, "image/webp", FAST_CATALOG_HANDOFF_WEBP_QUALITY);
+  if (!blob || blob.type !== "image/webp") return null;
+  if (blob.size >= file.size * FAST_CATALOG_HANDOFF_MAX_SIZE_RATIO) return null;
+  return new File([blob], `${fileBaseName(file.name)}.catalog-handoff.webp`, {
+    type: "image/webp",
+    lastModified: file.lastModified,
+  });
+}
+
+function shouldTryFastCatalogHandoff(file, probeCandidate, catalogProbeResult) {
+  if (!file || isSvgFile(file) || file.size < FAST_CATALOG_HANDOFF_MIN_BYTES) return false;
+  if (!probeCandidate?.sourceCanvas || !probeCandidate.looksServiceAreaLike) return false;
+  if (!catalogProbeResult?.bestActiveCatalogSlug) return false;
+  const probeIou = Number(catalogProbeResult.bestActiveCatalogIou);
+  return Number.isFinite(probeIou) && probeIou >= FAST_CATALOG_HANDOFF_MIN_PROBE_IOU;
 }
 
 async function buildRunCacheKeys(file, formData) {

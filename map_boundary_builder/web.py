@@ -160,7 +160,8 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         image_path.write_bytes(image_bytes)
         output_path = run_dir / "boundary.geojson"
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
-        if catalog_probe_only:
+        fast_catalog_handoff = bool_field(fields, "fast_catalog_handoff", default=False)
+        if catalog_probe_only or fast_catalog_handoff:
             events: list[dict[str, Any]] = []
             profile: dict[str, Any] = {"upload_bytes": len(image_bytes)}
 
@@ -171,7 +172,8 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                 simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
                 min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
                 min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
-                catalog_probe_only=True,
+                catalog_probe_only=catalog_probe_only,
+                catalog_probe_missed=fast_catalog_handoff or bool_field(fields, "catalog_probe_missed", default=False),
                 write_mask_artifact=False,
                 filename_hint=original_filename,
             )

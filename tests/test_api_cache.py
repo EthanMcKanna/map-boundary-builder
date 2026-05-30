@@ -695,11 +695,15 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
-            b"return { file: null, skippedMiss: !looksServiceAreaLike };",
+            b"return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };",
             app_js,
         )
         self.assertIn(
-            b"return { file: null, skippedMiss: true };",
+            b"return { file: null, skippedMiss: true, ...metadata };",
+            app_js,
+        )
+        self.assertIn(
+            b"hasHint,\n    hintText,\n    looksServiceAreaLike,\n    maxDimension,\n    sourceCanvas,",
             app_js,
         )
         self.assertIn(
@@ -707,7 +711,31 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
-            b"lowIou: payload.catalog_probe_miss?.active_shape_iou_is_low === true,",
+            b"lowIou: miss.active_shape_iou_is_low === true,",
+            app_js,
+        )
+        self.assertIn(
+            b"const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 2000;",
+            app_js,
+        )
+        self.assertIn(
+            b"const CATALOG_PROBE_AREA_HINT_PATTERN =",
+            app_js,
+        )
+        self.assertIn(
+            b'if (name !== "image" && name !== "catalog_probe_miss_low_iou")',
+            app_js,
+        )
+        self.assertIn(
+            b'fastData.set("fast_catalog_handoff", "1");',
+            app_js,
+        )
+        self.assertIn(
+            b"summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug",
+            app_js,
+        )
+        self.assertIn(
+            b"catalogSlugMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText)",
             app_js,
         )
 
