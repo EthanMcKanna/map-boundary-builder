@@ -6759,3 +6759,28 @@ with zero failures in 0.531s.
   regression issues, and default active catalog gate
   `out/direct-filename-shape-default-20260530/full-report.json` with zero IoU
   regression issues.
+- Tightened the direct current-catalog shortcuts after the user reiterated that
+  Houston, Miami, and Bay Area changed relative to the base saved ground truth.
+  The prior filename/label shortcut could return current catalog geometry from
+  weak image-shape evidence: local inspection showed Houston filename-shape at
+  `catalog_shape_iou=0.576679` / area ratio `1.262478`, Miami at `0.609280` /
+  `0.724319`, and the label-shape path at similar Houston/Miami IoUs. Filename
+  shortcuts now use the catalog entry's normal high shape threshold and 0.85-1.15
+  area-ratio bounds; label-shape current catalog shortcuts now require at least
+  0.70 shape IoU plus the same area-ratio bounds before skipping georeference.
+  Houston and Miami drift screenshots therefore run OCR/georeference first and
+  only then use the georef-contained current-catalog completion, while strong
+  shape matches such as Bay Area Waymo and Tesla/Zoox catalog entries remain
+  fast. Focused shortcut tests passed 7/7. Drift smoke
+  `out/user-drift-smoke-after-shortcut-tighten-20260530c/full-report.json`
+  passed 6/6 smoke checks with zero failures, and current-catalog scoring
+  `out/user-drift-current-catalog-after-shortcut-tighten-20260530c/full-report.json`
+  still passed 6/6 at IoU 1.0, now routing Houston/Miami through
+  `catalog-shape-match:georef-contained` instead of the weaker pre-OCR shortcut.
+  Active non-drift gates stayed green: default catalog
+  `out/active-default-after-shortcut-tighten-20260530c/full-report.json` passed
+  8/8 with zero regression issues, and no-catalog
+  `out/active-nocatalog-after-shortcut-tighten-rerun-20260530c/full-report.json`
+  passed 8/8 with zero IoU regression. Full validation passed 274 tests plus 9
+  subtests, `python -m compileall -q api map_boundary_builder tests`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.

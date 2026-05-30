@@ -131,11 +131,13 @@ CURRENT_CATALOG_COMPLETION_SOURCES = {
     "current-external-service-area-reference",
     "current-verified-ocr-output",
 }
-CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU = 0.55
-CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.50
-CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.35
+CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU = 0.70
+CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.85
+CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.15
 CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE = 0.95
 CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE = 0.84
+FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO = 0.85
+FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO = 1.15
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 EARLY_OCR_STYLE_MAX_DIMENSION = max(
@@ -1729,27 +1731,12 @@ def filename_hinted_current_catalog_shape_match(
         return None
 
     entry = candidates[0]
-    iou, area_ratio, scored_entry, fitted, rotation_degrees = score_catalog_entry(
+    return match_catalog_entry(
         extraction.pixel_geometry,
         entry,
         min_iou=entry.min_iou,
-    )
-    if iou < CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU:
-        return None
-    if not (
-        CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO
-        <= area_ratio
-        <= CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO
-    ):
-        return None
-    return catalog_match_from_score(
-        extraction.pixel_geometry,
-        scored_entry,
-        iou=iou,
-        area_ratio=area_ratio,
-        margin=iou,
-        fitted_mercator_geometry=fitted,
-        rotation_degrees=rotation_degrees,
+        min_area_ratio=FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO,
+        max_area_ratio=FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO,
         confidence_override=CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE,
     )
 

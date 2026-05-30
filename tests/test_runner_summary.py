@@ -658,6 +658,76 @@ def test_filename_shape_shortcut_requires_provider_hint(monkeypatch) -> None:
     )
 
 
+def test_filename_shape_shortcut_requires_strong_shape_evidence(monkeypatch) -> None:
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.88,
+        use_exact_geometry=True,
+    )
+    loose_extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (10, 20), (10, 10), (0, 10)]),
+        coverage_ratio=0.75,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+
+    assert (
+        runner.filename_hinted_current_catalog_shape_match(
+            loose_extraction,
+            city_input=None,
+            filename_hint="Waymo Houston.png",
+        )
+        is None
+    )
+
+
+def test_filename_shape_shortcut_accepts_exact_provider_area_shape(monkeypatch) -> None:
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.88,
+        use_exact_geometry=True,
+    )
+    exact_extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+
+    match = runner.filename_hinted_current_catalog_shape_match(
+        exact_extraction,
+        city_input=None,
+        filename_hint="Waymo Houston.png",
+    )
+
+    assert match is not None
+    assert match.entry.slug == "houston-waymo"
+    assert match.iou == pytest.approx(1.0)
+    assert match.confidence == pytest.approx(runner.CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE)
+
+
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "Tesla Bay Area.png"
     Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
@@ -1125,7 +1195,7 @@ def test_current_catalog_label_shape_match_accepts_current_area_label(monkeypatc
 
     def fake_score(_pixel_geometry, candidate, *, min_iou):
         assert candidate is entry
-        return 0.573, 1.26, candidate, Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]), 0.0
+        return 0.88, 1.05, candidate, Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]), 0.0
 
     monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
     monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
@@ -1137,8 +1207,8 @@ def test_current_catalog_label_shape_match_accepts_current_area_label(monkeypatc
 
     assert match is not None
     assert match.entry.slug == "houston-waymo"
-    assert match.iou == pytest.approx(0.573)
-    assert match.area_ratio == pytest.approx(1.26)
+    assert match.iou == pytest.approx(0.88)
+    assert match.area_ratio == pytest.approx(1.05)
     assert match.confidence == pytest.approx(runner.CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE)
 
 
