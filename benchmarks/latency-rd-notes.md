@@ -7070,3 +7070,19 @@ with zero failures in 0.531s.
   A follow-up 0.20 pad attempt still matched locally, but it did not beat the
   0.25 proof and made the hard-image label evidence less direct in the top OCR
   labels, so it was rejected before deployment.
+- Provider-UI focused first-pass OCR candidate: raw shape-only disambiguation
+  was rejected because both Las Vegas phone screenshots scored higher against
+  `bay-area-zoox` than `las-vegas-zoox` without label evidence. The accepted
+  prototype keeps the full provider crop as fallback, but first OCRs an
+  interior service-area crop for dark-teal provider UI screenshots. Local proof
+  `out/provider-ui-focus-proof-20260530/` returned both phone screenshots via
+  `catalog-shape-match:provider-ui-focus-label` with the same `las-vegas-zoox`
+  catalog result, shape IoUs 0.524784 and 0.532996, explicit `Las Vegas` label
+  evidence, and elapsed times 0.317034s for `IMG_0071.PNG` and 0.226508s for
+  `IMG_0226.PNG`; the Zoox SF fixture still bypassed OCR through the regular
+  high-confidence catalog shape match. Validation passed 164 focused tests,
+  default active regression `out/provider-ui-focus-default-20260530/full-report.json`,
+  no-catalog regression `out/provider-ui-focus-nocatalog-20260530/full-report.json`,
+  current changed-market scoring
+  `out/provider-ui-focus-current-changed-market-score-20260530/full-report.json`,
+  full 289 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.

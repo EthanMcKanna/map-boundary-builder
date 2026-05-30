@@ -103,6 +103,11 @@ PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
 )
 PROVIDER_UI_CROP_PAD_RATIO = 0.25
 PROVIDER_UI_CROP_MIN_PAD_PX = 80.0
+PROVIDER_UI_FOCUS_CROP_ENABLED = os.environ.get("MAP_BOUNDARY_PROVIDER_UI_FOCUS_CROP", "1") != "0"
+PROVIDER_UI_FOCUS_CROP_STYLES = {"dark-teal"}
+PROVIDER_UI_FOCUS_CROP_MIN_X_FRACTION = 0.10
+PROVIDER_UI_FOCUS_CROP_MAX_X_FRACTION = 0.95
+PROVIDER_UI_FOCUS_CROP_Y_PAD_RATIO = 0.05
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
@@ -743,6 +748,57 @@ def build_boundary(
             and allow_catalog
             and provider_ui_fast_ocr_max_dimension is not None
         ):
+            provider_ui_match = None
+            provider_ui_labels: list[Any] = []
+            if provider_ui_focus_crop_enabled(extraction):
+                emit_progress(
+                    progress,
+                    stage="ocr",
+                    message="Reading focused provider area labels",
+                    percent=42,
+                    details={
+                        "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
+                        "crop_rapidocr_max_dimension": (
+                            PROVIDER_UI_CROP_OCR_MAX_DIMENSION
+                            if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+                            else None
+                        ),
+                    },
+                )
+                provider_ui_labels = extract_provider_ui_labels_from_rgb(
+                    str(image_path),
+                    rgb,
+                    extraction=extraction,
+                    rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                    focus=True,
+                )
+                provider_ui_match = provider_ui_label_catalog_match(extraction, provider_ui_labels)
+                emit_progress(
+                    progress,
+                    stage="ocr",
+                    message="Focused provider area labels read",
+                    percent=44,
+                    details={
+                        "label_count": len(provider_ui_labels),
+                        "top_labels": [label.text for label in provider_ui_labels[:8]],
+                        "matched_catalog": provider_ui_match.entry.slug if provider_ui_match is not None else None,
+                    },
+                )
+                if provider_ui_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        provider_ui_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input="Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:provider-ui-focus-label",
+                    )
             emit_progress(
                 progress,
                 stage="ocr",
@@ -1221,8 +1277,12 @@ def extract_provider_ui_labels_from_rgb(
     *,
     extraction,
     rapidocr_max_dimension: int | None,
+    focus: bool = False,
 ) -> list[Any]:
-    crop, offset_x, offset_y = provider_ui_ocr_crop(rgb, extraction.pixel_geometry.bounds)
+    if focus:
+        crop, offset_x, offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
+    else:
+        crop, offset_x, offset_y = provider_ui_ocr_crop(rgb, extraction.pixel_geometry.bounds)
     crop_max_dimension = (
         PROVIDER_UI_CROP_OCR_MAX_DIMENSION
         if PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
@@ -1247,6 +1307,29 @@ def extract_provider_ui_labels_from_rgb(
         )
         for label in labels
     ]
+
+
+def provider_ui_focus_crop_enabled(extraction) -> bool:
+    return (
+        PROVIDER_UI_FOCUS_CROP_ENABLED
+        and PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
+        and extraction.style in PROVIDER_UI_FOCUS_CROP_STYLES
+    )
+
+
+def provider_ui_focus_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
+    height, width = rgb.shape[:2]
+    min_x, min_y, max_x, max_y = bounds
+    polygon_width = max(1.0, max_x - min_x)
+    polygon_height = max(1.0, max_y - min_y)
+    left = max(0, int(min_x + polygon_width * PROVIDER_UI_FOCUS_CROP_MIN_X_FRACTION))
+    right = min(width, int(min_x + polygon_width * PROVIDER_UI_FOCUS_CROP_MAX_X_FRACTION))
+    pad_y = max(40.0, polygon_height * PROVIDER_UI_FOCUS_CROP_Y_PAD_RATIO)
+    top = max(0, int(min_y - pad_y))
+    bottom = min(height, int(max_y + pad_y))
+    if right <= left or bottom <= top:
+        return provider_ui_ocr_crop(rgb, bounds)
+    return rgb[top:bottom, left:right], float(left), float(top)
 
 
 def provider_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
