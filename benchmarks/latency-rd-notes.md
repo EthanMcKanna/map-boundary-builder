@@ -90,6 +90,18 @@ with zero failures in 0.531s.
   wheel to validate parity before deployment. Current PyPI metadata still shows
   `rapidocr-onnxruntime` at 1.4.4, `onnxruntime` at 1.26.0, and `rapidocr` at
   3.8.1, so there is no newly proven drop-in dependency upgrade lane.
+- May 30 live user step-in again confirmed Houston, Miami, and Bay Area service
+  areas have changed from the base saved ground truth. Re-ran the drift guards:
+  the four focused benchmark/catalog tests passed 4/4, the changed-market smoke
+  `out/user-reminder-drift-smoke-20260530/full-report.json` ran all six
+  Houston/Miami/Bay Area fixtures as unscored `reference_mismatch` checks with
+  zero smoke failures, and the strict drift-aware no-catalog gate
+  `out/user-reminder-drift-aware-nocatalog-20260530/full-report.json` passed
+  8/8 scored non-drift fixtures with seven `reference_mismatch` skips, avg IoU
+  0.962, min IoU 0.931, total active duration 3.34s, and zero regression issues
+  against `out/current-profile-nocatalog-20260530/full-report.json`. Keep these
+  markets out of scored accuracy gates until their source/reference pairs are
+  refreshed.
 - May 30 upload-transport probe: rejected browser-side lossless PNG
   normalization. A Pillow `optimize=True` encode preserved decoded RGBA pixels
   and shrank Tesla screenshots by about 20-24%, but big Waymo screenshots only
@@ -6616,3 +6628,46 @@ with zero failures in 0.531s.
   8/8, avg IoU 0.962, min IoU 0.931, total active duration 2.741s, average
   0.343s, max 0.556s, and zero regression issues against
   `out/current-profile-nocatalog-20260530/full-report.json`.
+- Continued post-deploy R&D after the realistic warmup rollout. Production
+  repeated `/api/health?warm=ocr` calls on `pipeline-844c7a5b3381d745` confirmed
+  the cold warmup is cached inside the function process: warm payloads returned
+  `total_s` around 0.0038s and `rapidocr_s` around 0.00001s after the first
+  warm call. PyPI still has no straightforward OCR upgrade lane:
+  `rapidocr-onnxruntime` latest/installed 1.4.4 and `onnxruntime`
+  latest/installed 1.26.0; standalone `rapidocr` remains latest 3.8.1 and was
+  already rejected as a drop-in backend. Rejected another full-upload transport
+  shortcut: 1600px WebP q94 transformed fixtures cut bytes heavily but failed
+  strict no-catalog regression in
+  `out/upload-webp1600-fixtures-20260530k/nocatalog/full-report.json`, with IoU
+  drops on Austin Tesla, Dallas Tesla, Dallas Waymo, Nashville, Phoenix, and San
+  Antonio. Rejected fast-text recognition box caps as a default: caps below 44
+  lost Phoenix/LA/Orlando accuracy, cap 48 preserved strict IoU in
+  `out/capped-fasttext-48-nocatalog-20260530k/` and matched 9 successful
+  Downloads stress outputs at IoU 1.0, but sequential A/B showed uncapped faster
+  (`out/seq-ab-uncapped-nocatalog-20260530k` total 6.12s) than cap 48
+  (`out/seq-ab-cap48-nocatalog-20260530k` total 8.12s). No code shipped from
+  these probes.
+- Dallas Avride arbitrary/no-catalog robustness improvement: the
+  `/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp` image
+  already extracted a clean `light-fill` polygon, but no-catalog georeferencing
+  failed because high-confidence OCR labels such as `DEEPELLUM`, `OAKLAWN`, and
+  `LAKEWO` did not match the existing OSM place seed names `Deep Ellum`,
+  `Oak Lawn`, and `Lakewood`. Added general OCR place aliases for those
+  concatenated/truncated forms plus nearby road/name variants. The same image
+  now succeeds with catalog disabled in
+  `out/avride-dallas-alias-nocatalog-20260530/boundary.geojson`: five control
+  points, confidence 0.855, median residual 444.2m, p90 residual 1049.1m,
+  bbox `[-96.8209832, 32.767271, -96.7593743, 32.8342594]`, and a diagnostic
+  0.816 IoU / 0.864 catalog coverage against the current `dallas-avride`
+  catalog geometry. Same-process warm repeats took 0.276884s and 0.246006s.
+  Focused alias/context tests passed 4/4. The strict drift-aware no-catalog gate
+  `out/dallas-alias-nocatalog-20260530/full-report.json` passed 8/8 scored
+  fixtures, skipped seven `reference_mismatch` fixtures, avg IoU 0.962, min IoU
+  0.931, total 3.35s, and zero regression issues against
+  `out/current-profile-nocatalog-20260530/full-report.json`. The default
+  catalog gate `out/dallas-alias-default-20260530/full-report.json` passed 8/8
+  with zero regression issues against
+  `out/realistic-warmup-active-20260530j/full-report.json`. Full validation
+  passed 269 tests plus 9 subtests, `compileall -q api map_boundary_builder
+  tests`, `node --check map_boundary_builder/web_assets/app.js`, and
+  `git diff --check`.

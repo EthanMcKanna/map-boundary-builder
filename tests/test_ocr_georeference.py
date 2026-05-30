@@ -14,6 +14,7 @@ from map_boundary_builder.georeference import (
     ControlPoint,
     GeoreferenceResult,
     LabelGeocodeCandidate,
+    build_osm_place_control_points,
     build_control_points,
     candidate_place_labels,
     direct_city_contexts_from_labels,
@@ -38,6 +39,7 @@ from map_boundary_builder.georeference import (
 )
 from map_boundary_builder.geocoder import GeocodeResult
 from map_boundary_builder.georef_transform import GeoreferenceTransform
+from map_boundary_builder.osm_places import PlacePoint
 from map_boundary_builder.ocr import (
     OCR_MEMORY_CACHE_MAX,
     OcrLabel,
@@ -1092,6 +1094,44 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(place_query_text("ILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")
+        self.assertEqual(place_query_text("DEEPELLUM"), "Deep Ellum")
+        self.assertEqual(place_query_text("OAKLAWN"), "Oak Lawn")
+        self.assertEqual(place_query_text("NORTH AKLAWN"), "North Oak Lawn")
+        self.assertEqual(place_query_text("LAKEWO"), "Lakewood")
+        self.assertEqual(place_query_text("WIISHIRE"), "Wilshire")
+
+    def test_concatenated_dallas_labels_match_osm_place_controls(self) -> None:
+        dallas = GeocodeResult(
+            label="Dallas",
+            lon=-96.7968559,
+            lat=32.7762719,
+            display_name="Dallas, Dallas County, Texas, United States",
+            bbox=(-97.000482, 32.613216, -96.4636317, 33.0239366),
+            importance=0.72,
+            place_type="city",
+        )
+        labels = [
+            OcrLabel("DEEPELLUM", x=424.5, y=385.0, width=89.0, height=18.0, confidence=98.1),
+            OcrLabel("OAKLAWN", x=258.0, y=163.5, width=76.0, height=15.0, confidence=99.2),
+            OcrLabel("LAKEWO", x=644.5, y=123.5, width=63.0, height=13.0, confidence=99.5),
+        ]
+        places = [
+            PlacePoint("Deep Ellum", "quarter", lon=-96.7804594, lat=32.7842977),
+            PlacePoint("Oak Lawn", "neighbourhood", lon=-96.8089492, lat=32.809111),
+            PlacePoint("Lakewood", "quarter", lon=-96.7524914, lat=32.8271318),
+        ]
+
+        with patch("map_boundary_builder.georeference.load_place_points", return_value=places):
+            controls = build_osm_place_control_points(labels, dallas)
+
+        self.assertCountEqual(
+            [(control.label.text, control.geocode.display_name) for control in controls],
+            [
+                ("DEEPELLUM", "Deep Ellum, quarter"),
+                ("LAKEWO", "Lakewood, quarter"),
+                ("OAKLAWN", "Oak Lawn, neighbourhood"),
+            ],
+        )
 
     def test_fuller_labels_identify_single_token_fragments(self) -> None:
         labels = [
