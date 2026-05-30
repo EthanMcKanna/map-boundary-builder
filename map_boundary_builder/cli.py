@@ -38,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Treat the prior catalog probe miss as far from active catalog shapes and overlap OCR with extraction.",
     )
+    parser.add_argument(
+        "--filename-hint",
+        help="Override the uploaded filename hint used for catalog/context matching.",
+    )
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")
     parser.add_argument(
         "--profile-events",
@@ -78,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
                 allow_catalog=not args.no_catalog,
                 catalog_probe_missed=args.catalog_probe_missed,
                 catalog_probe_miss_low_iou=args.catalog_probe_miss_low_iou,
-                filename_hint=image_path.name,
+                filename_hint=args.filename_hint if args.filename_hint is not None else image_path.name,
             ),
             progress=progress if args.profile_events else None,
         )

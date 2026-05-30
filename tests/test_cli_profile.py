@@ -72,3 +72,30 @@ def test_print_summary_failure_includes_profile_events(tmp_path, monkeypatch, ca
         "georeference",
     ]
     assert "map-boundary-builder: error: could not infer a reliable map location" in captured.err
+
+
+def test_filename_hint_override_reaches_runner(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "Waymo Phoenix.png"
+    output_path = tmp_path / "boundary.geojson"
+    image_path.write_bytes(b"not a real image")
+    seen_hints = []
+
+    def fake_build_boundary(image, city, output, *, debug_dir, options, progress):
+        seen_hints.append(options.filename_hint)
+        raise RuntimeError("stop after options")
+
+    monkeypatch.setattr(cli_module, "build_boundary", fake_build_boundary)
+
+    exit_code = cli_module.main(
+        [
+            "--image",
+            str(image_path),
+            "--output",
+            str(output_path),
+            "--filename-hint",
+            "uploaded-map.png",
+        ]
+    )
+
+    assert exit_code == 1
+    assert seen_hints == ["uploaded-map.png"]

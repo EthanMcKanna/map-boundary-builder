@@ -735,11 +735,13 @@ def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, m
         catalog_probe_missed=True,
         execution="subprocess",
         debug_artifacts=False,
+        neutral_filename_hint=True,
     )
 
     assert "--print-summary" in seen_commands[0]
     assert "--profile-events" in seen_commands[0]
     assert "--catalog-probe-missed" in seen_commands[0]
+    assert seen_commands[0][-2:] == ["--filename-hint", "uploaded-map.png"]
     assert score.passed is False
     assert score.error == "could not infer a reliable map location"
     assert score.stage_elapsed_s == {"inspect": 0.01, "ocr": 0.2}
@@ -834,3 +836,67 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
             "write_mask_artifact": False,
         }
     ]
+
+
+def test_in_process_full_fixture_can_use_neutral_filename_hint(tmp_path: Path, monkeypatch) -> None:
+    polygon = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-112.0, 33.0],
+                            [-111.0, 33.0],
+                            [-111.0, 34.0],
+                            [-112.0, 33.0],
+                        ]
+                    ],
+                },
+            }
+        ],
+    }
+    image_path = tmp_path / "Waymo Phoenix.png"
+    reference_path = tmp_path / "phoenix-waymo.json"
+    image_path.write_bytes(b"unused by patched runner")
+    reference_path.write_text(json.dumps(polygon) + "\n")
+    fixture = BenchmarkFixture(
+        slug="phoenix-waymo",
+        provider="waymo",
+        area="Phoenix",
+        image_path=image_path,
+        reference_path=reference_path,
+    )
+    filename_hints = []
+
+    def fake_build_boundary(_image, _city, _output_path, *, debug_dir, options, progress):
+        filename_hints.append(options.filename_hint)
+        return SimpleNamespace(
+            geojson=polygon,
+            summary={
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "combined_confidence": 0.96,
+                "catalog_slug": None,
+            },
+        )
+
+    monkeypatch.setattr("map_boundary_builder.runner.build_boundary", fake_build_boundary)
+
+    score = score_full_fixture_in_process(
+        fixture,
+        output_path=tmp_path / "out" / "boundary.geojson",
+        debug_dir=None,
+        min_iou=0.99,
+        city_overrides=False,
+        no_catalog=True,
+        catalog_probe_missed=False,
+        debug_artifacts=False,
+        neutral_filename_hint=True,
+    )
+
+    assert score.passed is True
+    assert filename_hints == ["uploaded-map.png"]

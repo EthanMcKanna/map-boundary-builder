@@ -109,3 +109,8 @@ stay visible as skipped data debt instead of weakening the model score.
 For slower end-to-end georeferencing checks, run `--mode full`. The full mode
 uses the same CLI output path as production and scores the exported GeoJSON
 against the same references.
+
+Use `--neutral-filename-hint` with `--mode full` when you want an image-only
+generalization gate. It replaces market/provider fixture filenames with a
+generic upload hint so the benchmark cannot lean on names like
+`Waymo Phoenix.png` while fitting OCR labels.

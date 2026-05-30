@@ -138,6 +138,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="For --mode full, mark the prior catalog probe miss as far from active catalog shapes.",
     )
     parser.add_argument(
+        "--neutral-filename-hint",
+        action="store_true",
+        help=(
+            "For --mode full, replace provider/market filename hints with a neutral "
+            "upload name so image-only generalization can be measured."
+        ),
+    )
+    parser.add_argument(
         "--execution",
         choices=("subprocess", "in-process"),
         default="subprocess",
@@ -251,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
         no_catalog=args.no_catalog,
         catalog_probe_missed=args.catalog_probe_missed,
         catalog_probe_miss_low_iou=args.catalog_probe_miss_low_iou,
+        neutral_filename_hint=args.neutral_filename_hint,
         only_filters=args.only,
         fixture_config=args.fixture_config,
         execution=args.execution,
@@ -311,6 +320,7 @@ def run_benchmark(
     no_catalog: bool = False,
     catalog_probe_missed: bool = False,
     catalog_probe_miss_low_iou: bool = False,
+    neutral_filename_hint: bool = False,
     execution: str = "subprocess",
     debug_artifacts: bool = True,
     smoke_skipped: bool = False,
@@ -351,6 +361,7 @@ def run_benchmark(
                             no_catalog=no_catalog,
                             catalog_probe_missed=catalog_probe_missed,
                             catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                            neutral_filename_hint=neutral_filename_hint,
                             execution=execution,
                             debug_artifacts=debug_artifacts,
                             score_reference=True,
@@ -367,6 +378,7 @@ def run_benchmark(
                         no_catalog=no_catalog,
                         catalog_probe_missed=catalog_probe_missed,
                         catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                        neutral_filename_hint=neutral_filename_hint,
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=False,
@@ -395,6 +407,7 @@ def run_benchmark(
                         no_catalog=no_catalog,
                         catalog_probe_missed=catalog_probe_missed,
                         catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                        neutral_filename_hint=neutral_filename_hint,
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=True,
@@ -425,6 +438,7 @@ def run_benchmark(
             "no_catalog": no_catalog,
             "catalog_probe_missed": catalog_probe_missed,
             "catalog_probe_miss_low_iou": catalog_probe_miss_low_iou,
+            "neutral_filename_hint": neutral_filename_hint,
             "execution": execution,
             "debug_artifacts": debug_artifacts,
             "smoke_skipped": smoke_skipped,
@@ -610,6 +624,7 @@ def score_full_fixture(
     debug_artifacts: bool,
     catalog_probe_missed: bool = False,
     catalog_probe_miss_low_iou: bool = False,
+    neutral_filename_hint: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
@@ -625,6 +640,7 @@ def score_full_fixture(
             no_catalog=no_catalog,
             catalog_probe_missed=catalog_probe_missed,
             catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+            neutral_filename_hint=neutral_filename_hint,
             debug_artifacts=debug_artifacts,
             score_reference=score_reference,
             reference_geometry=reference_geometry,
@@ -652,6 +668,8 @@ def score_full_fixture(
         command.append("--catalog-probe-missed")
     if catalog_probe_miss_low_iou:
         command.append("--catalog-probe-miss-low-iou")
+    if neutral_filename_hint:
+        command.extend(["--filename-hint", neutral_fixture_filename_hint(fixture)])
     started = time.perf_counter()
     try:
         completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout_seconds, check=False)
@@ -732,6 +750,7 @@ def score_full_fixture_in_process(
     debug_artifacts: bool,
     catalog_probe_missed: bool = False,
     catalog_probe_miss_low_iou: bool = False,
+    neutral_filename_hint: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
 ) -> BenchmarkScore:
@@ -754,7 +773,7 @@ def score_full_fixture_in_process(
                 allow_catalog=not no_catalog,
                 catalog_probe_missed=catalog_probe_missed,
                 catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
-                filename_hint=fixture.image_path.name,
+                filename_hint=fixture_filename_hint(fixture, neutral=neutral_filename_hint),
                 write_mask_artifact=debug_artifacts,
             ),
             progress=progress,
@@ -792,6 +811,15 @@ def score_full_fixture_in_process(
         )
     except Exception as exc:
         return failed_full_score(fixture, str(exc), duration_s=time.perf_counter() - started)
+
+
+def fixture_filename_hint(fixture: BenchmarkFixture, *, neutral: bool) -> str:
+    return neutral_fixture_filename_hint(fixture) if neutral else fixture.image_path.name
+
+
+def neutral_fixture_filename_hint(fixture: BenchmarkFixture) -> str:
+    suffix = fixture.image_path.suffix.lower() or ".png"
+    return f"uploaded-map{suffix}"
 
 
 def score_output_geometry(

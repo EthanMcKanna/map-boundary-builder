@@ -6217,3 +6217,29 @@ with zero failures in 0.531s.
   total and 0.508999s max for the current 4.10 pin in
   `out/active-nocatalog-serial-20260530c/full-report.json`. Do not promote the
   pin unless a future OCR/extraction change recovers that no-catalog loss.
+- Added a first-class neutral-filename benchmark mode to measure true
+  image-only generalization. The active no-catalog gate had been using real
+  fixture names like `Waymo Phoenix.png`, so this mode passes
+  `uploaded-map.<ext>` through the CLI/runner instead. A pre-change one-off
+  probe with neutral hints passed all 8 active fixtures with avg IoU 0.961733,
+  min IoU 0.931476, total 3.133498s, and max 0.580393s in
+  `out/no-filename-hint-nocatalog-20260530a/report.json`. The checked-in
+  benchmark switch (`--neutral-filename-hint`) also passed all 8 active
+  fixtures with the same avg/min IoU in
+  `out/no-hint-benchmark-20260530a/full-report.json`; that run was timing-noisy
+  at 5.815758s total, so treat it as a generalization/reliability guard rather
+  than a speed proof. Focused coverage passed 24 benchmark/CLI tests, and the
+  default catalog/no-catalog gates still passed after the plumbing change
+  (`out/post-neutral-default-20260530a/`,
+  `out/post-neutral-nocatalog-20260530a/`), preserving the same scored IoUs.
+- Rejected an OpenCV thread-pool cap as an arbitrary-path latency lever. The
+  local cv2 build uses the macOS GCD backend and reports 12 threads by default;
+  `cv2.setNumThreads(1)` snapped back to 12, while `cv2.setNumThreads(0)`
+  reported 1. Accuracy stayed unchanged with the one-thread setting, but the
+  no-catalog active gate was still slower/noisy at 5.330549s total in
+  `out/opencv-threads0-nocatalog-20260530a/full-report.json` versus the clean
+  current 4.10/OpenCV default serial baseline of 2.774516s in
+  `out/active-nocatalog-serial-20260530c/full-report.json`. The catalog-enabled
+  run also did not produce a meaningful win (`out/opencv-threads0-default-20260530a/`).
+  Leave OpenCV threading on its upstream default unless a future production-like
+  concurrency benchmark proves otherwise.
