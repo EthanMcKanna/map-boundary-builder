@@ -7086,3 +7086,9 @@ with zero failures in 0.531s.
   current changed-market scoring
   `out/provider-ui-focus-current-changed-market-score-20260530/full-report.json`,
   full 289 tests plus 9 subtests, compileall, JS syntax, and `git diff --check`.
+  Production `dpl_ZgPoGjD2QmkLsLDFHgGt9kyGVjju` served
+  `pipeline-9edbbfda2aac66db`; cache-busted no-city uploads preserved the same
+  catalog result and used only the focused provider OCR path. `IMG_0071.PNG`
+  completed in 0.326216-0.438518s total before send, and the hard
+  `IMG_0226.PNG` crossed below one second at 0.801312-0.836180s total before
+  send, with build time 0.791048-0.826130s and OCR down to 0.542589-0.564102s.
