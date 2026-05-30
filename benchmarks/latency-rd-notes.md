@@ -6555,3 +6555,36 @@ with zero failures in 0.531s.
   while `out/filename-shape-active-default-20260530h/full-report.json`
   preserved the unchanged active suite at 8/8 scored, avg IoU 0.993, min IoU
   0.943, and zero regression issues against the previous baseline.
+- Pipeline-version cold-path split: `get_pipeline_version()` no longer imports
+  `cv2` just to hash backend/source/package versions. Runtime health still
+  verifies the actual `cv2` import through `pipeline_version_dependency_versions`,
+  but the HTML shell and run-result cache-key path can now compute the pipeline
+  hash without paying the OpenCV import cost. Local cold-process timing improved
+  from about 0.200712s for `get_pipeline_version()` with `cv2` imported to
+  0.017803s with `cv2_loaded=False`; `web_asset_response("index.html")`
+  served in 0.020381s with `cv2_loaded=False`, while the health dependency path
+  still reported `cv2 4.10.0` and imported it. Validation passed
+  `tests/test_pipeline_version.py` plus focused API asset/health tests, full
+  pytest 267/267 plus 9 subtests, `compileall -q api map_boundary_builder tests`,
+  `node --check map_boundary_builder/web_assets/app.js`, and `git diff --check`.
+  The unchanged active catalog gate
+  `out/light-pipeline-version-active-20260530i/full-report.json` passed 8/8
+  scored with zero IoU regression against
+  `out/filename-shape-active-default-20260530h/full-report.json`; the no-catalog
+  gate `out/light-pipeline-version-nocatalog-20260530i/full-report.json`
+  preserved avg IoU 0.962/min IoU 0.931 with zero regression issues against
+  `out/current-profile-nocatalog-20260530/full-report.json` and total active
+  duration 3.28s.
+- Production deployment `dpl_8esnk9aRhcEpcyDv7trWCx8ab43G` is aliased to
+  `https://mapboundary.app` with the lightweight pipeline hash
+  `pipeline-55b20635c79fc62c`. Public `/` returned the HTML shell with that
+  hash and `asset-d7bb213e359621a5` in 0.087926s TTFB / 0.088113s total, and
+  `/api/health` stayed healthy with `cv2 4.10.0`. Fresh production handoff
+  smokes under `out/prod-light-pipeline-version-20260530i/` preserved current
+  catalog sources: Houston and Miami returned
+  `catalog-shape-match:filename-shape`, while Bay Area returned
+  `catalog-shape-match:probe-miss-full`; each fresh response had
+  `raw_cache_lookup_s` below 0.030s. A same-image Houston repeat proved the
+  intended cache-hit path: `cached: true`, `cache_hit: raw`,
+  `raw_cache_lookup_s: 0.000647`, and `total_before_send_s: 0.001042`, with
+  the same `houston-waymo` filename-shape output.

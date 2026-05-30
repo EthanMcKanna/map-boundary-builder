@@ -58,7 +58,7 @@ def get_pipeline_version() -> str:
     for filename, source in pipeline_version_sources():
         digest.update(filename.encode("utf-8"))
         digest.update(source.read_bytes())
-    for package, package_version in pipeline_version_dependency_versions():
+    for package, package_version in pipeline_version_hash_dependency_versions():
         digest.update(package.encode("utf-8"))
         digest.update(package_version.encode("utf-8"))
     _PIPELINE_VERSION = f"pipeline-{digest.hexdigest()[:16]}"
@@ -83,6 +83,10 @@ def pipeline_version_sources():
 def pipeline_version_dependency_versions():
     yield from runtime_dependency_versions(PIPELINE_VERSION_PACKAGES)
     yield "cv2", cv2_runtime_version()
+
+
+def pipeline_version_hash_dependency_versions():
+    yield from runtime_dependency_versions(PIPELINE_VERSION_PACKAGES)
 
 
 def runtime_dependency_versions(packages: tuple[str, ...]):
