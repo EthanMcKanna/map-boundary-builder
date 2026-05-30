@@ -186,9 +186,9 @@ class handler(BaseHTTPRequestHandler):
         def progress(event: dict[str, Any]) -> None:
             events.append({"timestamp": time.time(), **event})
 
-        include_overlay = bool_field(fields, "include_overlay", default=True)
         normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=False)
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
+        include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
@@ -564,6 +564,10 @@ def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def include_overlay_for_request(fields: dict[str, str], *, catalog_probe_only: bool) -> bool:
+    return bool_field(fields, "include_overlay", default=not catalog_probe_only)
 
 
 def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") -> tuple[bytes, dict[str, str]]:

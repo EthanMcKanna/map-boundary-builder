@@ -25,6 +25,7 @@ from api.index import (
     generation_error_status,
     health_response_status,
     health_payload,
+    include_overlay_for_request,
     inline_overlay,
     jpeg_commentless_run_result_cache_key,
     jpeg_commentless_sha256,
@@ -682,6 +683,12 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))
         self.assertFalse(bool_field({"normalized_cache_lookup": "0"}, "normalized_cache_lookup", default=False))
         self.assertTrue(bool_field({"normalized_cache_lookup": "1"}, "normalized_cache_lookup", default=False))
+
+    def test_catalog_probe_requests_default_to_no_overlay(self) -> None:
+        self.assertFalse(include_overlay_for_request({}, catalog_probe_only=True))
+        self.assertTrue(include_overlay_for_request({}, catalog_probe_only=False))
+        self.assertTrue(include_overlay_for_request({"include_overlay": "1"}, catalog_probe_only=True))
+        self.assertFalse(include_overlay_for_request({"include_overlay": "0"}, catalog_probe_only=False))
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:
