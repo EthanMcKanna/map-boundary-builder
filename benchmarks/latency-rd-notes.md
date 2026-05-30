@@ -6975,3 +6975,25 @@ with zero failures in 0.531s.
   catalog score audit intentionally still fails the old Houston/Miami saved
   screenshots for weak source-image evidence, confirming those remain stale
   screenshot debt rather than refreshed scored truth.
+- Retry-first current-area hint candidate: after the user reiterated that
+  Houston, Miami, and Bay Area have changed from the saved ground truth, the
+  validation gate was tightened around current catalog evidence instead of old
+  saved references. The candidate skips the initial 240px catalog probe only
+  for a single active `current-verified-ocr-output` area hint whose catalog
+  geometry has at least 150 vertices, which currently targets the complex Bay
+  Area Waymo outline while keeping smaller current Houston and Miami hints on
+  the cheaper probe. Local current-input proof
+  `out/retry-first-current-changed-market-score-20260530/full-report.json`
+  scored Houston, Miami, and Bay Area Waymo against current catalog geometry
+  with 3/3 passing, avg/min IoU 1.0, source-image evidence IoUs 0.980523,
+  0.986200, and 0.960519, and total duration 0.192002s. Drift-aware gates
+  stayed clean: default active catalog
+  `out/retry-first-current-default-20260530/full-report.json` preserved the
+  prior 8/8 scored active fixtures with seven stale `reference_mismatch` skips
+  and zero IoU regression; no-catalog
+  `out/retry-first-current-nocatalog-20260530/full-report.json` preserved the
+  OCR/georeference path with zero IoU regression; and
+  `out/retry-first-current-drift-smoke-20260530/full-report.json` smoke-ran the
+  stale Houston/Miami/Bay Area saved fixtures without scoring them as truth.
+  Full validation passed 282 tests plus 9 subtests, compileall, JS syntax, and
+  `git diff --check`.

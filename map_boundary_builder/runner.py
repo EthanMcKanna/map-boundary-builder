@@ -143,6 +143,7 @@ AREA_HINTED_CURRENT_CATALOG_MAX_IOU_RELAXATION = 0.01
 AREA_HINTED_CURRENT_CATALOG_MIN_MARGIN = 0.70
 AREA_HINTED_CURRENT_CATALOG_MIN_AREA_RATIO = 0.98
 AREA_HINTED_CURRENT_CATALOG_MAX_AREA_RATIO = 1.04
+AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES = 150
 FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO = 0.85
 FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO = 1.15
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
@@ -282,8 +283,13 @@ def build_boundary(
             filename_hint=filename_hint,
             allow_pre_ocr_catalog=allow_pre_ocr_catalog,
         )
+        catalog_extract_max_dimension = initial_catalog_extract_max_dimension(
+            city_input=city_input,
+            filename_hint=filename_hint,
+            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+        )
         rgb = (
-            load_rgb_at_max_dimension(image_path, CATALOG_EXTRACT_MAX_DIMENSION)
+            load_rgb_at_max_dimension(image_path, catalog_extract_max_dimension)
             if low_res_catalog_rgb
             else load_rgb(image_path)
         )
@@ -354,7 +360,7 @@ def build_boundary(
                 **ocr_kwargs,
             )
             ensure_georeference_resource_preload()
-        extraction_max_dimension = CATALOG_EXTRACT_MAX_DIMENSION if allow_pre_ocr_catalog else (
+        extraction_max_dimension = catalog_extract_max_dimension if allow_pre_ocr_catalog else (
             CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
         )
         used_catalog_scaled_extraction = (
@@ -1470,6 +1476,63 @@ def should_load_low_res_catalog_rgb(
     if city_input is not None:
         return has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input)
     return has_active_catalog_area_hint(filename_hint)
+
+
+def initial_catalog_extract_max_dimension(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    allow_pre_ocr_catalog: bool,
+) -> int:
+    if (
+        not allow_pre_ocr_catalog
+        or CATALOG_RETRY_EXTRACT_MAX_DIMENSION <= CATALOG_EXTRACT_MAX_DIMENSION
+    ):
+        return CATALOG_EXTRACT_MAX_DIMENSION
+    if area_hinted_current_catalog_should_start_at_retry_dimension(
+        city_input=city_input,
+        filename_hint=filename_hint,
+    ):
+        return CATALOG_RETRY_EXTRACT_MAX_DIMENSION
+    return CATALOG_EXTRACT_MAX_DIMENSION
+
+
+def area_hinted_current_catalog_should_start_at_retry_dimension(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> bool:
+    hint_texts = [text for text in (city_input, filename_hint) if text and text.strip()]
+    if not hint_texts:
+        return False
+    candidates = [
+        entry
+        for entry in load_catalog_entries()
+        if (
+            getattr(entry, "is_active", False)
+            and getattr(entry, "catalog_source", None) == "current-verified-ocr-output"
+            and any(catalog_area_matches_text(getattr(entry, "area", ""), hint) for hint in hint_texts)
+        )
+    ]
+    if len(candidates) != 1:
+        return False
+    return catalog_entry_vertex_count(candidates[0]) >= AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES
+
+
+def catalog_entry_vertex_count(entry: Any) -> int:
+    return geometry_vertex_count(getattr(entry, "geometry", None))
+
+
+def geometry_vertex_count(geometry: Any) -> int:
+    if geometry is None:
+        return 0
+    if hasattr(geometry, "exterior"):
+        coords = list(geometry.exterior.coords)
+        return max(0, len(coords) - 1)
+    geoms = getattr(geometry, "geoms", None)
+    if geoms is None:
+        return 0
+    return sum(geometry_vertex_count(geom) for geom in geoms)
 
 
 def should_retry_pre_ocr_catalog(

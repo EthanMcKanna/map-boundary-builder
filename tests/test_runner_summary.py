@@ -1340,6 +1340,46 @@ def test_area_hinted_current_catalog_match_rejects_when_best_shape_is_different_
     assert match is None
 
 
+def test_complex_area_hinted_current_catalog_starts_at_retry_dimension(monkeypatch) -> None:
+    entry = SimpleNamespace(
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        area="Bay Area",
+        geometry=Polygon([(index, index % 7) for index in range(151)]),
+    )
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+
+    assert (
+        runner.initial_catalog_extract_max_dimension(
+            city_input="Bay Area",
+            filename_hint="Waymo Bay Area.png",
+            allow_pre_ocr_catalog=True,
+        )
+        == runner.CATALOG_RETRY_EXTRACT_MAX_DIMENSION
+    )
+
+
+def test_smaller_area_hinted_current_catalog_keeps_tiny_probe(monkeypatch) -> None:
+    entry = SimpleNamespace(
+        is_active=True,
+        catalog_source="current-verified-ocr-output",
+        area="Miami",
+        geometry=Polygon([(0, 0), (3, 0), (3, 3), (0, 3)]),
+    )
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+
+    assert (
+        runner.initial_catalog_extract_max_dimension(
+            city_input="Miami",
+            filename_hint="Waymo Miami.png",
+            allow_pre_ocr_catalog=True,
+        )
+        == runner.CATALOG_EXTRACT_MAX_DIMENSION
+    )
+
+
 def test_catalog_probe_only_retries_without_area_hint_before_miss(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "h-waymo probe.jpg"
     Image.new("RGB", (520, 520), (245, 245, 245)).save(image_path)
