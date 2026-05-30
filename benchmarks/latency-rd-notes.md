@@ -5718,33 +5718,25 @@ with zero failures in 0.531s.
   was rejected because cv2 resizing did not match PIL pixels and moved
   dark-teal thumbnail bounds/vertices, so `load_rgb_at_max_dimension` remains on
   the existing PIL path.
-- Accepted a guarded hybrid OpenVINO text-recognition path for RapidOCR's
-  filtered bright-text workflow, with an important deployment caveat. Full
-  OpenVINO OCR was rejected because its detector missed too many map labels, but
-  keeping the current ONNX detector and swapping only recognition was accurate:
-  direct crop profiling cut recognition for Miami/Bay Area/Phoenix-style
-  batches roughly in half while preserving decoded labels. The production
-  implementation is optional and self-disabling: if OpenVINO is unavailable or
-  errors once, it falls back to the existing ONNX recognizer for the process;
-  small batches stay on ONNX by default
-  (`MAP_BOUNDARY_OPENVINO_RECOGNIZER_MIN_CROPS=8`) to avoid OpenVINO overhead
-  on tiny gray Tesla cases while still accelerating the Houston/Miami/Bay
-  Area-sized OCR batches. Focused tests cover OpenVINO selection, ONNX
-  fallback, failure disabling, small-batch skipping, cache-key versioning, and
-  warmup; full pytest passed 254 tests and 9 subtests on the locked dependency
-  set. Local cold-ish no-catalog runs were noisy because OpenVINO compile cost
-  can land inside early fixtures, but the production-shaped warmed gate
+- Rejected OpenVINO for production after live Vercel validation. Full OpenVINO
+  OCR was inaccurate because its detector missed too many map labels. A hybrid
+  path that kept the current ONNX detector and swapped only recognition looked
+  promising locally: the warmed locked-stack no-catalog gate
   `out/openvino-locked-min8-warmed-nocatalog-20260530/full-report.json` passed
   8/8 scored active fixtures with avg IoU 0.961733, min IoU 0.931476, zero
   regression issues versus `out/webp-decode-nocatalog-20260530/full-report.json`,
-  and total active duration 2.26s versus 2.96s baseline. The warmed
+  and total active duration 2.26s versus 2.96s baseline; the warmed
   Houston/Miami/Bay Area drift smoke
   `out/openvino-locked-min8-warmed-drift-smoke-20260530/full-report.json`
   passed all three user-confirmed stale `reference_mismatch` checks as
-  OCR/georeference catalog misses; the min-8 active gate was added after live
-  production showed min-14 was too conservative for Houston/Miami-sized
-  batches. Adding OpenVINO initially exceeded Vercel's 500MB Python function
-  storage limit (514.53MB), but extending `vercel.json`'s Python
-  `excludeFiles` to match local `.vercelignore` for `_uv/**`,
-  `.playwright-cli/**`, and other generated clutter brought the production
-  build to 456.03MB and allowed `npx -y vercel@latest build --prod` to pass.
+  OCR/georeference catalog misses. Vercel packaging also became workable only
+  after extending `vercel.json`'s Python `excludeFiles` to match local
+  `.vercelignore` for `_uv/**`, `.playwright-cli/**`, and other generated
+  clutter, reducing the OpenVINO build from 514.53MB over the 500MB Lambda
+  storage limit to a passing 456.03MB build. However, live production smokes on
+  deployment `dpl_G7KB3hEWAVZSYpFigBTFGZZwArKo` were slower than the previous
+  non-OpenVINO production handoff for the user-confirmed stale Houston, Miami,
+  and Bay Area screenshots, so production was rolled back to
+  `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`. The deployability exclude cleanup is kept,
+  but the OpenVINO runtime/dependency code should stay out until a lighter or
+  demonstrably faster production recognizer path is found.

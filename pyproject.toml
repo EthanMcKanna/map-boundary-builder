@@ -26,7 +26,6 @@ dependencies = [
   "numpy>=2.0",
   "onnxruntime==1.26.0",
   "opencv-python-headless==4.10.0.84",
-  "openvino==2025.4.1",
   "pillow>=10.0",
   "rapidocr-onnxruntime>=1.4,<2.0",
   "shapely>=2.0",

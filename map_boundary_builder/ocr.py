@@ -13,7 +13,6 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from threading import Lock
 
 import cv2
 import numpy as np
@@ -22,8 +21,6 @@ from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
-    OPENVINO_RECOGNIZER_ENABLED,
-    OPENVINO_RECOGNIZER_MIN_CROPS,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
@@ -64,14 +61,11 @@ OCR_CACHE_DEPENDENCY_PACKAGES = (
     "onnxruntime",
     "opencv-python",
     "opencv-python-headless",
-    "openvino",
     "pillow",
     "rapidocr-onnxruntime",
 )
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
-_OPENVINO_RECOGNIZER_UNAVAILABLE = False
-_OPENVINO_RECOGNIZER_STATE_LOCK = Lock()
 
 
 def extract_ocr_labels(
@@ -516,8 +510,6 @@ def ocr_cache_key_for_digest(
             f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
             f"rapidocr-min-text-area={round(float(rapidocr_min_text_area or 0.0), 4)}:"
-            f"openvino-rec-enabled={OPENVINO_RECOGNIZER_ENABLED}:"
-            f"openvino-rec-min-crops={OPENVINO_RECOGNIZER_MIN_CROPS}:"
             f"tesseract-fallback-min={TESSERACT_FALLBACK_MIN_USEFUL_LABELS}:"
             f"deps={ocr_cache_dependency_signature()}:"
             f"{digest_kind}:{digest}"
@@ -683,100 +675,10 @@ def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_tex
     if not selected:
         return None
     crop_images = engine.get_crop_img_list(img, selected)
-    rec_res, _rec_elapsed = recognize_rapidocr_crops(engine, crop_images)
+    rec_res, _rec_elapsed = engine.text_rec(crop_images, False)
     origin_boxes = engine._get_origin_points(selected, op_record, raw_h, raw_w)
     result, _elapsed = engine.get_final_res(origin_boxes, None, rec_res, 0.0, 0.0, 0.0)
     return result
-
-
-def recognize_rapidocr_crops(engine, crop_images: list[np.ndarray]) -> tuple[list[tuple[str, float]], float]:
-    openvino_result = run_openvino_text_recognition(getattr(engine, "text_rec", None), crop_images)
-    if openvino_result is not None:
-        return openvino_result, 0.0
-    return engine.text_rec(crop_images, False)
-
-
-def run_openvino_text_recognition(text_rec, img_list: list[np.ndarray] | np.ndarray):
-    if not OPENVINO_RECOGNIZER_ENABLED or text_rec is None:
-        return None
-    crop_count = 1 if isinstance(img_list, np.ndarray) else len(img_list)
-    if crop_count < OPENVINO_RECOGNIZER_MIN_CROPS:
-        return None
-    global _OPENVINO_RECOGNIZER_UNAVAILABLE
-    if _OPENVINO_RECOGNIZER_UNAVAILABLE:
-        return None
-    try:
-        return run_openvino_text_recognition_or_raise(text_rec, img_list)
-    except Exception:
-        with _OPENVINO_RECOGNIZER_STATE_LOCK:
-            _OPENVINO_RECOGNIZER_UNAVAILABLE = True
-        return None
-
-
-def run_openvino_text_recognition_or_raise(text_rec, img_list: list[np.ndarray] | np.ndarray):
-    if isinstance(img_list, np.ndarray):
-        img_list = [img_list]
-    if not img_list:
-        return []
-
-    model_path = openvino_recognition_model_path(text_rec)
-    if model_path is None:
-        return None
-    compiled_model = openvino_compiled_recognition_model(model_path)
-    infer_request = compiled_model.create_infer_request()
-
-    width_list = [img.shape[1] / float(img.shape[0]) for img in img_list]
-    indices = np.argsort(np.array(width_list))
-    rec_res = [("", 0.0)] * len(img_list)
-    batch_num = max(1, int(getattr(text_rec, "rec_batch_num", 1)))
-    for beg_img_no in range(0, len(img_list), batch_num):
-        end_img_no = min(len(img_list), beg_img_no + batch_num)
-        _img_c, img_h, img_w = text_rec.rec_image_shape[:3]
-        max_wh_ratio = img_w / img_h
-        wh_ratio_list = []
-        for index in range(beg_img_no, end_img_no):
-            h, w = img_list[indices[index]].shape[:2]
-            wh_ratio = w / float(h)
-            max_wh_ratio = max(max_wh_ratio, wh_ratio)
-            wh_ratio_list.append(wh_ratio)
-
-        norm_img_batch = []
-        for index in range(beg_img_no, end_img_no):
-            norm_img = text_rec.resize_norm_img(img_list[indices[index]], max_wh_ratio)
-            norm_img_batch.append(norm_img[np.newaxis, :])
-        batch = np.concatenate(norm_img_batch).astype(np.float32)
-
-        infer_request.infer(inputs=[batch])
-        preds = np.array(infer_request.get_output_tensor().data)
-        rec_result = text_rec.postprocess_op(
-            preds,
-            False,
-            wh_ratio_list=wh_ratio_list,
-            max_wh_ratio=max_wh_ratio,
-        )
-        for result_index, one_res in enumerate(rec_result):
-            rec_res[indices[beg_img_no + result_index]] = one_res
-    return rec_res
-
-
-def openvino_recognition_model_path(text_rec) -> str | None:
-    session = getattr(getattr(text_rec, "session", None), "session", None)
-    model_path = getattr(session, "_model_path", None)
-    if model_path is None:
-        return None
-    return str(model_path)
-
-
-@lru_cache(maxsize=2)
-def openvino_compiled_recognition_model(model_path: str):
-    try:
-        from openvino import Core
-    except Exception:
-        from openvino.runtime import Core
-
-    core = Core()
-    model = core.read_model(model_path)
-    return core.compile_model(model=model, device_name="CPU")
 
 
 def rapidocr_box_area(box: np.ndarray) -> float:
@@ -815,8 +717,6 @@ def warm_rapidocr_runtime() -> bool:
         for detector_limit in rapidocr_warm_detector_limits():
             engine = rapidocr_engine(detector_limit)
             engine(sample, use_cls=False)
-            openvino_warm_samples = [sample] * max(1, OPENVINO_RECOGNIZER_MIN_CROPS)
-            run_openvino_text_recognition(getattr(engine, "text_rec", None), openvino_warm_samples)
     except Exception:
         return False
     return True
