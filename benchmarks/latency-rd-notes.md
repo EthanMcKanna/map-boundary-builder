@@ -7183,3 +7183,26 @@ with zero failures in 0.531s.
   1.608629s before the shortcut, so the direct API tail is now subsecond. A
   gray-fill generic sanity upload stayed on `austin-tesla` in 0.677229s, and a
   hard dark Zoox sanity upload stayed on `las-vegas-zoox` in 0.824846s.
+- No-hint probe-miss OCR deferral candidate: a production audit of the actual
+  browser path for the generic gray-fill no-city stress image found that the
+  520px catalog probe correctly missed in 0.135285s, but because the miss was
+  marked low-IoU the full upload started low-detail full-image OCR before
+  refined extraction knew the image was `gray-fill`. That made the UI-style
+  full request take 2.125640s total-before-send with 1.891764s in OCR, even
+  though the direct provider-crop path handled the same image in about 0.68s.
+  The accepted candidate does not overlap OCR for no-city/no-provider/no-area
+  probe misses, allowing extraction to classify provider UI first and use the
+  cropped provider-label OCR path when applicable; provider/area hinted
+  low-IoU misses still keep their early OCR path. Local proof
+  `out/probe-miss-noearly-gray-20260530/boundary.geojson` preserved
+  `catalog-shape-match:provider-ui-label`, `austin-tesla`, evidence IoU
+  0.594104, and area ratio 0.855101 while completing in 0.535508s with
+  cropped provider OCR. Validation passed 56 runner tests, 189 focused
+  catalog/benchmark tests, full 293 tests plus 9 subtests, compileall, JS
+  syntax, and `git diff --check`. Default active regression
+  `out/probe-miss-noearly-default-20260530/full-report.json`, no-catalog
+  regression `out/probe-miss-noearly-nocatalog-20260530/full-report.json`,
+  and current changed-market scoring
+  `out/probe-miss-noearly-current-changed-market-score-20260530/full-report.json`
+  all passed with zero IoU regression; Houston, Miami, and Bay Area current
+  inputs remained 3/3 against refreshed current catalog geometry.

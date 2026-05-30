@@ -1802,6 +1802,15 @@ def test_catalog_probe_low_iou_miss_allows_early_ocr_for_provider_hints() -> Non
         runner.should_overlap_probe_miss_ocr(
             skip_redundant_probe=True,
             city_input=None,
+            filename_hint="uploaded-map.png",
+            catalog_probe_miss_low_iou=True,
+        )
+        is False
+    )
+    assert (
+        runner.should_overlap_probe_miss_ocr(
+            skip_redundant_probe=True,
+            city_input=None,
             filename_hint="Waymo Houston.png",
         )
         is False

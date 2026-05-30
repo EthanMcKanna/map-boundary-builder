@@ -1636,11 +1636,13 @@ def should_overlap_probe_miss_ocr(
 ) -> bool:
     if not skip_redundant_probe:
         return False
+    hint_text = filename_hint or ""
+    if city_input is None and not catalog_provider_hint(hint_text) and not has_active_catalog_area_hint(hint_text):
+        return False
     if catalog_probe_miss_low_iou:
         return True
     if city_input is not None:
         return False
-    hint_text = filename_hint or ""
     return not catalog_provider_hint(hint_text) and not has_active_catalog_area_hint(hint_text)
 
 
