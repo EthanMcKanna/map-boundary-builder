@@ -6815,3 +6815,25 @@ with zero failures in 0.531s.
   light-fill pass still fell back to full OCR, yielding no validated production
   win and sometimes adding a second OCR pass. The prototype was backed out.
   Focused runner/API tests after backing out passed 78/78.
+- Accepted the conservative part of the light-fill OCR filter after production
+  preview A/B: include `light-fill` in the existing fast-text OCR style set at
+  the current 800 area cutoff, not the unsafe higher cutoffs. The low-level
+  Dallas Avride probe showed area 800 preserved the same five-control
+  georeference while trimming OCR boxes from 56 to 49; area 1000 still produced
+  the known unsafe three-control fit, and 1200/1500 could not georeference on
+  their own. Local neutral Dallas Avride no-catalog
+  `out/lightfill-area800-default-neutral-20260530/boundary.geojson` preserved
+  bbox `[-96.8209832, 32.767271, -96.7593743, 32.8342594]`, confidence 0.855,
+  and five controls in 0.845665s. Active gates stayed green with zero IoU
+  regression issues against the saved baselines: default catalog
+  `out/lightfill-area800-default-20260530/full-report.json` passed 8/8, avg IoU
+  0.993, min IoU 0.943, total 0.43s; no-catalog
+  `out/lightfill-area800-nocatalog-20260530/full-report.json` passed 8/8, avg
+  IoU 0.962, min IoU 0.931, total 3.40s. Preview deployment
+  `dpl_CWhxG15e7JvQhf3CSccEkPAqi66G` on `pipeline-b54156429dd92594` exposed
+  `fast_text_ocr_styles=["bright-blue","gray-fill","light-fill"]`. Three
+  fresh cache-miss preview/prod A/B uploads of the same Dallas Avride WebP
+  preserved identical output, while preview build times were 0.845355s,
+  0.828119s, and 0.886328s versus current production at 1.021965s, 1.132628s,
+  and 1.139322s. This moves the warm arbitrary Avride path below one second on
+  preview without changing active benchmark geometry.

@@ -284,7 +284,7 @@ def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
     assert runner.fast_text_ocr_min_area_for_style("bright-blue") == 1200.0
     assert runner.fast_text_ocr_min_area_for_style("gray-fill") == 1200.0
     assert runner.fast_text_ocr_min_area_for_style("dark-teal") is None
-    assert runner.fast_text_ocr_min_area_for_style("light-fill") is None
+    assert runner.fast_text_ocr_min_area_for_style("light-fill") == 1200.0
     assert runner.fast_text_ocr_min_area_for_style(None) is None
 
 
