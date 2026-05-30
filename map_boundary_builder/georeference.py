@@ -3356,14 +3356,23 @@ def fit_similarity(pixel: np.ndarray, merc: np.ndarray) -> tuple[float, float, f
     if variance <= 0:
         return None
     covariance = p_centered.T @ m_centered
-    u, singular_values, vt = np.linalg.svd(covariance)
-    rotation_matrix = vt.T @ u.T
-    if np.linalg.det(rotation_matrix) < 0:
-        vt[-1, :] *= -1
-        rotation_matrix = vt.T @ u.T
-    scale = float(singular_values.sum() / variance)
-    translation = m_mean - scale * (rotation_matrix @ p_mean)
-    rotation = float(atan2(rotation_matrix[1, 0], rotation_matrix[0, 0]))
+    rotation = float(atan2(covariance[0, 1] - covariance[1, 0], covariance[0, 0] + covariance[1, 1]))
+    cos_r = cos(rotation)
+    sin_r = sin(rotation)
+    scale = float(
+        (
+            cos_r * (covariance[0, 0] + covariance[1, 1])
+            + sin_r * (covariance[0, 1] - covariance[1, 0])
+        )
+        / variance
+    )
+    translation = m_mean - scale * np.array(
+        [
+            cos_r * p_mean[0] - sin_r * p_mean[1],
+            sin_r * p_mean[0] + cos_r * p_mean[1],
+        ],
+        dtype=float,
+    )
     return scale, rotation, float(translation[0]), float(translation[1])
 
 

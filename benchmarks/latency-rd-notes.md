@@ -210,6 +210,22 @@ with zero failures in 0.531s.
   QInt8 measured LA 1.801s, Phoenix 2.825s, Dallas 0.787s, Orlando 0.699s.
   This is not a production candidate without a different quantization flow or a
   model family exported for quantization.
+- Accepted a closed-form 2D similarity fit for OCR georeferencing. The robust
+  label-fit search calls `fit_similarity` thousands of times on harder
+  arbitrary maps; replacing the tiny 2x2 SVD with the equivalent direct
+  rotation/scale formula preserved randomized SVD equivalence within
+  `1.8e-10` and made the primitive 2.25x faster locally (1.090167s to
+  0.485151s in the focused microbench). Focused georeference/benchmark/runner
+  tests passed 112/112; full pytest passed 226 tests plus 9 subtests;
+  compileall, `node --check`, and `git diff --check` passed. The strict
+  arbitrary/no-catalog gate `out/fitfast-nocatalog-20260530/full-report.json`
+  preserved avg IoU 0.961733/min 0.931476 with zero active IoU drops while
+  reducing active total duration from `out/current-profile-nocatalog-20260530`
+  at 3.872495s to 3.513431s. Default catalog
+  `out/fitfast-default-20260530/full-report.json` preserved avg IoU
+  0.992917/min 0.943345, and Houston/Miami/Bay Area smoke
+  `out/fitfast-drift-smoke-20260530/full-report.json` passed six
+  `reference_mismatch` checks with zero failures.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU

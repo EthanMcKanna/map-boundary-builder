@@ -20,6 +20,7 @@ from map_boundary_builder.georeference import (
     detect_label_marker_dots,
     filename_city_contexts,
     filename_context_queries,
+    fit_similarity,
     geocode_many,
     geocode_contexts,
     georeference_from_labels,
@@ -87,6 +88,30 @@ class OcrGroupingTests(unittest.TestCase):
 
     def test_residual_median_p90_handles_empty_numpy_arrays(self) -> None:
         self.assertEqual(residual_median_p90(np.array([]), empty=float("inf")), (float("inf"), float("inf")))
+
+    def test_fit_similarity_recovers_rotation_scale_and_translation(self) -> None:
+        pixel = np.array([[0.0, 0.0], [100.0, 0.0], [0.0, 80.0], [120.0, 90.0]], dtype=float)
+        scale = 37.5
+        rotation = 0.21
+        cos_r = np.cos(rotation)
+        sin_r = np.sin(rotation)
+        translation = np.array([1234.0, -5678.0], dtype=float)
+        merc = scale * np.column_stack(
+            (
+                cos_r * pixel[:, 0] - sin_r * pixel[:, 1],
+                sin_r * pixel[:, 0] + cos_r * pixel[:, 1],
+            )
+        ) + translation
+
+        fitted = fit_similarity(pixel, merc)
+
+        self.assertIsNotNone(fitted)
+        assert fitted is not None
+        fitted_scale, fitted_rotation, fitted_tx, fitted_ty = fitted
+        self.assertAlmostEqual(fitted_scale, scale)
+        self.assertAlmostEqual(fitted_rotation, rotation)
+        self.assertAlmostEqual(fitted_tx, translation[0])
+        self.assertAlmostEqual(fitted_ty, translation[1])
 
     def test_stacked_labels_require_nearby_rows(self) -> None:
         labels = [
