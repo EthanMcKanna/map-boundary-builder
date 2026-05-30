@@ -5829,3 +5829,14 @@ with zero failures in 0.531s.
   versus the protected old deployment's 1.468012s / 1.177167s control. The
   public `mapboundary.app` alias remained on `dpl_FdaSKSnGgVtGk1CWaUdWs6HdM3FQ`,
   and the runtime cap was backed out to 1400px.
+- Rejected broad OCR/extraction overlap for provider-named probe misses.
+  Houston, Miami, and Bay Area exposed a tempting gap: after a tiny catalog
+  probe miss, provider-named stale screenshots currently wait for extraction
+  before OCR starts. Allowing overlap for all provider hints was too blunt,
+  though. It preserved geometry but made active catalog-probe-miss fixtures much
+  slower because OCR contended with fast full-catalog matches:
+  `out/probe-miss-provider-overlap-20260530/full-report.json` kept avg IoU
+  0.992917 but increased active handoff total from 0.563764s to 1.617s, with
+  San Antonio rising from 0.090s to 0.404s and Phoenix from 0.098s to 0.310s.
+  Keep the current provider-hint guard unless a more precise stale/current
+  discriminator is available from the client or catalog probe response.
