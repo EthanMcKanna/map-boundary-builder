@@ -731,6 +731,14 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
         self.assertIn(
+            b"const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);",
+            app_js,
+        )
+        self.assertIn(
+            b"if (shouldUseFastCatalogHandoff(result)) {\n        result.fastHandoffFile = await fastHandoffFilePromise;",
+            app_js,
+        )
+        self.assertIn(
             b"summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug",
             app_js,
         )

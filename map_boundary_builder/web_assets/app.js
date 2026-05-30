@@ -842,11 +842,13 @@ async function tryCatalogProbe(file, formData, options = {}) {
     probeData.set("catalog_probe_only", "1");
     probeData.set("include_overlay", "0");
     probeData.set("normalized_cache_lookup", "0");
-    const response = await fetch("/api/runs", {
+    const responsePromise = fetch("/api/runs", {
       method: "POST",
       body: probeData,
       ...(options.signal ? { signal: options.signal } : {}),
     });
+    const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);
+    const response = await responsePromise;
     const payload = await response.json().catch(() => null);
     if (response.ok && isCatalogRunPayload(payload)) return { payload };
     if (response.ok && payload?.status === "catalog_miss") {
@@ -863,7 +865,9 @@ async function tryCatalogProbe(file, formData, options = {}) {
         hasCatalogHint: probeCandidate.hasHint === true,
         catalogHintText: probeCandidate.hintText || "",
       };
-      result.fastHandoffFile = await fastCatalogHandoffCandidate(file, probeCandidate, result);
+      if (shouldUseFastCatalogHandoff(result)) {
+        result.fastHandoffFile = await fastHandoffFilePromise;
+      }
       return {
         ...result,
       };
@@ -1070,8 +1074,8 @@ function hintTextHasToken(hintText, token) {
   return new RegExp(`\\b${token}\\b`).test(hintText);
 }
 
-async function fastCatalogHandoffCandidate(file, probeCandidate, catalogProbeResult) {
-  if (!shouldTryFastCatalogHandoff(file, probeCandidate, catalogProbeResult)) return null;
+async function fastCatalogHandoffCandidate(file, probeCandidate) {
+  if (!shouldPrepareFastCatalogHandoff(file, probeCandidate)) return null;
   const sourceCanvas = probeCandidate.sourceCanvas;
   const maxDimension = probeCandidate.maxDimension || Math.max(sourceCanvas.width, sourceCanvas.height);
   if (maxDimension <= FAST_CATALOG_HANDOFF_MAX_DIMENSION) return null;
@@ -1092,9 +1096,13 @@ async function fastCatalogHandoffCandidate(file, probeCandidate, catalogProbeRes
   });
 }
 
-function shouldTryFastCatalogHandoff(file, probeCandidate, catalogProbeResult) {
+function shouldPrepareFastCatalogHandoff(file, probeCandidate) {
   if (!file || isSvgFile(file) || file.size < FAST_CATALOG_HANDOFF_MIN_BYTES) return false;
   if (!probeCandidate?.sourceCanvas || !probeCandidate.looksServiceAreaLike) return false;
+  return true;
+}
+
+function shouldUseFastCatalogHandoff(catalogProbeResult) {
   if (!catalogProbeResult?.bestActiveCatalogSlug) return false;
   const probeIou = Number(catalogProbeResult.bestActiveCatalogIou);
   return Number.isFinite(probeIou) && probeIou >= FAST_CATALOG_HANDOFF_MIN_PROBE_IOU;

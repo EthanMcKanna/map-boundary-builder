@@ -6466,3 +6466,30 @@ with zero failures in 0.531s.
   avg IoU 0.961733 and min IoU 0.931476. One parallel benchmark batch was
   discarded as CPU-contended latency noise because it preserved IoU exactly but
   inflated every fixture's timing while three heavy gates were running at once.
+- Follow-up browser overlap candidate: the frontend now starts the tiny
+  catalog-probe `fetch()` before preparing the 2000px WebP handoff, then still
+  only awaits/uses that handoff when the probe miss reports a plausible active
+  catalog slug with IoU >=0.5. This keeps the same acceptance guards while
+  reducing the idle gap between probe miss and handoff upload. A local
+  two-port Chromium A/B against commit `7389206` kept identical
+  `probe` -> `fast-handoff` outputs and no original uploads; Houston averaged
+  0.858370s wall for the overlap candidate versus 0.897048s baseline, and
+  Miami averaged 0.726141s versus 0.782196s. A Bay Area Waymo exact-probe-hit
+  guard also stayed on the single tiny probe request and averaged 0.446806s
+  locally versus 0.564047s baseline, so the overlap work did not regress the
+  one-shot Bay Area path. Focused API/runner frontend tests passed 40 tests,
+  full pytest passed 264/264, `compileall -q api
+  map_boundary_builder tests`, `node --check map_boundary_builder/web_assets/app.js`,
+  and `git diff --check` passed. Preview deployment
+  `dpl_8Ku7Ar1URUWwAbFkeAxTyuD9J4JS` contains the overlap code and warmed OCR
+  successfully with backend `pipeline-3c16077ba036d439`. Promoted production
+  deployment `dpl_FjdLhDBC5qAVogcMX4byedzqjpcz` stabilized on the overlap
+  asset hash. Fresh production browser cache-miss checks in
+  `out/prod-overlap-verify-20260530f/browser-summary-536687.json` preserved
+  current slugs/confidence for Houston Waymo, Miami Waymo, and Bay Area Waymo.
+  The post-probe idle gap dropped from the previous production proof's 130-135ms
+  to approximately 0ms: the handoff request starts as soon as the probe response
+  is available. Warm cache-miss browser flows stayed around 2.12-2.27s for
+  Houston, 1.91-2.30s for Miami, and 0.82-0.86s for Bay Area; first Houston and
+  Miami reps were cold OCR/runtime outliers but still returned the same catalog
+  outputs with `cache_hit: miss`.
