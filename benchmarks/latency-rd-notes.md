@@ -5726,23 +5726,25 @@ with zero failures in 0.531s.
   batches roughly in half while preserving decoded labels. The production
   implementation is optional and self-disabling: if OpenVINO is unavailable or
   errors once, it falls back to the existing ONNX recognizer for the process;
-  small batches stay on ONNX by default (`MAP_BOUNDARY_OPENVINO_RECOGNIZER_MIN_CROPS=14`)
-  to avoid OpenVINO overhead on gray Tesla cases and marginal Dallas-sized
-  batches. Focused tests cover OpenVINO selection, ONNX fallback, failure
-  disabling, small-batch skipping, cache-key versioning, and warmup; full pytest
-  passed 254 tests and 9 subtests on the locked dependency set. Local cold-ish
-  no-catalog runs were noisy because OpenVINO compile cost can land inside early
-  fixtures, but the production-shaped warmed gate
-  `out/openvino-locked-min14-warmed-nocatalog-20260530/full-report.json` passed
+  small batches stay on ONNX by default
+  (`MAP_BOUNDARY_OPENVINO_RECOGNIZER_MIN_CROPS=8`) to avoid OpenVINO overhead
+  on tiny gray Tesla cases while still accelerating the Houston/Miami/Bay
+  Area-sized OCR batches. Focused tests cover OpenVINO selection, ONNX
+  fallback, failure disabling, small-batch skipping, cache-key versioning, and
+  warmup; full pytest passed 254 tests and 9 subtests on the locked dependency
+  set. Local cold-ish no-catalog runs were noisy because OpenVINO compile cost
+  can land inside early fixtures, but the production-shaped warmed gate
+  `out/openvino-locked-min8-warmed-nocatalog-20260530/full-report.json` passed
   8/8 scored active fixtures with avg IoU 0.961733, min IoU 0.931476, zero
   regression issues versus `out/webp-decode-nocatalog-20260530/full-report.json`,
-  and total active duration 2.23s versus 2.96s baseline. The warmed
+  and total active duration 2.26s versus 2.96s baseline. The warmed
   Houston/Miami/Bay Area drift smoke
-  `out/openvino-locked-min14-warmed-drift-smoke-20260530/full-report.json`
+  `out/openvino-locked-min8-warmed-drift-smoke-20260530/full-report.json`
   passed all three user-confirmed stale `reference_mismatch` checks as
-  OCR/georeference catalog misses. Adding OpenVINO initially exceeded Vercel's
-  500MB Python function storage limit (514.53MB), but extending
-  `vercel.json`'s Python `excludeFiles` to match local `.vercelignore` for
-  `_uv/**`, `.playwright-cli/**`, and other generated clutter brought the
-  production build to 456.03MB and allowed `npx -y vercel@latest build --prod`
-  to pass.
+  OCR/georeference catalog misses; the min-8 active gate was added after live
+  production showed min-14 was too conservative for Houston/Miami-sized
+  batches. Adding OpenVINO initially exceeded Vercel's 500MB Python function
+  storage limit (514.53MB), but extending `vercel.json`'s Python
+  `excludeFiles` to match local `.vercelignore` for `_uv/**`,
+  `.playwright-cli/**`, and other generated clutter brought the production
+  build to 456.03MB and allowed `npx -y vercel@latest build --prod` to pass.
