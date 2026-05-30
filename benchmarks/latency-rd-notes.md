@@ -5619,3 +5619,23 @@ with zero failures in 0.531s.
   Miami, and Bay Area Waymo on OCR/georeference with null catalog slugs; and
   dark-teal no-catalog stress `out/skip-marker-dark-stress-20260530` succeeded
   3/3 so Zoox-style maps still retain marker anchoring.
+- Deployed the guarded marker-anchor skip to production after the green local
+  gates, while keeping Houston, Miami, and Bay Area as user-confirmed
+  `reference_mismatch` data debt rather than scored accuracy regressions.
+  Production deploy `dpl_AstbX3PouinzQo7TsK33597vmGW6` promoted
+  `map-boundary-builder-fhexentuy-ethanmckannas-projects.vercel.app` to
+  `mapboundary.app`; `/api/health` reports
+  `pipeline-e1d53ae6b5f570c3` versus the previous production deployment's
+  `pipeline-43d21115c0cc2320`. Live protected-deployment comparison on two
+  pixel-distinct Miami drift uploads preserved output exactly across old and
+  new production: status `complete`, `catalog_slug: null`,
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence 0.864,
+  six control points, and bbox
+  `[-80.3244327, 25.6875289, -80.1176251, 25.9399326]`. The averaged live
+  georeference stage was 0.302751s on the new deployment versus 0.312382s on
+  the previous deployment; end-to-end production totals were noisy because OCR
+  and extraction varied more than the marker-anchor change. Public
+  `mapboundary.app` smoke also passed: an Avride Dallas catalog-path upload
+  returned in 0.038286s with `catalog_slug: dallas-avride`, and a Miami drift
+  OCR/georef upload returned in 1.572217s with `catalog_slug: null` and the same
+  six-control-point bbox.
