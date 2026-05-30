@@ -5419,3 +5419,17 @@ with zero failures in 0.531s.
   keeping even the heavier known-catalog path subsecond. The UI-equivalent probe
   with `include_overlay=0` returned the same catalog output at
   `build_boundary_s: 0.052227` and `total_before_send_s: 0.056629`.
+- Defaulted API `catalog_probe_only=1` requests to `include_overlay=0` unless
+  the caller explicitly asks for an overlay. The browser already sent this
+  field, but direct API probes were paying overlay/debug work by default: the
+  pre-change production proof without `include_overlay=0` returned
+  `build_artifacts_s: 0.218469` and `total_before_send_s: 0.83789`. Focused API
+  tests passed 2/2, full pytest passed 238 tests plus 9 subtests, `compileall`,
+  `node --check`, and `git diff --check` passed. Production deployment
+  `dpl_FLK4QdvDDqTcC4uuLymyHedrJ9yf` is aliased to `https://mapboundary.app`
+  and reports backend `pipeline-c69d42a455f16bce`. A cache-miss default catalog
+  probe with a pixel-distinct LA image returned HTTP 201, no overlay artifact,
+  `catalog-shape-match`, `los-angeles-waymo`, `build_boundary_s: 0.172005`,
+  and `total_before_send_s: 0.408703`; a warm pixel-distinct repeat preserved
+  the same output with no overlay artifact at `build_boundary_s: 0.055766` and
+  `total_before_send_s: 0.059676`.
