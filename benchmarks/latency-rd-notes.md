@@ -5400,3 +5400,22 @@ with zero failures in 0.531s.
   Houston/Miami/Bay Area fixtures as `reference_mismatch` smoke-only checks, so
   these changed markets do not count as accuracy regressions until references
   are refreshed.
+- Closed the frontend-delivery gap exposed by the warmup fix deploy. Because
+  frontend-only changes did not alter the backend pipeline hash, the stable
+  `/static/app.js` path could keep older browsers/CDN edges on stale code. The
+  index asset now hashes the frontend bundle separately and serves
+  `/static/app.css?v=asset-...` plus `/static/app.js?v=asset-...`, while leaving
+  the generation pipeline version and run-cache keys alone. Focused asset tests
+  passed 3/3, full pytest passed 237 tests plus 9 subtests, `compileall`,
+  `node --check`, `git diff --check`, and a local HTTP index check all passed.
+  Production deployment `dpl_3ZT9dFWHuL1jx79ojPtk5yGWdx4M` is aliased to
+  `https://mapboundary.app`; public HTML now references
+  `asset-5e40991ae17c6b83` for both CSS and JS, public health is OK on backend
+  `pipeline-e92714f32798fe7c`, and the hashed JS contains the
+  `generationRuntimePrewarmAbortController.abort()` cancellation path. A live
+  production LA catalog-probe smoke returned HTTP 201, `catalog-shape-match`,
+  `los-angeles-waymo`, confidence 0.859, `build_boundary_s: 0.380477`, and
+  `total_before_send_s: 0.83789` with the API default overlay included,
+  keeping even the heavier known-catalog path subsecond. The UI-equivalent probe
+  with `include_overlay=0` returned the same catalog output at
+  `build_boundary_s: 0.052227` and `total_before_send_s: 0.056629`.
