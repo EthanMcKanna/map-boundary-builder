@@ -53,8 +53,31 @@ class ExtractionResult:
 
 
 def load_rgb(path: str | Path) -> np.ndarray:
+    image_path = Path(path)
+    if image_path.suffix.lower() == ".webp":
+        cv2_rgb = load_webp_rgb_with_cv2(image_path)
+        if cv2_rgb is not None:
+            return cv2_rgb
     with Image.open(path) as image:
         return pil_image_to_rgb_array(image)
+
+
+def load_webp_rgb_with_cv2(path: str | Path) -> np.ndarray | None:
+    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    if image is None:
+        return None
+    if image.ndim == 2:
+        return np.ascontiguousarray(cv2.cvtColor(image, cv2.COLOR_GRAY2RGB))
+    if image.ndim != 3:
+        return None
+    if image.shape[2] == 3:
+        return np.ascontiguousarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    if image.shape[2] != 4:
+        return None
+    alpha = image[:, :, 3]
+    if not np.all(alpha == 255):
+        return None
+    return np.ascontiguousarray(cv2.cvtColor(image[:, :, :3], cv2.COLOR_BGR2RGB))
 
 
 def load_rgb_at_max_dimension(path: str | Path, max_dimension: int) -> np.ndarray:

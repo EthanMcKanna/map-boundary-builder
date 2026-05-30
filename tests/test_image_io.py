@@ -85,6 +85,34 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))
             self.assertEqual(tuple(rgb[0, 1]), (98, 76, 54))
 
+    def test_webp_loads_as_rgb_without_pillow_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            webp_path = Path(tmp) / "opaque.webp"
+            image = Image.new("RGB", (2, 1), (0, 0, 0))
+            image.putpixel((0, 0), (12, 34, 56))
+            image.putpixel((1, 0), (98, 76, 54))
+            image.save(webp_path, format="WEBP", lossless=True)
+
+            rgb = load_rgb(webp_path)
+
+            self.assertEqual(rgb.shape, (1, 2, 3))
+            self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))
+            self.assertEqual(tuple(rgb[0, 1]), (98, 76, 54))
+
+    def test_transparent_webp_falls_back_to_white_composite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            webp_path = Path(tmp) / "transparent.webp"
+            image = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+            image.putpixel((0, 0), (0, 128, 255, 255))
+            image.putpixel((1, 0), (0, 0, 0, 0))
+            image.save(webp_path, format="WEBP", lossless=True)
+
+            rgb = load_rgb(webp_path)
+
+            self.assertEqual(rgb.shape, (1, 2, 3))
+            self.assertEqual(tuple(rgb[0, 0]), (0, 128, 255))
+            self.assertEqual(tuple(rgb[0, 1]), (255, 255, 255))
+
 
 class OverlayPreviewTests(unittest.TestCase):
     def test_overlay_preview_draws_dark_mask_edge(self) -> None:

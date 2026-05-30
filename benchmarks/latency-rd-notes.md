@@ -5695,3 +5695,26 @@ with zero failures in 0.531s.
   zero failures and null catalog slugs, and Zoox dark/light stress
   `out/early-style-dark-stress-20260530/full-report.json` passed 2/2 smoke
   checks.
+- Accepted a WebP-only full-size decoder fast path. Earlier global OpenCV image
+  loading was rejected because PNG decode was slower and changed Phoenix pixels,
+  but a targeted WebP sweep across local uploads decoded byte-identically versus
+  the existing PIL path. The new helper uses OpenCV only for grayscale, RGB, and
+  fully opaque RGBA WebP files; transparent WebP still falls back to the existing
+  PIL white-composite behavior. Local WebP decode examples improved from roughly
+  25.6ms to 21.5ms on the Zoox SF 2880px WebP and 6.3ms to 4.4ms on the 1920px
+  Waymo WebP, with identical extracted masks and pixel-geometry bounds on the
+  service-area WebPs. Focused image-I/O tests passed 10/10, full pytest passed
+  249 tests and 9 subtests, compileall, `node --check`, and `git diff --check`
+  passed. Production-shaped gates stayed clean:
+  `out/webp-decode-default-20260530/full-report.json` passed 8/8 scored active
+  fixtures with seven `reference_mismatch` skips, avg IoU 0.992917, min IoU
+  0.943345, and zero regression issues versus
+  `out/early-style-default-20260530/full-report.json`; no-catalog
+  `out/webp-decode-nocatalog-20260530/full-report.json` passed 8/8 scored with
+  avg IoU 0.961733, min IoU 0.931476, and zero IoU regression; drift smoke
+  `out/webp-decode-drift-smoke-20260530/full-report.json` ran all six
+  Houston/Miami/Bay Area stale fixtures as unscored checks with zero failures.
+  A follow-up attempt to use OpenCV for low-resolution WebP catalog thumbnails
+  was rejected because cv2 resizing did not match PIL pixels and moved
+  dark-teal thumbnail bounds/vertices, so `load_rgb_at_max_dimension` remains on
+  the existing PIL path.
