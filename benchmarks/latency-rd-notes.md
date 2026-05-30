@@ -166,6 +166,18 @@ with zero failures in 0.531s.
   `total_before_send_s: 1.260573` to `build_boundary_s: 0.431852` /
   `total_before_send_s: 0.490719`; public wall time moved from 2.314638s to
   1.620266s for same-size 428 KB cache-busted WebP uploads.
+- Prepared-RGB OCR now uses OpenCV's native RGB-to-BGR conversion instead of a
+  NumPy reverse-slice copy. This preserves byte-for-byte BGR inputs while
+  removing the large-array Python copy from arbitrary/no-catalog OCR requests.
+  A direct Phoenix 2400x2400 microbench moved the conversion from roughly
+  0.0120s average to 0.00019s average with identical contiguous output. Focused
+  OCR/runner tests passed 18 tests, full pytest passed 225 tests plus 9
+  subtests, compileall, `node --check`, and `git diff --check` passed. The
+  strict no-catalog gate `out/bgr-cvt-nocatalog-20260530/full-report.json`
+  preserved avg IoU 0.961733/min 0.931476 with zero active IoU drops and moved
+  active total duration from `out/continue-baseline-nocatalog-20260530` at
+  4.008732s to 3.848029s; default catalog and Houston/Miami/Bay Area drift
+  smoke gates also passed.
 - Probed available local "current" assets before promoting stale
   Houston/Miami/Bay Area fixtures back into scored ground truth. The newer
   `/Users/ethanmckanna/Downloads/h-waymo.png` no-catalog output scored IoU

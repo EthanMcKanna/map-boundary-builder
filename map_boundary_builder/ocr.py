@@ -258,7 +258,7 @@ def extract_ocr_labels_from_rgb(
 def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
     if rgb.ndim != 3 or rgb.shape[2] != 3:
         return None
-    return np.ascontiguousarray(rgb[:, :, ::-1])
+    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
 def ocr_cache_key(
