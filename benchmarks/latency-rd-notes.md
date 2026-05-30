@@ -6837,3 +6837,13 @@ with zero failures in 0.531s.
   0.828119s, and 0.886328s versus current production at 1.021965s, 1.132628s,
   and 1.139322s. This moves the warm arbitrary Avride path below one second on
   preview without changing active benchmark geometry.
+  Production deploy `dpl_EvicxyLeLFT5iuQLTEmZB8DN1DWL` is aliased to
+  `https://mapboundary.app` and reports `pipeline-b54156429dd92594` with
+  `fast_text_ocr_styles=["bright-blue","gray-fill","light-fill"]`. After
+  warmup, three fresh live cache-miss no-overlay uploads of the same neutral
+  Dallas Avride WebP preserved bbox `[-96.8209832, 32.767271, -96.7593743,
+  32.8342594]`, confidence 0.855, and five controls, with build times
+  0.881363s, 0.816186s, and 0.825186s. The
+  default overlay response path also preserved output but still took 1.117736s
+  before send because overlay/export artifacts added roughly 0.29s; treat
+  overlay generation as the next remaining user-facing latency target.
