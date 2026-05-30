@@ -5326,3 +5326,24 @@ with zero failures in 0.531s.
   server generation versus the prior production samples: LA/Santa Monica warm
   miss `build_boundary_s: 0.144924` / `total_before_send_s: 0.152522`,
   Houston `0.206408` / `0.215907`, and Miami `0.245721` / `0.251349`.
+- Fixed a reliability edge from the low-resolution catalog RGB path. A
+  catalog-hit run with overlay enabled could pass a 240px caller-owned RGB array
+  to `write_overlay_png` alongside a larger full-size mask; large uploads were
+  implicitly resized to the preview cap, but smaller known-service-area uploads
+  crashed with a boolean-index shape mismatch. Reproduced on an 800px
+  LA/Santa Monica catalog hit, then made overlay generation resize caller RGB to
+  the mask or preview target before compositing. The repro now returns
+  `catalog-shape-match:city-contained` / `los-angeles-waymo` with an 800x800
+  overlay. Focused image/runner tests passed 29/29, full pytest passed 236
+  tests plus 9 subtests, `compileall`, `node --check`, and `git diff --check`
+  passed. Default catalog benchmark
+  `out/overlay-rgb-resize-default-20260530/full-report.json` passed 8/8 scored
+  with zero IoU regression against `out/lowres-catalog-rgb-default-20260530`,
+  avg IoU 0.992917, min IoU 0.943345, active total 0.38s. Strict no-catalog
+  `out/overlay-rgb-resize-nocatalog-20260530/full-report.json` passed 8/8
+  scored with zero IoU regression against
+  `out/lowres-catalog-rgb-nocatalog-20260530`, avg IoU 0.961733, min IoU
+  0.931476, active total 3.56s, and every active fixture under one second.
+  Houston/Miami/Bay Area drift smoke
+  `out/overlay-rgb-resize-drift-smoke-20260530/full-report.json` passed all six
+  user-confirmed `reference_mismatch` fixtures with zero smoke failures.

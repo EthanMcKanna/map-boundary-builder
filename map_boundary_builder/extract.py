@@ -784,17 +784,26 @@ def write_overlay_png(
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     if rgb is None:
         rgb = load_rgb(rgb_path)
+    target_width = mask.shape[1]
+    target_height = mask.shape[0]
     if max_dimension is not None and max_dimension > 0:
         h, w = mask.shape[:2]
         largest = max(h, w)
         if largest > max_dimension:
             preview_scale = max_dimension / float(largest)
-            preview_size = (
-                max(1, round(w * preview_scale)),
-                max(1, round(h * preview_scale)),
-            )
-            rgb = cv2.resize(rgb, preview_size, interpolation=cv2.INTER_AREA)
-            mask = cv2.resize(mask.astype(np.uint8), preview_size, interpolation=cv2.INTER_NEAREST).astype(bool)
+            target_width = max(1, round(w * preview_scale))
+            target_height = max(1, round(h * preview_scale))
+            mask = cv2.resize(
+                mask.astype(np.uint8),
+                (target_width, target_height),
+                interpolation=cv2.INTER_NEAREST,
+            ).astype(bool)
+    if rgb.shape[:2] != (target_height, target_width):
+        rgb = cv2.resize(
+            rgb,
+            (target_width, target_height),
+            interpolation=cv2.INTER_AREA if max(rgb.shape[:2]) > max(target_height, target_width) else cv2.INTER_CUBIC,
+        )
     rgb = rgb.astype(np.float32)
     overlay_color = np.array([255, 60, 0], dtype=np.float32)
     outline_color = (23, 33, 29)
