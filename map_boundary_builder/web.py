@@ -161,6 +161,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         output_path = run_dir / "boundary.geojson"
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         fast_catalog_handoff = bool_field(fields, "fast_catalog_handoff", default=False)
+        allow_catalog = allow_catalog_for_request(fields)
         if catalog_probe_only or fast_catalog_handoff:
             events: list[dict[str, Any]] = []
             profile: dict[str, Any] = {"upload_bytes": len(image_bytes)}
@@ -172,6 +173,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                 simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
                 min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
                 min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
+                allow_catalog=allow_catalog,
                 catalog_probe_only=catalog_probe_only,
                 catalog_probe_missed=fast_catalog_handoff or bool_field(fields, "catalog_probe_missed", default=False),
                 write_mask_artifact=False,
@@ -234,6 +236,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
+            allow_catalog=allow_catalog,
             catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
         )
@@ -542,6 +545,12 @@ def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def allow_catalog_for_request(fields: dict[str, str]) -> bool:
+    if bool_field(fields, "no_catalog", default=False):
+        return False
+    return bool_field(fields, "allow_catalog", default=True)
 
 
 def build_parser() -> argparse.ArgumentParser:

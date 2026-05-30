@@ -15,6 +15,7 @@ from api.index import (
     CRON_WARM_PATHS,
     LEGACY_CRON_WARM_PATH,
     INLINE_OVERLAY_OPTIMIZE_BYTES,
+    allow_catalog_for_request,
     authorized_cron_request,
     bool_field,
     cached_run_payload,
@@ -212,6 +213,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(catalog_probe_missed=True, catalog_probe_miss_low_iou=True),
         )
+        changed_allow_catalog = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(allow_catalog=False),
+        )
         changed_overlay_mode = run_result_cache_key(
             b"image-a",
             None,
@@ -235,6 +241,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_catalog_probe_options)
         self.assertNotEqual(base, changed_catalog_probe_missed_options)
         self.assertNotEqual(changed_catalog_probe_missed_options, changed_catalog_probe_miss_low_iou_options)
+        self.assertNotEqual(base, changed_allow_catalog)
         self.assertNotEqual(base, changed_overlay_mode)
 
     def test_run_cache_filename_hint_uses_semantic_basename(self) -> None:
@@ -817,6 +824,13 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(include_overlay_for_request({}, catalog_probe_only=False))
         self.assertTrue(include_overlay_for_request({"include_overlay": "1"}, catalog_probe_only=True))
         self.assertFalse(include_overlay_for_request({"include_overlay": "0"}, catalog_probe_only=False))
+
+    def test_api_can_disable_catalog_matching_for_controlled_no_catalog_runs(self) -> None:
+        self.assertTrue(allow_catalog_for_request({}))
+        self.assertTrue(allow_catalog_for_request({"allow_catalog": "1"}))
+        self.assertFalse(allow_catalog_for_request({"allow_catalog": "0"}))
+        self.assertFalse(allow_catalog_for_request({"no_catalog": "1"}))
+        self.assertFalse(allow_catalog_for_request({"allow_catalog": "1", "no_catalog": "1"}))
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_inline_overlay_uses_webp_for_typical_previews(self) -> None:

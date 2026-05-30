@@ -37,7 +37,7 @@ INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation-v2"
 LEGACY_CRON_WARM_PATH = "/api/cron/warm-generation"
 CRON_WARM_PATHS = frozenset({CRON_WARM_PATH, LEGACY_CRON_WARM_PATH})
-RUN_RESULT_CACHE_VERSION = "run-result-v6"
+RUN_RESULT_CACHE_VERSION = "run-result-v7"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
@@ -195,6 +195,7 @@ class handler(BaseHTTPRequestHandler):
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
+        allow_catalog = allow_catalog_for_request(fields)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -203,6 +204,7 @@ class handler(BaseHTTPRequestHandler):
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
             overlay_format="webp" if include_overlay else "png",
             write_mask_artifact=False,
+            allow_catalog=allow_catalog,
             catalog_probe_only=catalog_probe_only,
             catalog_probe_missed=catalog_probe_missed,
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
@@ -578,6 +580,12 @@ def include_overlay_for_request(fields: dict[str, str], *, catalog_probe_only: b
     return bool_field(fields, "include_overlay", default=not catalog_probe_only)
 
 
+def allow_catalog_for_request(fields: dict[str, str]) -> bool:
+    if bool_field(fields, "no_catalog", default=False):
+        return False
+    return bool_field(fields, "allow_catalog", default=True)
+
+
 def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") -> tuple[bytes, dict[str, str]]:
     data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     if len(data) < 1024 or "gzip" not in accept_encoding.lower():
@@ -733,6 +741,7 @@ def run_result_cache_key_for_hash(
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "overlay_format": getattr(options, "overlay_format", "png"),
         "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
+        "allow_catalog": bool(getattr(options, "allow_catalog", True)),
         "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
         "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),

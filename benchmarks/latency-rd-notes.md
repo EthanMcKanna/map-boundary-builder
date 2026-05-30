@@ -7279,3 +7279,19 @@ with zero failures in 0.531s.
   (`catalog_shape_iou` 0.609024, area ratio 0.722535) while allowing Bay Area's
   strong filename-near-hit evidence (`catalog_shape_iou` 0.960519, area ratio
   1.009283).
+- API no-catalog verification hook: the Vercel API and local web server now
+  accept `allow_catalog=0` or `no_catalog=1` on `/api/runs`, and the run-result
+  cache key includes `allow_catalog` under `run-result-v7` so no-catalog
+  production checks cannot reuse catalog-enabled results. This is a controlled
+  benchmark/diagnostic hook; the UI default remains catalog-enabled. Focused
+  cache/parser tests passed 3/3. A local web smoke posted Tesla Austin with
+  `no_catalog=1` and `include_overlay=0`; it returned
+  `ocr-georeference:nominatim-label-fit`, `catalog_slug: null`, confidence
+  0.858, and 0.335885s `total_before_send_s`, proving the field reaches the
+  OCR/georeference path instead of the catalog shortcut. Production-shaped
+  validation also stayed clean: `out/api-nocatalog-hook-default-20260530/`
+  passed 8/8 active catalog-enabled fixtures with avg IoU 0.992917, min IoU
+  0.943345, and 0.406006s total active duration; the explicit no-catalog gate
+  `out/api-nocatalog-hook-nocatalog-20260530/` passed 8/8 OCR/georeference
+  fixtures with avg IoU 0.961733, min IoU 0.931476, max fixture 0.680604s, and
+  zero latency-budget issues at `--max-duration-s 1.0`.
