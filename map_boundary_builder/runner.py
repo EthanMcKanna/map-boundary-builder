@@ -130,6 +130,15 @@ CURRENT_CATALOG_COMPLETION_SOURCES = {
     "current-external-service-area-reference",
     "current-verified-ocr-output",
 }
+CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU = 0.55
+CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.50
+CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.35
+CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE = 0.95
+CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE = 0.84
+CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION", "1000")),
+)
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 EARLY_OCR_STYLE_MAX_DIMENSION = max(
@@ -236,6 +245,7 @@ def build_boundary(
 
     labels_future: Future[list[Any]] | None = None
     labels_future_filtered = False
+    labels_future_current_catalog_shortcut = False
     provider_ui_labels_future: Future[list[Any]] | None = None
     provider_ui_fast_ocr_max_dimension: int | None = None
     ocr_executor: ThreadPoolExecutor | None = None
@@ -293,6 +303,13 @@ def build_boundary(
             rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
             labels_future_filtered = rapidocr_min_text_area is not None
             ocr_kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
+            if current_catalog_label_shape_shortcut_enabled(
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                skip_redundant_probe=skip_redundant_probe,
+            ):
+                ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
+                labels_future_current_catalog_shortcut = True
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             labels_future = ocr_executor.submit(
@@ -302,7 +319,7 @@ def build_boundary(
                 **ocr_kwargs,
             )
             ensure_georeference_resource_preload()
-        if should_overlap_probe_miss_ocr(
+        if labels_future is None and should_overlap_probe_miss_ocr(
             skip_redundant_probe=skip_redundant_probe,
             city_input=city_input,
             filename_hint=filename_hint,
@@ -314,6 +331,13 @@ def build_boundary(
             rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
             labels_future_filtered = rapidocr_min_text_area is not None
             ocr_kwargs = {"cache": runner_ocr_cache_enabled()}
+            if current_catalog_label_shape_shortcut_enabled(
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                skip_redundant_probe=skip_redundant_probe,
+            ):
+                ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
+                labels_future_current_catalog_shortcut = True
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             labels_future = ocr_executor.submit(
@@ -541,12 +565,21 @@ def build_boundary(
                     )
                 else:
                     labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
+                    shortcut_ocr = current_catalog_label_shape_shortcut_enabled(
+                        city_input=city_input,
+                        allow_catalog=allow_catalog,
+                        skip_redundant_probe=skip_redundant_probe,
+                    )
                     labels_future = submit_ocr_labels_from_rgb(
                         ocr_executor,
                         image_path,
                         rgb,
                         style=extraction.style,
+                        rapidocr_max_dimension_override=(
+                            CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION if shortcut_ocr else None
+                        ),
                     )
+                    labels_future_current_catalog_shortcut = shortcut_ocr
                     ensure_georeference_resource_preload()
             emit_progress(
                 progress,
@@ -705,6 +738,20 @@ def build_boundary(
                 image_path,
                 rgb,
                 style=extraction.style,
+                rapidocr_max_dimension_override=(
+                    CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
+                    if current_catalog_label_shape_shortcut_enabled(
+                        city_input=city_input,
+                        allow_catalog=allow_catalog,
+                        skip_redundant_probe=skip_redundant_probe,
+                    )
+                    else None
+                ),
+            )
+            labels_future_current_catalog_shortcut = current_catalog_label_shape_shortcut_enabled(
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                skip_redundant_probe=skip_redundant_probe,
             )
             ensure_georeference_resource_preload()
         if should_precompute_road_features(extraction.style, width, height):
@@ -738,6 +785,62 @@ def build_boundary(
     if labels_future_filtered and fast_text_ocr_min_area_for_style(extraction.style) is None:
         labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
         labels_future_filtered = False
+    if city_input is None and allow_catalog:
+        label_shape_match = current_catalog_label_shape_match(extraction, labels)
+        if label_shape_match is not None:
+            return finish_catalog_boundary_result(
+                extraction,
+                label_shape_match,
+                width=width,
+                height=height,
+                image_path=image_path,
+                city_input="Auto",
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                rgb=rgb,
+                progress=progress,
+                georeference_source="catalog-shape-match:label-shape",
+                catalog_label_hints=high_confidence_label_texts(labels)[:5],
+            )
+    if labels_future_current_catalog_shortcut:
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Retrying map labels at full detail",
+            percent=47,
+        )
+        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels_future_filtered = False
+        labels_future_current_catalog_shortcut = False
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Full-detail map labels read",
+            percent=48,
+            details={
+                "label_count": len(labels),
+                "top_labels": [label.text for label in labels[:8]],
+            },
+        )
+        if city_input is None and allow_catalog:
+            label_shape_match = current_catalog_label_shape_match(extraction, labels)
+            if label_shape_match is not None:
+                return finish_catalog_boundary_result(
+                    extraction,
+                    label_shape_match,
+                    width=width,
+                    height=height,
+                    image_path=image_path,
+                    city_input="Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=rgb,
+                    progress=progress,
+                    georeference_source="catalog-shape-match:label-shape",
+                    catalog_label_hints=high_confidence_label_texts(labels)[:5],
+                )
     if city_input is None and allow_catalog:
         provider_ui_match = provider_ui_label_catalog_match(extraction, labels)
         if provider_ui_match is not None:
@@ -1023,8 +1126,13 @@ def submit_ocr_labels_from_rgb(
     rgb,
     *,
     style: str,
+    rapidocr_max_dimension_override: int | None = None,
 ) -> Future[list[Any]]:
-    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    rapidocr_max_dimension = (
+        rapidocr_max_dimension_override
+        if rapidocr_max_dimension_override is not None
+        else rapidocr_max_dimension_for_extraction_style(style)
+    )
     rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
     kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
     if rapidocr_max_dimension is not None:
@@ -1104,6 +1212,20 @@ def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
     if RAPIDOCR_PURPLE_FILL_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
         return None
     return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+
+
+def current_catalog_label_shape_shortcut_enabled(
+    *,
+    city_input: str | None,
+    allow_catalog: bool,
+    skip_redundant_probe: bool,
+) -> bool:
+    return (
+        allow_catalog
+        and city_input is None
+        and skip_redundant_probe
+        and CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION > 0
+    )
 
 
 def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, height: int) -> int | None:
@@ -1494,6 +1616,58 @@ def post_georeference_catalog_completion_match(
         fitted_mercator_geometry=output_mercator,
         rotation_degrees=0.0,
         confidence_override=min(POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE, georef_confidence),
+    )
+
+
+def current_catalog_label_shape_match(extraction, labels: list[Any]) -> ServiceAreaCatalogMatch | None:
+    if extraction.confidence < CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE:
+        return None
+    if not catalog_style_supported(extraction.style):
+        return None
+
+    label_hints = high_confidence_label_texts(labels)
+    if not label_hints:
+        return None
+
+    candidates = []
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if getattr(entry, "catalog_source", None) not in CURRENT_CATALOG_COMPLETION_SOURCES:
+            continue
+        if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        if not any(catalog_area_matches_text(entry.area, hint) for hint in label_hints):
+            continue
+        iou, area_ratio, scored_entry, fitted, rotation_degrees = score_catalog_entry(
+            extraction.pixel_geometry,
+            entry,
+            min_iou=entry.min_iou,
+        )
+        if iou < CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU:
+            continue
+        if not (
+            CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO
+            <= area_ratio
+            <= CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO
+        ):
+            continue
+        candidates.append((iou, area_ratio, scored_entry, fitted, rotation_degrees))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    best_iou, best_area_ratio, best_entry, best_fitted, best_rotation = candidates[0]
+    runner_up_iou = candidates[1][0] if len(candidates) > 1 else 0.0
+    return catalog_match_from_score(
+        extraction.pixel_geometry,
+        best_entry,
+        iou=best_iou,
+        area_ratio=best_area_ratio,
+        margin=best_iou - runner_up_iou,
+        fitted_mercator_geometry=best_fitted,
+        rotation_degrees=best_rotation,
+        confidence_override=CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE,
     )
 
 

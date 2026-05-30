@@ -6332,3 +6332,20 @@ with zero failures in 0.531s.
   with avg IoU 0.961733, min IoU 0.931476, total duration 2.993634s, and max
   duration 0.56105s, confirming OCR/georeference still works when the catalog
   shortcuts are disabled.
+- Added a probe-miss handoff shortcut for current catalog screenshots with
+  strong label and shape evidence. When the frontend tiny catalog probe misses,
+  the full handoff now runs a 1000px OCR label pass first, accepts only active
+  current catalog sources whose provider/style and high-confidence area labels
+  match, requires extraction confidence >= 0.95, shape IoU >= 0.55, and
+  extracted/catalog area ratio from 0.50 to 1.35, then returns the current
+  catalog geometry without fitting a full OCR georeference. If that guard does
+  not match, it retries full-detail OCR before the normal georeference path, so
+  fallback accuracy is preserved. The first probe-miss drift run
+  `out/label-shape-probemiss-current-drift-neutral-blocknet-20260530a/full-report.json`
+  passed all six Houston/Miami/Bay Area current-catalog fixtures at avg IoU
+  1.0, total duration 1.549736s, max duration 0.544463s. Removing a duplicate
+  probe-miss OCR launch improved the same network-blocked neutral gate in
+  `out/label-shape-dedup-probemiss-current-drift-neutral-blocknet-20260530a/full-report.json`
+  to total duration 1.20131s, average duration 0.200218s, max duration
+  0.388867s, with Houston Waymo 0.211509s, Miami Waymo 0.151769s, and Bay Area
+  Waymo 0.388867s, all IoU 1.0 against current catalog geometry.

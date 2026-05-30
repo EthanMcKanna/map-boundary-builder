@@ -417,6 +417,76 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert ocr_kwargs == [{"rapidocr_min_text_area": 800.0, "cache": False}]
 
 
+def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "uploaded-map.png"
+    Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((1000, 2000, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(500, 200), (1500, 200), (1500, 700), (500, 700)]),
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=1.0,
+    )
+    ocr_kwargs: list[dict] = []
+    labels = [OcrLabel("Houston", 10, 10, 80, 20, 96.0)]
+    match = SimpleNamespace(entry=SimpleNamespace(slug="houston-waymo"))
+
+    def fake_extract_ocr_labels_from_rgb(_path, _prepared_rgb, **kwargs):
+        ocr_kwargs.append(kwargs)
+        return labels
+
+    def fake_current_catalog_label_shape_match(_extraction, seen_labels):
+        assert seen_labels is labels
+        return match
+
+    def unexpected_georef(*_args, **_kwargs):
+        raise AssertionError("label-shape catalog shortcut should return before full georeference")
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **kwargs):
+        return BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "current_catalog_label_shape_match", fake_current_catalog_label_shape_match)
+    monkeypatch.setattr(runner, "fit_georeference", unexpected_georef)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            catalog_probe_missed=True,
+            catalog_probe_miss_low_iou=True,
+            filename_hint="uploaded-map.webp",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert result.summary["catalog_slug"] == "houston-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:label-shape"
+    assert ocr_kwargs == [
+        {
+            "rapidocr_max_dimension": runner.CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
+            "rapidocr_min_text_area": 800.0,
+            "cache": False,
+        }
+    ]
+
+
 def test_active_catalog_hint_gets_intermediate_retry_before_ocr(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "Tesla Bay Area.png"
     Image.new("RGB", (2000, 1000), (245, 245, 245)).save(image_path)
@@ -855,6 +925,85 @@ def test_post_georeference_catalog_completion_rejects_tiny_subset(monkeypatch) -
             city_input=None,
             filename_hint="uploaded-map.webp",
             georef_confidence=0.91,
+        )
+        is None
+    )
+
+
+def test_current_catalog_label_shape_match_accepts_current_area_label(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.88,
+        use_exact_geometry=True,
+    )
+
+    def fake_score(_pixel_geometry, candidate, *, min_iou):
+        assert candidate is entry
+        return 0.573, 1.26, candidate, Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]), 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    match = runner.current_catalog_label_shape_match(
+        extraction,
+        [OcrLabel("Downtown Houston", 10, 10, 80, 20, 96.0)],
+    )
+
+    assert match is not None
+    assert match.entry.slug == "houston-waymo"
+    assert match.iou == pytest.approx(0.573)
+    assert match.area_ratio == pytest.approx(1.26)
+    assert match.confidence == pytest.approx(runner.CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE)
+
+
+def test_current_catalog_label_shape_match_rejects_weak_shape(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Miami",
+        slug="miami-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.897,
+        use_exact_geometry=True,
+    )
+
+    def fake_score(_pixel_geometry, candidate, *, min_iou):
+        assert candidate is entry
+        return 0.49, 1.0, candidate, Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]), 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    assert (
+        runner.current_catalog_label_shape_match(
+            extraction,
+            [OcrLabel("Miami Beach", 10, 10, 80, 20, 96.0)],
         )
         is None
     )
