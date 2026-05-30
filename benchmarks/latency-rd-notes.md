@@ -7206,3 +7206,14 @@ with zero failures in 0.531s.
   `out/probe-miss-noearly-current-changed-market-score-20260530/full-report.json`
   all passed with zero IoU regression; Houston, Miami, and Bay Area current
   inputs remained 3/3 against refreshed current catalog geometry.
+  Production commit `1781673` deployed as
+  `dpl_AwvdXY8ZqDvU33K6qjvME8Ko9T3w` with
+  `pipeline-319567c934611b51`. The same UI-style generic gray-fill probe miss
+  in `out/live-probe-miss-noearly-prod-20260530/` preserved
+  `catalog-shape-match:provider-ui-label`, `austin-tesla`, and cache misses.
+  The 520px probe still returned a `catalog_miss` in 0.139907s
+  total-before-send, then three cache-busted full uploads completed in
+  0.713907s, 0.690966s, and 0.651408s total-before-send with cropped provider
+  OCR. The rejected baseline for the same UI-style path took 2.125640s with
+  1.891764s in premature full-image OCR, so this removes the main frontend
+  generic gray-fill tail without changing the direct output.
