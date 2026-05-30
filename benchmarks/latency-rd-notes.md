@@ -7260,3 +7260,9 @@ with zero failures in 0.531s.
   completed from the catalog-probe request only: `austin-tesla`,
   `catalog-shape-match:low-res-shape`, no overlay, and 0.034206s server
   `total_before_send_s`, with the UI rendering the boundary and history entry.
+  Production deployment `dpl_5MvsFj478tWrFnJkSNACXWYYsuCd` is aliased to
+  `https://mapboundary.app`; the served `asset-583bf86a18da7936` app bundle
+  contains the deferred cache-key flow. A live Playwright smoke on the public
+  app with the same Tesla Austin image also completed from the catalog-probe
+  request only with `austin-tesla`, `catalog-shape-match:low-res-shape`, no
+  overlay, and 0.097839s server `total_before_send_s`.
