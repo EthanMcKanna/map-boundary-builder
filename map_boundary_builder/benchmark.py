@@ -280,6 +280,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allowed absolute active plus smoke-checked duration increase before ratio checks fail.",
     )
     parser.add_argument(
+        "--max-evaluated-stage-duration-increase-ratio",
+        type=float,
+        default=None,
+        help=(
+            "Optional maximum per-stage active plus smoke-checked duration increase "
+            "ratio against --baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-evaluated-stage-duration-increase-s",
+        type=float,
+        default=0.0,
+        help="Allowed absolute per-stage active plus smoke-checked duration increase before ratio checks fail.",
+    )
+    parser.add_argument(
         "--max-duration-s",
         type=float,
         default=None,
@@ -347,6 +362,10 @@ def main(argv: list[str] | None = None) -> int:
             max_total_duration_increase_s=args.max_total_duration_increase_s,
             max_evaluated_duration_increase_ratio=args.max_evaluated_duration_increase_ratio,
             max_evaluated_duration_increase_s=args.max_evaluated_duration_increase_s,
+            max_evaluated_stage_duration_increase_ratio=(
+                args.max_evaluated_stage_duration_increase_ratio
+            ),
+            max_evaluated_stage_duration_increase_s=args.max_evaluated_stage_duration_increase_s,
         )
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
@@ -1195,6 +1214,24 @@ def combine_stage_durations(*summaries: dict[str, float]) -> dict[str, float]:
     return {stage: round(total, 6) for stage, total in sorted(totals.items())}
 
 
+def report_summary_stage_durations(report: dict[str, Any], key: str) -> dict[str, float]:
+    summary = report.get("summary", {})
+    if not isinstance(summary, dict):
+        return {}
+    raw_stage_durations = summary.get(key)
+    if not isinstance(raw_stage_durations, dict):
+        return {}
+    stage_durations: dict[str, float] = {}
+    for stage, duration in raw_stage_durations.items():
+        if not isinstance(stage, str) or not stage:
+            continue
+        parsed_duration = parse_report_duration(duration)
+        if parsed_duration is None:
+            continue
+        stage_durations[stage] = round(parsed_duration, 6)
+    return dict(sorted(stage_durations.items()))
+
+
 def compare_report_regressions(
     report: dict[str, Any],
     baseline_report: dict[str, Any],
@@ -1208,6 +1245,8 @@ def compare_report_regressions(
     max_total_duration_increase_s: float = 0.0,
     max_evaluated_duration_increase_ratio: float | None = None,
     max_evaluated_duration_increase_s: float = 0.0,
+    max_evaluated_stage_duration_increase_ratio: float | None = None,
+    max_evaluated_stage_duration_increase_s: float = 0.0,
 ) -> dict[str, Any]:
     candidate_scores = active_iou_scores_by_slug(report)
     baseline_scores = active_iou_scores_by_slug(baseline_report)
@@ -1328,6 +1367,46 @@ def compare_report_regressions(
                         "increase_ratio": round(evaluated_increase_ratio, 6),
                     }
                 )
+    evaluated_stage_duration_tolerance = (
+        None
+        if max_evaluated_stage_duration_increase_ratio is None
+        else max(0.0, float(max_evaluated_stage_duration_increase_ratio))
+    )
+    evaluated_stage_duration_tolerance_s = max(
+        0.0,
+        float(max_evaluated_stage_duration_increase_s),
+    )
+    compared_evaluated_stage_durations = 0
+    if evaluated_stage_duration_tolerance is not None:
+        baseline_stage_durations = report_summary_stage_durations(
+            baseline_report,
+            "evaluated_stage_duration_s",
+        )
+        candidate_stage_durations = report_summary_stage_durations(
+            report,
+            "evaluated_stage_duration_s",
+        )
+        for stage, baseline_stage_duration in baseline_stage_durations.items():
+            candidate_stage_duration = candidate_stage_durations.get(stage)
+            if candidate_stage_duration is None or baseline_stage_duration <= 0:
+                continue
+            compared_evaluated_stage_durations += 1
+            stage_increase_s = candidate_stage_duration - baseline_stage_duration
+            stage_increase_ratio = candidate_stage_duration / baseline_stage_duration - 1.0
+            if (
+                stage_increase_s > evaluated_stage_duration_tolerance_s
+                and stage_increase_ratio > evaluated_stage_duration_tolerance
+            ):
+                issues.append(
+                    {
+                        "stage": stage,
+                        "kind": "evaluated_stage_duration_increase",
+                        "baseline_stage_duration_s": round(baseline_stage_duration, 6),
+                        "candidate_stage_duration_s": round(candidate_stage_duration, 6),
+                        "increase_s": round(stage_increase_s, 6),
+                        "increase_ratio": round(stage_increase_ratio, 6),
+                    }
+                )
 
     return {
         "passed": not issues,
@@ -1340,8 +1419,11 @@ def compare_report_regressions(
         "max_total_duration_increase_s": total_duration_tolerance_s,
         "max_evaluated_duration_increase_ratio": evaluated_duration_tolerance,
         "max_evaluated_duration_increase_s": evaluated_duration_tolerance_s,
+        "max_evaluated_stage_duration_increase_ratio": evaluated_stage_duration_tolerance,
+        "max_evaluated_stage_duration_increase_s": evaluated_stage_duration_tolerance_s,
         "compared_fixtures": len(baseline_scores),
         "compared_iou_fixtures": len(compared_iou_pairs),
+        "compared_evaluated_stage_durations": compared_evaluated_stage_durations,
         "baseline_average_iou": round(baseline_mean, 6),
         "candidate_average_iou": round(candidate_mean, 6),
         "average_iou_scope": "compared_fixtures",
@@ -1548,6 +1630,13 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(
                     f"       evaluated duration {issue['baseline_evaluated_duration_s']:.3f}s -> "
                     f"{issue['candidate_evaluated_duration_s']:.3f}s "
+                    f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
+                )
+            elif issue["kind"] == "evaluated_stage_duration_increase":
+                print(
+                    f"       {issue['stage']}: evaluated stage duration "
+                    f"{issue['baseline_stage_duration_s']:.3f}s -> "
+                    f"{issue['candidate_stage_duration_s']:.3f}s "
                     f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
                 )
             else:

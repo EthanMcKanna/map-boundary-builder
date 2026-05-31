@@ -941,13 +941,62 @@ def test_report_regression_check_can_flag_evaluated_duration_increase() -> None:
     ]
 
 
+def test_report_regression_check_can_flag_evaluated_stage_duration_increase() -> None:
+    baseline = {
+        "summary": {
+            "average_iou": 0.95,
+            "evaluated_stage_duration_s": {"extract": 1.0, "ocr": 2.0},
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332}],
+    }
+    candidate = {
+        "summary": {
+            "average_iou": 0.95,
+            "evaluated_stage_duration_s": {"extract": 1.05, "ocr": 2.5},
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_evaluated_stage_duration_increase_ratio=0.1,
+        max_evaluated_stage_duration_increase_s=0.1,
+    )
+
+    assert check["passed"] is False
+    assert check["max_evaluated_stage_duration_increase_ratio"] == 0.1
+    assert check["max_evaluated_stage_duration_increase_s"] == 0.1
+    assert check["compared_evaluated_stage_durations"] == 2
+    assert check["issues"] == [
+        {
+            "stage": "ocr",
+            "kind": "evaluated_stage_duration_increase",
+            "baseline_stage_duration_s": 2.0,
+            "candidate_stage_duration_s": 2.5,
+            "increase_s": 0.5,
+            "increase_ratio": 0.25,
+        }
+    ]
+
+
 def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise() -> None:
     baseline = {
-        "summary": {"average_iou": 0.95, "total_duration_s": 4.0, "evaluated_duration_s": 5.0},
+        "summary": {
+            "average_iou": 0.95,
+            "total_duration_s": 4.0,
+            "evaluated_duration_s": 5.0,
+            "evaluated_stage_duration_s": {"ocr": 5.0},
+        },
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.1}],
     }
     candidate = {
-        "summary": {"average_iou": 0.95, "total_duration_s": 4.2, "evaluated_duration_s": 5.2},
+        "summary": {
+            "average_iou": 0.95,
+            "total_duration_s": 4.2,
+            "evaluated_duration_s": 5.2,
+            "evaluated_stage_duration_s": {"ocr": 5.2},
+        },
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.19}],
     }
 
@@ -960,6 +1009,8 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
         max_total_duration_increase_s=0.25,
         max_evaluated_duration_increase_ratio=0.01,
         max_evaluated_duration_increase_s=0.25,
+        max_evaluated_stage_duration_increase_ratio=0.01,
+        max_evaluated_stage_duration_increase_s=0.25,
     )
 
     assert check["passed"] is True

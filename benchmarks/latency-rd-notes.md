@@ -8079,3 +8079,19 @@ with zero failures in 0.531s.
   export 0.008000s, and inspect 0.005902s, confirming OCR remains the dominant
   measured stage for this strict active plus smoke workload. Targeted benchmark
   tests passed 27/27; full `pytest` passed 320/320.
+- Accepted an evaluated-stage-duration regression guard for benchmark
+  comparisons. The regression checker can now reject per-stage active plus
+  smoke duration increases with
+  `--max-evaluated-stage-duration-increase-ratio` and
+  `--max-evaluated-stage-duration-increase-s`, using the same ratio plus
+  absolute-noise pattern as the total duration guards. The real strict
+  drift-smoke comparison
+  `out/evaluated-stage-duration-regression-guard-20260531/full-report.json`
+  passed against `out/stage-duration-summary-20260531/full-report.json`,
+  compared all five evaluated stage totals, and reported zero regression
+  issues. It scored 8/8 active fixtures at avg/min IoU 0.967842/0.942536,
+  stayed under the active/evaluated budgets with active total 2.947921s and
+  evaluated total 4.965624s, and preserved the useful stage signal: evaluated
+  OCR 3.416823s, extraction 1.277908s, georeference 0.238084s, export
+  0.012009s, inspect 0.005306s. Targeted benchmark tests passed 28/28; full
+  `pytest` passed 321/321.
