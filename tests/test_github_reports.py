@@ -5,6 +5,10 @@ def test_safe_report_extension_preserves_avif() -> None:
     assert safe_report_extension("uploaded-map.avif") == ".avif"
 
 
+def test_safe_report_extension_preserves_bmp() -> None:
+    assert safe_report_extension("uploaded-map.bmp") == ".bmp"
+
+
 def test_issue_body_includes_runtime_profile() -> None:
     report = GenerationReport(
         filename="slow-map.png",

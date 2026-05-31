@@ -93,6 +93,9 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_api_safe_extension_allows_gif(self) -> None:
         self.assertEqual(api_index.safe_extension("upload.gif"), ".gif")
 
+    def test_api_safe_extension_allows_bmp(self) -> None:
+        self.assertEqual(api_index.safe_extension("upload.bmp"), ".bmp")
+
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
@@ -305,6 +308,7 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         self.assertEqual(filename_hint_cache_value("neutral-map-1780145995.webp"), "webp:")
         self.assertEqual(filename_hint_cache_value("uploaded-map-variant.avif"), "avif:")
+        self.assertEqual(filename_hint_cache_value("uploaded-map-variant.bmp"), "bmp:")
         self.assertEqual(filename_hint_cache_value("uploaded-map.png"), "png:")
         self.assertEqual(
             filename_hint_cache_value("dallas-map-repeat-1780146013-1.webp"),

@@ -19,6 +19,9 @@ class SvgImageIoTests(unittest.TestCase):
     def test_safe_image_extension_preserves_gif(self) -> None:
         self.assertEqual(safe_image_extension("map.gif"), ".gif")
 
+    def test_safe_image_extension_preserves_bmp(self) -> None:
+        self.assertEqual(safe_image_extension("map.bmp"), ".bmp")
+
     def test_svg_is_rasterized_before_pillow_reads_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -119,6 +122,20 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(rgb.shape, (1, 2, 3))
             self.assertEqual(tuple(rgb[0, 0]), (255, 255, 255))
             self.assertEqual(tuple(rgb[0, 1]), (0, 128, 255))
+
+    def test_bmp_loads_as_rgb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bmp_path = Path(tmp) / "opaque.bmp"
+            image = Image.new("RGB", (2, 1), (0, 0, 0))
+            image.putpixel((0, 0), (12, 34, 56))
+            image.putpixel((1, 0), (98, 76, 54))
+            image.save(bmp_path, format="BMP")
+
+            rgb = load_rgb(bmp_path)
+
+            self.assertEqual(rgb.shape, (1, 2, 3))
+            self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))
+            self.assertEqual(tuple(rgb[0, 1]), (98, 76, 54))
 
     def test_transparent_webp_falls_back_to_white_composite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

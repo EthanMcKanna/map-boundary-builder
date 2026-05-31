@@ -8324,3 +8324,21 @@ with zero failures in 0.531s.
   timings inspect 0.039040s, extract 0.042622s, georeference 0.000005s, export
   0.000701s. The live response was saved at
   `out/gif-support-20260531/prod-gif-response.txt`.
+- Accepted explicit BMP upload/discovery support as another low-risk
+  generalizability improvement for Windows-style bitmap screenshots. Pillow
+  already decodes BMP losslessly, but the API/local extension allowlists,
+  GitHub report extension preservation, benchmark discovery, browser clipboard
+  MIME map, filename-cache noise tokens, and upload copy did not preserve BMP
+  consistently. A converted Tesla Dallas BMP completed through the normal CLI
+  path in `out/bmp-support-20260531/tesla-dallas-bmp.summary.json` with
+  `catalog_slug=dallas-tesla`, `catalog_shape_iou=0.972523`, confidence
+  0.972523, and the expected Dallas bbox in 0.023917s. Targeted image, API,
+  benchmark, and report tests passed 99/99 and `node --check
+  map_boundary_builder/web_assets/app.js` passed. Full `pytest` passed 343
+  tests plus 9 subtests. The strict drift-smoke benchmark
+  `out/bmp-support-20260531-strict/full-report.json` passed against
+  `out/gif-support-20260531-strict/full-report.json` with 8/8 active fixtures,
+  seven smoke-checked `reference_mismatch` fixtures, zero smoke failures,
+  avg/min IoU 0.967842/0.942536, no regression issues, active/evaluated totals
+  3.050349s/5.124506s, and evaluated OCR 3.685981s under the active 4s and
+  evaluated 6s budgets.

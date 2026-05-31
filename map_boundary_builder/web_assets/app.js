@@ -135,6 +135,7 @@ const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
   "avif",
   "boundary",
   "boundaries",
+  "bmp",
   "bust",
   "cache",
   "capture",
@@ -186,13 +187,14 @@ const RUN_BUTTON_LABELS = {
   running: "Building",
 };
 const EMPTY_DROP_TITLE = "Drop or paste map screenshot";
-const EMPTY_DROP_META = "PNG, JPG, WebP, AVIF, GIF, TIFF, SVG";
+const EMPTY_DROP_META = "PNG, JPG, WebP, AVIF, GIF, BMP, TIFF, SVG";
 const CLIPBOARD_IMAGE_EXTENSIONS = new Map([
   ["image/avif", "avif"],
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
   ["image/webp", "webp"],
   ["image/gif", "gif"],
+  ["image/bmp", "bmp"],
   ["image/tiff", "tiff"],
   ["image/svg+xml", "svg"],
 ]);

@@ -210,6 +210,30 @@ def test_discover_fixtures_accepts_gif_images(tmp_path: Path) -> None:
     ]
 
 
+def test_discover_fixtures_accepts_bmp_images(tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "dallas-tesla.json").write_text("{}\n")
+    bmp_image = image_dir / "Tesla Dallas.bmp"
+    bmp_image.write_bytes(b"BM")
+
+    fixtures, inventory = discover_fixtures(polygon_dir, image_dir, {"path": None, "fixtures": {}})
+
+    assert inventory["matched_images"] == 1
+    assert fixtures == [
+        BenchmarkFixture(
+            slug="dallas-tesla",
+            provider="tesla",
+            area="Dallas",
+            image_path=bmp_image,
+            reference_path=polygon_dir / "dallas-tesla.json",
+        )
+    ]
+
+
 def test_fixture_config_can_use_current_image_for_drifted_reference(tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"
     image_dir = tmp_path / "images"
