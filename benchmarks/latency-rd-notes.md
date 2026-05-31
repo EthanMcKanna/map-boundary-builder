@@ -7608,3 +7608,23 @@ with zero failures in 0.531s.
   catalog matches: Houston 0.511362s build / 0.519949s before send with shape
   IoU 0.989331, Miami 0.655296s / 0.671278s with shape IoU 0.989300, and Bay
   Area 0.862425s / 0.869863s with shape IoU 0.999999.
+- Rejected tightening the shape-aware fast-text rescue filter from area/aspect
+  `900/2.8` to `1000/3.0`. The local signal was tempting:
+  `out/fasttext-rescue-ab-baseline-a-detmax480-v5rec-nocatalog-20260531`
+  versus
+  `out/fasttext-rescue-ab-candidate-a-detmax480-v5rec-nocatalog-20260531`
+  improved active total from 3.125637s to 2.950656s, and the repeat improved
+  2.986321s to 2.952808s with no failures. The implemented local gate
+  `out/final-fasttext-rescue1000-aspect3-detmax480-v5rec-nocatalog-20260531/full-report.json`
+  still passed 8/8 scored fixtures with seven drift smokes, avg IoU 0.968011,
+  min IoU 0.942536, active total 3.096983s, and zero latency-budget issues;
+  full pytest also passed 308/308. Production disproved it. A pre-change
+  cache-busted Phoenix baseline on `pipeline-f0bb9f7e053b4e8d` took 3.218097s
+  and 2.436009s build time, with OCR at 2.253246s and 1.969779s. After
+  deploying candidate commit `ddd0ecd` as `dpl_2xSkAyvZEcQGSQSNzTGcZQcPiFLz`
+  / `pipeline-046317b83c9f2181`, cache-busted Phoenix worsened to 3.996170s,
+  3.164584s, and 3.076835s build time, with OCR at 3.131879s, 2.662644s, and
+  2.561380s. The candidate was reverted in `14c8310` and redeployed as
+  `dpl_At3gbe1H5YRdjt9rG6HKNF8HNmwT`; health again shows rescue
+  `900/2.8` and `pipeline-f0bb9f7e053b4e8d`. Keep the existing rescue filter
+  unless a future candidate wins in production, not just locally.
