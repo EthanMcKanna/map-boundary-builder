@@ -507,6 +507,9 @@ def run_benchmark(
     smoke_durations = [score.duration_s for score in smoke_validated if score.duration_s is not None]
     active_total_duration = sum(durations)
     smoke_total_duration = sum(smoke_durations)
+    active_stage_duration = summarize_stage_durations(scored)
+    smoke_stage_duration = summarize_stage_durations(smoke_validated)
+    evaluated_stage_duration = combine_stage_durations(active_stage_duration, smoke_stage_duration)
     average_iou = float(mean(ious)) if ious else 0.0
     min_seen_iou = float(min(ious)) if ious else 0.0
     passed_count = sum(score.passed for score in scored)
@@ -551,6 +554,9 @@ def run_benchmark(
             "total_duration_s": round(active_total_duration, 6),
             "active_total_duration_s": round(active_total_duration, 6),
             "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
+            "active_stage_duration_s": active_stage_duration,
+            "smoked_skipped_stage_duration_s": smoke_stage_duration,
+            "evaluated_stage_duration_s": evaluated_stage_duration,
             "average_duration_s": round(float(mean(durations)), 6) if durations else None,
             "max_duration_s": round(max(durations), 6) if durations else None,
         },
@@ -1161,6 +1167,32 @@ def summarize_statuses(scores: list[BenchmarkScore]) -> dict[str, int]:
     for score in scores:
         counts[score.status] = counts.get(score.status, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def summarize_stage_durations(scores: list[BenchmarkScore]) -> dict[str, float]:
+    totals: dict[str, float] = {}
+    for score in scores:
+        if not score.stage_elapsed_s:
+            continue
+        for stage, duration in score.stage_elapsed_s.items():
+            if not isinstance(stage, str) or not stage:
+                continue
+            parsed_duration = parse_report_duration(duration)
+            if parsed_duration is None:
+                continue
+            totals[stage] = totals.get(stage, 0.0) + parsed_duration
+    return {stage: round(total, 6) for stage, total in sorted(totals.items())}
+
+
+def combine_stage_durations(*summaries: dict[str, float]) -> dict[str, float]:
+    totals: dict[str, float] = {}
+    for summary in summaries:
+        for stage, duration in summary.items():
+            parsed_duration = parse_report_duration(duration)
+            if parsed_duration is None:
+                continue
+            totals[stage] = totals.get(stage, 0.0) + parsed_duration
+    return {stage: round(total, 6) for stage, total in sorted(totals.items())}
 
 
 def compare_report_regressions(

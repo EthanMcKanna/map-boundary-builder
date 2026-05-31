@@ -8066,3 +8066,16 @@ with zero failures in 0.531s.
   `--max-total-duration-increase-ratio 1.0`, and
   `--max-evaluated-duration-increase-ratio 1.0`. Targeted benchmark tests
   passed 27/27; full `pytest` passed 320/320.
+- Accepted aggregate stage-duration reporting in benchmark summaries. Full
+  reports now preserve active, smoke-only, and evaluated stage totals from the
+  existing per-fixture event profiles, which makes sub-second R&D runs explain
+  where time moved without re-parsing every score row. The real strict
+  drift-smoke gate `out/stage-duration-summary-20260531/full-report.json`
+  passed against
+  `out/evaluated-duration-regression-guard-20260531/full-report.json` with 8/8
+  compared active fixtures, no regression issues, active total 3.077841s,
+  smoke total 1.967530s, and evaluated total 5.045371s. The evaluated stage
+  totals were OCR 3.506116s, extraction 1.287102s, georeference 0.228421s,
+  export 0.008000s, and inspect 0.005902s, confirming OCR remains the dominant
+  measured stage for this strict active plus smoke workload. Targeted benchmark
+  tests passed 27/27; full `pytest` passed 320/320.

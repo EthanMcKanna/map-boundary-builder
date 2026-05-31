@@ -338,6 +338,9 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     assert report["summary"]["active_total_duration_s"] == 0
     assert report["summary"]["smoked_skipped_duration_s"] == 0.12
     assert report["summary"]["evaluated_duration_s"] == 0.12
+    assert report["summary"]["active_stage_duration_s"] == {}
+    assert report["summary"]["smoked_skipped_stage_duration_s"] == {"ocr": 0.08}
+    assert report["summary"]["evaluated_stage_duration_s"] == {"ocr": 0.08}
     assert report["scores"][0]["status"] == "reference_mismatch"
     assert report["scores"][0]["iou"] is None
     assert report["scores"][0]["georeference_source"] == "ocr-georeference:nominatim-label-fit"
@@ -456,6 +459,9 @@ def test_score_skipped_catalog_references_scores_against_current_catalog_geometr
     assert report["summary"]["passed"] is True
     assert report["summary"]["scored_fixtures"] == 1
     assert report["summary"]["skipped_fixtures"] == 0
+    assert report["summary"]["active_stage_duration_s"] == {"match_catalog": 0.01}
+    assert report["summary"]["smoked_skipped_stage_duration_s"] == {}
+    assert report["summary"]["evaluated_stage_duration_s"] == {"match_catalog": 0.01}
     assert report["scores"][0]["status"] == "active"
     assert report["scores"][0]["iou"] == 1.0
     assert report["scores"][0]["catalog_shape_iou"] == 0.92
