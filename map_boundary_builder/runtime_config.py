@@ -32,6 +32,13 @@ def env_bool(name: str, default: bool) -> bool:
     return default
 
 
+def env_choice(name: str, default: str, choices: set[str]) -> str:
+    value = os.environ.get(name, default).strip().lower()
+    if value in choices:
+        return value
+    return default
+
+
 RAPIDOCR_MAX_DIMENSION = env_int("MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION", 1600)
 RAPIDOCR_PURPLE_FILL_MAX_DIMENSION = env_int("MAP_BOUNDARY_RAPIDOCR_PURPLE_FILL_MAX_DIMENSION", 800)
 PROVIDER_UI_RAPIDOCR_MAX_DIMENSION = env_int("MAP_BOUNDARY_PROVIDER_UI_RAPIDOCR_MAX_DIMENSION", 1200)
@@ -46,7 +53,12 @@ RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN = env_int(
 )
 RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN = env_int(
     "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN",
-    544,
+    480,
+)
+RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE = env_choice(
+    "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE",
+    "max",
+    {"max", "min"},
 )
 RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE = (
     os.environ.get("MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5").strip().lower()
@@ -121,6 +133,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_detector_limit_side_len": RAPIDOCR_DET_LIMIT_SIDE_LEN,
         "rapidocr_large_image_detector_limit_side_len": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
         "rapidocr_bright_blue_detector_limit_side_len": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+        "rapidocr_bright_blue_detector_limit_type": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
         "rapidocr_bright_blue_recognition_profile": RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,

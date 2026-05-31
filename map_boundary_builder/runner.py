@@ -63,6 +63,7 @@ from .runtime_config import (
     FAST_TEXT_OCR_STYLES,
     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+    RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
     RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
@@ -346,6 +347,9 @@ def build_boundary(
             rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
             if rapidocr_detector_limit is not None:
                 ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+            rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
+            if rapidocr_detector_limit_type is not None:
+                ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
             rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
             if rapidocr_recognition_profile is not None:
                 ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
@@ -380,6 +384,9 @@ def build_boundary(
             rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
             if rapidocr_detector_limit is not None:
                 ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+            rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
+            if rapidocr_detector_limit_type is not None:
+                ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
             rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
             if rapidocr_recognition_profile is not None:
                 ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
@@ -1301,6 +1308,9 @@ def submit_ocr_labels_from_rgb(
     rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
     if rapidocr_detector_limit is not None:
         kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    if rapidocr_detector_limit_type is not None:
+        kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
     if rapidocr_recognition_profile is not None:
         kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
@@ -1428,6 +1438,9 @@ def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
     if rapidocr_recognition_profile is not None:
         ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    if rapidocr_detector_limit_type is not None:
+        ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
     if rapidocr_max_dimension is None:
         if rapidocr_detector_limit is not None:
             ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
@@ -1486,6 +1499,17 @@ def rapidocr_detector_limit_for_ocr_style(style: str | None) -> int | None:
     if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
         return None
     return RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN
+
+
+def rapidocr_detector_limit_type_for_ocr_style(style: str | None) -> str | None:
+    if style != "bright-blue":
+        return None
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+        return None
+    detector_limit_type = RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE.strip().lower()
+    if detector_limit_type not in {"max", "min"}:
+        return None
+    return detector_limit_type
 
 
 def rapidocr_recognition_profile_for_ocr_style(style: str | None) -> str | None:

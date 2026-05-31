@@ -7566,3 +7566,28 @@ with zero failures in 0.531s.
   `catalog_shape_iou` 0.989331, `miami-waymo` in 0.337723s / 0.343309s with
   shape IoU 0.989300, and `bay-area-waymo` in 0.379998s / 0.388253s with shape
   IoU 0.999999.
+- Bright-blue detector `det_limit_type=max` follow-up, accepted as a real OCR
+  speed lever. The prior env-only detector-limit sweeps were misleading
+  because RapidOCR's default `det_limit_type=min` does not downscale the
+  already-1600px OCR input; inspecting `TextDetector.get_preprocess` and
+  `DetPreProcess.resize` showed that true downscaling requires
+  `det_limit_type=max`. A monkeypatched no-catalog sweep passed the strict
+  scored/drift gate at 960, 736, 608, 544, and 480 detector caps with unchanged
+  avg/min IoU 0.968082/0.942536; 480 was the best conservative point in that
+  sweep at active total 2.961730s and max active 0.648963s
+  (`out/brightblue-detmax480-v5rec-nocatalog-smoke-20260531/full-report.json`).
+  Lower exploratory caps down to 128 also passed, but speed flattened and the
+  robustness margin was unnecessarily thin, so the implemented default is the
+  safer 480px max-side detector cap. The actual code path now threads
+  `rapidocr_detector_limit_type` through OCR cache keys, warmup, engine cache
+  keys, and style-specific runner kwargs; health exposes
+  `rapidocr_bright_blue_detector_limit_type: max`, and the bright-blue default
+  detector cap is 480. Focused OCR/runner tests passed 152/152, full pytest
+  passed 308/308, and the implemented strict no-catalog gate
+  `out/final-brightblue-detmax480-v5rec-nocatalog-smoke-20260531/full-report.json`
+  passed 8/8 scored fixtures with seven drift smokes, avg IoU 0.968082, min
+  IoU 0.942536, active total 3.203208s, max active fixture 0.647887s, and zero
+  latency-budget issues. The changed-market current-catalog audit
+  `out/final-brightblue-detmax480-v5rec-current-catalog-20260531/full-report.json`
+  passed Houston/Miami/Bay Area 3/3 against current catalog geometry, avg/min
+  IoU 1.0, total 0.305852s.

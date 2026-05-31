@@ -479,6 +479,7 @@ class OcrGroupingTests(unittest.TestCase):
                 prepared_bgr=None,
                 composited_alpha=False,
                 rapidocr_detector_limit_side_len=None,
+                rapidocr_detector_limit_type=None,
                 rapidocr_recognition_profile=None,
             ):
                 calls.append(Path(image_path).name)
@@ -716,6 +717,31 @@ class OcrGroupingTests(unittest.TestCase):
             )
 
         self.assertNotEqual(key_default, key_v5)
+
+    def test_ocr_cache_key_depends_on_rapidocr_detector_limit_type(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_detector_limit_side_len=480,
+            )
+            key_max = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_detector_limit_side_len=480,
+                rapidocr_detector_limit_type="max",
+            )
+
+        self.assertNotEqual(key_default, key_max)
+
+    def test_rapidocr_engine_kwargs_applies_detector_limit_type(self) -> None:
+        kwargs = ocr_module.rapidocr_engine_kwargs(480, detector_limit_type="max")
+
+        self.assertEqual(kwargs["det_limit_side_len"], 480)
+        self.assertEqual(kwargs["det_limit_type"], "max")
 
     def test_rapidocr_recognition_profile_kwargs_selects_v5_english_assets(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -970,7 +996,11 @@ class OcrGroupingTests(unittest.TestCase):
         ):
             labels = ocr_module.run_rapidocr_words("unused.png")
 
-        rapidocr.assert_called_once_with(640, ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT)
+        rapidocr.assert_called_once_with(
+            640,
+            ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
+            ocr_module.RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+        )
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_detector_limit_override_wins_for_large_arrays(self) -> None:
@@ -994,7 +1024,11 @@ class OcrGroupingTests(unittest.TestCase):
                 rapidocr_detector_limit_side_len=512,
             )
 
-        rapidocr.assert_called_once_with(512, ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT)
+        rapidocr.assert_called_once_with(
+            512,
+            ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
+            ocr_module.RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+        )
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_keeps_base_detector_limit_for_small_inputs(self) -> None:
