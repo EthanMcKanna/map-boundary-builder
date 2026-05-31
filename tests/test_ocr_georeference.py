@@ -1393,6 +1393,31 @@ class OcrGroupingTests(unittest.TestCase):
         preprocessed.assert_not_called()
         self.assertIn("University Park", {label.text for label in labels})
 
+    def test_cache_disabled_ocr_skips_tesseract_probe_when_rapidocr_has_enough_labels(self) -> None:
+        prepared_bgr = np.zeros((100, 120, 3), dtype=np.uint8)
+        rapid_labels = [
+            OcrLabel("University Park", x=10, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Highland Park", x=110, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Dallas", x=60, y=50, width=70, height=20, confidence=96),
+        ]
+
+        with (
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(
+                ocr_module,
+                "tesseract_available",
+                side_effect=AssertionError("Tesseract availability is only needed for cache keys or fallback"),
+            ),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=rapid_labels),
+            patch.object(ocr_module, "run_tesseract_words") as tesseract,
+            patch.object(ocr_module, "run_preprocessed_tesseract_words") as preprocessed,
+        ):
+            labels = extract_ocr_labels("unused.png", prepared_bgr=prepared_bgr, cache=False)
+
+        tesseract.assert_not_called()
+        preprocessed.assert_not_called()
+        self.assertIn("Dallas", {label.text for label in labels})
+
     def test_prepared_ocr_skips_source_shape_read_when_rapidocr_has_enough_labels(self) -> None:
         prepared_bgr = np.zeros((100, 120, 3), dtype=np.uint8)
         rapid_labels = [

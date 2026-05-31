@@ -92,7 +92,14 @@ def extract_ocr_labels(
     rapidocr_min_text_area: float | None = None,
     cache: bool = True,
 ) -> list[OcrLabel]:
-    use_tesseract = tesseract_available()
+    use_tesseract: bool | None = None
+
+    def tesseract_is_available() -> bool:
+        nonlocal use_tesseract
+        if use_tesseract is None:
+            use_tesseract = tesseract_available()
+        return use_tesseract
+
     label_shape = ocr_label_target_shape(image_path, prepared_bgr)
     prepared_bgr_has_distinct_shape: bool | None = None
 
@@ -109,7 +116,7 @@ def extract_ocr_labels(
     cache_key = (
         ocr_cache_key(
             image_path,
-            use_tesseract=use_tesseract,
+            use_tesseract=tesseract_is_available(),
             rapidocr_max_dimension=rapidocr_max_dimension,
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
@@ -138,7 +145,7 @@ def extract_ocr_labels(
             prepared_bgr, prepared_composited_alpha = load_rapidocr_bgr(image_path)
         visual_cache_key = ocr_visual_cache_key(
             prepared_bgr,
-            use_tesseract=use_tesseract,
+            use_tesseract=tesseract_is_available(),
             rapidocr_max_dimension=rapidocr_max_dimension,
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
@@ -154,7 +161,7 @@ def extract_ocr_labels(
         canonical_bgr, canonical_origin = canonical_ocr_bgr(prepared_bgr)
         canonical_visual_cache_key = ocr_canonical_visual_cache_key(
             canonical_bgr,
-            use_tesseract=use_tesseract,
+            use_tesseract=tesseract_is_available(),
             rapidocr_max_dimension=rapidocr_max_dimension,
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
@@ -178,7 +185,7 @@ def extract_ocr_labels(
                 return labels
         near_visual_cache_key = ocr_near_visual_cache_key(
             prepared_bgr,
-            use_tesseract=use_tesseract,
+            use_tesseract=tesseract_is_available(),
             rapidocr_max_dimension=rapidocr_max_dimension,
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
@@ -196,7 +203,7 @@ def extract_ocr_labels(
                 return labels
         coarse_visual_cache_key = ocr_coarse_visual_cache_key(
             prepared_bgr,
-            use_tesseract=use_tesseract,
+            use_tesseract=tesseract_is_available(),
             rapidocr_max_dimension=rapidocr_max_dimension,
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
@@ -257,7 +264,7 @@ def extract_ocr_labels(
     )
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
-    if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and use_tesseract:
+    if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and tesseract_is_available():
         if prepared_bgr_shape_differs_from_source():
             words = run_tesseract_array(prepared_bgr)
         else:

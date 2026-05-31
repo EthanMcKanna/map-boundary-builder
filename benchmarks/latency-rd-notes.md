@@ -8960,3 +8960,23 @@ with zero failures in 0.531s.
   `1.286930s`, and `total_before_send_s: 1.886372`. This confirms the shipped
   hash preserves the expected no-catalog OCR georeference behavior; the local
   microbench remains the only speed evidence for the tiny shape-read saving.
+- Accepted another tiny cache-disabled OCR hot-path cleanup. `extract_ocr_labels()`
+  now probes `tesseract_available()` lazily, so the production-style
+  cache-disabled path no longer performs a `shutil.which("tesseract")` lookup
+  when RapidOCR already returns enough labels. Cache-enabled paths still include
+  Tesseract availability in their cache keys, and sparse-label fallback still
+  probes before running Tesseract. A focused regression test asserts a prepared,
+  cache-disabled RapidOCR success does not call `tesseract_available()`, and
+  `tests/test_ocr_georeference.py` passed 106/106. The isolated mocked
+  microbench made zero current-path Tesseract probes versus 405 simulated eager
+  probes and measured `0.0808ms` median current versus `0.1103ms` eager, a
+  tiny `0.0295ms` median saving. `compileall` passed, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 368 tests plus 12 subtests, and the
+  local hash is `pipeline-31d7280d7a17cc57`. Strict no-catalog drift gate
+  `out/lazy-tesseract-probe-strict-20260531/full-report.json` preserved exact
+  active avg/min IoU `0.967842`/`0.942536` versus
+  `out/lazy-prepared-ocr-shape-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `3.070515s`/`5.121981s`. The aggregate
+  gate was noisy rather than faster, so the accepted evidence is the removed
+  deterministic availability lookup with unchanged broad behavior.
