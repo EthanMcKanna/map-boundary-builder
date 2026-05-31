@@ -1236,7 +1236,7 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         quick_hit = app_js.index(b"const cachedEntry = findCachedHistoryEntry(lookupKeys);", helper_start)
         fresh_guard = app_js.index(
-            b"if (cachedEntry || !options.includeDeferred || !hasCachedRunHistoryEntries())",
+            b"if (cachedEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries())",
             helper_start,
         )
         deferred_wait = app_js.index(
@@ -1252,7 +1252,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(deferred_wait, deferred_keys)
         self.assertLess(deferred_keys, combined_lookup)
         self.assertIn(b"function hasCachedRunHistoryEntries() {", app_js)
+        self.assertIn(b"function hasCurrentRunCacheHistoryEntries() {", app_js)
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
+        self.assertIn(b"runCacheKeyMatchesPipelineVersion(key, pipelineVersion)", app_js)
 
     def test_frontend_lazily_builds_cache_keys_without_cached_history(self) -> None:
         app_js, mime = web_asset_response("app.js")
@@ -1263,7 +1265,7 @@ class ApiRunCacheTests(unittest.TestCase):
             b"const settingsSignature = runCacheSettingsSignature(file, formData);",
             helper_start,
         )
-        no_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) {", settings_signature)
+        no_history_guard = app_js.index(b"if (!hasCurrentRunCacheHistoryEntries()) {", settings_signature)
         lazy_return = app_js.index(
             b"cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),",
             no_history_guard,
@@ -1295,11 +1297,34 @@ class ApiRunCacheTests(unittest.TestCase):
             b"if (!task || isSvgFile(task.file) || requiresJsonUpload(task.file)) return;",
             warmup_start,
         )
-        warmup_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) return;", warmup_task_guard)
+        warmup_history_guard = app_js.index(b"if (!hasCurrentRunCacheHistoryEntries()) return;", warmup_task_guard)
         warmup_pixel_hash = app_js.index(b"task.pixelHash().catch((error) => {", warmup_history_guard)
 
         self.assertLess(warmup_task_guard, warmup_history_guard)
         self.assertLess(warmup_history_guard, warmup_pixel_hash)
+
+    def test_frontend_ignores_stale_history_for_preupload_cache_work(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        helper_start = app_js.index(b"function hasCurrentRunCacheHistoryEntries() {")
+        pipeline_version = app_js.index(b"const pipelineVersion = cachedRunCachePipelineVersion;", helper_start)
+        fallback = app_js.index(b"if (!pipelineVersion) return hasCachedRunHistoryEntries();", pipeline_version)
+        namespace_match = app_js.index(
+            b"runCacheKeyMatchesPipelineVersion(key, pipelineVersion)",
+            fallback,
+        )
+        matcher_start = app_js.index(b"function runCacheKeyMatchesPipelineVersion(key, pipelineVersion) {")
+        raw_version = app_js.index(b"RUN_CACHE_RAW_VERSION,", matcher_start)
+        pixel_version = app_js.index(b"RUN_CACHE_PIXEL_VERSION,", raw_version)
+        starts_with = app_js.index(b"key.startsWith(`${version}:${pipelineVersion}:`)", pixel_version)
+
+        self.assertLess(helper_start, pipeline_version)
+        self.assertLess(pipeline_version, fallback)
+        self.assertLess(fallback, namespace_match)
+        self.assertLess(matcher_start, raw_version)
+        self.assertLess(raw_version, pixel_version)
+        self.assertLess(pixel_version, starts_with)
 
     def test_frontend_leaves_svgz_uploads_for_backend_rasterization(self) -> None:
         app_js, mime = web_asset_response("app.js")

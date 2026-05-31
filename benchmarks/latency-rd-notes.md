@@ -9425,3 +9425,32 @@ with zero failures in 0.531s.
   one pixel read, and two saved history cache keys after history persistence;
   screenshot saved to
   `out/prod-lazy-no-history-cache-20260531/lazy-cache-success-proof.png`.
+- Accepted current-pipeline browser-history gating for local cache work. After a
+  deploy, old browser history entries can still contain GeoJSON and cache keys,
+  but their `image-to-geojson-v3/v5:<pipeline>:` namespace cannot match the
+  freshly embedded pipeline version. The frontend now treats history as
+  cacheable for pre-upload raw/pixel hashing only when at least one saved cache
+  key matches the current pipeline namespace; stale entries still render in
+  history, but they no longer force a first upload to wait on local hash work
+  that has no possible hit. Local checks: `node --check
+  map_boundary_builder/web_assets/app.js`, focused
+  `PYTHONPATH=. .venv/bin/pytest tests/test_api_cache.py -q` passed 64 tests,
+  full `PYTHONPATH=. .venv/bin/pytest -q` passed 381 tests plus 12 subtests,
+  and `git diff --check` passed. Browser plugin page identity/blank/console
+  checks against `http://127.0.0.1:8881` passed; the Browser screenshot command
+  timed out, so the route/file-upload proof used the Playwright CLI fallback. A
+  local Playwright proof seeded `mapBoundaryBuilder.history.v1` with only
+  `pipeline-stale` raw/pixel keys, patched `File.prototype.arrayBuffer()` to
+  never resolve, selected a sub-probe-threshold PNG, and clicked Build. The
+  mocked `/api/runs` request was sent once in `348ms` with
+  `arrayBufferReads=0` before Build; `arrayBufferReads=1` only appeared after
+  the mocked success when async history persistence tried to save new keys.
+  Screenshot saved to
+  `out/stale-history-cache-browser-20260531/stale-history-cache-proof-2.png`.
+  Strict no-catalog drift gate
+  `out/stale-history-cache-strict-20260531/full-report.json` preserved active
+  avg/min IoU `0.968082`/`0.942536` versus
+  `out/lazy-no-history-cache-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven drift smokes, and stayed within latency budgets
+  with active/evaluated totals `3.282092s`/`5.423555s` and max active fixture
+  `0.716013s`.

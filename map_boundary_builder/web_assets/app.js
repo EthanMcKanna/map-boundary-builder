@@ -1207,7 +1207,7 @@ async function buildRunCacheKeys(file, formData) {
   }
   try {
     const settingsSignature = runCacheSettingsSignature(file, formData);
-    if (!hasCachedRunHistoryEntries()) {
+    if (!hasCurrentRunCacheHistoryEntries()) {
       return {
         lookupKeys: [],
         cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),
@@ -1223,7 +1223,7 @@ async function buildRunCacheKeys(file, formData) {
     if (requiresJsonUpload(file)) {
       return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
     }
-    if (!hasCachedRunHistoryEntries()) {
+    if (!hasCurrentRunCacheHistoryEntries()) {
       return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
     }
     const pixelHashPromise = pixelImageContentHash(file);
@@ -1368,7 +1368,7 @@ function createImageHashTask(file) {
 function scheduleSelectedImageHashWarmup() {
   const task = selectedImageHashTask;
   if (!task || isSvgFile(task.file) || requiresJsonUpload(task.file)) return;
-  if (!hasCachedRunHistoryEntries()) return;
+  if (!hasCurrentRunCacheHistoryEntries()) return;
   const start = () => {
     if (selectedImageHashTask === task) {
       task.pixelHash().catch((error) => {
@@ -2167,6 +2167,23 @@ function hasCachedRunHistoryEntries() {
   return historyEntries.some((entry) => entry?.geojson && entryCacheKeys(entry).length);
 }
 
+function hasCurrentRunCacheHistoryEntries() {
+  const pipelineVersion = cachedRunCachePipelineVersion;
+  if (!pipelineVersion) return hasCachedRunHistoryEntries();
+  return historyEntries.some((entry) => (
+    entry?.geojson && entryCacheKeys(entry).some((key) => (
+      runCacheKeyMatchesPipelineVersion(key, pipelineVersion)
+    ))
+  ));
+}
+
+function runCacheKeyMatchesPipelineVersion(key, pipelineVersion) {
+  return [
+    RUN_CACHE_RAW_VERSION,
+    RUN_CACHE_PIXEL_VERSION,
+  ].some((version) => key.startsWith(`${version}:${pipelineVersion}:`));
+}
+
 async function cacheKeysFromPromise(cacheKeysPromise) {
   if (!cacheKeysPromise) return [];
   try {
@@ -2194,7 +2211,7 @@ async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options =
     const lookup = await cacheLookupPromise;
     const lookupKeys = normalizedCacheKeys(lookup?.lookupKeys || []);
     const cachedEntry = findCachedHistoryEntry(lookupKeys);
-    if (cachedEntry || !options.includeDeferred || !hasCachedRunHistoryEntries()) {
+    if (cachedEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries()) {
       return cachedEntry;
     }
     const deferredWaitMs = Math.max(0, Number(options.deferredWaitMs || 0));
