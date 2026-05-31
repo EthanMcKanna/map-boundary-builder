@@ -9407,3 +9407,21 @@ with zero failures in 0.531s.
   `out/no-history-pixel-cache-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven drift smokes, and stayed within latency budgets
   with active/evaluated totals `3.110689s`/`5.153432s`.
+- Production proof for lazy no-history run-cache key generation: deployed
+  committed head `a66a8f3` as Vercel deployment
+  `dpl_6A7EY4D1pa5jXYDJzSu4W76yULHF`, aliased to `mapboundary.app`. Hosted
+  `/api/health?warm=ocr` returned `ok: true`, warm status `ok`, and backend
+  `pipeline-64ad23bb71268a34`. Hosted HTML referenced
+  `/static/app.js?v=asset-0114f6701c328986`, and the fetched production
+  `app.js` contained `lazyRunCacheKeys`, the lazy no-history return, and the
+  function-aware `cacheKeysFromPromise()` consumer. A production-page
+  Playwright proof cleared history, replaced `File.arrayBuffer()` with a
+  never-resolving promise, selected `Tesla Houston.png`, observed zero
+  array-buffer reads and zero pixel reads before Build, clicked Build, and saw
+  the mocked `/api/runs` request leave in 23ms; screenshot saved to
+  `out/prod-lazy-no-history-cache-20260531/lazy-cache-proof.png`. A second
+  production-page Playwright proof returned a mocked successful inline GeoJSON
+  run and verified no file/pixel reads before Build, then one array-buffer read,
+  one pixel read, and two saved history cache keys after history persistence;
+  screenshot saved to
+  `out/prod-lazy-no-history-cache-20260531/lazy-cache-success-proof.png`.
