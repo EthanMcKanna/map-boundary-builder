@@ -432,10 +432,9 @@ form.addEventListener("submit", async (event) => {
       step: "prepare",
       note: "Sending screenshot to the builder.",
     });
-    const response = await fetch("/api/runs", await uploadFetchOptions(formData, uploadFile));
-    const payload = await response.json();
+    const { response, payload } = await postRunUpload(formData, uploadFile);
     if (!response.ok) {
-      throw new Error(payload.error || "Run failed to start.");
+      throw new Error(payload?.error || uploadErrorMessage(response, "Run failed to start."));
     }
     if (payload.status === "complete" && payload.artifacts) {
       applyInlineRun(payload, {
@@ -856,12 +855,11 @@ async function tryCatalogProbe(file, formData, options = {}) {
     probeData.set("catalog_probe_only", "1");
     probeData.set("include_overlay", "0");
     probeData.set("normalized_cache_lookup", "0");
-    const responsePromise = uploadFetchOptions(probeData, probeCandidate.file, {
+    const responsePromise = postRunUpload(probeData, probeCandidate.file, {
       signal: options.signal,
-    }).then((requestOptions) => fetch("/api/runs", requestOptions));
+    });
     const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);
-    const response = await responsePromise;
-    const payload = await response.json().catch(() => null);
+    const { response, payload } = await responsePromise;
     if (response.ok && isCatalogRunPayload(payload)) return { payload };
     if (response.ok && payload?.status === "catalog_miss") {
       const miss = payload.catalog_probe_miss || {};
@@ -911,11 +909,7 @@ async function tryFastCatalogHandoff(formData, catalogProbeResult) {
     fastData.set("catalog_probe_missed", "1");
     fastData.set("include_overlay", "0");
     fastData.set("normalized_cache_lookup", "0");
-    const response = await fetch(
-      "/api/runs",
-      await uploadFetchOptions(fastData, catalogProbeResult.fastHandoffFile),
-    );
-    const payload = await response.json().catch(() => null);
+    const { response, payload } = await postRunUpload(fastData, catalogProbeResult.fastHandoffFile);
     if (response.ok && isFastCatalogHandoffPayload(payload, catalogProbeResult)) {
       return { payload };
     }
@@ -1443,7 +1437,7 @@ async function uploadFetchOptions(formData, file, options = {}) {
     method: "POST",
     ...(options.signal ? { signal: options.signal } : {}),
   };
-  if (!requiresJsonUpload(file)) {
+  if (!options.forceJson && !requiresJsonUpload(file)) {
     return { ...requestOptions, body: formData };
   }
   return {
@@ -1480,6 +1474,57 @@ function fileToBase64(file) {
     reader.onerror = () => reject(reader.error || new Error("Could not read image upload."));
     reader.readAsDataURL(file);
   });
+}
+
+async function postRunUpload(formData, file, options = {}) {
+  let response = await fetch("/api/runs", await uploadFetchOptions(formData, file, options));
+  let payload = await responseJsonOrNull(response);
+  if (shouldRetryWithJsonUpload(response, payload, file, options)) {
+    markProgressStep("prepare", "running", "Retrying upload.");
+    setStatus("Retrying upload", 8, "running", {
+      step: "prepare",
+      note: "Switching to a raw image transport.",
+    });
+    response = await fetch(
+      "/api/runs",
+      await uploadFetchOptions(formData, file, { ...options, forceJson: true }),
+    );
+    payload = await responseJsonOrNull(response);
+  }
+  return { response, payload };
+}
+
+async function postReportUpload(formData, file, options = {}) {
+  let response = await fetch("/api/reports", await uploadFetchOptions(formData, file, options));
+  let payload = await responseJsonOrNull(response);
+  if (shouldRetryWithJsonUpload(response, payload, file, options)) {
+    response = await fetch(
+      "/api/reports",
+      await uploadFetchOptions(formData, file, { ...options, forceJson: true }),
+    );
+    payload = await responseJsonOrNull(response);
+  }
+  return { response, payload };
+}
+
+function shouldRetryWithJsonUpload(response, payload, file, options = {}) {
+  if (options.forceJson || requiresJsonUpload(file) || !file?.arrayBuffer) return false;
+  if (response.status !== 403 || payload !== null) return false;
+  return true;
+}
+
+async function responseJsonOrNull(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+function uploadErrorMessage(response, fallback) {
+  if (response.status === 403) return "Upload was blocked before it reached the builder.";
+  if (response.status === 413) return "Upload is too large.";
+  return fallback;
 }
 
 function connectEvents(runId) {
@@ -2775,9 +2820,8 @@ async function submitGenerationReport(event) {
     formData.set("profile", JSON.stringify(latestRunProfile || {}));
     formData.set("user_agent", navigator.userAgent);
     formData.set("page_url", window.location.href);
-    const response = await fetch("/api/reports", await uploadFetchOptions(formData, reportImage));
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Report failed.");
+    const { response, payload } = await postReportUpload(formData, reportImage);
+    if (!response.ok) throw new Error(payload?.error || uploadErrorMessage(response, "Report failed."));
     reportFormStatus.textContent = "Issue created. The screenshot is now public in GitHub for debugging.";
     reportFormStatus.classList.add("success");
     reportIssueLink.href = payload.issue_url;

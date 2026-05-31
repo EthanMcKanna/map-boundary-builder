@@ -8399,3 +8399,15 @@ with zero failures in 0.531s.
   and `total_before_send_s=0.007774`. Live evidence was saved under
   `out/tiff-normalization-20260531/prod-tiff-json-response.txt` and
   `out/tiff-normalization-20260531/prod-tiff-json-repeat-response.txt`.
+- Accepted a guarded frontend JSON retry for future hosted pre-app upload
+  denials. The retry only fires when the first upload returns HTTP 403 with no
+  JSON body, matching the observed Vercel `x-vercel-mitigated: deny` behavior;
+  normal app JSON errors and formats already routed through JSON are not
+  retried. Playwright exercised the real local UI by mocking the first
+  `/api/runs` multipart request as `text/plain` 403, then observed a second
+  `/api/runs` request with `Content-Type: application/json` and a completed
+  Dallas run from `out/retry-json-local-web-20260531/Tesla Dallas.retry.jpg`.
+  The browser screenshot was saved at
+  `out/retry-json-local-web-20260531/retry-json-browser.png`. Validation passed
+  `node --check map_boundary_builder/web_assets/app.js` and full `pytest`
+  347/347.
