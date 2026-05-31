@@ -8662,3 +8662,13 @@ with zero failures in 0.531s.
   and `out/context-live-skip-currentref-gate-20260531/full-report.json`
   preserved 15/15 current-reference IoUs (`0.996223/0.943345` avg/min).
   Focused OCR/georeference and runner tests passed 164/164.
+- Deployed the cached-context-first inference guard as
+  `dpl_HyNvWUcAgd9HdLKRaeGHmLixRZt1`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-7ea9f15d7402a695` with RapidOCR 1.4.4,
+  onnxruntime 1.26.0, Pillow 12.2.0, and cv2 4.10.0. A production neutral
+  Bay Area Waymo no-catalog upload using filename `upload.png` preserved the
+  expected `ocr-georeference:nominatim-label-fit` output, confidence `0.877`,
+  and bbox `[-122.4990409, 37.3074884, -121.8578132, 37.7981705]`. Production
+  remained OCR/extraction-heavy at `3.402697s` total-before-send, but the
+  georeference stage stayed bounded at `0.093435s`, consistent with skipping
+  the prior live direct-context geocoder wait.
