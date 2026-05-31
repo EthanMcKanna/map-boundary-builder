@@ -9662,3 +9662,22 @@ with zero failures in 0.531s.
   reports `pipeline-18efd6dd9073624d`, bright-blue detector limit `448`,
   fast-text min area `1500.0`, assets available `true`, and effective
   recognizer profile `en-ppocrv5`.
+- Production deploy for the bright-blue OCR default tuning: Vercel deployment
+  `dpl_242TGvrSp7ZzHBpMQZHGkSEDhUM2` went READY at
+  `map-boundary-builder-c57m6hmmr-ethanmckannas-projects.vercel.app` and was
+  aliased to `mapboundary.app`. Live health reports
+  `pipeline-18efd6dd9073624d`, bright-blue detector limit `448`, fast-text min
+  area `1500.0`, PP-OCRv5 assets available `true`, and effective recognizer
+  profile `en-ppocrv5`; warmed health returned warm `status: ok`,
+  `rapidocr_inference_warmed: true`, `rapidocr_s: 5.068403`, and
+  `total_s: 5.524122`. A production cache-busted no-catalog Waymo Nashville
+  smoke with overlay disabled completed on the same pipeline with
+  `cache_hit: miss`, `total_before_send_s: 2.243188`,
+  `build_boundary_s: 2.232719`, and stage timings `extract: 0.423746`, `ocr: 1.294306`,
+  `georeference: 0.410360`, `export: 0.001522`. The result stayed on
+  `bright-blue`, inferred `Nashville`, used
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, returned confidence
+  `0.82`, and kept `catalog_slug: null`. Health artifacts were saved at
+  `out/prod-det448-area1500-health-20260531.json` and
+  `out/prod-det448-area1500-health-warm-20260531.json`; the smoke response was
+  saved under `out/prod-det448-area1500-smoke-20260531/`.
