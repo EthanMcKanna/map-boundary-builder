@@ -8538,3 +8538,33 @@ with zero failures in 0.531s.
   (`0.448051s`) dominated. Keep the guarded policy for the local first-run
   improvement and exact-regression gates, but continue treating production
   arbitrary-path latency as OCR-bound and noisy.
+- Rejected a general OCR crop-around-extraction prototype for the arbitrary
+  no-catalog path. The crop saved OCR area, but it also forfeited the current
+  extraction/OCR overlap and removed labels needed by Phoenix's road-supported
+  fit. The active gate in
+  `out/probe-ocr-crop-pad050-active-20260531/full-report.json` failed the
+  strict baseline comparison: active avg IoU fell from `0.967842` to
+  `0.951618`, and Phoenix Waymo dropped from `0.983820` to `0.854028`. Keep
+  full-image OCR for the general bright-blue path unless a future crop can prove
+  a safe fallback without adding more latency than it saves.
+- Accepted a guarded road-refinement cache-key skip for large feature-distance
+  rasters when no road-refine cache entries exist. The expensive part is the
+  full float feature-field hash needed before a cache miss; exact web/API
+  repeats are already covered by the run-result cache, while local warmed
+  road-refine caches should still be usable. A fresh-cache control
+  `out/probe-road-refine-cache-current-fresh-20260531/full-report.json` passed
+  the strict no-catalog gate with exact active IoUs, active/evaluated totals
+  `3.081054s`/`5.646054s`, and evaluated georeference `1.095514s`. The guarded
+  candidate `out/road-refine-cache-emptyguard-fresh-20260531/full-report.json`
+  preserved exact IoUs and reduced those totals to `2.997966s`/`5.105079s`,
+  with evaluated georeference down to `0.773955s`. The regular warmed-cache
+  gate `out/road-refine-cache-emptyguard-nocatalog-20260531/full-report.json`
+  also preserved exact active IoUs and passed latency budgets, and the
+  current-reference catalog gate
+  `out/road-refine-cache-emptyguard-currentref-20260531/full-report.json`
+  passed 15/15 with avg/min IoU unchanged at `0.996223`/`0.943345`. Focused
+  road/runner tests passed 79/79, `compileall` and `git diff --check` passed,
+  and full `PYTHONPATH=. pytest` passed 356 tests plus 9 subtests. This is
+  intentionally an empty-cache first-run optimization; existing road-refine
+  cache entries still trigger the old exact-key path for repeat local
+  workflows.

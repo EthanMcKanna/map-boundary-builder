@@ -30,6 +30,10 @@ ROAD_REFINE_FULL_FALLBACK_MIN_SCORE = max(
     0.0,
     float(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE", "0.60")),
 )
+ROAD_REFINE_CACHE_MAX_PIXELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS", "1000000")),
+)
 ROAD_SCORE_SIGMA_PX = np.float32(6.0)
 ROAD_REFINE_CACHE_VERSION = "road-refine-v6"
 ROAD_REFINE_MEMORY_CACHE_MAX = 64
@@ -59,23 +63,26 @@ def refine_transform_with_osm_roads(
         return None
     if feature_distance is None:
         feature_distance = image_feature_distance(rgb)
+    use_cache = should_use_road_refine_cache(feature_distance)
     road_source_digest = road_points_source_digest(city_center.bbox)
-    cache_key = road_refine_cache_key(
-        feature_distance,
-        city_center,
-        initial,
-        lock_scale=lock_scale,
-        road_source_digest=road_source_digest,
-    )
-    cached = read_road_refine_cache(cache_key)
-    if cached is not None:
-        return cached
+    cache_key: str | None = None
+    if use_cache:
+        cache_key = road_refine_cache_key(
+            feature_distance,
+            city_center,
+            initial,
+            lock_scale=lock_scale,
+            road_source_digest=road_source_digest,
+        )
+        cached = read_road_refine_cache(cache_key)
+        if cached is not None:
+            return cached
 
     road_points = load_road_points(city_center.bbox, road_source_digest=road_source_digest)
     if road_points.size == 0:
         return None
     loaded_source_digest = road_points_source_digest(city_center.bbox)
-    if loaded_source_digest != road_source_digest:
+    if use_cache and loaded_source_digest != road_source_digest:
         road_source_digest = loaded_source_digest
         cache_key = road_refine_cache_key(
             feature_distance,
@@ -179,8 +186,26 @@ def refine_transform_with_osm_roads(
         sampled_points=best_count,
         base_score=round(base_score, 6),
     )
-    write_road_refine_cache(cache_key, result)
+    if cache_key is not None:
+        write_road_refine_cache(cache_key, result)
     return result
+
+
+def should_use_road_refine_cache(feature_distance: np.ndarray) -> bool:
+    if ROAD_REFINE_CACHE_MAX_PIXELS <= 0:
+        return False
+    if int(feature_distance.size) <= ROAD_REFINE_CACHE_MAX_PIXELS:
+        return True
+    return road_refine_cache_has_entries()
+
+
+def road_refine_cache_has_entries() -> bool:
+    if _ROAD_REFINE_MEMORY_CACHE:
+        return True
+    try:
+        return next(ROAD_REFINE_CACHE_DIR.glob("*.json"), None) is not None
+    except OSError:
+        return False
 
 
 def road_refine_cache_key(
