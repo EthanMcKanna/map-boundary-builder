@@ -8345,3 +8345,19 @@ with zero failures in 0.531s.
   Vercel before app code (`x-vercel-mitigated: deny`), so the hosted browser
   path now normalizes BMP uploads and report images to PNG before POSTing while
   preserving local/server BMP decoding for non-Vercel paths.
+- Deployed the hosted BMP normalization path to Vercel production as
+  `dpl_CZfb5wEsxJDLrg8MuHAaMrnEWkJ4`, aliased to `https://mapboundary.app`.
+  The live health endpoint stayed on `pipeline-76bd7c4d97a7fba9`, the served
+  upload copy includes `PNG, JPG, WebP, AVIF, GIF, BMP, TIFF, SVG`, and the
+  served `/static/app.js` contains the `isBmpFile` / `Converting bitmap map`
+  branch. A current raw-BMP multipart POST is still denied before app code with
+  HTTP 403 and `x-vercel-mitigated: deny`, confirming the hosted path needs
+  client-side normalization. A browser-equivalent PNG converted from the Tesla
+  Dallas BMP fixture returned HTTP 201, status `complete`, filename
+  `Tesla Dallas.bmp.normalized.png`, city Dallas, style gray-fill, confidence
+  0.972523, catalog `dallas-tesla`, `catalog_shape_iou=0.972523`, bbox
+  `[-96.8582001, 32.7624321, -96.7552567, 32.8723526]`,
+  `build_boundary_s=0.105897`, `total_before_send_s=0.408049`, and stage
+  timings inspect 0.036229s, extract 0.047413s, georeference 0.000005s, export
+  0.000705s. The live evidence was saved under
+  `out/bmp-support-20260531/prod-bmp-normalized-response.txt`.
