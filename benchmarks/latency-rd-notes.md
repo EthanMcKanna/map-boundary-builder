@@ -8114,3 +8114,17 @@ with zero failures in 0.531s.
   the bright-blue detector limit to 416 preserved accuracy but slowed evaluated
   OCR to 3.682463s. Targeted OCR/runtime tests passed 102/102; full `pytest`
   passed 321/321.
+- Deployed the RapidOCR recognition-batch default to Vercel production as
+  `dpl_J9A5ve7DN6Jv6CyqxS48duy1LKZ6` after a local
+  `npx vercel@latest build --prod` succeeded with CLI 54.6.1, Python 3.12, and
+  `uv` 0.11.16. Production aliases `https://mapboundary.app` and
+  `https://map-boundary-builder.vercel.app` both reported
+  `pipeline-8b92229d0cbdf798`, `rapidocr_rec_batch_num=24`, and
+  `rapidocr_cls_batch_num=24` from `/api/health`. A no-catalog Nashville
+  production generation smoke against `https://mapboundary.app/api/runs`
+  returned HTTP 201, status `complete`, city Nashville, style bright-blue,
+  confidence 0.82, georeference source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, three control
+  points, `build_boundary_s=3.266126`, and stage timings extract 1.219846s,
+  OCR 1.582956s, georeference 0.430188s, export 0.001381s. The smoke response
+  was saved at `out/prod-smoke-be76f2d/nashville-response.txt`.
