@@ -8214,3 +8214,22 @@ with zero failures in 0.531s.
   `total_before_send_s=0.008597`. The counted smoke responses were saved at
   `out/prod-smoke-eeefc46/webp-visual-fresh-first-response.txt` and
   `out/prod-smoke-eeefc46/webp-visual-fresh-second-response.txt`.
+- Accepted a conservative JPEG visual run-result cache key. The API cache
+  ladder now has a `jpeg-visual` lookup after the older comment-only JPEG key:
+  it skips only COM comments and APP1 Exif/XMP metadata while preserving ICC
+  profiles, unknown APP1 payloads, scan bytes, options, pipeline version, and
+  semantic filename hints. This covers common cache-busted JPEG upload variants
+  without opting into the expensive decoded-pixel normalized cache path. Focused
+  JPEG visual-key tests passed 2/2, and `tests/test_api_cache.py` passed 46/46.
+  A real JPEG stress check on `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg`
+  confirmed the two metadata variants had different raw keys and different old
+  commentless keys, but the same JPEG visual key and the second variant read
+  the first cached payload. Full `pytest` passed 330 tests plus 9 subtests. A
+  first strict drift-smoke benchmark run was discarded because it ran alongside
+  full pytest and failed only the evaluated-duration budget; the standalone
+  repeat `out/jpeg-visual-cache-20260531-repeat/full-report.json` passed
+  against `out/webp-visual-cache-20260531/full-report.json` with 8/8 active
+  fixtures, seven smoke-checked `reference_mismatch` fixtures, zero smoke
+  failures, avg/min IoU 0.967842/0.942536, no regression issues,
+  active/evaluated totals 2.850909s/4.973401s, and evaluated OCR 3.523898s
+  under the active 4s and evaluated 6s budgets.

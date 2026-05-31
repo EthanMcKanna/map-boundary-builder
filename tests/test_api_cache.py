@@ -31,6 +31,8 @@ from api.index import (
     inline_overlay,
     jpeg_commentless_run_result_cache_key,
     jpeg_commentless_sha256,
+    jpeg_visual_run_result_cache_key,
+    jpeg_visual_sha256,
     json_response_body,
     filename_hint_cache_value,
     normalized_image_sha256,
@@ -420,6 +422,48 @@ class ApiRunCacheTests(unittest.TestCase):
             jpeg_commentless_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
         )
         self.assertIsNone(jpeg_commentless_run_result_cache_key(b"not a jpeg", None, BoundaryBuildOptions()))
+
+    def test_jpeg_visual_hash_ignores_metadata_only(self) -> None:
+        base = jpeg_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), quality=95)
+        changed_pixel = jpeg_bytes(Image.new("RGB", (4, 3), (200, 34, 57)), quality=95)
+        first_comment = insert_jpeg_segment(base, 0xFE, b"first comment")
+        second_exif = insert_jpeg_segment(base, 0xE1, b"Exif\x00\x00second")
+        third_xmp = insert_jpeg_segment(base, 0xE1, b"http://ns.adobe.com/xap/1.0/\x00third")
+        color_profile = insert_jpeg_segment(base, 0xE2, b"ICC_PROFILE\x00profile")
+        unknown_app1 = insert_jpeg_segment(base, 0xE1, b"unknown app1 payload")
+
+        self.assertNotEqual(first_comment, second_exif)
+        self.assertNotEqual(second_exif, third_xmp)
+        self.assertEqual(jpeg_visual_sha256(first_comment), jpeg_visual_sha256(second_exif))
+        self.assertEqual(jpeg_visual_sha256(first_comment), jpeg_visual_sha256(third_xmp))
+        self.assertNotEqual(jpeg_visual_sha256(first_comment), jpeg_visual_sha256(changed_pixel))
+        self.assertNotEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(color_profile))
+        self.assertNotEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(unknown_app1))
+        self.assertIsNone(jpeg_visual_sha256(b"not a jpeg"))
+        self.assertIsNone(jpeg_visual_sha256(base[:-2]))
+
+    def test_jpeg_visual_run_cache_key_ignores_metadata_but_keeps_options(self) -> None:
+        base = jpeg_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), quality=95)
+        first = insert_jpeg_segment(base, 0xE1, b"Exif\x00\x00cache bust a")
+        second = insert_jpeg_segment(base, 0xE1, b"http://ns.adobe.com/xap/1.0/\x00cache bust b")
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            jpeg_commentless_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            jpeg_commentless_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            jpeg_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            jpeg_visual_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            jpeg_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            jpeg_visual_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(jpeg_visual_run_result_cache_key(b"not a jpeg", None, BoundaryBuildOptions()))
 
     @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
     def test_webp_visual_hash_ignores_metadata_only(self) -> None:

@@ -48,8 +48,11 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_NON_VISUAL_CHUNKS = {b"tEXt", b"zTXt", b"iTXt", b"tIME"}
 JPEG_SIGNATURE = b"\xff\xd8"
 JPEG_COMMENT_MARKER = 0xFE
+JPEG_APP1_MARKER = 0xE1
 JPEG_START_OF_SCAN_MARKER = 0xDA
 JPEG_END_OF_IMAGE = b"\xff\xd9"
+JPEG_EXIF_PREFIX = b"Exif\x00\x00"
+JPEG_XMP_PREFIX = b"http://ns.adobe.com/xap/1.0/\x00"
 WEBP_RIFF_SIGNATURE = b"RIFF"
 WEBP_SIGNATURE = b"WEBP"
 WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
@@ -266,6 +269,24 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        jpeg_visual_cache_started = time.perf_counter()
+        jpeg_visual_cache_key = jpeg_visual_run_result_cache_key(image_bytes, city, options)
+        if jpeg_visual_cache_key is not None:
+            cached = read_run_result_cache(jpeg_visual_cache_key)
+        profile["jpeg_visual_cache_lookup_s"] = elapsed_seconds(jpeg_visual_cache_started)
+        if jpeg_visual_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "jpeg-visual"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            self.send_json(
+                payload,
+                status=cached_run_response_status(payload),
+            )
+            return
+
         webp_visual_cache_started = time.perf_counter()
         webp_visual_cache_key = webp_visual_run_result_cache_key(image_bytes, city, options)
         if webp_visual_cache_key is not None:
@@ -350,6 +371,8 @@ class handler(BaseHTTPRequestHandler):
                 write_run_result_cache(png_visual_cache_key, payload)
             if jpeg_commentless_cache_key is not None:
                 write_run_result_cache(jpeg_commentless_cache_key, payload)
+            if jpeg_visual_cache_key is not None:
+                write_run_result_cache(jpeg_visual_cache_key, payload)
             if webp_visual_cache_key is not None:
                 write_run_result_cache(webp_visual_cache_key, payload)
             write_run_result_cache(raw_cache_key, payload)
@@ -368,6 +391,8 @@ class handler(BaseHTTPRequestHandler):
                     write_run_result_cache(png_visual_cache_key, payload)
                 if jpeg_commentless_cache_key is not None:
                     write_run_result_cache(jpeg_commentless_cache_key, payload)
+                if jpeg_visual_cache_key is not None:
+                    write_run_result_cache(jpeg_visual_cache_key, payload)
                 if webp_visual_cache_key is not None:
                     write_run_result_cache(webp_visual_cache_key, payload)
                 write_run_result_cache(raw_cache_key, payload)
@@ -400,6 +425,8 @@ class handler(BaseHTTPRequestHandler):
             write_run_result_cache(png_visual_cache_key, payload)
         if jpeg_commentless_cache_key is not None:
             write_run_result_cache(jpeg_commentless_cache_key, payload)
+        if jpeg_visual_cache_key is not None:
+            write_run_result_cache(jpeg_visual_cache_key, payload)
         if webp_visual_cache_key is not None:
             write_run_result_cache(webp_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
@@ -752,6 +779,13 @@ def jpeg_commentless_run_result_cache_key(image_bytes: bytes, city: str | None, 
     return run_result_cache_key_for_hash("jpeg_commentless_sha256", visual_hash, city, options)
 
 
+def jpeg_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = jpeg_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash("jpeg_visual_sha256", visual_hash, city, options)
+
+
 def webp_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
     visual_hash = webp_visual_sha256(image_bytes)
     if visual_hash is None:
@@ -916,6 +950,61 @@ def jpeg_commentless_sha256(image_bytes: bytes) -> str | None:
 
 def jpeg_marker_has_no_payload(marker: int) -> bool:
     return marker == 0x01 or marker == 0xD8 or marker == 0xD9 or 0xD0 <= marker <= 0xD7
+
+
+def jpeg_visual_sha256(image_bytes: bytes) -> str | None:
+    if not image_bytes.startswith(JPEG_SIGNATURE):
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"jpeg-visual-v1")
+    digest.update(JPEG_SIGNATURE)
+    offset = len(JPEG_SIGNATURE)
+    while offset < len(image_bytes):
+        if image_bytes[offset] != 0xFF:
+            return None
+        while offset < len(image_bytes) and image_bytes[offset] == 0xFF:
+            offset += 1
+        if offset >= len(image_bytes):
+            return None
+        marker = image_bytes[offset]
+        offset += 1
+        if marker == 0x00:
+            return None
+        marker_bytes = bytes((0xFF, marker))
+        if jpeg_marker_has_no_payload(marker):
+            digest.update(marker_bytes)
+            if marker_bytes == JPEG_END_OF_IMAGE:
+                return digest.hexdigest()
+            continue
+        if offset + 2 > len(image_bytes):
+            return None
+        segment_length = int.from_bytes(image_bytes[offset : offset + 2], "big")
+        if segment_length < 2:
+            return None
+        segment_end = offset + segment_length
+        if segment_end > len(image_bytes):
+            return None
+        payload = image_bytes[offset + 2 : segment_end]
+        if not jpeg_segment_is_non_visual(marker, payload):
+            digest.update(marker_bytes)
+            digest.update(image_bytes[offset : offset + 2])
+            digest.update(payload)
+        offset = segment_end
+        if marker == JPEG_START_OF_SCAN_MARKER:
+            scan_bytes = image_bytes[offset:]
+            if JPEG_END_OF_IMAGE not in scan_bytes:
+                return None
+            digest.update(scan_bytes)
+            return digest.hexdigest()
+    return None
+
+
+def jpeg_segment_is_non_visual(marker: int, payload: bytes) -> bool:
+    if marker == JPEG_COMMENT_MARKER:
+        return True
+    if marker != JPEG_APP1_MARKER:
+        return False
+    return payload.startswith(JPEG_EXIF_PREFIX) or payload.startswith(JPEG_XMP_PREFIX)
 
 
 def webp_visual_sha256(image_bytes: bytes) -> str | None:
