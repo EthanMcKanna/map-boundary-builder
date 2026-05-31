@@ -9562,3 +9562,17 @@ with zero failures in 0.531s.
   `out/effective-recognition-profile-strict-20260531/full-report.json`
   preserved exact avg/min IoU `0.968082`/`0.942536` with no regression issues
   and active/evaluated totals `3.321033s`/`5.798774s`.
+- Production deploy for the effective recognizer health field: Vercel
+  deployment `dpl_CRWrupHkx8S8wsYWQN93ptbiyCYn` went READY at
+  `map-boundary-builder-9haak2lt0-ethanmckannas-projects.vercel.app` and was
+  aliased to `mapboundary.app`. Live health now reports
+  `pipeline-7bebf7cf663de672`,
+  `rapidocr_bright_blue_recognition_profile: en-ppocrv5`,
+  `rapidocr_bright_blue_recognition_assets_available: false`, and
+  `rapidocr_bright_blue_effective_recognition_profile: default`. The warmed
+  health call returned the same effective profile with warm status `ok`,
+  `rapidocr_inference_warmed: true`, `rapidocr_s: 5.028517`, and
+  `total_s: 5.447063`. Production is therefore explicitly honest about the
+  recognizer it can actually run, and the next speed-improvement branch should
+  target a production-safe PP-OCRv5 asset source before retesting the promising
+  RapidOCR 3.8 bright-blue adapter.
