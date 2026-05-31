@@ -9189,3 +9189,27 @@ with zero failures in 0.531s.
   terminal `Generation failed` event, and `pipeline-prod-sse-asset-proof`
   profile; screenshot saved to
   `out/prod-smoke-local-web-failed-events-20260531/direct-failed-payload-proof.png`.
+- Accepted browser-cache restoration before catalog-probe completion. The
+  frontend already started local history-cache keying in parallel with the tiny
+  catalog probe, but it awaited the probe result before checking whether an
+  exact browser-history hit was available. Repeated screenshots could therefore
+  wait on the network probe even though the browser had a completed GeoJSON
+  entry. The submit path now races the catalog probe against a real local
+  history hit, restores from browser cache immediately when that wins, and
+  aborts the probe without gating catalog-probe successes on cache misses.
+  `node --check map_boundary_builder/web_assets/app.js` passed, focused
+  frontend/source tests passed 57/57, `compileall` passed, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 373 tests plus 12 subtests, and
+  `git diff --check` passed. A real local browser proof against
+  `http://127.0.0.1:8765` preloaded a matching `Waymo Dallas.png` history entry,
+  delayed/intercepted `/api/runs`, and restored from browser cache in `133ms`
+  with zero full-upload requests and no probe request escaping before abort;
+  screenshot saved to
+  `out/frontend-browser-cache-hit-race-20260531/browser-cache-hit-race.png`.
+  Backend hash stayed `pipeline-64ad23bb71268a34`; the new asset hash is
+  `asset-96a24a2b33994357`. Strict no-catalog drift gate
+  `out/browser-cache-race-strict-20260531/full-report.json` preserved active
+  avg/min IoU `0.968082`/`0.942536` versus
+  `out/local-web-failed-events-strict-rerun-20260531/full-report.json`, passed
+  8/8 active fixtures plus seven drift smokes, and stayed within latency
+  budgets with active/evaluated totals `3.287930s`/`5.472785s`.

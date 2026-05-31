@@ -395,7 +395,23 @@ form.addEventListener("submit", async (event) => {
     });
     const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);
     const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);
-    const catalogProbeResult = await catalogProbePromise;
+    const firstFastResult = await Promise.race([
+      catalogProbePromise.then((result) => ({ type: "catalog-probe", result })),
+      cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then((cachedEntry) => (
+        cachedEntry ? { type: "cache-hit", cachedEntry } : null
+      )),
+    ]);
+    if (firstFastResult?.type === "cache-hit") {
+      catalogProbeAbortController?.abort();
+      restoreCachedHistoryEntry(firstFastResult.cachedEntry);
+      pendingRunCacheKey = null;
+      pendingRunCacheKeys = [];
+      pendingRunCacheKeysPromise = null;
+      return;
+    }
+    const catalogProbeResult = firstFastResult?.type === "catalog-probe"
+      ? firstFastResult.result
+      : await catalogProbePromise;
     if (catalogProbeResult?.payload) {
       applyInlineRun(catalogProbeResult.payload, {
         cacheKeysPromise: deferredCacheKeysPromise,
@@ -2075,6 +2091,15 @@ async function cacheKeysFromLookupPromise(cacheLookupPromise) {
     ]);
   } catch (error) {
     return [];
+  }
+}
+
+async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise) {
+  try {
+    const lookup = await cacheLookupPromise;
+    return findCachedHistoryEntry(lookup?.lookupKeys || []);
+  } catch (error) {
+    return null;
   }
 }
 

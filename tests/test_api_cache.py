@@ -1113,24 +1113,37 @@ class ApiRunCacheTests(unittest.TestCase):
             app_js,
         )
 
-    def test_frontend_does_not_gate_catalog_probe_hit_on_cache_hashing(self) -> None:
+    def test_frontend_races_browser_cache_hit_against_catalog_probe(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         cache_start = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
         deferred_cache = app_js.index(b"const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);")
-        probe_await = app_js.index(b"const catalogProbeResult = await catalogProbePromise;")
+        race_start = app_js.index(b"const firstFastResult = await Promise.race([")
+        probe_race = app_js.index(b'catalogProbePromise.then((result) => ({ type: "catalog-probe", result }))')
+        cache_race = app_js.index(b"cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then")
+        cache_hit_branch = app_js.index(b'if (firstFastResult?.type === "cache-hit") {')
+        cache_abort = app_js.index(b"catalogProbeAbortController?.abort();", cache_hit_branch)
+        cache_restore = app_js.index(b"restoreCachedHistoryEntry(firstFastResult.cachedEntry);")
+        probe_result = app_js.index(b'const catalogProbeResult = firstFastResult?.type === "catalog-probe"')
         first_inline = app_js.index(b"applyInlineRun(catalogProbeResult.payload, {")
         cache_await = app_js.index(b"const cacheLookup = await cacheLookupPromise;")
         cached_entry = app_js.index(b"const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);")
 
         self.assertLess(cache_start, deferred_cache)
-        self.assertLess(deferred_cache, probe_await)
-        self.assertLess(probe_await, first_inline)
+        self.assertLess(deferred_cache, race_start)
+        self.assertLess(race_start, probe_race)
+        self.assertLess(race_start, cache_race)
+        self.assertLess(race_start, cache_hit_branch)
+        self.assertLess(cache_hit_branch, cache_abort)
+        self.assertLess(cache_abort, cache_restore)
+        self.assertLess(cache_hit_branch, probe_result)
+        self.assertLess(probe_result, first_inline)
         self.assertLess(first_inline, cache_await)
         self.assertLess(cache_await, cached_entry)
         self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
         self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
+        self.assertIn(b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise) {", app_js)
 
     def test_frontend_preserves_failed_run_payload_for_reports(self) -> None:
         app_js, mime = web_asset_response("app.js")
