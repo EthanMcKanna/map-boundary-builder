@@ -338,6 +338,14 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_run_cache_key_depends_on_ocr_runtime_config(self) -> None:
+        with patch("api.index.ocr_runtime_config", return_value={"rapidocr_rec_batch_num": 24}):
+            first = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+        with patch("api.index.ocr_runtime_config", return_value={"rapidocr_rec_batch_num": 32}):
+            second = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+
+        self.assertNotEqual(first, second)
+
     def test_run_cache_key_uses_decoded_pixels(self) -> None:
         first = BytesIO()
         second = BytesIO()

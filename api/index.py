@@ -845,6 +845,7 @@ def run_result_cache_key_for_hash(
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
         "pipeline_version": get_pipeline_version(),
+        "ocr_runtime_config": ocr_runtime_config(),
         image_hash_name: image_hash,
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),

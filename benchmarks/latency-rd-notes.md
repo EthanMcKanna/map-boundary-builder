@@ -8777,3 +8777,18 @@ with zero failures in 0.531s.
   timings `0.106395s`, `0.131647s`, and `0.206818s`. This is a local parity
   reliability/speed improvement only; production already preserved filename
   hints and stayed on `pipeline-75b9631cf0a4b002`, so no deploy was required.
+- Accepted API run-result cache hardening for OCR runtime experiments. The
+  lower-level OCR cache already keys detector limits, recognition profile, and
+  batch-size knobs, but the top-level `/api/runs` result cache only keyed the
+  code pipeline hash. That meant a future `MAP_BOUNDARY_*` OCR runtime override
+  could reuse stale GeoJSON/profile payloads generated under a different OCR
+  configuration. The run-result cache key now includes `ocr_runtime_config()`.
+  Focused API/pipeline/OCR cache tests passed 163/163, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 364 tests plus 12 subtests, and
+  `compileall` passed. The
+  local hash is `pipeline-7fc43642d111f851`. Strict no-catalog drift gate
+  `out/ocr-runtime-cache-key-strict-20260531/full-report.json` preserved exact
+  active avg/min IoU `0.967842`/`0.942536` versus
+  `out/upload-payload-hash-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.862993s`/`4.966439s`.
