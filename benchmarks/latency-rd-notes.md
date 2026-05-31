@@ -9107,3 +9107,26 @@ with zero failures in 0.531s.
   the exact same bytes returned HTTP 422 with `cached: true`, `cache_hit: raw`,
   `total_before_send_s: 0.000360`, and the existing cached terminal event
   `Generation failure ready from cache` with the same `details.error`.
+- Accepted frontend failed-payload preservation for reports. The API now emits
+  rich 422 payloads with run id, events, profile, and terminal failure details,
+  but the browser submit path still threw on any non-OK `/api/runs` response
+  before copying that payload into the report state. The frontend now recognizes
+  `status: failed` payloads, preserves `latestRunId`, `latestRunEvents`,
+  `latestRunProfile`, and the error message, and marks the progress step that
+  last ran before the terminal failure. It also treats streamed `failed` events
+  as UI errors. `node --check map_boundary_builder/web_assets/app.js` passed,
+  focused API/frontend-source tests passed 57/57, `compileall` passed, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 371 tests plus 12 subtests, and the
+  web asset hash is `asset-54707ede87907d78` while the backend pipeline hash
+  remains `pipeline-64ad23bb71268a34`. Strict no-catalog drift gate
+  `out/frontend-failed-payload-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/fresh-failure-terminal-events-strict-20260531/full-report.json`, passed
+  8/8 active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.876854s`/`4.943492s`. Playwright
+  browser proof against local `http://127.0.0.1:8765` intercepted `/api/runs`
+  with a synthetic 422 failed payload, verified the UI status text and visible
+  report panel, submitted the report, and confirmed the `/api/reports` multipart
+  body contained `browser-failed-run`, the terminal `Generation failed` event,
+  and the `pipeline-browser-proof` profile; screenshot saved to
+  `out/frontend-failed-payload-browser-20260531/report-proof.png`.

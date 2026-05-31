@@ -1132,6 +1132,26 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
         self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
 
+    def test_frontend_preserves_failed_run_payload_for_reports(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        non_ok = app_js.index(b"if (!response.ok) {")
+        failed_payload = app_js.index(b"if (isFailedRunPayload(payload)) {")
+        finish_failed = app_js.index(b"finishWithFailedRunPayload(payload);")
+        fallback_throw = app_js.index(b'throw new Error(payload?.error || uploadErrorMessage(response, "Run failed to start."));')
+
+        self.assertLess(non_ok, failed_payload)
+        self.assertLess(failed_payload, finish_failed)
+        self.assertLess(finish_failed, fallback_throw)
+        self.assertIn(b"latestRunId = payload.id || latestRunId;", app_js)
+        self.assertIn(b"latestRunEvents = Array.isArray(payload.events) ? payload.events : [];", app_js)
+        self.assertIn(b"latestRunProfile = payload.profile || null;", app_js)
+        self.assertIn(b"function failedRunProgressStep(events) {", app_js)
+        self.assertIn(b"formData.set(\"run_id\", latestRunId || \"\");", app_js)
+        self.assertIn(b"formData.set(\"events\", JSON.stringify(latestRunEvents));", app_js)
+        self.assertIn(b"formData.set(\"profile\", JSON.stringify(latestRunProfile || {}));", app_js)
+
     def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))
         self.assertFalse(bool_field({"normalized_cache_lookup": "0"}, "normalized_cache_lookup", default=False))

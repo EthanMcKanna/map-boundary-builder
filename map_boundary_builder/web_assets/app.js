@@ -218,6 +218,7 @@ const stageLabels = {
   georeference: "Georeference",
   export: "Export",
   complete: "Complete",
+  failed: "Failed",
   error: "Error",
 };
 
@@ -434,6 +435,10 @@ form.addEventListener("submit", async (event) => {
     });
     const { response, payload } = await postRunUpload(formData, uploadFile);
     if (!response.ok) {
+      if (isFailedRunPayload(payload)) {
+        finishWithFailedRunPayload(payload);
+        return;
+      }
       throw new Error(payload?.error || uploadErrorMessage(response, "Run failed to start."));
     }
     if (payload.status === "complete" && payload.artifacts) {
@@ -1608,7 +1613,8 @@ function applyInlineRun(status, options = {}) {
 }
 
 function applyEvent(event) {
-  if (event.status === "complete" || event.status === "error" || event.stage !== "queued") {
+  const failed = isFailureEvent(event);
+  if (event.status === "complete" || failed || event.stage !== "queued") {
     stopEstimatedProgress();
   }
   latestRunEvents = [...latestRunEvents, event].slice(-20);
@@ -1617,17 +1623,26 @@ function applyEvent(event) {
   if (event.status === "complete") {
     latestRunStatus = "completed";
     markAllProgressStepsDone();
-  } else if (event.status === "error") {
+  } else if (failed) {
     latestRunStatus = "failed";
+    latestRunError = event.details?.error || event.message || latestRunError;
     markProgressStep(step || activeProgressStep || "georeference", "error", event.message || label);
   } else if (step) {
     markPreviousProgressStepsDone(step);
     markProgressStep(step, "running", humanProgressMessage(event));
   }
-  setStatus(event.message || label, progressPercentForEvent(event), event.status, {
+  setStatus(event.message || label, progressPercentForEvent(event), failed ? "error" : event.status, {
     step,
     note: humanProgressNote(event),
   });
+  if (failed) {
+    showFailureReport();
+    updateRunButton();
+  }
+}
+
+function isFailureEvent(event) {
+  return event?.status === "error" || event?.status === "failed" || event?.stage === "failed";
 }
 
 function setStatus(message, percent, status = "running", options = {}) {
@@ -2736,19 +2751,46 @@ function updateGeojsonPane(geojson) {
   geojsonPaneWrapper.classList.toggle("has-content", Boolean(geojson));
 }
 
-function finishWithError(message) {
+function finishWithError(message, options = {}) {
   stopEstimatedProgress();
   pendingRunCacheKey = null;
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
-  latestRunError = message || "Generation failed.";
+  const displayMessage = message || "Generation failed.";
+  latestRunError = displayMessage;
   latestRunStatus = "failed";
-  markProgressStep(activeProgressStep || "georeference", "error", message);
-  setStatus(message, progressValue, "error", {
+  markProgressStep(options.step || activeProgressStep || "georeference", "error", displayMessage);
+  setStatus(displayMessage, progressValue, "error", {
     note: "The run stopped before a reliable boundary could be exported.",
   });
   showFailureReport();
   updateRunButton();
+}
+
+function finishWithFailedRunPayload(payload) {
+  latestRunId = payload.id || latestRunId;
+  latestRunEvents = Array.isArray(payload.events) ? payload.events : [];
+  latestRunSummary = payload.summary || null;
+  latestRunProfile = payload.profile || null;
+  const terminalEvent = latestRunEvents[latestRunEvents.length - 1] || null;
+  const message = payload.error || terminalEvent?.details?.error || terminalEvent?.message || "Generation failed.";
+  finishWithError(message, {
+    step: failedRunProgressStep(latestRunEvents),
+  });
+}
+
+function failedRunProgressStep(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (isFailureEvent(event)) continue;
+    const step = progressStepForEvent(event);
+    if (step) return step;
+  }
+  return activeProgressStep || "georeference";
+}
+
+function isFailedRunPayload(payload) {
+  return payload?.status === "failed" && typeof payload.error === "string";
 }
 
 function showFailureReport() {
