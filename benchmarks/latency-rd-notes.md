@@ -7883,3 +7883,24 @@ with zero failures in 0.531s.
   total 2.808419s, max 0.534349s). Keep the current 480px bright-blue detector
   cap; the detector-cap surface is now bracketed at 384, 448, and 480 without a
   robust speed win.
+- Accepted a narrow low-resolution OCR alias for the Houston Tesla stress case.
+  The half-scale screenshot read the Willowbrook control label as `ILLOWBNOOK`,
+  which missed the existing Willowbrook aliases and left only unusable
+  `Houston TX` / `Village` evidence. Adding `illowbnook -> willowbrook` rescued
+  that no-catalog stress fixture without loosening OCR thresholds:
+  `out/alias-illowbnook-half-currentref-nocatalog-20260531/full-report.json`
+  improved the half-scale set from 12/15 to 13/15, with Houston Tesla passing
+  at IoU 0.781402, area ratio 1.061839, centroid error 727.2m, and duration
+  0.113583s. Bay Area Tesla and Las Vegas Zoox still fail closed, which is
+  preferred to the old bad polygons. The benchmark regression helper flags an
+  average-IoU drop here only because its denominator changes when a previously
+  failed borderline case becomes scored; all 12 previously scored half-scale
+  fixtures preserved their exact IoUs. Normal gates stayed clean:
+  `out/alias-illowbnook-currentref-nocatalog-20260531/full-report.json`
+  passed 15/15 with avg/min IoU 0.950465/0.794177, max 0.498261s, total
+  4.763611s, and no zero-drop regression issues; the strict active plus
+  drift-smoke gate
+  `out/alias-illowbnook-strict-nocatalog-20260531/full-report.json` passed 8/8
+  scored with seven catalog-miss smokes, avg/min IoU 0.967842/0.942536, max
+  0.490299s, total 2.624160s, and no regression issues. Focused OCR/runner
+  tests passed 160/160 and full `pytest` passed 316/316.

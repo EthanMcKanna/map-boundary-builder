@@ -1385,6 +1385,7 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(place_query_text("Ersey Village"), "Jersey Village")
         self.assertEqual(place_query_text("rsey Village"), "Jersey Village")
         self.assertEqual(place_query_text("HUNTRIDG"), "Huntridge")
+        self.assertEqual(place_query_text("ILLOWBNOOK"), "Willowbrook")
         self.assertEqual(place_query_text("ILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("VILLOWBROOK"), "Willowbrook")
         self.assertEqual(place_query_text("C-ARVERDALE"), "Carverdale")

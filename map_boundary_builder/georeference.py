@@ -135,6 +135,7 @@ OCR_PLACE_TOKEN_ALIASES = {
     "fredrick": "frederick",
     "huntridg": "huntridge",
     "illowb": "willowbrook",
+    "illowbnook": "willowbrook",
     "illowbrook": "willowbrook",
     "isco": "francisco",
     "jakland": "oakland",
