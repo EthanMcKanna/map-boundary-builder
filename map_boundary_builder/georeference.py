@@ -1147,7 +1147,7 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
-    direct_contexts = direct_city_contexts_from_labels(inference_labels)
+    direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=False)
     if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
         return direct_contexts
     if should_use_direct_city_contexts(direct_contexts) and is_decisive_direct_context(direct_contexts[0]):
@@ -1163,10 +1163,16 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
         return direct_contexts
 
     if not candidates:
+        live_direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=True)
+        if should_use_direct_city_contexts(live_direct_contexts):
+            return live_direct_contexts
         return prominent_contexts_from_labels(inference_labels)
 
     members = best_candidate_cluster(candidates)
     if not members or not has_enough_context_members(members):
+        live_direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=True)
+        if should_use_direct_city_contexts(live_direct_contexts):
+            return live_direct_contexts
         return prominent_contexts_from_labels(inference_labels)
 
     contexts: list[CityContext] = []
@@ -1273,8 +1279,8 @@ def city_inference_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     )
 
 
-def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext]:
-    decisive_broad_context = broad_direct_context_from_labels(labels)
+def direct_city_contexts_from_labels(labels: list[OcrLabel], *, allow_network: bool = True) -> list[CityContext]:
+    decisive_broad_context = broad_direct_context_from_labels(labels, allow_network=allow_network)
     if decisive_broad_context is not None:
         return [decisive_broad_context]
 
@@ -1341,7 +1347,7 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel]) -> list[CityContext
         geocode_many([(query, 2) for query, _score in ranked_queries], allow_network=False),
         query_evidence,
     )
-    if not scored_contexts:
+    if not scored_contexts and allow_network:
         live_ranked_queries = append_ranked_context_queries(
             ranked_queries[:DIRECT_CONTEXT_LIVE_QUERY_LIMIT],
             promoted_queries,
@@ -1473,7 +1479,7 @@ def score_direct_city_context_queries(
     return scored_contexts
 
 
-def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | None:
+def broad_direct_context_from_labels(labels: list[OcrLabel], *, allow_network: bool = True) -> CityContext | None:
     for label in labels[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
@@ -1487,7 +1493,7 @@ def broad_direct_context_from_labels(labels: list[OcrLabel]) -> CityContext | No
         if score < 100.0:
             continue
         results = geocode_cached_only(query, limit=2)
-        if not results and should_live_geocode_broad_context(tokens, score):
+        if not results and allow_network and should_live_geocode_broad_context(tokens, score):
             results = geocode(query, limit=2)
         for result in results:
             if not result.bbox or not primary_name_matches_label(result.display_name, query):

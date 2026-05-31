@@ -8641,3 +8641,24 @@ with zero failures in 0.531s.
   `2.624609s` total-before-send. The production sample was still OCR-heavy
   (`1.593609s` OCR) and noisier than local, but georeference stayed bounded at
   `0.472013s` instead of the prior 8s live-geocoder cold path.
+- Accepted a cached-context-first georeference inference guard. The previous
+  inference order tried live direct-context geocoding before giving the cached
+  label-cluster path a chance to prove a regional context. A fresh-cache
+  neutral stress pass exposed this as optional latency: Zoox SF small spent
+  `0.893297s` in georeference and Bay Area Waymo `0.636530s`, while the
+  network-blocked versions returned the same bbox/source/confidence in about
+  `0.03s` georeference. The new order uses cached direct contexts first, then
+  cached geocoded-label clusters, and only falls back to live direct-context
+  geocoding when those cached paths cannot form a context. Focused proof
+  `out/context-live-skip-probe-20260531/summary.json` kept Zoox SF at
+  `0.603922s` total with `0.028803s` georeference and Bay Area Waymo at
+  `0.666851s` total with `0.025079s` georeference, with no fresh geocoder cache
+  files written. The full real-screenshot neutral stress pass
+  `out/stress-neutral-context-live-skip-fresh-20260531/stress-summary.json`
+  completed all ten screenshots at `0.338128s`-`0.777652s` total and wrote zero
+  geocoder cache files. Strict fixture gates stayed clean:
+  `out/context-live-skip-nocatalog-gate-20260531/full-report.json` preserved
+  exact active IoUs (`0.967842/0.942536` avg/min) with zero regression issues,
+  and `out/context-live-skip-currentref-gate-20260531/full-report.json`
+  preserved 15/15 current-reference IoUs (`0.996223/0.943345` avg/min).
+  Focused OCR/georeference and runner tests passed 164/164.

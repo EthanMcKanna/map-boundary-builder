@@ -1791,6 +1791,70 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertGreater(contexts[0].center.bbox[3], 25.94)
         self.assertTrue(any(context.center.display_name.startswith("Miami,") for context in contexts[1:]))
 
+    def test_cached_label_cluster_skips_live_direct_context_lookup(self) -> None:
+        labels = [
+            OcrLabel("Atherton", x=120, y=180, width=110, height=26, confidence=55),
+            OcrLabel("Redwood City", x=210, y=260, width=140, height=28, confidence=55),
+            OcrLabel("Burlingame", x=310, y=330, width=130, height=26, confidence=55),
+            OcrLabel("San Francisco", x=440, y=120, width=155, height=30, confidence=55),
+        ]
+        cached_results = {
+            "Atherton": GeocodeResult(
+                label="Atherton",
+                lon=-122.2058,
+                lat=37.4538,
+                display_name="Atherton, San Mateo County, California, United States",
+                bbox=(-122.23, 37.43, -122.18, 37.47),
+                importance=0.45,
+                place_type="town",
+            ),
+            "Redwood City": GeocodeResult(
+                label="Redwood City",
+                lon=-122.2325,
+                lat=37.4863,
+                display_name="Redwood City, San Mateo County, California, United States",
+                bbox=(-122.28, 37.45, -122.18, 37.54),
+                importance=0.55,
+                place_type="city",
+            ),
+            "Burlingame": GeocodeResult(
+                label="Burlingame",
+                lon=-122.3477,
+                lat=37.5841,
+                display_name="Burlingame, San Mateo County, California, United States",
+                bbox=(-122.39, 37.55, -122.32, 37.61),
+                importance=0.5,
+                place_type="city",
+            ),
+            "San Francisco": GeocodeResult(
+                label="San Francisco",
+                lon=-122.4194,
+                lat=37.7749,
+                display_name="San Francisco, California, United States",
+                bbox=(-122.52, 37.70, -122.35, 37.84),
+                importance=0.72,
+                place_type="city",
+            ),
+        }
+        live_calls: list[str] = []
+
+        def fake_cached(query: str, *, limit: int = 3, country_codes: str = "us"):
+            result = cached_results.get(query)
+            return [result] if result is not None else []
+
+        def fake_live(query: str, *, limit: int = 3, country_codes: str = "us"):
+            live_calls.append(query)
+            return []
+
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_cached),
+            patch("map_boundary_builder.georeference.geocode", side_effect=fake_live),
+        ):
+            contexts = infer_city_contexts(labels)
+
+        self.assertTrue(contexts)
+        self.assertFalse(live_calls)
+
     def test_early_context_cluster_requires_regional_breadth(self) -> None:
         def candidate(name: str, lon: float, lat: float, x: float, y: float) -> LabelGeocodeCandidate:
             return LabelGeocodeCandidate(
