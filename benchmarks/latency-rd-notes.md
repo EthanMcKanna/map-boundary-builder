@@ -7644,3 +7644,38 @@ with zero failures in 0.531s.
   passed the same gate at 3.282561s. Keep `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM`
   at 12; batch size remains too noisy to ship without a production-confirmed
   win.
+- Rejected geometry-only recognition pruning and post-extraction OCR crops as
+  first-class bright-blue shortcuts. A control-label audit showed that useful
+  georeference labels are not just the largest boxes: Phoenix still depends on
+  medium labels such as `Biltmore`, `Paradise Valley`, `Scottsdale`, `Tempe`,
+  and `Downtown Phoenix`, while Los Angeles uses many medium neighborhood
+  labels. Monkeypatched largest-area recognition caps were fast but brittle:
+  cap 16/20/24/28 all passed the broad smoke gate yet dropped Phoenix to
+  0.851108 IoU and lost the `+osm-road-refine` path; cap 36 still had the same
+  Phoenix regression. Cap 40 restored the strict-quality band at avg/min IoU
+  0.967771/0.942536 and active total 2.358716s
+  (`out/probe-geo-rank-cap40-detmax480-v5rec-nocatalog-20260531/full-report.json`),
+  but the same-session uncapped control was slightly faster at 2.334776s with
+  avg/min IoU 0.967842/0.942536
+  (`out/probe-geo-rank-baseline-detmax480-v5rec-nocatalog-20260531/full-report.json`).
+  Cropping OCR around the extracted service-area bounds had the same shape:
+  25% padding passed but regressed Phoenix to 0.846874 IoU and active total
+  3.765698s, 40% padding failed Phoenix at 0.753330 IoU, and the safe 60%
+  padding matched baseline accuracy but was slower at 2.456453s
+  (`out/probe-cropocr-pad60-detmax480-v5rec-nocatalog-20260531/full-report.json`).
+  Keep full selected-box recognition for bright-blue OCR unless a future staged
+  recognizer can cheaply prove that the partial fit is as strong as the full
+  `+osm-road-refine` path.
+- Rejected toggling ONNX Runtime CPU arena/spinning defaults as a speed lever.
+  `MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING=0` passed the strict no-catalog gate
+  at 2.55s active total
+  (`out/probe-ort-nospin-detmax480-v5rec-nocatalog-20260531/full-report.json`),
+  `MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA=0` also passed at 2.55s
+  (`out/probe-ort-noarena-detmax480-v5rec-nocatalog-20260531/full-report.json`),
+  and disabling both passed at 2.58s
+  (`out/probe-ort-noarena-nospin-detmax480-v5rec-nocatalog-20260531/full-report.json`).
+  The same cold-process default control passed at 2.60s with identical
+  avg/min IoU 0.967842/0.942536
+  (`out/probe-ort-default-control-detmax480-v5rec-nocatalog-20260531/full-report.json`).
+  The tiny local timing movement is within normal run noise and does not justify
+  changing production runtime defaults.
