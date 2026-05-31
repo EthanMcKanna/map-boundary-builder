@@ -7591,3 +7591,20 @@ with zero failures in 0.531s.
   `out/final-brightblue-detmax480-v5rec-current-catalog-20260531/full-report.json`
   passed Houston/Miami/Bay Area 3/3 against current catalog geometry, avg/min
   IoU 1.0, total 0.305852s.
+- Production deploy/verification for the bright-blue `det_limit_type=max`
+  follow-up: deployed commit `a479625` as
+  `dpl_6TYNJLr8DXzNXKAxAca2UPUVf6sb`, aliased to `https://mapboundary.app`,
+  with `pipeline-f0bb9f7e053b4e8d`. Health confirms
+  `rapidocr_bright_blue_detector_limit_side_len: 480`,
+  `rapidocr_bright_blue_detector_limit_type: max`,
+  `rapidocr_bright_blue_recognition_profile: en-ppocrv5`, and warm detector
+  limits `[608, 480]`. First live OCR warm initialized the default and
+  bright-blue sessions in 4.899324s; immediate repeat was warm at 0.000008s
+  RapidOCR / 0.009069s total. Cache-busted Phoenix no-catalog production
+  probes stayed OCR-bound and broadly non-regressive rather than subsecond:
+  3.106519s, 2.823543s, and 2.430968s build time with expected
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` source. Changed-market
+  catalog production probes stayed under one second with correct current
+  catalog matches: Houston 0.511362s build / 0.519949s before send with shape
+  IoU 0.989331, Miami 0.655296s / 0.671278s with shape IoU 0.989300, and Bay
+  Area 0.862425s / 0.869863s with shape IoU 0.999999.
