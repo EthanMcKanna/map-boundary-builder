@@ -385,10 +385,22 @@ class handler(BaseHTTPRequestHandler):
         image_path.write_bytes(image_bytes)
         profile["write_upload_s"] = elapsed_seconds(write_upload_started)
 
+        build_started = time.perf_counter()
         try:
             from map_boundary_builder.runner import CatalogProbeMiss, build_boundary
+        except Exception as exc:
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            profile["cache_hit"] = "miss"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = generation_error_payload(exc, run_id, original_filename, events, profile)
+            self.send_json(
+                payload,
+                status=generation_error_status(exc),
+            )
+            return
 
-            build_started = time.perf_counter()
+        try:
             result = build_boundary(
                 image_path,
                 city,

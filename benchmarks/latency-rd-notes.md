@@ -8998,3 +8998,29 @@ with zero failures in 0.531s.
   preserves the expected OCR georeference behavior on the current production
   runtime; the claimed speed gain remains the tiny removed availability lookup,
   not a broad end-to-end latency step-change.
+- Rejected skipping the runner's initial metadata open for full-RGB no-catalog
+  paths. The hypothesis was that full-resolution generation could derive
+  `width`/`height` from the decoded RGB array and avoid opening the image once
+  for metadata before immediately decoding it for extraction/OCR. The prototype
+  was straightforward and focused runner tests passed, but an 80-iteration
+  Dallas PNG microbench measured `46.6034ms` median for the old metadata-open
+  plus full decode versus `46.8745ms` for decode-only, so the change had no
+  measurable local speed win and would have removed useful early progress
+  dimensions. Reverted; do not ship this cleanup without stronger production
+  evidence.
+- Accepted an API error-path reliability guard. `/api/runs` imported
+  `CatalogProbeMiss` and `build_boundary` inside the same `try` block whose
+  handlers referenced those imported names and `build_started`. If runner
+  import/initialization failed before those locals were assigned, the handler
+  could raise a secondary exception while trying to report the original
+  generation failure. The API now starts timing before the import and handles
+  import failures through the normal generation-error payload path, preserving
+  the original error and profile instead of masking it. Focused API cache tests
+  passed 55/55, `compileall` passed, full `PYTHONPATH=. .venv/bin/pytest -q`
+  passed 369 tests plus 12 subtests, and the local hash is
+  `pipeline-0d72dc868088997a`. Strict no-catalog drift gate
+  `out/api-import-error-guard-strict-20260531/full-report.json` preserved exact
+  active avg/min IoU `0.967842`/`0.942536` versus
+  `out/lazy-tesseract-probe-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.929000s`/`4.902518s`.

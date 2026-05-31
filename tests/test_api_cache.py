@@ -1,5 +1,6 @@
 import unittest
 import base64
+import builtins
 import gzip
 from http import HTTPStatus
 from io import BytesIO
@@ -769,6 +770,44 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(captured["status"], HTTPStatus.CREATED)
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
         self.assertEqual(payload["profile"]["cache_hit"], "raw")
+
+    def test_create_run_reports_runner_import_failure_without_secondary_error(self) -> None:
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {},
+            {"image": ("upload.png", b"not-an-image")},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        real_import = builtins.__import__
+
+        def import_with_runner_failure(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "map_boundary_builder.runner" and "build_boundary" in fromlist:
+                raise ImportError("runner import unavailable")
+            return real_import(name, globals, locals, fromlist, level)
+
+        request.send_json = send_json
+        with (
+            patch("api.index.get_pipeline_version", return_value="pipeline-import-failure"),
+            patch("api.index.raw_run_result_cache_key", return_value="raw-key"),
+            patch("api.index.read_run_result_cache", return_value=None),
+            patch("builtins.__import__", side_effect=import_with_runner_failure),
+        ):
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.INTERNAL_SERVER_ERROR)
+        self.assertEqual(payload["status"], "failed")
+        self.assertIn("runner import unavailable", payload["error"])
+        self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-import-failure")
+        self.assertEqual(payload["profile"]["cache_hit"], "miss")
+        self.assertIn("build_boundary_s", payload["profile"])
 
     def test_event_stage_elapsed_seconds_sums_repeated_stages(self) -> None:
         events = [
