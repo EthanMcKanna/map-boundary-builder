@@ -7628,3 +7628,19 @@ with zero failures in 0.531s.
   `dpl_At3gbe1H5YRdjt9rG6HKNF8HNmwT`; health again shows rescue
   `900/2.8` and `pipeline-f0bb9f7e053b4e8d`. Keep the existing rescue filter
   unless a future candidate wins in production, not just locally.
+- Rejected changing RapidOCR recognition batch size from 12 to 6 after the
+  scoped PP-OCRv5/max-detector changes. The hypothesis was that smaller
+  batches might reduce padding waste for very wide text crops, since
+  RapidOCR's recognizer sorts by crop aspect ratio and uses the widest item in
+  a batch to set recognition tensor width. Initial A/Bs were encouraging:
+  batch 6 improved active no-catalog total from 3.100021s to 2.949277s, and a
+  repeat from 3.016840s to 2.989603s, preserving exact scored IoUs. It also
+  improved the current Houston/Miami/Bay Area no-catalog drift check from
+  1.510595s to 1.438627s with unchanged IoUs. However, the implemented final
+  gate `out/final-recbatch6-detmax480-v5rec-nocatalog-20260531/full-report.json`
+  passed accuracy but was slower at 3.387422s total, while an immediate
+  batch-12 control
+  `out/control-recbatch12-detmax480-v5rec-nocatalog-20260531/full-report.json`
+  passed the same gate at 3.282561s. Keep `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM`
+  at 12; batch size remains too noisy to ship without a production-confirmed
+  win.
