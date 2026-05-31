@@ -8761,3 +8761,19 @@ with zero failures in 0.531s.
   pipeline version at `total_before_send_s=0.004432`
   (`out/prod-smoke-upload-hash-20260531/nashville-response.json` and
   `out/prod-smoke-upload-hash-20260531/nashville-repeat-response.json`).
+- Accepted a local web/API parity speed fix. The local web background-run path
+  wrote uploads as `input.<ext>` and did not pass the original filename into
+  `BoundaryBuildOptions`, unlike the production API and the fast catalog
+  handoff path. That made local UI QA less representative and could miss
+  filename-hinted catalog shortcuts. The background path now preserves
+  `filename_hint=original_filename`. A focused handler test covers the option
+  handoff, and full `PYTHONPATH=. pytest` passed 363 tests plus 12 subtests.
+  The local-web-shaped A/B probe
+  `out/local-web-filename-hint-probe-20260531/summary.json` copied the Bay
+  Area Waymo screenshot to `input.png`; the pre-patch/no-hint path used
+  `catalog-shape-match` with four extraction passes and timings
+  `0.302658s`, `0.114112s`, and `0.136593s`, while the hinted path used
+  `catalog-shape-match:filename-near-hit` with two extraction passes and
+  timings `0.106395s`, `0.131647s`, and `0.206818s`. This is a local parity
+  reliability/speed improvement only; production already preserved filename
+  hints and stayed on `pipeline-75b9631cf0a4b002`, so no deploy was required.

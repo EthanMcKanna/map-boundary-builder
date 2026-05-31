@@ -246,6 +246,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             allow_catalog=allow_catalog,
             catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
+            filename_hint=original_filename,
         )
         record_event(
             state,
