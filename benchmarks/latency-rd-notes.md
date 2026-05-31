@@ -9213,3 +9213,15 @@ with zero failures in 0.531s.
   `out/local-web-failed-events-strict-rerun-20260531/full-report.json`, passed
   8/8 active fixtures plus seven drift smokes, and stayed within latency
   budgets with active/evaluated totals `3.287930s`/`5.472785s`.
+- Production proof for browser-cache restoration before catalog-probe
+  completion: deployed the asset update as Vercel deployment
+  `dpl_Eoko8hMcJpu3ciUkvqJN2dnrJGub`, aliased to `mapboundary.app`. Hosted
+  `/api/health` stayed healthy on backend `pipeline-64ad23bb71268a34`; the
+  hosted HTML referenced `/static/app.js?v=asset-96a24a2b33994357`, and the
+  fetched production `app.js` contained `firstFastResult`,
+  `cachedHistoryEntryFromLookupPromise`, `cache-hit`, and the "Loaded from
+  browser cache" status text. A production-page Playwright proof preloaded a
+  matching `Waymo Dallas.png` browser-history entry, delayed/intercepted
+  `/api/runs`, and restored from browser cache in `94ms` with zero full-upload
+  requests and no probe request escaping before abort; screenshot saved to
+  `out/prod-browser-cache-hit-race-20260531/browser-cache-hit-race.png`.
