@@ -896,13 +896,52 @@ def test_report_regression_check_can_flag_duration_increase() -> None:
     ]
 
 
+def test_report_regression_check_can_flag_evaluated_duration_increase() -> None:
+    baseline = {
+        "summary": {
+            "average_iou": 0.95,
+            "total_duration_s": 2.5,
+            "smoked_skipped_duration_s": 0.5,
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332, "duration_s": 0.5}],
+    }
+    candidate = {
+        "summary": {
+            "average_iou": 0.95,
+            "total_duration_s": 2.6,
+            "evaluated_duration_s": 4.2,
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332, "duration_s": 0.52}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_evaluated_duration_increase_ratio=0.1,
+        max_evaluated_duration_increase_s=0.1,
+    )
+
+    assert check["passed"] is False
+    assert check["max_evaluated_duration_increase_ratio"] == 0.1
+    assert check["max_evaluated_duration_increase_s"] == 0.1
+    assert check["issues"] == [
+        {
+            "kind": "evaluated_duration_increase",
+            "baseline_evaluated_duration_s": 3.0,
+            "candidate_evaluated_duration_s": 4.2,
+            "increase_s": 1.2,
+            "increase_ratio": 0.4,
+        }
+    ]
+
+
 def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise() -> None:
     baseline = {
-        "summary": {"average_iou": 0.95, "total_duration_s": 4.0},
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.0, "evaluated_duration_s": 5.0},
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.1}],
     }
     candidate = {
-        "summary": {"average_iou": 0.95, "total_duration_s": 4.2},
+        "summary": {"average_iou": 0.95, "total_duration_s": 4.2, "evaluated_duration_s": 5.2},
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.19}],
     }
 
@@ -913,6 +952,8 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
         max_duration_increase_s=0.1,
         max_total_duration_increase_ratio=0.01,
         max_total_duration_increase_s=0.25,
+        max_evaluated_duration_increase_ratio=0.01,
+        max_evaluated_duration_increase_s=0.25,
     )
 
     assert check["passed"] is True

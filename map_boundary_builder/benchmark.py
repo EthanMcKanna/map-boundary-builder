@@ -265,6 +265,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allowed absolute total-duration increase before ratio checks fail.",
     )
     parser.add_argument(
+        "--max-evaluated-duration-increase-ratio",
+        type=float,
+        default=None,
+        help=(
+            "Optional maximum active plus smoke-checked duration increase ratio "
+            "against --baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-evaluated-duration-increase-s",
+        type=float,
+        default=0.0,
+        help="Allowed absolute active plus smoke-checked duration increase before ratio checks fail.",
+    )
+    parser.add_argument(
         "--max-duration-s",
         type=float,
         default=None,
@@ -330,6 +345,8 @@ def main(argv: list[str] | None = None) -> int:
             max_duration_increase_s=args.max_duration_increase_s,
             max_total_duration_increase_ratio=args.max_total_duration_increase_ratio,
             max_total_duration_increase_s=args.max_total_duration_increase_s,
+            max_evaluated_duration_increase_ratio=args.max_evaluated_duration_increase_ratio,
+            max_evaluated_duration_increase_s=args.max_evaluated_duration_increase_s,
         )
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
@@ -1157,6 +1174,8 @@ def compare_report_regressions(
     max_duration_increase_s: float = 0.0,
     max_total_duration_increase_ratio: float | None = None,
     max_total_duration_increase_s: float = 0.0,
+    max_evaluated_duration_increase_ratio: float | None = None,
+    max_evaluated_duration_increase_s: float = 0.0,
 ) -> dict[str, Any]:
     candidate_scores = active_iou_scores_by_slug(report)
     baseline_scores = active_iou_scores_by_slug(baseline_report)
@@ -1252,6 +1271,31 @@ def compare_report_regressions(
                         "increase_ratio": round(total_increase_ratio, 6),
                     }
                 )
+    evaluated_duration_tolerance = (
+        None
+        if max_evaluated_duration_increase_ratio is None
+        else max(0.0, float(max_evaluated_duration_increase_ratio))
+    )
+    evaluated_duration_tolerance_s = max(0.0, float(max_evaluated_duration_increase_s))
+    if evaluated_duration_tolerance is not None:
+        baseline_evaluated = report_evaluated_duration(baseline_report)
+        candidate_evaluated = report_evaluated_duration(report)
+        if baseline_evaluated is not None and candidate_evaluated is not None and baseline_evaluated > 0:
+            evaluated_increase_s = candidate_evaluated - baseline_evaluated
+            evaluated_increase_ratio = candidate_evaluated / baseline_evaluated - 1.0
+            if (
+                evaluated_increase_s > evaluated_duration_tolerance_s
+                and evaluated_increase_ratio > evaluated_duration_tolerance
+            ):
+                issues.append(
+                    {
+                        "kind": "evaluated_duration_increase",
+                        "baseline_evaluated_duration_s": round(baseline_evaluated, 6),
+                        "candidate_evaluated_duration_s": round(candidate_evaluated, 6),
+                        "increase_s": round(evaluated_increase_s, 6),
+                        "increase_ratio": round(evaluated_increase_ratio, 6),
+                    }
+                )
 
     return {
         "passed": not issues,
@@ -1262,6 +1306,8 @@ def compare_report_regressions(
         "max_duration_increase_s": duration_tolerance_s,
         "max_total_duration_increase_ratio": total_duration_tolerance,
         "max_total_duration_increase_s": total_duration_tolerance_s,
+        "max_evaluated_duration_increase_ratio": evaluated_duration_tolerance,
+        "max_evaluated_duration_increase_s": evaluated_duration_tolerance_s,
         "compared_fixtures": len(baseline_scores),
         "compared_iou_fixtures": len(compared_iou_pairs),
         "baseline_average_iou": round(baseline_mean, 6),
@@ -1285,9 +1331,7 @@ def check_report_latency_budgets(
     )
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
-    evaluated_duration = parse_report_duration(report.get("summary", {}).get("evaluated_duration_s"))
-    if evaluated_duration is None and (active_total_duration is not None or smoke_total_duration is not None):
-        evaluated_duration = (active_total_duration or 0.0) + (smoke_total_duration or 0.0)
+    evaluated_duration = report_evaluated_duration(report)
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
         for row in report.get("scores", []):
@@ -1358,6 +1402,20 @@ def parse_report_duration(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return duration if duration >= 0.0 else None
+
+
+def report_evaluated_duration(report: dict[str, Any]) -> float | None:
+    summary = report.get("summary", {})
+    if not isinstance(summary, dict):
+        return None
+    evaluated_duration = parse_report_duration(summary.get("evaluated_duration_s"))
+    if evaluated_duration is not None:
+        return evaluated_duration
+    active_total_duration = parse_report_duration(summary.get("total_duration_s"))
+    smoke_total_duration = parse_report_duration(summary.get("smoked_skipped_duration_s"))
+    if active_total_duration is None and smoke_total_duration is None:
+        return None
+    return (active_total_duration or 0.0) + (smoke_total_duration or 0.0)
 
 
 def print_table(report: dict[str, Any], report_path: Path) -> None:
@@ -1452,6 +1510,12 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(
                     f"       total duration {issue['baseline_total_duration_s']:.3f}s -> "
                     f"{issue['candidate_total_duration_s']:.3f}s "
+                    f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
+                )
+            elif issue["kind"] == "evaluated_duration_increase":
+                print(
+                    f"       evaluated duration {issue['baseline_evaluated_duration_s']:.3f}s -> "
+                    f"{issue['candidate_evaluated_duration_s']:.3f}s "
                     f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
                 )
             else:

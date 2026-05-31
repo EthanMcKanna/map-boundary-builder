@@ -8049,3 +8049,20 @@ with zero failures in 0.531s.
   evaluated total 5.040743s, `--max-total-duration-s 4`, and
   `--max-evaluated-duration-s 6`. Targeted benchmark tests passed 26/26; full
   `pytest` passed 319/319.
+- Accepted a smoke-aware benchmark regression guard for evaluated duration.
+  Baseline comparisons can now separately reject active plus smoke-checked
+  duration regressions with `--max-evaluated-duration-increase-ratio` and
+  `--max-evaluated-duration-increase-s`, while preserving the existing
+  per-fixture and active-total duration checks. The comparison reads explicit
+  `evaluated_duration_s` when available and falls back to
+  `total_duration_s + smoked_skipped_duration_s` for older reports, so the
+  guard works across the reports produced during this overnight pass. The real
+  strict drift-smoke comparison
+  `out/evaluated-duration-regression-guard-20260531/full-report.json` passed
+  against `out/evaluated-duration-budget-20260531/full-report.json` with 8/8
+  compared active fixtures, no regression issues, active total 3.071645s, smoke
+  total 1.986488s, and evaluated total 5.058134s under
+  `--max-total-duration-s 4`, `--max-evaluated-duration-s 6`,
+  `--max-total-duration-increase-ratio 1.0`, and
+  `--max-evaluated-duration-increase-ratio 1.0`. Targeted benchmark tests
+  passed 27/27; full `pytest` passed 320/320.
