@@ -8095,3 +8095,22 @@ with zero failures in 0.531s.
   OCR 3.416823s, extraction 1.277908s, georeference 0.238084s, export
   0.012009s, inspect 0.005306s. Targeted benchmark tests passed 28/28; full
   `pytest` passed 321/321.
+- Accepted a RapidOCR recognition-batch default increase from 12 to 24. The
+  first env-only batch-24 strict drift-smoke run
+  `out/rapidocr-rec-batch24-20260531/full-report.json` preserved 8/8 active
+  fixtures at avg/min IoU 0.967842/0.942536, kept zero smoke catalog-hit
+  failures, and reduced active/evaluated totals to 2.619431s/4.539079s with
+  evaluated OCR 3.074837s. A confirmation env-only batch-24 run
+  `out/rapidocr-rec-batch24-confirm-20260531/full-report.json` also passed at
+  active/evaluated 2.772020s/4.879721s with evaluated OCR 3.396466s. After
+  changing the default, `out/rapidocr-rec-batch24-default-20260531/full-report.json`
+  passed the same strict gate with no regression issues, active/evaluated
+  2.857744s/4.930301s, and evaluated OCR 3.435542s. The old batch-12 control
+  on the patched tree failed the evaluated-duration budget at
+  `out/rapidocr-rec-batch12-control-20260531/full-report.json`, with
+  active/evaluated 3.857774s/6.669826s and evaluated OCR 4.955644s. Rejected
+  nearby knobs: batch 16 passed but had worse smoke/evaluated totals than the
+  best batch-24 run, batch 32 inflated evaluated OCR to 3.868520s, and lowering
+  the bright-blue detector limit to 416 preserved accuracy but slowed evaluated
+  OCR to 3.682463s. Targeted OCR/runtime tests passed 102/102; full `pytest`
+  passed 321/321.
