@@ -9130,3 +9130,19 @@ with zero failures in 0.531s.
   body contained `browser-failed-run`, the terminal `Generation failed` event,
   and the `pipeline-browser-proof` profile; screenshot saved to
   `out/frontend-failed-payload-browser-20260531/report-proof.png`.
+- Production proof for frontend failed-payload preservation: deployed the
+  frontend asset update as Vercel deployment
+  `dpl_4m3MbLstYuZ3LTF2wCAbFqSgxW2f`, aliased to `mapboundary.app`. Because the
+  change only touched web assets, `/api/health` correctly stayed on backend
+  `pipeline-64ad23bb71268a34`; the hosted HTML referenced
+  `/static/app.js?v=asset-54707ede87907d78`, and the fetched production
+  `app.js` contained `isFailedRunPayload()`, `finishWithFailedRunPayload()`,
+  and the preserved `latestRunEvents = Array.isArray(payload.events) ?
+  payload.events : []` assignment. A Playwright production-page proof under
+  `out/prod-smoke-frontend-failed-payload-20260531/` intercepted `/api/runs`
+  with a synthetic HTTP 422 failed payload, verified the UI status text and
+  visible report panel, submitted the report through intercepted `/api/reports`,
+  and confirmed the multipart body contained `prod-browser-failed-run`, the
+  terminal `Generation failed` event, and the `pipeline-prod-browser-proof`
+  profile. Screenshot saved to
+  `out/prod-smoke-frontend-failed-payload-20260531/report-proof.png`.
