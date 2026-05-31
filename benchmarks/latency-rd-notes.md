@@ -9225,3 +9225,28 @@ with zero failures in 0.531s.
   `/api/runs`, and restored from browser cache in `94ms` with zero full-upload
   requests and no probe request escaping before abort; screenshot saved to
   `out/prod-browser-cache-hit-race-20260531/browser-cache-hit-race.png`.
+- Accepted SVGZ frontend pass-through for backend rasterization. `.svgz`
+  uploads were already listed as supported and the backend CairoSVG path can
+  rasterize them, but the browser upload prep treated compressed SVG like plain
+  SVG, called `file.text()`, and attempted client canvas rasterization before
+  the backend could see the original gzip-compressed vector. The frontend now
+  detects `.svgz` / `image/svg+xml-compressed`, skips client rasterization for
+  those files, and uploads the original compressed vector for server-side
+  rasterization while preserving the existing plain-SVG browser raster path.
+  Backend image I/O now has an explicit gzipped SVG rasterization regression
+  test. `node --check map_boundary_builder/web_assets/app.js` passed, focused
+  API/frontend/image-I/O tests passed 79/79, `compileall` passed, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 376 tests plus 12 subtests, and
+  `git diff --check` passed. A local browser proof against
+  `http://127.0.0.1:8765` uploaded a synthetic `map.svgz`, intercepted
+  `/api/runs`, verified the multipart request preserved `filename="map.svgz"`
+  and did not include `filename="map.png"`, then displayed the synthetic failed
+  payload; screenshot saved to
+  `out/svgz-frontend-pass-through-browser-20260531/svgz-upload-pass-through.png`.
+  Backend hash stayed `pipeline-64ad23bb71268a34`; the new asset hash is
+  `asset-c3b60484c4e35a37`. Strict no-catalog drift gate
+  `out/svgz-frontend-pass-through-strict-20260531/full-report.json` preserved
+  active avg/min IoU `0.968082`/`0.942536` versus
+  `out/browser-cache-race-strict-20260531/full-report.json`, passed 8/8 active
+  fixtures plus seven drift smokes, and stayed within latency budgets with
+  active/evaluated totals `3.203291s`/`5.532988s`.

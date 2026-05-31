@@ -102,6 +102,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(api_index.safe_extension("upload.tif"), ".tif")
         self.assertEqual(api_index.safe_extension("upload.tiff"), ".tiff")
 
+    def test_api_safe_extension_allows_svgz(self) -> None:
+        self.assertEqual(api_index.safe_extension("upload.svgz"), ".svgz")
+
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
@@ -1144,6 +1147,25 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
         self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
         self.assertIn(b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise) {", app_js)
+
+    def test_frontend_leaves_svgz_uploads_for_backend_rasterization(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        compressed_svg = app_js.index(b"if (isCompressedSvgFile(file)) {")
+        plain_svg = app_js.index(b"if (isSvgFile(file)) {")
+        compressed_status = app_js.index(b'setStatus("Uploading SVGZ map"', compressed_svg)
+        compressed_return = app_js.index(b"return file;", compressed_svg)
+        rasterize_call = app_js.index(b"const canvas = await svgFileToCanvas(file);", plain_svg)
+
+        self.assertLess(compressed_svg, plain_svg)
+        self.assertLess(compressed_svg, compressed_status)
+        self.assertLess(compressed_status, compressed_return)
+        self.assertLess(compressed_return, plain_svg)
+        self.assertLess(plain_svg, rasterize_call)
+        self.assertIn(b"function isCompressedSvgFile(file) {", app_js)
+        self.assertIn(b'type === "image/svg+xml-compressed"', app_js)
+        self.assertIn(b"/\\.svgz$/i.test(file?.name || \"\")", app_js)
 
     def test_frontend_preserves_failed_run_payload_for_reports(self) -> None:
         app_js, mime = web_asset_response("app.js")

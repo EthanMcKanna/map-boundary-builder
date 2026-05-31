@@ -830,6 +830,14 @@ function cancelPendingGenerationRuntimePrewarm() {
 }
 
 async function prepareRunImage(file) {
+  if (isCompressedSvgFile(file)) {
+    markProgressStep("prepare", "running", "Uploading compressed vector map.");
+    setStatus("Uploading SVGZ map", 4, "running", {
+      step: "prepare",
+      note: "Sending compressed vector upload for server rasterization.",
+    });
+    return file;
+  }
   if (isSvgFile(file)) {
     markProgressStep("prepare", "running", "Converting vector map.");
     setStatus("Rasterizing SVG map", 4, "running", {
@@ -1366,6 +1374,11 @@ async function sha256Hex(bytes) {
 
 function isSvgFile(file) {
   return file?.type === "image/svg+xml" || /\.svgz?$/i.test(file?.name || "");
+}
+
+function isCompressedSvgFile(file) {
+  const type = String(file?.type || "").toLowerCase();
+  return type === "image/svg+xml-compressed" || /\.svgz$/i.test(file?.name || "");
 }
 
 function isBmpFile(file) {
