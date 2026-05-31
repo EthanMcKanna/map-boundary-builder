@@ -8568,3 +8568,18 @@ with zero failures in 0.531s.
   intentionally an empty-cache first-run optimization; existing road-refine
   cache entries still trigger the old exact-key path for repeat local
   workflows.
+- Deployed the guarded empty-cache road-refine key policy as
+  `dpl_5iUHiZ1wnQvmrmEVcZvhaX5pnWqD`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-b0ba675e87efb830` with RapidOCR 1.4.4,
+  onnxruntime 1.26.0, Pillow 12.2.0, and cv2 4.10.0. The first Phoenix
+  no-catalog production smoke was a cold/noisy correct result at
+  `5.095193s` total-before-send, with OCR `2.782506s`, georeference
+  `0.481145s`, and road refinement `0.453566s`. After runtime warmup, an exact
+  repeat hit the API run-result cache at `0.004909s`. A one-pixel Phoenix PNG
+  variant forced a real warmed build miss and preserved the expected
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` output, confidence
+  `0.886`, and bbox `[-112.1163789, 33.2318417, -111.8163558, 33.6890285]` at
+  `3.283929s` total-before-send, with extract `0.323209s`, OCR `2.448141s`,
+  georeference `0.419998s`, and road refinement `0.408766s`. The production
+  path remains OCR-bound and noisy, but the deploy did not change geometry and
+  the warmed cache-busted sample is consistent with the fresh-cache local win.
