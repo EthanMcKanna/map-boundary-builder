@@ -7710,3 +7710,43 @@ with zero failures in 0.531s.
   controlled benchmark because Vercel instance variance remains visible, but the
   deployed overlay export stage moved in the expected direction versus the
   pre-change 0.248371s Phoenix sample.
+- Current no-catalog profile after the overlay deploy: the broader
+  current-reference gate scored 15/15 fixtures at avg/min IoU
+  0.950465/0.794177 and 5.019997s active total
+  (`out/current-control-nocatalog-20260531b/full-report.json`). OCR remains the
+  dominant warm-stage cost for bright-blue images, with representative OCR
+  stages Dallas 0.439017s, Houston 0.384460s, Phoenix 0.361541s, Los Angeles
+  0.315103s, and Bay Area 0.255641s. The strict 8-scored plus seven drift-smoke
+  gate also passed at 2.63s active total and 2.00s smoke total
+  (`out/strict-control-detmax480-nocatalog-20260531b/full-report.json`).
+- Rejected lowering the bright-blue detector cap from 480 to 256 as a default
+  for now. The current-reference gate passed with identical scored IoUs at
+  4.649708s, then 4.858675s on repeat
+  (`out/probe-detmax256-currentref-nocatalog-20260531/full-report.json`,
+  `out/probe-detmax256-repeat-currentref-nocatalog-20260531/full-report.json`),
+  but the strict 8-scored gate was effectively tied with control at 2.621506s
+  vs 2.633581s
+  (`out/strict-probe-detmax256-nocatalog-20260531/full-report.json`).
+  A half-scale stress set was not a ship gate because the current 480px control
+  already failed 3/15 smaller-label fixtures, but 256 did not worsen the
+  passing/failing pattern and cut that stress total from 10.99s to 3.30s
+  (`out/stress-half-control-nocatalog-20260531/full-report.json`,
+  `out/stress-half-detmax256-nocatalog-20260531/full-report.json`). Keep 480
+  until a production A/B or an adaptive fallback gives a cleaner no-regression
+  speed win.
+- Rejected classifier/use-cls and sparse classifier retry changes as no-ship
+  speed levers. Reading the OCR wrapper showed the normal RapidOCR path already
+  uses `rapidocr_engine_without_classifier()` and calls the engine with
+  `use_cls=False`; only the sparse-label retry initializes the classifier
+  session. Monkeypatched `use_cls=False` and
+  `MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS=0` probes both preserved geometry
+  but were within run noise on the strict gate (2.577775s-2.598818s vs
+  2.633581s control) and do not justify losing the sparse fallback safety net.
+- Rejected raising `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` above 1300. Area 1600
+  passed the current-reference threshold and was faster at 4.54s, but it
+  regressed Bay Area Waymo to 0.788 IoU and Houston Waymo to 0.898 IoU
+  (`out/probe-fasttext-min1600-currentref-nocatalog-20260531/full-report.json`).
+  Area 1400 was faster at 4.44s but showed the same Bay Area Waymo 0.788 IoU
+  regression (`out/probe-fasttext-min1400-currentref-nocatalog-20260531/full-report.json`).
+  Keep the current 1300 threshold; these labels are still needed for robust
+  regional fits.
