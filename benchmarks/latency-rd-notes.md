@@ -8792,3 +8792,19 @@ with zero failures in 0.531s.
   `out/upload-payload-hash-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.862993s`/`4.966439s`.
+- Deployed the OCR-runtime-aware run-result cache key as
+  `dpl_91g6dXJH1FbSFjp6F1vYZAb8i8KE`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-7fc43642d111f851` with
+  `rapidocr_rec_batch_num=24` (`out/prod-smoke-ocr-runtime-cache-key-20260531/health.json`),
+  and `/api/health?warm=ocr` stayed healthy with warm status `ok`
+  (`out/prod-smoke-ocr-runtime-cache-key-20260531/health-warm.json`). A fresh
+  no-catalog Nashville upload using neutral filename `upload.png` returned the
+  expected `ocr-georeference:nominatim-label-fit+osm-road-refine` result with
+  confidence `0.82`, bbox
+  `[-86.8464007, 36.1088135, -86.6905828, 36.2428345]`, `catalog_slug: null`,
+  `profile.pipeline_version: pipeline-7fc43642d111f851`, and
+  `total_before_send_s=2.493639` (`cache_hit: miss`). The exact repeat hit the
+  raw run-result cache in the new namespace with the same bbox/source/confidence
+  and profile pipeline version at `total_before_send_s=0.004531`
+  (`out/prod-smoke-ocr-runtime-cache-key-20260531/nashville-response.json` and
+  `out/prod-smoke-ocr-runtime-cache-key-20260531/nashville-repeat-response.json`).
