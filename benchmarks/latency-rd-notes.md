@@ -8193,3 +8193,24 @@ with zero failures in 0.531s.
   8/8 active fixtures, zero smoke failures, avg/min IoU 0.967842/0.942536, no
   regression issues, active/evaluated totals 3.023630s/5.096346s, and evaluated
   OCR 3.467865s under the active 4s and evaluated 6s budgets.
+- Deployed the WebP visual run-result cache key to Vercel production as
+  `dpl_GfYsjGj8dYo1hVgmwm3z3TJwjjxd` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production aliases
+  `https://mapboundary.app` and `https://map-boundary-builder.vercel.app` both
+  reported `pipeline-fef72b6db110322b`, `rapidocr_rec_batch_num=24`,
+  `rapidocr_cls_batch_num=24`, RapidOCR 1.4.4, and onnxruntime 1.26.0 from
+  `/api/health`. A fresh live Zoox SF WebP metadata pair had different raw
+  SHA-256 values (`eebc240e5a04068b151737c444a13407034e11e54f7b054c0f257fe034205b89`
+  and `dbbfab0963af86821d828a2ffa0927a99670f5728ddf84c6dcb16551f1c2ff29`) but
+  the same WebP visual digest
+  `55f6de65e1bee1b91dd63c1a5c694c1ab0d941efe687bf9e330ddde67be8f5cb` and the
+  same upload filename hint. The first production upload returned HTTP 201,
+  status `complete`, city San Francisco, style dark-teal, confidence 0.946,
+  catalog `san-francisco-zoox`, `cache_hit=miss`, `build_boundary_s=0.321831`,
+  `total_before_send_s=0.331676`, and stage timings inspect 0.013613s, extract
+  0.305518s, georeference 0.000006s, export 0.002470s. The second metadata
+  variant returned HTTP 201 with `cached=true`, `cache_hit=webp-visual`,
+  `raw_cache_lookup_s=0.001133`, `webp_visual_cache_lookup_s=0.001505`, and
+  `total_before_send_s=0.008597`. The counted smoke responses were saved at
+  `out/prod-smoke-eeefc46/webp-visual-fresh-first-response.txt` and
+  `out/prod-smoke-eeefc46/webp-visual-fresh-second-response.txt`.
