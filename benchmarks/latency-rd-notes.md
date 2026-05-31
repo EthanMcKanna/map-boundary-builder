@@ -8905,3 +8905,20 @@ with zero failures in 0.531s.
   `out/catalog-miss-details-cache-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.945897s`/`4.933226s`.
+- Deployed the cached catalog-miss event detail preservation as
+  `dpl_B6qCZQ65oXzFUY48gAjnVMYT3N45`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-e108f15e143e4b7a`, and `/api/health?warm=ocr`
+  stayed healthy with warm status `ok`
+  (`out/prod-smoke-catalog-miss-event-details-20260531/health.json` and
+  `out/prod-smoke-catalog-miss-event-details-20260531/health-warm.json`). A
+  fresh generic catalog-probe miss returned `status: catalog_miss`,
+  `profile.cache_hit: miss`, `profile.total_before_send_s=0.146782`,
+  `profile.pipeline_version=pipeline-e108f15e143e4b7a`, and top-level
+  `catalog_probe_miss.best_active_catalog_slug=dallas-tesla`. The exact repeat
+  hit the raw run-result cache with `cached: true`, `profile.cache_hit: raw`,
+  `profile.total_before_send_s=0.000445`, and the cached event details now
+  preserved `best_active_catalog_slug=dallas-tesla`,
+  `active_shape_iou_is_low=true`, and `style=gray-fill`
+  (`out/prod-smoke-catalog-miss-event-details-20260531/generic-probe-response.json`
+  and
+  `out/prod-smoke-catalog-miss-event-details-20260531/generic-probe-repeat-response.json`).
