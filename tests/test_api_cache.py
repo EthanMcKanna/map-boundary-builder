@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image, PngImagePlugin, features
 
+import api.index as api_index
 from api.index import (
     CRON_WARM_PATH,
     CRON_WARM_PATHS,
@@ -41,6 +42,7 @@ from api.index import (
     read_run_result_cache,
     RUN_RESULT_MEMORY_CACHE_MAX_BYTES,
     RUN_RESULT_MEMORY_CACHE_MAX,
+    run_result_cache_tmp_path,
     run_result_cache_key,
     write_run_result_cache,
 )
@@ -542,6 +544,36 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertIsNone(read_run_result_cache("bad"))
         self.assertNotIn("bad", _RUN_RESULT_MEMORY_CACHE)
+
+    def test_run_result_memory_cache_survives_parallel_access(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        _RUN_RESULT_MEMORY_CACHE.clear()
+
+        def write_and_read(index: int) -> dict[str, object] | None:
+            key = f"parallel-key-{index}"
+            remember_run_result_cache(key, {"city": str(index), "summary": {}, "artifacts": {}})
+            return read_run_result_cache(key)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(write_and_read, range(32)))
+            list(executor.map(write_and_read, range(32, RUN_RESULT_MEMORY_CACHE_MAX + 32)))
+
+        self.assertTrue(all(result for result in results))
+        self.assertLessEqual(len(_RUN_RESULT_MEMORY_CACHE), RUN_RESULT_MEMORY_CACHE_MAX)
+
+    def test_run_result_cache_tmp_path_is_thread_specific(self) -> None:
+        cache_path = Path("/tmp/map-boundary-builder-cache/run-results/key.json")
+
+        with patch.object(api_index.threading, "get_ident", return_value=111):
+            first = run_result_cache_tmp_path(cache_path)
+        with patch.object(api_index.threading, "get_ident", return_value=222):
+            second = run_result_cache_tmp_path(cache_path)
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(first.parent, cache_path.parent)
+        self.assertTrue(first.name.startswith("key.json."))
+        self.assertTrue(first.name.endswith(".111.tmp"))
 
     def test_cached_run_payload_can_include_request_profile(self) -> None:
         cached = {

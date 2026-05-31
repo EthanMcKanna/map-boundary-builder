@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 import cv2
@@ -75,6 +76,7 @@ RAPIDOCR_RECOGNITION_PROFILE_DEFAULT = "default"
 RAPIDOCR_RECOGNITION_PROFILE_EN_PPOCRV5 = "en-ppocrv5"
 RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT = "default"
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
+_OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
 
 
@@ -663,10 +665,11 @@ def ocr_cache_dependency_signature() -> str:
 
 
 def read_ocr_cache(cache_key: str) -> tuple[OcrLabel, ...] | None:
-    cached = _OCR_MEMORY_CACHE.get(cache_key)
-    if cached is not None:
-        _OCR_MEMORY_CACHE.move_to_end(cache_key)
-        return cached
+    with _OCR_MEMORY_CACHE_LOCK:
+        cached = _OCR_MEMORY_CACHE.get(cache_key)
+        if cached is not None:
+            _OCR_MEMORY_CACHE.move_to_end(cache_key)
+            return cached
     if not OCR_DISK_CACHE_ENABLED:
         return None
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
@@ -687,21 +690,27 @@ def write_ocr_cache(cache_key: str, labels: list[OcrLabel]) -> None:
     if not OCR_DISK_CACHE_ENABLED:
         return
     cache_path = OCR_CACHE_DIR / f"{cache_key}.json"
+    tmp_path = ocr_cache_tmp_path(cache_path)
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps([label.__dict__ for label in cached], separators=(",", ":"))
-        tmp_path = cache_path.with_suffix(".tmp")
         tmp_path.write_text(payload)
         tmp_path.replace(cache_path)
     except OSError:
+        tmp_path.unlink(missing_ok=True)
         return
 
 
 def remember_ocr_memory_cache(cache_key: str, labels: tuple[OcrLabel, ...]) -> None:
-    _OCR_MEMORY_CACHE[cache_key] = labels
-    _OCR_MEMORY_CACHE.move_to_end(cache_key)
-    while len(_OCR_MEMORY_CACHE) > OCR_MEMORY_CACHE_MAX:
-        _OCR_MEMORY_CACHE.popitem(last=False)
+    with _OCR_MEMORY_CACHE_LOCK:
+        _OCR_MEMORY_CACHE[cache_key] = labels
+        _OCR_MEMORY_CACHE.move_to_end(cache_key)
+        while len(_OCR_MEMORY_CACHE) > OCR_MEMORY_CACHE_MAX:
+            _OCR_MEMORY_CACHE.popitem(last=False)
+
+
+def ocr_cache_tmp_path(cache_path: Path) -> Path:
+    return cache_path.with_name(f"{cache_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
 
 
 def tesseract_available() -> bool:

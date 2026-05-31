@@ -8153,3 +8153,15 @@ with zero failures in 0.531s.
   points, `build_boundary_s=3.345460`, and stage timings extract 1.348306s,
   OCR 1.493220s, georeference 0.467600s, export 0.001492s. The smoke response
   was saved at `out/prod-smoke-e8c712f/nashville-response.txt`.
+- Accepted concurrent cache hardening for the OCR label and Vercel run-result
+  caches. Both in-process LRU maps now lock around ordered mutations, and both
+  disk cache writers use thread-specific temporary paths instead of one shared
+  `<key>.tmp`, avoiding same-key write collisions on reused/concurrent compute
+  instances. Focused parallel cache tests passed 4/4, and
+  `tests/test_api_cache.py tests/test_ocr_georeference.py` passed 145/145. The
+  strict drift-smoke benchmark `out/concurrent-cache-hardening-20260531/full-report.json`
+  passed against `out/prepared-array-cache-safety-20260531/full-report.json`
+  with 8/8 active fixtures, zero smoke failures, avg/min IoU
+  0.967842/0.942536, no regression issues, active/evaluated totals
+  3.067205s/5.145266s, and evaluated OCR 3.683027s under the active 4s and
+  evaluated 6s budgets.

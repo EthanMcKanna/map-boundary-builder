@@ -1,5 +1,6 @@
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -270,6 +271,37 @@ class OcrGroupingTests(unittest.TestCase):
                     self.assertIn("new-key", _OCR_MEMORY_CACHE)
                 finally:
                     _OCR_MEMORY_CACHE.clear()
+
+    def test_ocr_memory_cache_survives_parallel_access(self) -> None:
+        _OCR_MEMORY_CACHE.clear()
+
+        def write_and_read(index: int) -> tuple[OcrLabel, ...] | None:
+            key = f"parallel-key-{index}"
+            write_ocr_cache(key, [OcrLabel(str(index), 0, 0, 1, 1, 99)])
+            return read_ocr_cache(key)
+
+        try:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(write_and_read, range(32)))
+                list(executor.map(write_and_read, range(32, OCR_MEMORY_CACHE_MAX + 32)))
+
+            self.assertTrue(all(result for result in results))
+            self.assertLessEqual(len(_OCR_MEMORY_CACHE), OCR_MEMORY_CACHE_MAX)
+        finally:
+            _OCR_MEMORY_CACHE.clear()
+
+    def test_ocr_cache_tmp_path_is_thread_specific(self) -> None:
+        cache_path = Path("/tmp/map-boundary-builder-cache/ocr-labels/key.json")
+
+        with patch.object(ocr_module.threading, "get_ident", return_value=111):
+            first = ocr_module.ocr_cache_tmp_path(cache_path)
+        with patch.object(ocr_module.threading, "get_ident", return_value=222):
+            second = ocr_module.ocr_cache_tmp_path(cache_path)
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(first.parent, cache_path.parent)
+        self.assertTrue(first.name.startswith("key.json."))
+        self.assertTrue(first.name.endswith(".111.tmp"))
 
     def test_ocr_visual_cache_key_ignores_png_metadata(self) -> None:
         with TemporaryDirectory() as workdir:

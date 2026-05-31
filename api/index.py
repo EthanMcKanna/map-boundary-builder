@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 import time
 from io import BytesIO
 from http import HTTPStatus
@@ -42,6 +43,7 @@ RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
 _RUN_RESULT_MEMORY_CACHE: OrderedDict[str, str] = OrderedDict()
+_RUN_RESULT_MEMORY_CACHE_LOCK = threading.RLock()
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_NON_VISUAL_CHUNKS = {b"tEXt", b"zTXt", b"iTXt", b"tIME"}
 JPEG_SIGNATURE = b"\xff\xd8"
@@ -883,13 +885,16 @@ def jpeg_marker_has_no_payload(marker: int) -> bool:
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
-    cached_json = _RUN_RESULT_MEMORY_CACHE.get(cache_key)
+    with _RUN_RESULT_MEMORY_CACHE_LOCK:
+        cached_json = _RUN_RESULT_MEMORY_CACHE.get(cache_key)
+        if cached_json is not None:
+            _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
     if cached_json is not None:
-        _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
         try:
             return json.loads(cached_json)
         except Exception:
-            _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
+            with _RUN_RESULT_MEMORY_CACHE_LOCK:
+                _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
             return None
     cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
     if not cache_path.exists():
@@ -923,13 +928,14 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
             "artifacts": payload.get("artifacts"),
         }
     encoded = remember_run_result_cache(cache_key, cached)
+    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
+    tmp_path = run_result_cache_tmp_path(cache_path)
     try:
         RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
-        tmp_path = cache_path.with_suffix(".tmp")
         tmp_path.write_text(encoded)
         tmp_path.replace(cache_path)
     except OSError:
+        tmp_path.unlink(missing_ok=True)
         return
 
 
@@ -937,13 +943,19 @@ def remember_run_result_cache(cache_key: str, payload: dict[str, Any], *, encode
     if encoded is None:
         encoded = json.dumps(payload, separators=(",", ":"))
     if len(encoded.encode("utf-8")) > RUN_RESULT_MEMORY_CACHE_MAX_BYTES:
-        _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
+        with _RUN_RESULT_MEMORY_CACHE_LOCK:
+            _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
         return encoded
-    _RUN_RESULT_MEMORY_CACHE[cache_key] = encoded
-    _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
-    while len(_RUN_RESULT_MEMORY_CACHE) > RUN_RESULT_MEMORY_CACHE_MAX:
-        _RUN_RESULT_MEMORY_CACHE.popitem(last=False)
+    with _RUN_RESULT_MEMORY_CACHE_LOCK:
+        _RUN_RESULT_MEMORY_CACHE[cache_key] = encoded
+        _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
+        while len(_RUN_RESULT_MEMORY_CACHE) > RUN_RESULT_MEMORY_CACHE_MAX:
+            _RUN_RESULT_MEMORY_CACHE.popitem(last=False)
     return encoded
+
+
+def run_result_cache_tmp_path(cache_path: Path) -> Path:
+    return cache_path.with_name(f"{cache_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
 
 
 def cached_run_payload(
