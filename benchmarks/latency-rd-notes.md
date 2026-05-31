@@ -7843,3 +7843,11 @@ with zero failures in 0.531s.
   / `--max-total-duration-s 5` passed
   (`out/ocr-bounds-filter-currentref-seq-nocatalog-20260531/full-report.json`).
   Focused OCR/runner tests passed 160/160 and full `pytest` passed 316/316.
+- Production deployment proof for OCR coordinate-space hardening: runtime commit
+  `c7274ed` deployed as `dpl_A2i78h9DWVknh2yi6AX6WNRKvmmx`, aliased to
+  `https://mapboundary.app`, with health reporting
+  `pipeline-76d9109c335c362a`. `/api/health?warm=ocr` returned `ok: true`,
+  `tesseract: null`, and warm status `ok`. A cache-busted no-catalog Tesla
+  Dallas API smoke returned `status: complete`, source
+  `ocr-georeference:nominatim-label-fit`, `catalog_slug: null`, confidence
+  0.825, `build_boundary_s: 0.262996`, and `total_before_send_s: 0.265709`.
