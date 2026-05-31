@@ -8000,3 +8000,27 @@ with zero failures in 0.531s.
   passes with 13 comparable fixtures, compared average IoU
   0.902906 -> 0.902906, and no issues. Targeted benchmark tests passed 24/24;
   full `pytest` passed 317/317.
+- Rejected a fresh ONNX Runtime thread-spinning default change after a
+  contention retest. Running the current-reference and strict no-catalog
+  benchmark processes in parallel with the existing default inflated the
+  current-reference total to 6.893520s and the strict active total to 5.050111s,
+  which is a benchmarking-contention artifact rather than a geometry
+  regression. Repeating the same parallel pair with
+  `MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING=0` improved the current-reference
+  total to 5.678682s and let the strict active gate pass at 3.929842s, but the
+  broader 15-fixture total still missed the 5s budget. Sequential retests were
+  within noise: the default passed at 4.603709s current-reference / 2.676052s
+  strict active, while no-spinning passed at 4.554361s / 2.607753s. This is not
+  strong enough to reverse the earlier production-default rejection; keep
+  spinning enabled, and avoid parallel OCR benchmark runs when interpreting
+  latency budgets.
+- Accepted a benchmark gate hardening for skipped-fixture drift smokes.
+  `--require-smoked-catalog-miss` now implies `--smoke-skipped`, so a CLI
+  report cannot claim the catalog-miss requirement while silently smoke-checking
+  zero skipped fixtures. The fixed strict active plus drift-smoke command
+  `out/require-smoke-implies-skip-smoke-20260531/full-report.json` scored 8/8
+  active fixtures at avg/min IoU 0.967842/0.942536, smoke-checked all seven
+  `reference_mismatch` fixtures with zero catalog-hit failures, and stayed
+  inside the latency budgets with active total 2.592025s, max fixture
+  0.476246s, and smoke total 1.857s. Targeted benchmark tests passed 25/25;
+  full `pytest` passed 318/318.

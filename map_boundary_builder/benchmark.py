@@ -376,6 +376,7 @@ def run_benchmark(
     require_scored_catalog_evidence = bool(
         require_scored_catalog_evidence or score_skipped_catalog_references
     )
+    smoke_skipped = bool(smoke_skipped or require_smoked_catalog_miss)
     config = load_fixture_config(fixture_config)
     fixtures, inventory = discover_fixtures(polygon_dir, image_dir, config)
     filters = normalize_only_filters(only_filters)

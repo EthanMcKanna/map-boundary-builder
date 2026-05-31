@@ -630,6 +630,79 @@ def test_smoke_skipped_catalog_miss_requirement_fails_catalog_hits(
     assert "expected OCR/georeference catalog miss" in report["scores"][0]["error"]
 
 
+def test_catalog_miss_requirement_implies_smoke_skipped_fixtures(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "bay-area-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Bay Area.png").write_bytes(b"not an image")
+    config_path.write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    "bay-area-waymo": {
+                        "status": "reference_mismatch",
+                        "note": "changed live service area",
+                    }
+                }
+            }
+        )
+        + "\n"
+    )
+    calls = []
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        calls.append((fixture.slug, kwargs["score_reference"], kwargs["catalog_probe_missed"]))
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=None,
+            area_ratio=None,
+            centroid_distance_m=None,
+            vertices=42,
+            style="bright-blue",
+            duration_s=0.12,
+            georeference_source="ocr-georeference:nominatim-label-fit",
+            combined_confidence=0.86,
+            catalog_slug=None,
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        catalog_probe_missed=True,
+        require_smoked_catalog_miss=True,
+    )
+
+    assert calls == [("bay-area-waymo", False, True)]
+    assert report["thresholds"]["smoke_skipped"] is True
+    assert report["thresholds"]["require_smoked_catalog_miss"] is True
+    assert report["summary"]["smoked_skipped_fixtures"] == 1
+    assert report["summary"]["failed_smoked_skipped_fixtures"] == 0
+    assert report["summary"]["passed"] is True
+
+
 def test_block_network_sets_policy_during_full_generation(tmp_path: Path, monkeypatch) -> None:
     polygon_dir = tmp_path / "polygons"
     image_dir = tmp_path / "images"
