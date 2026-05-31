@@ -87,6 +87,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(catalog_matching_enabled(SimpleNamespace()))
         self.assertFalse(catalog_matching_enabled(SimpleNamespace(allow_catalog=False)))
 
+    def test_api_safe_extension_allows_avif(self) -> None:
+        self.assertEqual(api_index.safe_extension("upload.avif"), ".avif")
+
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))
@@ -298,6 +301,7 @@ class ApiRunCacheTests(unittest.TestCase):
             "webp:",
         )
         self.assertEqual(filename_hint_cache_value("neutral-map-1780145995.webp"), "webp:")
+        self.assertEqual(filename_hint_cache_value("uploaded-map-variant.avif"), "avif:")
         self.assertEqual(filename_hint_cache_value("uploaded-map.png"), "png:")
         self.assertEqual(
             filename_hint_cache_value("dallas-map-repeat-1780146013-1.webp"),

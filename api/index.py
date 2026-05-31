@@ -56,9 +56,20 @@ JPEG_XMP_PREFIX = b"http://ns.adobe.com/xap/1.0/\x00"
 WEBP_RIFF_SIGNATURE = b"RIFF"
 WEBP_SIGNATURE = b"WEBP"
 WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
-SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
+SUPPORTED_IMAGE_EXTENSIONS = {
+    ".avif",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".svg",
+    ".svgz",
+}
 FILENAME_HINT_CACHE_NOISE_TOKENS = {
     "app",
+    "avif",
     "after",
     "boundary",
     "boundaries",

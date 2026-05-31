@@ -1,4 +1,8 @@
-from map_boundary_builder.github_reports import GenerationReport, issue_body
+from map_boundary_builder.github_reports import GenerationReport, issue_body, safe_report_extension
+
+
+def test_safe_report_extension_preserves_avif() -> None:
+    assert safe_report_extension("uploaded-map.avif") == ".avif"
 
 
 def test_issue_body_includes_runtime_profile() -> None:

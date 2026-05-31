@@ -8259,3 +8259,20 @@ with zero failures in 0.531s.
   counted smoke responses were saved at
   `out/prod-smoke-c3573f3/jpeg-visual-first-response.txt` and
   `out/prod-smoke-c3573f3/jpeg-visual-second-response.txt`.
+- Accepted explicit AVIF upload support as a low-risk generalizability
+  improvement. Pillow in the current runtime reports AVIF support, and a local
+  AVIF conversion of the Tesla Dallas service-area screenshot loaded through
+  the normal image pipeline and completed via `catalog-shape-match` with
+  `catalog_slug=dallas-tesla`, `catalog_shape_iou=0.972523`, confidence
+  0.972523, and the expected Dallas bbox. The API/shared image extension
+  allowlists, benchmark screenshot discovery, GitHub report image extension
+  preservation, browser clipboard extension map, filename-cache noise tokens,
+  and upload copy now include AVIF. Targeted image/API/report tests passed
+  17/17 and `node --check map_boundary_builder/web_assets/app.js` passed. Full
+  `pytest` passed 334 tests plus 9 subtests. The strict drift-smoke benchmark
+  `out/avif-support-20260531-strict/full-report.json` passed against
+  `out/jpeg-visual-cache-20260531-repeat/full-report.json` with 8/8 active
+  fixtures, seven smoke-checked `reference_mismatch` fixtures, zero smoke
+  failures, avg/min IoU 0.967842/0.942536, no regression issues,
+  active/evaluated totals 3.183671s/5.352809s, and evaluated OCR 3.688441s
+  under the active 4s and evaluated 6s budgets.

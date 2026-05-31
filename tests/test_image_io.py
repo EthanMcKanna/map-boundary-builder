@@ -13,6 +13,9 @@ class SvgImageIoTests(unittest.TestCase):
     def test_safe_image_extension_preserves_svg(self) -> None:
         self.assertEqual(safe_image_extension("mi.svg"), ".svg")
 
+    def test_safe_image_extension_preserves_avif(self) -> None:
+        self.assertEqual(safe_image_extension("map.avif"), ".avif")
+
     def test_svg_is_rasterized_before_pillow_reads_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -112,6 +115,22 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(rgb.shape, (1, 2, 3))
             self.assertEqual(tuple(rgb[0, 0]), (0, 128, 255))
             self.assertEqual(tuple(rgb[0, 1]), (255, 255, 255))
+
+    @unittest.skipUnless(features.check("avif"), "Pillow AVIF support required")
+    def test_avif_loads_as_rgb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            avif_path = Path(tmp) / "opaque.avif"
+            image = Image.new("RGB", (16, 8), (12, 34, 56))
+            for x in range(8, 16):
+                for y in range(8):
+                    image.putpixel((x, y), (98, 76, 54))
+            image.save(avif_path, format="AVIF", quality=100)
+
+            rgb = load_rgb(avif_path)
+
+            self.assertEqual(rgb.shape, (8, 16, 3))
+            self.assertLess(np.abs(rgb[:, :8].mean(axis=(0, 1)) - np.array([12, 34, 56])).max(), 8)
+            self.assertLess(np.abs(rgb[:, 8:].mean(axis=(0, 1)) - np.array([98, 76, 54])).max(), 8)
 
 
 class OverlayPreviewTests(unittest.TestCase):

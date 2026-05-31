@@ -132,6 +132,7 @@ const CATALOG_PROBE_AREA_HINT_PATTERN = /\b(?:atlanta|austin|dallas|houston|miam
 const CATALOG_PROBE_PROVIDER_HINT_PATTERN = /\b(?:waymo|tesla|zoox|avride)\b/;
 const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
   "app",
+  "avif",
   "boundary",
   "boundaries",
   "bust",
@@ -185,8 +186,9 @@ const RUN_BUTTON_LABELS = {
   running: "Building",
 };
 const EMPTY_DROP_TITLE = "Drop or paste map screenshot";
-const EMPTY_DROP_META = "PNG, JPG, WebP, TIFF, SVG";
+const EMPTY_DROP_META = "PNG, JPG, WebP, AVIF, TIFF, SVG";
 const CLIPBOARD_IMAGE_EXTENSIONS = new Map([
+  ["image/avif", "avif"],
   ["image/png", "png"],
   ["image/jpeg", "jpg"],
   ["image/webp", "webp"],

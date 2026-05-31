@@ -27,7 +27,7 @@ DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_IOU = 0.70
 DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_AREA_RATIO = 0.85
 DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO = 1.15
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+IMAGE_SUFFIXES = {".avif", ".png", ".jpg", ".jpeg", ".webp"}
 AREA_ALIASES = {
     "bay area": "bay-area",
     "san francisco": "bay-area",
