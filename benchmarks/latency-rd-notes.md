@@ -8411,3 +8411,14 @@ with zero failures in 0.531s.
   `out/retry-json-local-web-20260531/retry-json-browser.png`. Validation passed
   `node --check map_boundary_builder/web_assets/app.js` and full `pytest`
   347/347.
+- Deployed the guarded upload retry to Vercel production as
+  `dpl_61vvQvDouw7mJ6ZfFSWUWhnYeptX`, aliased to `https://mapboundary.app`.
+  The live health endpoint reported `pipeline-ddaffd945efaecf4`, and the served
+  `/static/app.js` contains `postRunUpload`, `shouldRetryWithJsonUpload`, and
+  `postReportUpload`. A production Playwright check mocked the first
+  `https://mapboundary.app/api/runs` multipart request as `text/plain` HTTP
+  403, observed the deployed app send a second `/api/runs` request with
+  `Content-Type: application/json`, and the page still completed the Dallas run
+  from `Tesla Dallas.retry.jpg`. Evidence was saved at
+  `out/retry-json-prod-20260531/retry-json-prod-browser.json` and
+  `out/retry-json-prod-20260531/retry-json-prod-browser.png`.
