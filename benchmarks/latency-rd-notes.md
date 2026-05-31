@@ -9024,3 +9024,22 @@ with zero failures in 0.531s.
   `out/lazy-tesseract-probe-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.929000s`/`4.902518s`.
+- Production proof for the API runner-import failure guard: deployed
+  `pipeline-0d72dc868088997a` as Vercel deployment
+  `dpl_BC29f9CPHKDkN6krYqGXBKPSBhw5`, aliased to `mapboundary.app`. Health and
+  OCR warm checks under `out/prod-smoke-api-import-guard-20260531/` reported
+  the new hash; warmup loaded 19 catalog entries, seed resources, bright-blue
+  extraction, and `rapidocr_inference_warmed: true`. A three-pixel cache-busted
+  copy of `Waymo Dallas.png` was posted with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0`; production returned
+  `cache_hit: miss`, `id: 1780244130-bc8c13dd`, `status: complete`, city
+  `Dallas`, style `bright-blue`, bbox
+  `[-96.8748943, 32.7334002, -96.729715, 32.86549]`,
+  `georeference_source: ocr-georeference:nominatim-label-fit`, combined
+  confidence `0.946`, no catalog slug, stage times `extract: 0.468466s`,
+  `ocr: 1.240073s`, `georeference: 0.017089s`, and
+  `total_before_send_s: 1.838105`. This proves the deployed API wrapper still
+  serves the normal no-catalog path on the current production runtime; the
+  import-failure branch itself remains covered by the focused local regression
+  test because intentionally breaking the production runner import would be
+  destructive.
