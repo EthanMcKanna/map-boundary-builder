@@ -8744,3 +8744,20 @@ with zero failures in 0.531s.
   `out/pipeline-warmup-hash-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `3.047959s`/`5.128111s`.
+- Deployed the upload-parser hash/profile hardening as
+  `dpl_4c8ekmjw3pK5vf9eK3ueuKH1zUQx`, aliased to
+  `https://mapboundary.app`. Live health reported
+  `pipeline-75b9631cf0a4b002` with RapidOCR 1.4.4 and onnxruntime 1.26.0
+  (`out/prod-smoke-upload-hash-20260531/health.json`), and
+  `/api/health?warm=ocr` stayed healthy with warm status `ok`
+  (`out/prod-smoke-upload-hash-20260531/health-warm.json`). A fresh
+  no-catalog Nashville upload using neutral filename `upload.png` returned the
+  expected `ocr-georeference:nominatim-label-fit+osm-road-refine` result with
+  confidence `0.82`, bbox
+  `[-86.8464007, 36.1088135, -86.6905828, 36.2428345]`, `catalog_slug: null`,
+  `profile.pipeline_version: pipeline-75b9631cf0a4b002`, and
+  `total_before_send_s=2.370332` (`cache_hit: miss`). The exact repeat hit the
+  raw run-result cache with the same bbox/source/confidence and profile
+  pipeline version at `total_before_send_s=0.004432`
+  (`out/prod-smoke-upload-hash-20260531/nashville-response.json` and
+  `out/prod-smoke-upload-hash-20260531/nashville-repeat-response.json`).
