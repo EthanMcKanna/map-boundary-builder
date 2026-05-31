@@ -9628,3 +9628,37 @@ with zero failures in 0.531s.
   `out/prod-vendored-ppocrv5-health-20260531.json` and
   `out/prod-vendored-ppocrv5-health-warm-20260531.json`; the production smoke
   response was saved under `out/prod-vendored-ppocrv5-smoke-20260531/`.
+- Re-tested the RapidOCR 3.8.1 bright-blue adapter after the vendored asset
+  fix and rejected it for now. A target-install direct modern RapidOCR probe
+  with bundled PP-OCRv5 assets
+  (`out/probe-rapidocr381-modern-direct-nocatalog-20260531/full-report.json`)
+  failed the strict no-catalog regression gate: San Antonio Waymo IoU dropped
+  from `0.962497` to `0.940135`, compared average IoU dropped from `0.968082`
+  to `0.965287`, and active OCR rose to `2.534317s` with active/evaluated
+  totals `3.667104s`/`5.946601s`. The modern package's default detector path
+  is therefore not a shippable speedup despite the production-safe PP-OCRv5
+  asset source.
+- Found and accepted a smaller current-engine OCR tuning win instead. A strict
+  sweep against the vendored-asset baseline showed that the paired bright-blue
+  detector limit and text-box filter defaults can move from `480`/`1300` to
+  `448`/`1500` without changing scored accuracy. The best sweep run
+  (`out/sweep-ppocrv5-det448-area1500-strict-20260531/full-report.json`)
+  preserved avg/min IoU `0.968082`/`0.942536`, passed 8/8 active fixtures plus
+  seven drift smokes, and reduced active/evaluated totals to
+  `2.692393s`/`4.480676s` with active OCR `1.645845s`. After promoting the
+  defaults, focused OCR/API/runner tests passed (`234 passed`), full pytest
+  passed `385` tests plus 12 subtests, `py_compile` and `git diff --check`
+  passed, and the default strict gate
+  (`out/det448-area1500-default-strict-20260531/full-report.json`) preserved
+  exact avg/min IoU with active/evaluated totals `2.899440s`/`4.963449s`.
+  A back-to-back paired check under the same code confirmed the direction:
+  old env-overridden `480`/`1300`
+  (`out/old480-area1300-paired-strict-20260531/full-report.json`) took
+  `2.823496s` active, `4.861190s` evaluated, and `1.781724s` active OCR,
+  while the new defaults
+  (`out/new448-area1500-paired-strict-20260531/full-report.json`) took
+  `2.737625s` active, `4.647553s` evaluated, and `1.723239s` active OCR with
+  the same avg/min IoU `0.968082`/`0.942536`. Local health construction now
+  reports `pipeline-18efd6dd9073624d`, bright-blue detector limit `448`,
+  fast-text min area `1500.0`, assets available `true`, and effective
+  recognizer profile `en-ppocrv5`.

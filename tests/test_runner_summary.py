@@ -644,7 +644,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
     assert ocr_kwargs == [
         {
-            "rapidocr_min_text_area": 1300.0,
+            "rapidocr_min_text_area": runner.FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
@@ -717,7 +717,7 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
     assert ocr_kwargs == [
         {
             "rapidocr_max_dimension": runner.CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
-            "rapidocr_min_text_area": 1300.0,
+            "rapidocr_min_text_area": runner.FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
@@ -2284,7 +2284,7 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
     assert ocr_rgb_shapes == [(800, 1200, 3)]
     assert ocr_kwargs == [
         {
-            "rapidocr_min_text_area": 1300.0,
+            "rapidocr_min_text_area": runner.FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
