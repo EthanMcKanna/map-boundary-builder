@@ -7548,3 +7548,21 @@ with zero failures in 0.531s.
   passed 8/8 scored fixtures with seven drift smokes, avg IoU 0.968082, min
   IoU 0.942536, active total 4.126270s, max active fixture 0.843302s, and zero
   latency-budget issues.
+- Production deploy/verification for the bright-blue PP-OCRv5 recognizer path:
+  deployed `b477098` as `dpl_3FW2cLaUPZTWSnvYGxp9Hx9cnwaY`, aliased to
+  `https://mapboundary.app`, with `pipeline-ba30cc765c96e7dc`. Health confirms
+  `rapidocr_bright_blue_recognition_profile: en-ppocrv5` and warm detector
+  limits `[608, 544]`. The first live OCR warm call took 4.953530s to
+  initialize the additional recognizer session; an immediate repeat was warm at
+  0.000010s. Cache-busted Phoenix no-catalog production probes stayed
+  OCR-bound rather than subsecond: first post-deploy build 3.258465s, then
+  warmed repeats 2.407284s and 2.304488s, with the expected
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` source and no catalog
+  shortcut. That is roughly non-regressive against the earlier 2.27-2.39s
+  production Phoenix band, but it is not a production arbitrary-image
+  subsecond breakthrough. The changed-market catalog path remains fast and
+  current-geometry-safe: cache-busted production uploads returned
+  `houston-waymo` in 0.358232s build / 0.367722s before send with
+  `catalog_shape_iou` 0.989331, `miami-waymo` in 0.337723s / 0.343309s with
+  shape IoU 0.989300, and `bay-area-waymo` in 0.379998s / 0.388253s with shape
+  IoU 0.999999.
