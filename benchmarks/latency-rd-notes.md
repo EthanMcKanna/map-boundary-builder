@@ -7812,3 +7812,13 @@ with zero failures in 0.531s.
   after 81.053518s of georeferencing with IoU 0.0, area ratio 5.844536, and
   centroid error 32.4km. Keep this fallback disabled; it is much too slow and
   less reliable than the current fail-closed behavior.
+- Re-tested lowering the bright-blue max-side detector cap from 480 to 256
+  after the sparse-georeference fail-closed guard, because the earlier
+  half-scale stress result no longer emitted the two bad GeoJSONs. The stricter
+  cap still is not a deployable default: it preserved the strict active plus
+  drift-smoke geometry with no regression issues, but slowed the active gate to
+  2.910903s total and 0.594345s max active fixture versus the sparse-guard
+  control's 2.607291s total and 0.482685s max
+  (`out/probe-detmax256-after-sparseguard-nocatalog-20260531/full-report.json`,
+  baseline `out/sparseguard-strict-nocatalog-20260531/full-report.json`).
+  Keep the current 480px bright-blue detector cap.
