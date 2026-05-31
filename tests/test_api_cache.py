@@ -346,6 +346,29 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_run_cache_key_depends_on_generation_runtime_env(self) -> None:
+        with (
+            patch.dict("os.environ", {"MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1600"}, clear=True),
+            patch("api.index.ocr_runtime_config", return_value={}),
+        ):
+            first = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+        with (
+            patch.dict("os.environ", {"MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1200"}, clear=True),
+            patch("api.index.ocr_runtime_config", return_value={}),
+        ):
+            second = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+
+        self.assertNotEqual(first, second)
+
+    def test_generation_runtime_env_config_defaults_and_overrides(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            defaults = api_index.generation_runtime_env_config()
+        with patch.dict("os.environ", {"MAP_BOUNDARY_GEOCODE_WORKERS": "1"}, clear=True):
+            changed = api_index.generation_runtime_env_config()
+
+        self.assertEqual(defaults["MAP_BOUNDARY_GEOCODE_WORKERS"], "6")
+        self.assertEqual(changed["MAP_BOUNDARY_GEOCODE_WORKERS"], "1")
+
     def test_run_cache_key_uses_decoded_pixels(self) -> None:
         first = BytesIO()
         second = BytesIO()
@@ -791,7 +814,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["events"], events)
 
     def test_health_payload_can_prewarm_generation_runtime(self) -> None:
-        with patch("api.index.prewarm_generation_runtime", return_value={"status": "ok", "total_s": 0.1}) as prewarm:
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("api.index.prewarm_generation_runtime", return_value={"status": "ok", "total_s": 0.1}) as prewarm,
+        ):
             cold = health_payload()
             warm = health_payload(warm="ocr")
 
@@ -811,6 +837,8 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_area"], 900.0)
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_aspect"], 2.8)
         self.assertEqual(cold["ocr"]["fast_text_ocr_fallback_confidence"], 0.70)
+        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION"], "1600")
+        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_GEOCODE_WORKERS"], "6")
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
         self.assertIn("cv2", cold["runtime_dependencies"])
         self.assertIn("rapidocr-onnxruntime", cold["runtime_dependencies"])

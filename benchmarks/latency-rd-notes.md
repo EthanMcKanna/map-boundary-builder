@@ -8808,3 +8808,20 @@ with zero failures in 0.531s.
   and profile pipeline version at `total_before_send_s=0.004531`
   (`out/prod-smoke-ocr-runtime-cache-key-20260531/nashville-response.json` and
   `out/prod-smoke-ocr-runtime-cache-key-20260531/nashville-repeat-response.json`).
+- Accepted broader API run-result cache hardening for non-OCR generation
+  runtime knobs. After adding OCR runtime config to the top-level result key, a
+  remaining stale-cache hole was still present for behavior-changing
+  `MAP_BOUNDARY_*` overrides outside `runtime_config.py`, including extraction
+  dimensions, geocoder worker/timeout settings, network-block policy,
+  provider-UI crop toggles, and road-refine settings. The API run-result key
+  now includes a normalized generation-env fingerprint for those knobs, and
+  `/api/health` exposes the same `generation_env` map for production proof.
+  Focused API/pipeline tests passed 61/61, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 366 tests plus 12 subtests, and
+  `compileall` passed. The local hash is `pipeline-3b9f16d71189e097`. Strict
+  no-catalog drift gate
+  `out/generation-env-cache-key-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/ocr-runtime-cache-key-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `3.077617s`/`5.111148s`.

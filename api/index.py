@@ -47,6 +47,34 @@ RUN_RESULT_CACHE_VERSION = "run-result-v7"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
+RUN_RESULT_RUNTIME_ENV_DEFAULTS = {
+    "MAP_BOUNDARY_BLOCK_NETWORK": "",
+    "MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION": "240",
+    "MAP_BOUNDARY_CATALOG_MISS_REFINE_MAX_DIMENSION": "",
+    "MAP_BOUNDARY_CATALOG_RETRY_EXTRACT_MAX_DIMENSION": "400",
+    "MAP_BOUNDARY_EARLY_OCR_STYLE_MAX_DIMENSION": "800",
+    "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK": "",
+    "MAP_BOUNDARY_EXTRACT_MAX_DIMENSION": "0",
+    "MAP_BOUNDARY_EXTRACTION_DISK_CACHE": "",
+    "MAP_BOUNDARY_EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS": "1000000",
+    "MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1600",
+    "MAP_BOUNDARY_GEOCODE_BATCH_SIZE": "12",
+    "MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD": "3",
+    "MAP_BOUNDARY_GEOCODE_WORKERS": "6",
+    "MAP_BOUNDARY_NOMINATIM_TIMEOUT_SECONDS": "4.0",
+    "MAP_BOUNDARY_OCR_DISK_CACHE": "",
+    "MAP_BOUNDARY_PLACE_BEFORE_LIVE_TIMEOUT_SECONDS": "1.0",
+    "MAP_BOUNDARY_PLACE_FAST_PATH_TIMEOUT_SECONDS": "0.08",
+    "MAP_BOUNDARY_PROVIDER_UI_CROP_OCR_MAX_DIMENSION": "750",
+    "MAP_BOUNDARY_PROVIDER_UI_FOCUS_CROP": "1",
+    "MAP_BOUNDARY_PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION": "450",
+    "MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS": "4000",
+    "MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS": "1000000",
+    "MAP_BOUNDARY_ROAD_REFINE_COARSE_FEATURE_SCALE": "4",
+    "MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE": "2",
+    "MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE": "0.60",
+    "MAP_BOUNDARY_RUNNER_OCR_CACHE": "",
+}
 _RUN_RESULT_MEMORY_CACHE: OrderedDict[str, str] = OrderedDict()
 _RUN_RESULT_MEMORY_CACHE_LOCK = threading.RLock()
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -713,6 +741,7 @@ def health_payload(*, warm: str | None = None) -> dict[str, Any]:
         "pipeline_version": get_pipeline_version(),
         "runtime_dependencies": runtime_dependencies,
         "ocr": ocr_runtime_config(),
+        "generation_env": generation_runtime_env_config(),
     }
     if should_prewarm_generation_runtime(warm):
         warm_payload = prewarm_generation_runtime()
@@ -845,7 +874,7 @@ def run_result_cache_key_for_hash(
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
         "pipeline_version": get_pipeline_version(),
-        "ocr_runtime_config": ocr_runtime_config(),
+        "runtime_config": run_result_runtime_config(),
         image_hash_name: image_hash,
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),
@@ -863,6 +892,20 @@ def run_result_cache_key_for_hash(
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def run_result_runtime_config() -> dict[str, Any]:
+    return {
+        "ocr": ocr_runtime_config(),
+        "generation_env": generation_runtime_env_config(),
+    }
+
+
+def generation_runtime_env_config() -> dict[str, str]:
+    return {
+        name: os.environ.get(name, default)
+        for name, default in sorted(RUN_RESULT_RUNTIME_ENV_DEFAULTS.items())
+    }
 
 
 def filename_hint_cache_value(filename_hint: object) -> str:
