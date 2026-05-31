@@ -9090,3 +9090,20 @@ with zero failures in 0.531s.
   `out/cached-failed-event-details-strict-20260531/full-report.json`, passed
   8/8 active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.908416s`/`4.976961s`.
+- Production proof for fresh terminal failure events: deployed
+  `pipeline-64ad23bb71268a34` as Vercel deployment
+  `dpl_2sx93e4jT7fCJHYQKDa1qFoLQ7jY`, aliased to `mapboundary.app`. Health and
+  OCR warm checks under `out/prod-smoke-fresh-terminal-events-20260531/`
+  reported the new hash; warmup loaded 19 catalog entries, seed resources,
+  bright-blue extraction, and `rapidocr_inference_warmed: true`. A visually
+  unique all-white PNG with one off-white pixel was posted with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0`; the first production
+  response returned HTTP 422, `cache_hit: miss`, `status: failed`, top-level
+  error `No service-area polygon could be extracted from the image.`, and
+  `total_before_send_s: 0.133152`. Its event stream now ended with
+  `stage: failed`, `message: Generation failed`, `status: failed`,
+  `percent: 100`, and `details.error` preserving the same message; profile
+  `build_stage_elapsed_s` also captured the final extract-stage time. Reposting
+  the exact same bytes returned HTTP 422 with `cached: true`, `cache_hit: raw`,
+  `total_before_send_s: 0.000360`, and the existing cached terminal event
+  `Generation failure ready from cache` with the same `details.error`.
