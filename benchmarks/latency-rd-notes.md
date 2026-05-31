@@ -9176,3 +9176,16 @@ with zero failures in 0.531s.
   included the detailed error, terminal `Generation failed` event, and final
   profile; screenshot saved to
   `out/local-web-failed-events-browser-20260531/report-proof-profile.png`.
+- Production proof for the local-web failure-event parity asset: deployed the
+  web/SSE parity update as Vercel deployment
+  `dpl_BLWpJD9vnVjJzJ8PoxEnZvG1Tyvs`, aliased to `mapboundary.app`. Hosted
+  `/api/health` stayed healthy on backend `pipeline-64ad23bb71268a34`, and the
+  HTML referenced `/static/app.js?v=asset-25def13ee0ceb93e`. The fetched
+  production `app.js` contained the `event.status === "failed"` SSE branch,
+  `loadFailureSnapshot(runId)`, `isFailureEvent()`, and `details.error` display
+  logic. A production-page Playwright proof with intercepted `/api/runs` HTTP
+  422 verified the direct failed-payload path still displayed the detailed
+  error and submitted a report body containing `prod-sse-asset-failed-run`, the
+  terminal `Generation failed` event, and `pipeline-prod-sse-asset-proof`
+  profile; screenshot saved to
+  `out/prod-smoke-local-web-failed-events-20260531/direct-failed-payload-proof.png`.
