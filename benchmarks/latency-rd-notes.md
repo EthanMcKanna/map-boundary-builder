@@ -9539,3 +9539,26 @@ with zero failures in 0.531s.
   exact avg/min IoU `0.968082`/`0.942536`, passed 8/8 active fixtures plus
   seven drift smokes, and stayed inside budgets with active/evaluated totals
   `3.036814s`/`5.065892s`.
+- Production deploy of the asset-readiness health flag (`2d595d8`) exposed an
+  important production/local mismatch rather than hiding it. Vercel deployment
+  `dpl_35vdDJENqJ1vYfwTuFY8QvMAQ1vR` went READY at
+  `map-boundary-builder-jic6qu8vi-ethanmckannas-projects.vercel.app` and was
+  aliased to `mapboundary.app`. Live `https://mapboundary.app/api/health`
+  returned pipeline `pipeline-14b97da9acca9948`, configured bright-blue
+  recognition profile `en-ppocrv5`, but
+  `rapidocr_bright_blue_recognition_assets_available: false`; the warmed health
+  call returned the same asset state with warm status `ok`,
+  `rapidocr_inference_warmed: true`, and `rapidocr_s: 5.105174`. This proves
+  the production runtime is currently falling back to the default recognizer
+  even though the profile config names PP-OCRv5, which makes the PP-OCRv5-backed
+  RapidOCR 3.8 speed prototype non-shippable until the asset source is solved.
+  Follow-up health output now also reports
+  `rapidocr_bright_blue_effective_recognition_profile` so this mismatch is
+  explicit instead of inferred from the configured profile plus asset flag.
+  Local `/api/health` construction after that follow-up returned
+  `pipeline-7bebf7cf663de672`, assets available `true`, and effective profile
+  `en-ppocrv5`. Focused OCR/API tests passed together (`173 passed`), full
+  pytest passed `384` tests plus 12 subtests, and strict no-catalog gate
+  `out/effective-recognition-profile-strict-20260531/full-report.json`
+  preserved exact avg/min IoU `0.968082`/`0.942536` with no regression issues
+  and active/evaluated totals `3.321033s`/`5.798774s`.

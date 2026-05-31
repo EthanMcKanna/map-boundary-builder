@@ -852,6 +852,7 @@ class OcrGroupingTests(unittest.TestCase):
                 config = runtime_config_module.ocr_runtime_config()
 
         self.assertTrue(config["rapidocr_bright_blue_recognition_assets_available"])
+        self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "en-ppocrv5")
 
     def test_runtime_config_reports_missing_v5_recognition_assets(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -867,6 +868,7 @@ class OcrGroupingTests(unittest.TestCase):
                 config = runtime_config_module.ocr_runtime_config()
 
         self.assertFalse(config["rapidocr_bright_blue_recognition_assets_available"])
+        self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "default")
 
     def test_runtime_config_can_use_explicit_v5_recognition_asset_paths(self) -> None:
         with TemporaryDirectory() as workdir:

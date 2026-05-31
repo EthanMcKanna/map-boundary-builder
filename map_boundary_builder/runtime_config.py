@@ -158,6 +158,13 @@ def rapidocr_bright_blue_recognition_assets_available() -> bool:
     return False
 
 
+def rapidocr_bright_blue_effective_recognition_profile() -> str:
+    profile = RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE.strip().lower()
+    if profile in {"en-ppocrv5", "ppocrv5-en", "v5-en"} and rapidocr_english_ppocrv5_assets_available():
+        return "en-ppocrv5"
+    return "default"
+
+
 def ocr_runtime_config() -> dict[str, Any]:
     return {
         "rapidocr_max_dimension": RAPIDOCR_MAX_DIMENSION,
@@ -171,6 +178,9 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_bright_blue_recognition_profile": RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
         "rapidocr_bright_blue_recognition_assets_available": (
             rapidocr_bright_blue_recognition_assets_available()
+        ),
+        "rapidocr_bright_blue_effective_recognition_profile": (
+            rapidocr_bright_blue_effective_recognition_profile()
         ),
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
