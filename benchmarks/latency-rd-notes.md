@@ -7794,3 +7794,11 @@ with zero failures in 0.531s.
   active plus drift-smoke gate passed with no regression issues
   (`out/sparseguard-strict-nocatalog-20260531/full-report.json`, 8/8 scored,
   avg/min IoU 0.967842/0.942536, seven drift smokes with zero failures).
+- Production deployment proof for sparse-georeference fail-closed guard:
+  runtime commit `d13265d` deployed as `dpl_6MHeXjQxYNtfAzJqWmkR8TabVbpi`,
+  aliased to `https://mapboundary.app`, with health reporting
+  `pipeline-722716309ef85796`. Live cache-miss no-catalog probes on the two
+  low-resolution stress cases returned the new sparse-label failure instead of
+  GeoJSON: half-scale Bay Area Tesla failed closed in `build_boundary_s`
+  0.286312s / `total_before_send_s` 0.287727s, and half-scale Las Vegas Zoox
+  failed closed in 1.432559s / 1.433788s.
