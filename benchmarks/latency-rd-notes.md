@@ -8433,3 +8433,11 @@ with zero failures in 0.531s.
   scored fixtures, avg/min IoU 0.996223/0.943345, no regression issues,
   active/evaluated totals 0.797751s/0.797751s, and latency budgets
   `max_total_duration_s=4` plus `max_evaluated_duration_s=6`.
+- Deployed the TIFF benchmark/report consistency fix to Vercel production as
+  `dpl_Dwt6papjcR1pAEWz3FF3rBNfy34k`, aliased to `https://mapboundary.app`.
+  The live health endpoint stayed healthy on `pipeline-ddaffd945efaecf4`, and
+  the served frontend asset still contains the TIFF JSON upload/retry path.
+  The production-facing effect is that future TIFF issue reports will preserve
+  `.tif/.tiff` attachment names once they reach the GitHub reporting helper,
+  while benchmark runs now discover TIFF screenshots instead of silently
+  omitting them.
