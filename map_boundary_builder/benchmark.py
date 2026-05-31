@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-smoked-catalog-miss",
         action="store_true",
         help=(
-            "With --smoke-skipped, fail smoke-checked fixtures that return a catalog_slug. "
+            "Implies --smoke-skipped and fails smoke-checked fixtures that return a catalog_slug. "
             "Use with targeted --only filters when those drifted screenshots must stay on OCR/georeference."
         ),
     )
@@ -477,6 +477,8 @@ def run_benchmark(
     ious = [score.iou for score in scored if score.iou is not None]
     durations = [score.duration_s for score in scored if score.duration_s is not None]
     smoke_durations = [score.duration_s for score in smoke_validated if score.duration_s is not None]
+    active_total_duration = sum(durations)
+    smoke_total_duration = sum(smoke_durations)
     average_iou = float(mean(ious)) if ious else 0.0
     min_seen_iou = float(min(ious)) if ious else 0.0
     passed_count = sum(score.passed for score in scored)
@@ -513,12 +515,14 @@ def run_benchmark(
             "skipped_by_status": summarize_statuses(skipped),
             "smoked_skipped_fixtures": len(smoke_validated),
             "failed_smoked_skipped_fixtures": smoke_failed_count,
-            "smoked_skipped_duration_s": round(sum(smoke_durations), 3),
+            "smoked_skipped_duration_s": round(smoke_total_duration, 6),
             "passed_fixtures": passed_count,
             "failed_fixtures": failed_count,
             "average_iou": round(average_iou, 6),
             "min_iou": round(min_seen_iou, 6),
-            "total_duration_s": round(sum(durations), 6),
+            "total_duration_s": round(active_total_duration, 6),
+            "active_total_duration_s": round(active_total_duration, 6),
+            "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
             "average_duration_s": round(float(mean(durations)), 6) if durations else None,
             "max_duration_s": round(max(durations), 6) if durations else None,
         },
@@ -1264,6 +1268,11 @@ def check_report_latency_budgets(
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
+    active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
+    smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
+    evaluated_duration = parse_report_duration(report.get("summary", {}).get("evaluated_duration_s"))
+    if evaluated_duration is None and (active_total_duration is not None or smoke_total_duration is not None):
+        evaluated_duration = (active_total_duration or 0.0) + (smoke_total_duration or 0.0)
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
         for row in report.get("scores", []):
@@ -1282,20 +1291,22 @@ def check_report_latency_budgets(
                     }
                 )
     if total_budget is not None:
-        total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
-        if total_duration is not None and total_duration > total_budget:
+        if active_total_duration is not None and active_total_duration > total_budget:
             issues.append(
                 {
                     "kind": "total_duration_budget_exceeded",
-                    "total_duration_s": round(total_duration, 6),
+                    "total_duration_s": round(active_total_duration, 6),
                     "max_total_duration_s": total_budget,
-                    "excess_s": round(total_duration - total_budget, 6),
+                    "excess_s": round(active_total_duration - total_budget, 6),
                 }
             )
     return {
         "passed": not issues,
         "max_duration_s": duration_budget,
         "max_total_duration_s": total_budget,
+        "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
+        "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
+        "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
         "issues": issues,
     }
 
@@ -1342,12 +1353,17 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
             f"{summary.get('failed_smoked_skipped_fixtures', 0)} smoke failed, "
             f"smoke total {format_duration(summary.get('smoked_skipped_duration_s'))}"
         )
+    duration_text = f"active total {format_duration(summary.get('total_duration_s'))}"
+    if summary.get("smoked_skipped_fixtures"):
+        duration_text = (
+            f"{duration_text}, evaluated total {format_duration(summary.get('evaluated_duration_s'))}"
+        )
     print(
         f"{status} {report['mode']} benchmark: "
         f"{summary['passed_fixtures']}/{summary['scored_fixtures']} scored fixtures, "
         f"{skipped_text}, "
         f"avg IoU {summary['average_iou']:.3f}, min IoU {summary['min_iou']:.3f}, "
-        f"total {format_duration(summary.get('total_duration_s'))}"
+        f"{duration_text}"
     )
     print(f"report: {report_path}")
     print("")

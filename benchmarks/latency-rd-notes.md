@@ -8024,3 +8024,16 @@ with zero failures in 0.531s.
   inside the latency budgets with active total 2.592025s, max fixture
   0.476246s, and smoke total 1.857s. Targeted benchmark tests passed 25/25;
   full `pytest` passed 318/318.
+- Accepted clearer duration accounting for drift-smoke benchmark reports. The
+  summary now keeps `total_duration_s` as the active scored-fixture duration for
+  compatibility, also exposes `active_total_duration_s`, preserves the
+  smoke-only duration at six-decimal precision, and adds
+  `evaluated_duration_s` for active plus smoke time. The latency-budget check
+  reports the same three duration fields so the active-fixture budget cannot be
+  confused with the full validation wall-clock work. The real strict
+  drift-smoke gate
+  `out/smoke-duration-accounting-20260531/full-report.json` passed with 8/8
+  active fixtures, seven smoke-checked `reference_mismatch` fixtures, zero
+  catalog-hit failures, active total 2.726766s, smoke total 1.985669s, and
+  evaluated total 4.712435s. Targeted benchmark tests passed 25/25; full
+  `pytest` passed 318/318.

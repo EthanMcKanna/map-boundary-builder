@@ -335,6 +335,9 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     assert report["summary"]["skipped_fixtures"] == 1
     assert report["summary"]["smoked_skipped_fixtures"] == 1
     assert report["summary"]["failed_smoked_skipped_fixtures"] == 0
+    assert report["summary"]["active_total_duration_s"] == 0
+    assert report["summary"]["smoked_skipped_duration_s"] == 0.12
+    assert report["summary"]["evaluated_duration_s"] == 0.12
     assert report["scores"][0]["status"] == "reference_mismatch"
     assert report["scores"][0]["iou"] is None
     assert report["scores"][0]["georeference_source"] == "ocr-georeference:nominatim-label-fit"
@@ -626,6 +629,9 @@ def test_smoke_skipped_catalog_miss_requirement_fails_catalog_hits(
     assert report["summary"]["passed"] is False
     assert report["summary"]["smoked_skipped_fixtures"] == 1
     assert report["summary"]["failed_smoked_skipped_fixtures"] == 1
+    assert report["summary"]["active_total_duration_s"] == 0
+    assert report["summary"]["smoked_skipped_duration_s"] == 0.12
+    assert report["summary"]["evaluated_duration_s"] == 0.12
     assert report["scores"][0]["catalog_slug"] == "miami-waymo"
     assert "expected OCR/georeference catalog miss" in report["scores"][0]["error"]
 
@@ -700,6 +706,9 @@ def test_catalog_miss_requirement_implies_smoke_skipped_fixtures(
     assert report["thresholds"]["require_smoked_catalog_miss"] is True
     assert report["summary"]["smoked_skipped_fixtures"] == 1
     assert report["summary"]["failed_smoked_skipped_fixtures"] == 0
+    assert report["summary"]["active_total_duration_s"] == 0
+    assert report["summary"]["smoked_skipped_duration_s"] == 0.12
+    assert report["summary"]["evaluated_duration_s"] == 0.12
     assert report["summary"]["passed"] is True
 
 
@@ -946,13 +955,20 @@ def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
 
 def test_report_latency_budget_check_passes_when_within_budget() -> None:
     report = {
-        "summary": {"total_duration_s": 2.9},
+        "summary": {
+            "total_duration_s": 2.9,
+            "smoked_skipped_duration_s": 0.4,
+            "evaluated_duration_s": 3.3,
+        },
         "scores": [{"slug": "dallas-tesla", "status": "active", "duration_s": 0.19}],
     }
 
     check = check_report_latency_budgets(report, max_duration_s=1.0, max_total_duration_s=3.0)
 
     assert check["passed"] is True
+    assert check["active_total_duration_s"] == 2.9
+    assert check["smoked_skipped_duration_s"] == 0.4
+    assert check["evaluated_duration_s"] == 3.3
     assert check["issues"] == []
 
 
