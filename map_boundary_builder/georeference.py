@@ -3215,6 +3215,74 @@ def _robust_similarity_fit_cached(
         if best_score is None or score > best_score:
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
+    if best is None:
+        return None
+    return prune_single_noisy_similarity_control(best, pixel, merc, total_spread)
+
+
+def prune_single_noisy_similarity_control(
+    fit: tuple[float, float, float, float, list[int], list[float]],
+    pixel: np.ndarray,
+    merc: np.ndarray,
+    total_spread: float,
+) -> tuple[float, float, float, float, list[int], list[float]]:
+    scale, rotation, tx, ty, inliers, residuals = fit
+    if len(inliers) < 6:
+        return fit
+
+    base_median, base_p90 = residual_median_p90([residuals[idx] for idx in inliers])
+    base_score = fit_candidate_score(
+        len(inliers),
+        len(pixel),
+        control_spread(pixel[inliers]),
+        total_spread,
+        base_median,
+        base_p90,
+        rotation,
+    )
+    best = fit
+    best_improvement = 0.0
+    for drop_index in inliers:
+        candidate_inliers = [idx for idx in inliers if idx != drop_index]
+        if len(candidate_inliers) < 5:
+            continue
+        refined = fit_similarity(pixel[candidate_inliers], merc[candidate_inliers])
+        if refined is None:
+            continue
+        r_scale, r_rotation, r_tx, r_ty = refined
+        if abs(r_rotation) > 0.35:
+            continue
+        r_residuals = np.linalg.norm(
+            apply_similarity(pixel, r_scale, r_rotation, r_tx, r_ty) - merc,
+            axis=1,
+        ).tolist()
+        median, p90 = residual_median_p90([r_residuals[idx] for idx in candidate_inliers])
+        if median > 2500.0 or p90 > 6500.0:
+            continue
+        spread = control_spread(pixel[candidate_inliers])
+        if spread < total_spread * 0.55:
+            continue
+        median_improvement = base_median - median
+        p90_improvement = base_p90 - p90
+        if median_improvement < max(150.0, base_median * 0.25):
+            continue
+        if p90_improvement < max(250.0, base_p90 * 0.30):
+            continue
+        score = fit_candidate_score(
+            len(candidate_inliers),
+            len(pixel),
+            spread,
+            total_spread,
+            median,
+            p90,
+            r_rotation,
+        )
+        if score < base_score - 0.08:
+            continue
+        improvement = median_improvement + p90_improvement
+        if improvement > best_improvement:
+            best_improvement = improvement
+            best = (r_scale, r_rotation, r_tx, r_ty, candidate_inliers, r_residuals)
     return best
 
 

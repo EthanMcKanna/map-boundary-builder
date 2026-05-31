@@ -7515,3 +7515,36 @@ with zero failures in 0.531s.
   budget issues under the relaxed predeploy budget. A fresh production deploy
   of the current validated runtime is a reliability/speed-warmup fix even
   though it does not change arbitrary OCR accuracy.
+- PP-OCRv5 recognition follow-up, accepted only as a style-scoped bright-blue
+  path. Direct ONNX model-mix microbenching showed the v5 assets bundled with
+  `rapidocr_onnxruntime` are not a safe global swap: several first-use/model
+  mixes spiked to multi-second OCR, `v5det_v4rec` failed Phoenix and Orlando,
+  and `v4det_env5rec` / `v5det_env5rec` both failed Orlando plus the Las Vegas
+  drift smoke when applied globally. The useful piece was the English
+  PP-OCRv5 recognizer on the existing v4 detector for Waymo-style
+  `bright-blue` screenshots. An extra plausible Orlando control point exposed
+  a georeference robustness bug; a narrow one-control prune now accepts a
+  refit only when residuals improve sharply while spatial spread is preserved.
+  With the recognizer scoped to `bright-blue` only, the actual code path passed
+  the strict no-catalog gate
+  `out/code-brightblue-v5rec-cli-nocatalog-smoke-20260531/full-report.json`:
+  8/8 scored fixtures, seven `reference_mismatch` smokes, avg IoU 0.968082,
+  min IoU 0.942536, active total 4.503659s, max active fixture 0.914532s, and
+  zero latency-budget issues. The warmed code-path run
+  `out/code-brightblue-v5rec-warm-nocatalog-smoke-20260531/full-report.json`
+  was also clean at avg IoU 0.968082, min IoU 0.942536, active total
+  4.243862s, and max 0.930978s. For comparison, the same-session warmed
+  default-recognizer control
+  `out/default-warm-nocatalog-smoke-20260531/full-report.json` was 8/8 with
+  avg IoU 0.964230, min IoU 0.931476, active total 4.898692s, and max
+  1.001137s. The changed-market current-catalog audit
+  `out/code-brightblue-v5rec-current-catalog-20260531/full-report.json` passed
+  6/6 Houston/Miami/Bay Area fixtures against current catalog geometry, avg IoU
+  1.0, min IoU 0.999999, total 0.684709s. Focused OCR, runner, API/cache, benchmark/catalog,
+  pipeline-version, warmup, `git diff --check`, and `node --check` validations
+  passed before staging. After adding direct unit coverage, full pytest passed
+  306/306 and the final strict gate
+  `out/final-brightblue-v5rec-nocatalog-smoke-20260531/full-report.json`
+  passed 8/8 scored fixtures with seven drift smokes, avg IoU 0.968082, min
+  IoU 0.942536, active total 4.126270s, max active fixture 0.843302s, and zero
+  latency-budget issues.

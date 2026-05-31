@@ -508,6 +508,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
         {
             "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
             "cache": False,
         }
     ]
@@ -579,6 +580,7 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
             "rapidocr_max_dimension": runner.CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
             "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
             "cache": False,
         }
     ]
@@ -2144,6 +2146,7 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
         {
             "rapidocr_min_text_area": 1300.0,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
             "cache": False,
         }
     ]

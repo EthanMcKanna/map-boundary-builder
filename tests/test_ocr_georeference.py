@@ -14,9 +14,11 @@ from map_boundary_builder.georeference import (
     ControlPoint,
     GeoreferenceResult,
     LabelGeocodeCandidate,
+    apply_similarity,
     build_osm_place_control_points,
     build_control_points,
     candidate_place_labels,
+    control_spread,
     direct_city_contexts_from_labels,
     detect_label_marker_dots,
     filename_city_contexts,
@@ -32,6 +34,7 @@ from map_boundary_builder.georeference import (
     is_reliable_single_token_context,
     place_query_text,
     place_tokens,
+    prune_single_noisy_similarity_control,
     residual_median_p90,
     should_try_road_refinement,
     single_tokens_supported_by_fuller_labels,
@@ -476,6 +479,7 @@ class OcrGroupingTests(unittest.TestCase):
                 prepared_bgr=None,
                 composited_alpha=False,
                 rapidocr_detector_limit_side_len=None,
+                rapidocr_recognition_profile=None,
             ):
                 calls.append(Path(image_path).name)
                 return [OcrLabel("Dallas", x=10, y=8, width=6, height=5, confidence=99)]
@@ -698,6 +702,45 @@ class OcrGroupingTests(unittest.TestCase):
             )
 
         self.assertNotEqual(key_default, key_filtered)
+
+    def test_ocr_cache_key_depends_on_rapidocr_recognition_profile(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(image_path, use_tesseract=False)
+            key_v5 = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_recognition_profile="en-ppocrv5",
+            )
+
+        self.assertNotEqual(key_default, key_v5)
+
+    def test_rapidocr_recognition_profile_kwargs_selects_v5_english_assets(self) -> None:
+        with TemporaryDirectory() as workdir:
+            models_dir = Path(workdir) / "models"
+            models_dir.mkdir()
+            rec_model = models_dir / "en_PP-OCRv5_rec_mobile.onnx"
+            rec_keys = models_dir / "ppocrv5_en_dict.txt"
+            rec_model.write_bytes(b"model")
+            rec_keys.write_text("a\nb\n", encoding="utf-8")
+
+            with patch.object(
+                ocr_module.importlib_resources,
+                "files",
+                return_value=Path(workdir),
+            ):
+                ocr_module.rapidocr_recognition_profile_kwargs.cache_clear()
+                try:
+                    kwargs = ocr_module.rapidocr_recognition_profile_kwargs("en-ppocrv5")
+                finally:
+                    ocr_module.rapidocr_recognition_profile_kwargs.cache_clear()
+
+        self.assertEqual(kwargs["rec_model_path"], str(rec_model))
+        self.assertEqual(kwargs["rec_keys_path"], str(rec_keys))
+        self.assertEqual(kwargs["rec_img_shape"], [3, 48, 320])
+        self.assertEqual(ocr_module.rapidocr_recognition_profile_kwargs("unknown"), {})
 
     def test_ocr_cache_key_depends_on_fast_text_rescue_filter(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -927,7 +970,7 @@ class OcrGroupingTests(unittest.TestCase):
         ):
             labels = ocr_module.run_rapidocr_words("unused.png")
 
-        rapidocr.assert_called_once_with(640)
+        rapidocr.assert_called_once_with(640, ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT)
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_detector_limit_override_wins_for_large_arrays(self) -> None:
@@ -951,7 +994,7 @@ class OcrGroupingTests(unittest.TestCase):
                 rapidocr_detector_limit_side_len=512,
             )
 
-        rapidocr.assert_called_once_with(512)
+        rapidocr.assert_called_once_with(512, ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT)
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
     def test_rapidocr_keeps_base_detector_limit_for_small_inputs(self) -> None:
@@ -1028,6 +1071,7 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "rapidocr_engine", return_value=FakeWarmEngine()),
                 patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1600),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
             ):
                 self.assertTrue(warm_rapidocr_runtime())
         finally:
@@ -1061,14 +1105,61 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertTrue(warm_rapidocr_runtime())
                 self.assertTrue(warm_rapidocr_runtime())
 
-            expected_limits = ocr_module.rapidocr_warm_detector_limits()
+            expected_keys = ocr_module.rapidocr_warm_engine_keys()
             self.assertEqual(
-                [call.args[0] for call in rapidocr.call_args_list],
-                expected_limits,
+                [call.args for call in rapidocr.call_args_list],
+                expected_keys,
             )
-            self.assertEqual(engine.use_cls_calls, [False] * len(expected_limits))
+            self.assertEqual(engine.use_cls_calls, [False] * len(expected_keys))
         finally:
             warm_rapidocr_runtime.cache_clear()
+
+    def test_single_noisy_similarity_control_can_be_pruned(self) -> None:
+        pixel = np.array(
+            [
+                [0.0, 0.0],
+                [120.0, 0.0],
+                [0.0, 120.0],
+                [120.0, 120.0],
+                [60.0, 60.0],
+                [220.0, 220.0],
+            ],
+            dtype=float,
+        )
+        merc = pixel * 12.0 + np.array([1000.0, -500.0])
+        merc[4] += np.array([3200.0, -2400.0])
+        scale, rotation, tx, ty = fit_similarity(pixel, merc)
+        residuals = np.linalg.norm(apply_similarity(pixel, scale, rotation, tx, ty) - merc, axis=1).tolist()
+        fit = (scale, rotation, tx, ty, list(range(len(pixel))), residuals)
+
+        pruned = prune_single_noisy_similarity_control(fit, pixel, merc, control_spread(pixel))
+
+        self.assertEqual(pruned[4], [0, 1, 2, 3, 5])
+        base_median, base_p90 = residual_median_p90(residuals)
+        pruned_median, pruned_p90 = residual_median_p90([pruned[5][idx] for idx in pruned[4]])
+        self.assertLess(pruned_median, base_median)
+        self.assertLess(pruned_p90, base_p90)
+
+    def test_single_noisy_similarity_control_keeps_stable_fit(self) -> None:
+        pixel = np.array(
+            [
+                [0.0, 0.0],
+                [120.0, 0.0],
+                [0.0, 120.0],
+                [120.0, 120.0],
+                [220.0, 50.0],
+                [50.0, 220.0],
+            ],
+            dtype=float,
+        )
+        merc = pixel * 12.0 + np.array([1000.0, -500.0])
+        scale, rotation, tx, ty = fit_similarity(pixel, merc)
+        residuals = np.linalg.norm(apply_similarity(pixel, scale, rotation, tx, ty) - merc, axis=1).tolist()
+        fit = (scale, rotation, tx, ty, list(range(len(pixel))), residuals)
+
+        pruned = prune_single_noisy_similarity_control(fit, pixel, merc, control_spread(pixel))
+
+        self.assertEqual(pruned[4], list(range(len(pixel))))
 
     def test_extract_ocr_labels_does_not_rerun_rapidocr_without_tesseract(self) -> None:
         rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
