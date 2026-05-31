@@ -8441,3 +8441,83 @@ with zero failures in 0.531s.
   `.tif/.tiff` attachment names once they reach the GitHub reporting helper,
   while benchmark runs now discover TIFF screenshots instead of silently
   omitting them.
+- Re-baselined the current arbitrary no-catalog path after the TIFF work. The
+  local in-process production-shaped gate
+  `out/nocatalog-current-20260531-rerun/full-report.json` passed 8/8 active
+  fixtures with seven drift smokes, avg/min IoU `0.967842/0.942536`, active
+  total `2.981862s`, evaluated total `5.102903s`, and every active fixture
+  under one second. Dallas Waymo remained the local tail at `0.626623s`, with
+  stage timings inspect `0.000192s`, extract `0.158525s`, OCR wait `0.463023s`,
+  georeference `0.003289s`, and export `0.000843s`.
+- A live production no-catalog cache-miss probe of the same full 2400px
+  `Waymo Dallas.png` image exposed the current hosted arbitrary-path gap:
+  HTTP 201, city Dallas, style bright-blue, `catalog_slug=null`,
+  `georeference_source=ocr-georeference:nominatim-label-fit`, confidence
+  `0.946`, six control points, and correct bbox
+  `[-96.8748943, 32.7334002, -96.729715, 32.86549]`, but
+  `total_before_send_s=1.847765`. The profile spent `1.779114s` in
+  `build_boundary`, with stage timings inspect `0.029538s`, extract
+  `0.428524s`, OCR wait `1.301539s`, georeference `0.016482s`, and export
+  `0.000947s`. Evidence is saved under
+  `out/prod-nocatalog-20260531/dallas-waymo-nocatalog-response.txt`.
+- Production-shaped client-size probes show why full-upload downscaling remains
+  an interesting but not-yet-shippable lever. Concurrent 1600px and 1300px
+  production uploads were noisy and slower under server contention
+  (`1.994776s` and `1.642289s` total-before-send), so they should not be used
+  as acceptance evidence. A sequential fresh 1200px PNG upload was the useful
+  signal: HTTP 201, city Dallas, `catalog_slug=null`,
+  `ocr-georeference:nominatim-label-fit`, confidence `0.965`, six control
+  points, bbox `[-96.8760738, 32.7327843, -96.7296406, 32.8659702]`, and
+  `total_before_send_s=0.736628` with extract `0.111834s` and OCR wait
+  `0.605154s`. Local reference validation of the same 1200px image passed
+  Dallas Waymo at IoU `0.956951`, area ratio `0.982020`, and `0.318408s` in
+  `out/downscale-fixtures-20260531/local-1200/full-report.json`.
+- Do not ship a generic client/server downscale from that Dallas-only success
+  without a broader validator. Existing evidence already rejected global
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION` caps, a lower general extraction cap,
+  and client-side 1600px full-upload downscales because they changed active
+  fixture geometry or failed strict current-reference gates on markets such as
+  Phoenix, Nashville, Los Angeles, Bay Area, or San Antonio. The new 1200px
+  result is valuable as a targeted production bottleneck probe, but it needs a
+  safe market/style gate or fallback proof before becoming default behavior.
+- Rejected generic 1200px source-image downscaling after broad validation. A
+  1200px mirror of all 15 service-area fixture screenshots was benchmarked in
+  `out/downscale1200-active-smoke-20260531/full-report.json` against the
+  current no-catalog baseline with zero allowed IoU or mean-IoU drop. The
+  candidate stayed within latency budgets (`3.804626s` active,
+  `6.314348s` evaluated, max active `0.961281s`) and all seven drift smokes
+  completed without catalog fallbacks, but the regression check failed: active
+  avg/min IoU fell from `0.967842/0.942536` to `0.924587/0.829204`. The largest
+  drops were Phoenix Waymo `0.983820 -> 0.846588`, Los Angeles Waymo
+  `0.942536 -> 0.829204`, San Antonio Waymo `0.960578 -> 0.920044`, Nashville
+  Waymo `0.986282 -> 0.956419`, and Orlando Waymo `0.960371 -> 0.948383`; both
+  Tesla active fixtures also dropped slightly. This confirms the 1200px Dallas
+  production win is not a safe default and should only be revisited behind a
+  strong accept/fallback validator.
+- Rejected an opaque-PNG OpenCV decode shortcut as a first-run extraction win.
+  OpenCV produced identical RGB pixels for opaque PNG screenshots, but local
+  reads were neutral to slower on the large Waymo inputs: for example
+  `Waymo Dallas.png` was `0.0536s` through the existing PIL path versus
+  `0.0551s` for `cv2.imread`, and `Waymo Houston.png` was `0.0469s` versus
+  `0.0573s`. Keep the current decode path; the useful extraction overhead is
+  not PNG decoding itself.
+- Accepted a narrower extraction-cache miss optimization for large untrimmed
+  screenshots. The canonical extraction cache remains active for trimmed
+  uniform-border/padding variants and for small untrimmed images, and disk
+  extraction caching still opts into full keying. Large ordinary screenshots
+  now skip the expensive full-RGB visual cache hash unless the cheap edge probe
+  actually found a trimmed canonical image. A direct active-fixture extraction
+  microbench showed exact same geometries while reducing cache-miss extraction
+  work from `0.300893s` to `0.225039s` across the eight active fixtures. The
+  production-shaped arbitrary gate
+  `out/trimmed-cache-gate-nocatalog-20260531/full-report.json` passed 8/8
+  active plus seven drift smokes with zero IoU/mean-IoU regression against
+  `out/nocatalog-current-20260531-rerun/full-report.json`; active total
+  improved from `2.981862s` to `2.833237s`, evaluated total from `5.102903s` to
+  `4.907557s`, and max active duration from `0.626623s` to `0.521833s`. The
+  current-reference catalog gate
+  `out/trimmed-cache-default-currentref-20260531/full-report.json` passed
+  15/15 with avg/min IoU unchanged at `0.996223/0.943345`, no regression
+  issues, and latency budgets clean. Focused extraction tests, runner/API tests,
+  full `pytest` 354/354, compileall, `node --check`, and `git diff --check`
+  passed.

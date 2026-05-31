@@ -26,6 +26,10 @@ EXTRACTION_CACHE_VERSION = "extraction-v1"
 EXTRACTION_BORDER_COLOR_TOLERANCE = 6
 EXTRACTION_BORDER_ROW_MATCH_RATIO = 0.995
 EXTRACTION_MEMORY_CACHE_MAX = 24
+EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS", "1000000")),
+)
 EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CACHE", "").lower() in {
     "1",
     "true",
@@ -134,15 +138,20 @@ def extract_service_area(
     canonical_origin = (0.0, 0.0)
     if cache:
         canonical_rgb, canonical_origin = canonical_extract_rgb(rgb)
-        canonical_key = extraction_visual_cache_key(
-            canonical_rgb,
-            simplify_px=simplify_px,
-            max_dimension=max_dimension,
-        )
-        if canonical_key is not None:
-            cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
-            if cached is not None:
-                return cached
+        if should_use_extraction_cache_key(
+            rgb,
+            canonical_rgb=canonical_rgb,
+            canonical_origin=canonical_origin,
+        ):
+            canonical_key = extraction_visual_cache_key(
+                canonical_rgb,
+                simplify_px=simplify_px,
+                max_dimension=max_dimension,
+            )
+            if canonical_key is not None:
+                cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
+                if cached is not None:
+                    return cached
     scale = extraction_scale_factor(rgb, max_dimension)
     if scale < 1.0:
         height, width = rgb.shape[:2]
@@ -381,6 +390,24 @@ def canonical_extract_rgb(rgb: np.ndarray | None) -> tuple[np.ndarray | None, tu
     if top == 0 and left == 0 and bottom == height and right == width:
         return contiguous, (0.0, 0.0)
     return np.ascontiguousarray(contiguous[top:bottom, left:right]), (float(left), float(top))
+
+
+def should_use_extraction_cache_key(
+    rgb: np.ndarray | None,
+    *,
+    canonical_rgb: np.ndarray | None,
+    canonical_origin: tuple[float, float],
+) -> bool:
+    if rgb is None or canonical_rgb is None:
+        return False
+    if EXTRACTION_DISK_CACHE_ENABLED:
+        return True
+    if canonical_origin != (0.0, 0.0) or rgb.shape[:2] != canonical_rgb.shape[:2]:
+        return True
+    if EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS <= 0:
+        return False
+    height, width = rgb.shape[:2]
+    return height * width <= EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS
 
 
 def canonical_extract_border_color(rgb: np.ndarray) -> np.ndarray:
