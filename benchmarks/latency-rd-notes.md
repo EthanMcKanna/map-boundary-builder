@@ -9250,3 +9250,15 @@ with zero failures in 0.531s.
   `out/browser-cache-race-strict-20260531/full-report.json`, passed 8/8 active
   fixtures plus seven drift smokes, and stayed within latency budgets with
   active/evaluated totals `3.203291s`/`5.532988s`.
+- Production proof for SVGZ frontend pass-through: deployed the asset update as
+  Vercel deployment `dpl_E31CJ7VUuzWWikHbaE7voazX2t91`, aliased to
+  `mapboundary.app`. Hosted `/api/health` stayed healthy on backend
+  `pipeline-64ad23bb71268a34`; the hosted HTML referenced
+  `/static/app.js?v=asset-c3b60484c4e35a37`, and the fetched production
+  `app.js` contained `isCompressedSvgFile`, `Uploading SVGZ map`,
+  `image/svg+xml-compressed`, and `.svgz` detection. A production-page
+  Playwright proof uploaded the synthetic `map.svgz`, intercepted `/api/runs`,
+  verified the multipart request preserved `filename="map.svgz"` and did not
+  include `filename="map.png"`, then displayed the synthetic failed payload;
+  screenshot saved to
+  `out/prod-svgz-pass-through-20260531/svgz-upload-pass-through.png`.
