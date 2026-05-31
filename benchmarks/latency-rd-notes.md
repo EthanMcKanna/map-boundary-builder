@@ -8877,3 +8877,31 @@ with zero failures in 0.531s.
   (`out/prod-smoke-catalog-miss-details-cache-20260531/generic-probe-response.json`
   and
   `out/prod-smoke-catalog-miss-details-cache-20260531/generic-probe-repeat-response.json`).
+- Current production resampling on the same deployed pipeline confirms the
+  arbitrary no-catalog tail is still OCR-bound after runtime warmup. A warmed
+  `/api/health?warm=ocr` call on `pipeline-72f6cc115e8b400b` returned from an
+  already-warm instance in `0.003621s`, but a one-pixel cache-busted Dallas
+  Waymo no-catalog upload with neutral filename `upload.png` still took
+  `1.771639s` total-before-send. The output stayed correct
+  (`ocr-georeference:nominatim-label-fit`, confidence `0.946`, bbox
+  `[-96.8748943, 32.7334002, -96.729715, 32.86549]`, `catalog_slug: null`),
+  while the profile spent `1.254809s` in OCR versus `0.393642s` extraction and
+  `0.017478s` georeference
+  (`out/prod-current-dallas-warm-bust-20260531/dallas-waymo-response.json`).
+  This keeps OCR/ONNX work as the next broad first-run speed target; the
+  earlier 1200px downscale result remains a useful Dallas probe but not a safe
+  default because broad validation already failed Phoenix and Los Angeles.
+- Accepted cached catalog-miss event detail preservation. The previous cache
+  detail fix preserved `catalog_probe_miss` at the response top level, but the
+  synthetic cached event still carried `details: {}`, leaving diagnostics and
+  future report payloads less informative on repeat probe misses. Cached
+  `catalog_miss` events now use the same structured miss details, while cached
+  successful runs keep summary details. Focused API cache tests passed 54/54,
+  `compileall` passed, full `PYTHONPATH=. .venv/bin/pytest -q` passed 366 tests
+  plus 12 subtests, and the local hash is `pipeline-e108f15e143e4b7a`. Strict
+  no-catalog drift gate
+  `out/catalog-miss-event-details-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/catalog-miss-details-cache-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.945897s`/`4.933226s`.

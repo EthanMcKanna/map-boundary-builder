@@ -1215,6 +1215,7 @@ def cached_run_payload(
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     raw_status = payload.get("status")
     status = raw_status if raw_status in {"catalog_miss", "failed"} else "complete"
+    event_details = cached_run_event_details(status, payload=payload, summary=summary)
     event_message = {
         "catalog_miss": "Catalog miss ready from cache",
         "failed": "Generation failure ready from cache",
@@ -1235,7 +1236,7 @@ def cached_run_payload(
                     "message": event_message,
                     "percent": 100,
                     "status": status,
-                    "details": summary,
+                    "details": event_details,
                 },
             ],
         }
@@ -1243,6 +1244,17 @@ def cached_run_payload(
     if profile is not None:
         payload["profile"] = profile
     return payload
+
+
+def cached_run_event_details(
+    status: str,
+    *,
+    payload: dict[str, Any],
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    if status == "catalog_miss" and isinstance(payload.get("catalog_probe_miss"), dict):
+        return payload["catalog_probe_miss"]
+    return summary
 
 
 def cached_run_response_status(payload: dict[str, Any]) -> HTTPStatus:

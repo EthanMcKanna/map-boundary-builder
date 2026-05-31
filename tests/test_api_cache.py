@@ -649,6 +649,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["filename"], "Bay Area probe.jpg")
         self.assertIn("No known service-area shape", payload["error"])
         self.assertEqual(payload["events"][-1]["message"], "Catalog miss ready from cache")
+        self.assertEqual(payload["events"][-1]["details"]["best_active_catalog_slug"], "bay-area-waymo")
         self.assertEqual(cached_run_response_status(payload), HTTPStatus.OK)
 
     def test_run_cache_uses_memory_cache_before_disk(self) -> None:
