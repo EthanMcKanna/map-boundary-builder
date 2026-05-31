@@ -8980,3 +8980,21 @@ with zero failures in 0.531s.
   budgets with active/evaluated totals `3.070515s`/`5.121981s`. The aggregate
   gate was noisy rather than faster, so the accepted evidence is the removed
   deterministic availability lookup with unchanged broad behavior.
+- Production proof for the lazy Tesseract availability probe: deployed
+  `pipeline-31d7280d7a17cc57` as Vercel deployment
+  `dpl_DAfs89A6UYgqqNzasMDnATdH1oL9`, aliased to `mapboundary.app`. Health and
+  OCR warm checks under `out/prod-smoke-lazy-tesseract-probe-20260531/`
+  reported the new hash; warmup loaded 19 catalog entries, seed resources,
+  bright-blue extraction, and `rapidocr_inference_warmed: true`. A two-pixel
+  cache-busted copy of `Waymo Dallas.png` was posted with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0`; production returned
+  `cache_hit: miss`, `id: 1780243491-2b4c742d`, `status: complete`, city
+  `Dallas`, style `bright-blue`, bbox
+  `[-96.8748943, 32.7334002, -96.729715, 32.86549]`,
+  `georeference_source: ocr-georeference:nominatim-label-fit`, combined
+  confidence `0.946`, no catalog slug, stage times `extract: 0.444999s`,
+  `ocr: 1.277919s`, `georeference: 0.017037s`, and
+  `total_before_send_s: 1.850286`. This verifies the deployed no-catalog path
+  preserves the expected OCR georeference behavior on the current production
+  runtime; the claimed speed gain remains the tiny removed availability lookup,
+  not a broad end-to-end latency step-change.
