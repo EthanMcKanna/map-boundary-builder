@@ -53,7 +53,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v5"
+OCR_CACHE_VERSION = "ocr-labels-v6"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK = 0xF8
 OCR_BORDER_COLOR_TOLERANCE = 6
@@ -91,6 +91,10 @@ def extract_ocr_labels(
     cache: bool = True,
 ) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
+    label_shape = ocr_label_target_shape(image_path, prepared_bgr)
+    prepared_bgr_has_distinct_shape = (
+        prepared_bgr is not None and prepared_bgr.shape[:2] != source_image_shape(Path(image_path))
+    )
     cache_key = (
         ocr_cache_key(
             image_path,
@@ -238,10 +242,18 @@ def extract_ocr_labels(
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
     if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and use_tesseract:
-        words = run_tesseract_words(image_path)
+        if prepared_bgr_has_distinct_shape:
+            words = run_tesseract_array(prepared_bgr)
+        else:
+            words = run_tesseract_words(image_path)
         words = [word for word in words if is_useful_text(word.text)]
         if len(words) < 80:
-            words.extend(word for word in run_preprocessed_tesseract_words(image_path) if is_useful_text(word.text))
+            preprocessed_words = (
+                run_preprocessed_tesseract_bgr(prepared_bgr)
+                if prepared_bgr_has_distinct_shape
+                else run_preprocessed_tesseract_words(image_path)
+            )
+            words.extend(word for word in preprocessed_words if is_useful_text(word.text))
         used_tesseract_fallback = True
     if used_tesseract_fallback and count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS:
         words.extend(rapid_words)
@@ -254,6 +266,7 @@ def extract_ocr_labels(
     labels.extend(group_line_labels(words))
     labels.extend(group_stacked_labels(words))
     labels = dedupe_labels(labels)
+    labels = filter_ocr_labels_to_image_bounds(labels, label_shape)
     if cache_key is not None:
         write_ocr_cache(cache_key, labels)
     if visual_cache_key is not None and visual_cache_key != cache_key:
@@ -306,6 +319,20 @@ def rgb_to_bgr(rgb: np.ndarray) -> np.ndarray | None:
     if rgb.ndim != 3 or rgb.shape[2] != 3:
         return None
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+
+def ocr_label_target_shape(
+    image_path: str | Path,
+    prepared_bgr: np.ndarray | None,
+) -> tuple[float, float] | None:
+    if prepared_bgr is not None:
+        height, width = prepared_bgr.shape[:2]
+        return float(height), float(width)
+    shape = source_image_shape(Path(image_path))
+    if shape is None:
+        return None
+    height, width = shape
+    return float(height), float(width)
 
 
 def ocr_cache_key(
@@ -697,6 +724,10 @@ def run_preprocessed_tesseract_words(image_path: str | Path) -> list[OcrLabel]:
     bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
     if bgr is None:
         return []
+    return run_preprocessed_tesseract_bgr(bgr)
+
+
+def run_preprocessed_tesseract_bgr(bgr: np.ndarray) -> list[OcrLabel]:
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
@@ -754,6 +785,7 @@ def run_rapidocr_words(
         composited_alpha=composited_alpha,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
+    label_shape = rapidocr_label_target_shape(ocr_input, scale_x=scale_x, scale_y=scale_y)
     detector_limit = rapidocr_detector_limit_for_input(
         ocr_input,
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
@@ -767,7 +799,10 @@ def run_rapidocr_words(
             result = run_rapidocr_filtered_items(engine, ocr_input, min_text_area=min_text_area)
         else:
             result, _elapsed = engine(ocr_input, use_cls=False)
-        labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
+        labels = filter_ocr_labels_to_image_bounds(
+            scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y),
+            label_shape,
+        )
         if not should_retry_rapidocr_with_classifier(labels):
             return labels
         result, _elapsed = rapidocr_classifier_engine(
@@ -777,8 +812,46 @@ def run_rapidocr_words(
         )(ocr_input, use_cls=True)
     except Exception:
         return []
-    labels = rapidocr_items_to_labels(result)
-    return scale_rapidocr_labels(labels, scale_x, scale_y)
+    labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
+    return filter_ocr_labels_to_image_bounds(labels, label_shape)
+
+
+def rapidocr_label_target_shape(
+    ocr_input: Path | np.ndarray,
+    *,
+    scale_x: float,
+    scale_y: float,
+) -> tuple[float, float] | None:
+    if isinstance(ocr_input, np.ndarray):
+        height, width = ocr_input.shape[:2]
+        return height / max(scale_y, 1e-9), width / max(scale_x, 1e-9)
+    shape = source_image_shape(Path(ocr_input))
+    if shape is None:
+        return None
+    height, width = shape
+    return float(height), float(width)
+
+
+def filter_ocr_labels_to_image_bounds(
+    labels: list[OcrLabel],
+    image_shape: tuple[float, float] | None,
+) -> list[OcrLabel]:
+    if image_shape is None:
+        return labels
+    height, width = image_shape
+    if height <= 0 or width <= 0:
+        return labels
+    margin = max(2.0, min(width, height) * 0.025)
+    max_label_width = width + 2.0 * margin
+    max_label_height = height + 2.0 * margin
+    return [
+        label
+        for label in labels
+        if -margin <= label.x <= width + margin
+        and -margin <= label.y <= height + margin
+        and 0.0 < label.width <= max_label_width
+        and 0.0 < label.height <= max_label_height
+    ]
 
 
 def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_text_area: float):

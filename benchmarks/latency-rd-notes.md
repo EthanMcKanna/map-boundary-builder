@@ -7822,3 +7822,24 @@ with zero failures in 0.531s.
   (`out/probe-detmax256-after-sparseguard-nocatalog-20260531/full-report.json`,
   baseline `out/sparseguard-strict-nocatalog-20260531/full-report.json`).
   Keep the current 480px bright-blue detector cap.
+- Accepted an OCR coordinate-space hardening for prepared/resized image inputs.
+  A low-level half-scale Houston Tesla repro showed that lowering the
+  fast-text filter enough to expose more small text could let local Tesseract
+  fallback labels from the original source image mix with RapidOCR labels from
+  the prepared 281x279 image; those impossible out-of-bounds labels were enough
+  to form a bogus three-control Houston-area georeference. RapidOCR labels are
+  now filtered to the target input bounds, local Tesseract fallback runs on the
+  prepared BGR image when that is the active coordinate space, final OCR labels
+  are bounds-filtered before caching, and the OCR cache version is bumped so
+  stale impossible labels are not reused. The fixed repro stays in prepared
+  coordinates and fails closed instead of fitting the bogus out-of-bounds
+  controls. Validation preserved geometry and latency budgets: strict
+  no-catalog active plus drift smoke passed 8/8 scored with avg/min IoU
+  0.967842/0.942536, total 2.611622s, max 0.486389s, and `--max-duration-s 1`
+  / `--max-total-duration-s 4` passed
+  (`out/ocr-bounds-filter-strict-seq-nocatalog-20260531/full-report.json`).
+  The current-reference no-catalog gate passed 15/15 with avg/min IoU
+  0.950465/0.794177, total 4.436132s, max 0.485939s, and `--max-duration-s 1`
+  / `--max-total-duration-s 5` passed
+  (`out/ocr-bounds-filter-currentref-seq-nocatalog-20260531/full-report.json`).
+  Focused OCR/runner tests passed 160/160 and full `pytest` passed 316/316.

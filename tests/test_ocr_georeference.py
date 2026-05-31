@@ -854,6 +854,43 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertTrue(np.array_equal(engine.selected_boxes[1], large_box))
         self.assertEqual([label.text for label in labels], ["Austin", "Austin"])
 
+    def test_rapidocr_words_drop_impossible_prepared_image_labels(self) -> None:
+        inside_box = np.array(
+            [[10.0, 10.0], [70.0, 10.0], [70.0, 30.0], [10.0, 30.0]],
+            dtype=np.float32,
+        )
+        outside_box = np.array(
+            [[130.0, 10.0], [190.0, 10.0], [190.0, 30.0], [130.0, 30.0]],
+            dtype=np.float32,
+        )
+        engine = FakeFilteredRapidOcrEngine([inside_box, outside_box])
+
+        with (
+            patch.object(
+                ocr_module,
+                "rapidocr_input_array",
+                return_value=(np.zeros((100, 100, 3), dtype=np.uint8), 1.0, 1.0),
+            ),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_min_text_area=200)
+
+        self.assertEqual(len(engine.selected_boxes), 2)
+        self.assertEqual([label.text for label in labels], ["Austin"])
+        self.assertEqual(labels[0].x, 40.0)
+
+    def test_ocr_label_bounds_allow_slight_edge_overlap(self) -> None:
+        labels = [
+            OcrLabel("Inside", x=50, y=50, width=80, height=20, confidence=95),
+            OcrLabel("Edge", x=-1, y=50, width=20, height=10, confidence=95),
+            OcrLabel("Outside", x=140, y=50, width=20, height=10, confidence=95),
+        ]
+
+        filtered = ocr_module.filter_ocr_labels_to_image_bounds(labels, (100.0, 100.0))
+
+        self.assertEqual([label.text for label in filtered], ["Inside", "Edge"])
+
     def test_ocr_cache_key_depends_on_large_rapidocr_detector_limit(self) -> None:
         with TemporaryDirectory() as workdir:
             image_path = Path(workdir) / "input.png"
@@ -1246,6 +1283,31 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertEqual(rapidocr.call_count, 1)
         self.assertIn("Nashville", {label.text for label in labels})
+
+    def test_extract_ocr_labels_runs_tesseract_on_prepared_image_coordinates(self) -> None:
+        rapid_label = OcrLabel("Houston TX", x=54, y=27, width=74, height=14, confidence=95)
+        source_tesseract_label = OcrLabel("Jersey Village", x=325, y=378, width=102, height=20, confidence=70)
+        prepared_tesseract_label = OcrLabel("Willowbrook", x=90, y=60, width=64, height=12, confidence=80)
+        prepared_bgr = np.zeros((100, 120, 3), dtype=np.uint8)
+
+        with (
+            patch.object(ocr_module, "ocr_cache_key", return_value=None),
+            patch.object(ocr_module, "source_image_shape", return_value=(200, 240)),
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(ocr_module, "tesseract_available", return_value=True),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]),
+            patch.object(ocr_module, "run_tesseract_words", return_value=[source_tesseract_label]) as source_tesseract,
+            patch.object(ocr_module, "run_tesseract_array", return_value=[prepared_tesseract_label]) as array_tesseract,
+            patch.object(ocr_module, "run_preprocessed_tesseract_bgr", return_value=[]),
+        ):
+            labels = extract_ocr_labels("unused.png", prepared_bgr=prepared_bgr)
+
+        source_tesseract.assert_not_called()
+        array_tesseract.assert_called_once()
+        texts = {label.text for label in labels}
+        self.assertIn("Houston TX", texts)
+        self.assertIn("Willowbrook", texts)
+        self.assertNotIn("Jersey Village", texts)
 
     def test_extract_ocr_labels_skips_tesseract_when_rapidocr_has_enough_labels(self) -> None:
         rapid_labels = [
