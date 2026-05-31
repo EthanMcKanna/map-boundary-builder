@@ -9323,3 +9323,17 @@ with zero failures in 0.531s.
   `out/deferred-pixel-cache-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven drift smokes, and stayed within latency budgets
   with active/evaluated totals `3.155113s`/`5.241223s`.
+- Production proof for eager selected-image runtime prewarm scheduling: deployed
+  committed head `443d3b9` as Vercel deployment
+  `dpl_7GTVJ8M5Z24G8482jPj384r8X1nw`, aliased to `mapboundary.app`. Hosted
+  `/api/health?warm=ocr` returned `ok: true`, warm status `ok`, and backend
+  `pipeline-64ad23bb71268a34`. Hosted HTML referenced
+  `/static/app.js?v=asset-a87028119704cbe4`, and the fetched production
+  `app.js` contained `scheduleGenerationRuntimePrewarm({ eager: true })`,
+  `generationRuntimePrewarmScheduleToken`, and `cancelIdleCallback`. A
+  production-page Playwright proof against `https://mapboundary.app` stubbed
+  `requestIdleCallback`, selected `Tesla Houston.png`, observed one
+  `/api/health?warm=ocr` before Build, confirmed one startup idle-callback
+  cancel, clicked Build, observed one prewarm abort and one mocked `/api/runs`
+  request, then displayed the synthetic failed payload; screenshot saved to
+  `out/prod-prewarm-eager-browser-20260531/prewarm-eager-proof.png`.
