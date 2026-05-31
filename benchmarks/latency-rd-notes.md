@@ -8128,3 +8128,16 @@ with zero failures in 0.531s.
   points, `build_boundary_s=3.266126`, and stage timings extract 1.219846s,
   OCR 1.582956s, georeference 0.430188s, export 0.001381s. The smoke response
   was saved at `out/prod-smoke-be76f2d/nashville-response.txt`.
+- Accepted an OCR cache safety fix for prepared RGB crops and resized arrays.
+  The old cache path could reuse the upload's raw file digest for a prepared
+  crop with a different coordinate space, so a full-image OCR result could be
+  returned for a provider UI crop or low-resolution prepared input when runner
+  OCR caching was enabled. Raw digest cache reads/backfills now apply only to
+  file-decoded OCR; prepared arrays still use the existing visual-array cache
+  keys. A new regression test first reproduced the bug, then passed after the patch, and
+  `tests/test_ocr_georeference.py` passed 101/101. The strict drift-smoke
+  benchmark `out/prepared-array-cache-safety-20260531/full-report.json` passed
+  against `out/rapidocr-rec-batch24-default-20260531/full-report.json` with 8/8
+  active fixtures, zero smoke failures, avg/min IoU 0.967842/0.942536, no
+  regression issues, active/evaluated totals 2.870871s/5.086630s, and evaluated
+  OCR 3.567740s under the active 4s and evaluated 6s budgets.

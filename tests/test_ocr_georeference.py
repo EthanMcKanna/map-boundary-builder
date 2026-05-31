@@ -363,6 +363,37 @@ class OcrGroupingTests(unittest.TestCase):
 
             self.assertEqual(labels, [label])
 
+    def test_prepared_crop_ocr_does_not_reuse_full_image_raw_cache_key(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "image.png"
+            Image.new("RGB", (20, 10), (12, 34, 56)).save(image_path)
+            full_bgr = np.zeros((10, 20, 3), dtype=np.uint8)
+            crop_bgr = np.zeros((5, 10, 3), dtype=np.uint8)
+            calls: list[tuple[int, int]] = []
+
+            def fake_rapidocr(_image_path, *, prepared_bgr=None, **_kwargs):
+                assert prepared_bgr is not None
+                height, width = prepared_bgr.shape[:2]
+                calls.append((height, width))
+                if (height, width) == (10, 20):
+                    return [OcrLabel("Dallas", x=8, y=4, width=4, height=2, confidence=99)]
+                return [OcrLabel("Dallas", x=2, y=1, width=4, height=2, confidence=99)]
+
+            with (
+                patch.object(ocr_module, "tesseract_available", return_value=False),
+                patch.object(ocr_module, "run_rapidocr_words", side_effect=fake_rapidocr),
+            ):
+                _OCR_MEMORY_CACHE.clear()
+                try:
+                    full_labels = extract_ocr_labels(image_path, prepared_bgr=full_bgr)
+                    crop_labels = extract_ocr_labels(image_path, prepared_bgr=crop_bgr)
+                finally:
+                    _OCR_MEMORY_CACHE.clear()
+
+            self.assertEqual(calls, [(10, 20), (5, 10)])
+            self.assertEqual(full_labels[0].x, 8)
+            self.assertEqual(crop_labels[0].x, 2)
+
     def test_ocr_visual_cache_hit_backfills_raw_key(self) -> None:
         with TemporaryDirectory() as workdir:
             first = Path(workdir) / "first.png"

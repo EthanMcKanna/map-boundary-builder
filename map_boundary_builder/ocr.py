@@ -95,6 +95,7 @@ def extract_ocr_labels(
     prepared_bgr_has_distinct_shape = (
         prepared_bgr is not None and prepared_bgr.shape[:2] != source_image_shape(Path(image_path))
     )
+    use_raw_cache_key = cache and prepared_bgr is None
     cache_key = (
         ocr_cache_key(
             image_path,
@@ -105,7 +106,7 @@ def extract_ocr_labels(
             rapidocr_recognition_profile=rapidocr_recognition_profile,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
-        if cache
+        if use_raw_cache_key
         else None
     )
     if cache_key is not None:
@@ -120,7 +121,7 @@ def extract_ocr_labels(
     canonical_visual_cache_key: str | None = None
     canonical_origin = (0.0, 0.0)
     canonical_cache_checked = False
-    if cache_key is not None:
+    if cache:
         if prepared_bgr is not None:
             prepared_bgr = np.ascontiguousarray(prepared_bgr)
         else:
@@ -137,7 +138,8 @@ def extract_ocr_labels(
         if visual_cache_key is not None and visual_cache_key != cache_key:
             cached = read_ocr_cache(visual_cache_key)
             if cached is not None:
-                write_ocr_cache(cache_key, list(cached))
+                if cache_key is not None:
+                    write_ocr_cache(cache_key, list(cached))
                 return list(cached)
         canonical_bgr, canonical_origin = canonical_ocr_bgr(prepared_bgr)
         canonical_visual_cache_key = ocr_canonical_visual_cache_key(
@@ -159,7 +161,8 @@ def extract_ocr_labels(
             cached = read_ocr_cache(canonical_visual_cache_key)
             if cached is not None:
                 labels = shift_ocr_labels(cached, canonical_origin[0], canonical_origin[1])
-                write_ocr_cache(cache_key, labels)
+                if cache_key is not None:
+                    write_ocr_cache(cache_key, labels)
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 return labels
@@ -176,7 +179,8 @@ def extract_ocr_labels(
             cached = read_ocr_cache(near_visual_cache_key)
             if cached is not None:
                 labels = list(cached)
-                write_ocr_cache(cache_key, labels)
+                if cache_key is not None:
+                    write_ocr_cache(cache_key, labels)
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 return labels
@@ -197,7 +201,8 @@ def extract_ocr_labels(
             cached = read_ocr_cache(coarse_visual_cache_key)
             if cached is not None:
                 labels = list(cached)
-                write_ocr_cache(cache_key, labels)
+                if cache_key is not None:
+                    write_ocr_cache(cache_key, labels)
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 if near_visual_cache_key is not None:
@@ -216,7 +221,8 @@ def extract_ocr_labels(
             cached = read_ocr_cache(canonical_visual_cache_key)
             if cached is not None:
                 labels = shift_ocr_labels(cached, canonical_origin[0], canonical_origin[1])
-                write_ocr_cache(cache_key, labels)
+                if cache_key is not None:
+                    write_ocr_cache(cache_key, labels)
                 if visual_cache_key is not None:
                     write_ocr_cache(visual_cache_key, labels)
                 if near_visual_cache_key is not None:
