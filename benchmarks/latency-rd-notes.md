@@ -8141,3 +8141,15 @@ with zero failures in 0.531s.
   active fixtures, zero smoke failures, avg/min IoU 0.967842/0.942536, no
   regression issues, active/evaluated totals 2.870871s/5.086630s, and evaluated
   OCR 3.567740s under the active 4s and evaluated 6s budgets.
+- Deployed the prepared-array OCR cache safety fix to Vercel production as
+  `dpl_6FeLP1TrkE1DPFefZUg6EWgEYuau` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production aliases
+  `https://mapboundary.app` and `https://map-boundary-builder.vercel.app` both
+  reported `pipeline-934087a7190a439f`, `rapidocr_rec_batch_num=24`, and
+  `rapidocr_cls_batch_num=24` from `/api/health`. A no-catalog Nashville smoke
+  against `https://mapboundary.app/api/runs` returned HTTP 201, status
+  `complete`, city Nashville, style bright-blue, confidence 0.82, georeference
+  source `ocr-georeference:nominatim-label-fit+osm-road-refine`, three control
+  points, `build_boundary_s=3.345460`, and stage timings extract 1.348306s,
+  OCR 1.493220s, georeference 0.467600s, export 0.001492s. The smoke response
+  was saved at `out/prod-smoke-e8c712f/nashville-response.txt`.
