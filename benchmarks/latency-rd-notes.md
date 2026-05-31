@@ -7904,3 +7904,16 @@ with zero failures in 0.531s.
   scored with seven catalog-miss smokes, avg/min IoU 0.967842/0.942536, max
   0.490299s, total 2.624160s, and no regression issues. Focused OCR/runner
   tests passed 160/160 and full `pytest` passed 316/316.
+- Production deployment proof for the Willowbrook OCR alias: runtime commit
+  `2dba108` deployed as `dpl_8wpitCGa8zt11bVhHf4t5jYxowEH`, aliased to
+  `https://mapboundary.app`, with health reporting
+  `pipeline-ca0293b831135416`. A live half-scale Houston Tesla no-catalog
+  cache-miss upload with `include_overlay=0` and normalized cache disabled read
+  top labels `Houston TX`, `Village`, and `ILLOWBNOOK`, then completed via
+  `ocr-georeference:nominatim-label-fit` with `catalog_slug: null`, confidence
+  0.825, two controls, and bbox
+  `[-95.6308588, 29.8545703, -95.5264431, 29.9718786]`. The first post-deploy
+  call paid OCR warm cost (`build_boundary_s` 1.763316s,
+  `total_before_send_s` 2.000383s); a warmed cache-miss repeat completed in
+  `build_boundary_s` 0.572210s / `total_before_send_s` 0.573960s, under the
+  sub-second target for this rescued low-resolution case.
