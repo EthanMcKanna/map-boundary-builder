@@ -8165,3 +8165,18 @@ with zero failures in 0.531s.
   0.967842/0.942536, no regression issues, active/evaluated totals
   3.067205s/5.145266s, and evaluated OCR 3.683027s under the active 4s and
   evaluated 6s budgets.
+- Deployed the concurrent cache hardening to Vercel production as
+  `dpl_6qAcgpgyp72taVB1xug8NmzVn7Rf` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production aliases
+  `https://mapboundary.app` and `https://map-boundary-builder.vercel.app` both
+  reported `pipeline-1755132256bbb6be`, `rapidocr_rec_batch_num=24`, and
+  `rapidocr_cls_batch_num=24` from `/api/health`. A no-catalog Nashville smoke
+  against `https://mapboundary.app/api/runs` returned HTTP 201, status
+  `complete`, city Nashville, style bright-blue, confidence 0.82, georeference
+  source `ocr-georeference:nominatim-label-fit+osm-road-refine`, three control
+  points, `build_boundary_s=3.407024`, and stage timings extract 1.355475s,
+  OCR 1.532325s, georeference 0.481473s, export 0.001623s. An immediate exact
+  repeat hit the raw run-result cache with `cached=true`, `cache_hit=raw`, and
+  server-side `total_before_send_s=0.004438`. The smoke responses were saved at
+  `out/prod-smoke-40e78fa/nashville-response.txt` and
+  `out/prod-smoke-40e78fa/nashville-repeat-response.txt`.
