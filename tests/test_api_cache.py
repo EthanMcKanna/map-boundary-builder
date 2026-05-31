@@ -1131,7 +1131,9 @@ class ApiRunCacheTests(unittest.TestCase):
         probe_result = app_js.index(b'const catalogProbeResult = firstFastResult?.type === "catalog-probe"')
         first_inline = app_js.index(b"applyInlineRun(catalogProbeResult.payload, {")
         cache_await = app_js.index(b"const cacheLookup = await cacheLookupPromise;")
-        cached_entry = app_js.index(b"const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);")
+        cached_entry = app_js.index(
+            b"const cachedEntry = await cachedHistoryEntryFromLookupPromise(cacheLookupPromise, {"
+        )
 
         self.assertLess(cache_start, deferred_cache)
         self.assertLess(deferred_cache, race_start)
@@ -1146,7 +1148,54 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(cache_await, cached_entry)
         self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
         self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
-        self.assertIn(b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise) {", app_js)
+        self.assertIn(
+            b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options = {}) {",
+            app_js,
+        )
+
+    def test_frontend_checks_deferred_pixel_cache_before_full_upload(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        self.assertIn(b"const RUN_CACHE_DEFERRED_HISTORY_WAIT_MS = 180;", app_js)
+
+        cache_await = app_js.index(b"const cacheLookup = await cacheLookupPromise;")
+        deferred_cached_entry = app_js.index(
+            b"const cachedEntry = await cachedHistoryEntryFromLookupPromise(cacheLookupPromise, {"
+        )
+        upload_status = app_js.index(b'markProgressStep("prepare", "running", "Uploading image.");')
+        upload_call = app_js.index(b"const { response, payload } = await postRunUpload(formData, uploadFile);")
+
+        self.assertLess(cache_await, deferred_cached_entry)
+        self.assertLess(deferred_cached_entry, upload_status)
+        self.assertLess(upload_status, upload_call)
+        self.assertIn(
+            b"includeDeferred: true,\n      deferredWaitMs: RUN_CACHE_DEFERRED_HISTORY_WAIT_MS,",
+            app_js,
+        )
+
+        helper_start = app_js.index(
+            b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options = {}) {"
+        )
+        quick_hit = app_js.index(b"const cachedEntry = findCachedHistoryEntry(lookupKeys);", helper_start)
+        fresh_guard = app_js.index(
+            b"if (cachedEntry || !options.includeDeferred || !hasCachedRunHistoryEntries())",
+            helper_start,
+        )
+        deferred_wait = app_js.index(
+            b"const deferredWaitMs = Math.max(0, Number(options.deferredWaitMs || 0));",
+            helper_start,
+        )
+        deferred_keys = app_js.index(b"cacheKeysFromPromise(lookup?.cacheKeysPromise),", helper_start)
+        combined_lookup = app_js.index(b"return findCachedHistoryEntry([\n      ...lookupKeys,", helper_start)
+
+        self.assertLess(helper_start, quick_hit)
+        self.assertLess(quick_hit, fresh_guard)
+        self.assertLess(fresh_guard, deferred_wait)
+        self.assertLess(deferred_wait, deferred_keys)
+        self.assertLess(deferred_keys, combined_lookup)
+        self.assertIn(b"function hasCachedRunHistoryEntries() {", app_js)
+        self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
 
     def test_frontend_leaves_svgz_uploads_for_backend_rasterization(self) -> None:
         app_js, mime = web_asset_response("app.js")

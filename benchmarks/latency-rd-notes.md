@@ -9262,3 +9262,26 @@ with zero failures in 0.531s.
   include `filename="map.png"`, then displayed the synthetic failed payload;
   screenshot saved to
   `out/prod-svgz-pass-through-20260531/svgz-upload-pass-through.png`.
+- Accepted a bounded deferred-pixel browser-cache lookup before full upload.
+  The browser already persisted both raw-byte and decoded-pixel cache keys, but
+  the submit path only checked quick lookup keys before falling through to a
+  full upload. If the 60ms decoded-pixel hash window missed, a visually
+  identical screenshot with different raw bytes could skip an existing local
+  history entry even though the deferred pixel key resolved moments later. The
+  submit path now performs one guarded deferred history check before
+  `postRunUpload()`, waiting at most 180ms and only when local history actually
+  contains GeoJSON-bearing cache keys. `node --check
+  map_boundary_builder/web_assets/app.js` passed, focused frontend/source tests
+  passed 60/60, `compileall` passed, and full pytest
+  (`PYTHONPATH=. .venv/bin/pytest -q`) passed 377 tests plus 12 subtests. A
+  local Playwright proof against `http://127.0.0.1:8877` seeded history with
+  only the decoded pixel key, forced the quick pixel lookup to time out, then
+  selected the same image; the page restored `Deferred Pixel Cache Proof` from
+  browser cache with zero `/api/runs` requests. Screenshot saved to
+  `out/deferred-pixel-cache-browser-20260531/deferred-pixel-cache-hit.png`.
+  Strict no-catalog drift gate
+  `out/deferred-pixel-cache-strict-20260531/full-report.json` preserved active
+  avg/min IoU `0.968082`/`0.942536` versus
+  `out/svgz-frontend-pass-through-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven drift smokes, and stayed within latency budgets
+  with active/evaluated totals `3.032665s`/`5.262939s`.

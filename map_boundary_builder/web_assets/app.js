@@ -97,6 +97,7 @@ const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
 const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v5";
 const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "min_control_points", "simplify_px"];
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
+const RUN_CACHE_DEFERRED_HISTORY_WAIT_MS = 180;
 const CATALOG_PROBE_MAX_DIMENSION = 520;
 const CATALOG_PROBE_MIN_BYTES = 180_000;
 const CATALOG_PROBE_GENERIC_MIN_BYTES = 650_000;
@@ -435,7 +436,10 @@ form.addEventListener("submit", async (event) => {
     pendingRunCacheKeys = cacheLookup.lookupKeys;
     pendingRunCacheKey = pendingRunCacheKeys[0] || null;
     pendingRunCacheKeysPromise = cacheLookup.cacheKeysPromise;
-    const cachedEntry = findCachedHistoryEntry(pendingRunCacheKeys);
+    const cachedEntry = await cachedHistoryEntryFromLookupPromise(cacheLookupPromise, {
+      includeDeferred: true,
+      deferredWaitMs: RUN_CACHE_DEFERRED_HISTORY_WAIT_MS,
+    });
     if (cachedEntry) {
       catalogProbeAbortController?.abort();
       restoreCachedHistoryEntry(cachedEntry);
@@ -2085,6 +2089,10 @@ function findCachedHistoryEntry(cacheKeys) {
   )) || null;
 }
 
+function hasCachedRunHistoryEntries() {
+  return historyEntries.some((entry) => entry?.geojson && entryCacheKeys(entry).length);
+}
+
 async function cacheKeysFromPromise(cacheKeysPromise) {
   if (!cacheKeysPromise) return [];
   try {
@@ -2107,10 +2115,23 @@ async function cacheKeysFromLookupPromise(cacheLookupPromise) {
   }
 }
 
-async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise) {
+async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options = {}) {
   try {
     const lookup = await cacheLookupPromise;
-    return findCachedHistoryEntry(lookup?.lookupKeys || []);
+    const lookupKeys = normalizedCacheKeys(lookup?.lookupKeys || []);
+    const cachedEntry = findCachedHistoryEntry(lookupKeys);
+    if (cachedEntry || !options.includeDeferred || !hasCachedRunHistoryEntries()) {
+      return cachedEntry;
+    }
+    const deferredWaitMs = Math.max(0, Number(options.deferredWaitMs || 0));
+    const deferredKeys = await promiseWithTimeout(
+      cacheKeysFromPromise(lookup?.cacheKeysPromise),
+      deferredWaitMs,
+    );
+    return findCachedHistoryEntry([
+      ...lookupKeys,
+      ...(Array.isArray(deferredKeys) ? deferredKeys : []),
+    ]);
   } catch (error) {
     return null;
   }
