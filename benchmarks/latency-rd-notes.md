@@ -7802,3 +7802,13 @@ with zero failures in 0.531s.
   GeoJSON: half-scale Bay Area Tesla failed closed in `build_boundary_s`
   0.286312s / `total_before_send_s` 0.287727s, and half-scale Las Vegas Zoox
   failed closed in 1.432559s / 1.433788s.
+- Rejected enabling the road-network-only context fallback as a rescue for the
+  low-resolution no-catalog stress failures. With
+  `MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK=1`, the focused half-scale
+  Bay Area Tesla, Houston Tesla, and Las Vegas Zoox probe still failed all
+  three cases (`out/roadfallback-half-focused-20260531/full-report.json`).
+  Bay Area and Las Vegas continued to fail closed quickly via the sparse OCR
+  guard, while Houston Tesla produced a `city-context:osm-road-search` result
+  after 81.053518s of georeferencing with IoU 0.0, area ratio 5.844536, and
+  centroid error 32.4km. Keep this fallback disabled; it is much too slow and
+  less reliable than the current fail-closed behavior.
