@@ -7851,3 +7851,17 @@ with zero failures in 0.531s.
   Dallas API smoke returned `status: complete`, source
   `ocr-georeference:nominatim-label-fit`, `catalog_slug: null`, confidence
   0.825, `build_boundary_s: 0.262996`, and `total_before_send_s: 0.265709`.
+- Rejected a post-bounds low-resolution fast-text loosening. The coordinate
+  hardening made it worth retesting whether smaller OCR boxes could safely
+  rescue half-scale arbitrary screenshots, but
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA=500` still failed the same three
+  half-scale cases (Bay Area Tesla, Houston Tesla, Las Vegas Zoox) and added a
+  new Los Angeles failure at IoU 0.771159. It also regressed Houston Waymo,
+  Miami, Orlando, and average IoU versus the sparse-guard half-scale baseline,
+  while Phoenix spent 6.277749s in georeference and Austin spent 1.308676s in
+  georeference. The report
+  `out/probe-fasttext-min500-half-after-bounds-nocatalog-20260531/full-report.json`
+  ended 11/15, avg/min IoU 0.911098/0.771159, max duration 6.600519s, and
+  failed the zero-drop regression check. Keep the 1300px fast-text filter; low
+  resolution still needs a better independent georeference signal, not more
+  tiny OCR boxes.
