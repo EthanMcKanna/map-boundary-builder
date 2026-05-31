@@ -74,6 +74,8 @@ RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH = os.environ.get(
     "MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH",
     "",
 ).strip()
+RAPIDOCR_EN_PPOCRV5_REC_MODEL_NAME = "en_PP-OCRv5_rec_mobile.onnx"
+RAPIDOCR_EN_PPOCRV5_REC_KEYS_NAME = "ppocrv5_en_dict.txt"
 RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION",
     1000,
@@ -134,14 +136,33 @@ def rapidocr_warm_detector_limits() -> list[int]:
     return limits
 
 
+def _rapidocr_english_ppocrv5_asset_paths(package: str, model_dir: str) -> tuple[Path, Path] | None:
+    try:
+        models_dir = importlib_resources.files(package).joinpath(model_dir)
+    except Exception:
+        return None
+    return models_dir / RAPIDOCR_EN_PPOCRV5_REC_MODEL_NAME, models_dir / RAPIDOCR_EN_PPOCRV5_REC_KEYS_NAME
+
+
+def _existing_rapidocr_english_ppocrv5_asset_paths(package: str, model_dir: str) -> tuple[Path, Path] | None:
+    asset_paths = _rapidocr_english_ppocrv5_asset_paths(package, model_dir)
+    if asset_paths is not None and all(path.is_file() for path in asset_paths):
+        return asset_paths
+    return None
+
+
 def rapidocr_english_ppocrv5_asset_paths() -> tuple[Path, Path] | None:
     if RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH and RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH:
         return Path(RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH), Path(RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH)
-    try:
-        models_dir = importlib_resources.files("rapidocr").joinpath("models")
-    except Exception:
+    bundled_paths = _existing_rapidocr_english_ppocrv5_asset_paths("map_boundary_builder", "ocr_models")
+    if bundled_paths is not None:
+        return bundled_paths
+    rapidocr_paths = _rapidocr_english_ppocrv5_asset_paths("rapidocr", "models")
+    if rapidocr_paths is None:
         return None
-    return models_dir / "en_PP-OCRv5_rec_mobile.onnx", models_dir / "ppocrv5_en_dict.txt"
+    if all(path.is_file() for path in rapidocr_paths):
+        return rapidocr_paths
+    return rapidocr_paths
 
 
 def rapidocr_english_ppocrv5_assets_available() -> bool:

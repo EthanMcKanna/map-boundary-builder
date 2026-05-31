@@ -9576,3 +9576,34 @@ with zero failures in 0.531s.
   recognizer it can actually run, and the next speed-improvement branch should
   target a production-safe PP-OCRv5 asset source before retesting the promising
   RapidOCR 3.8 bright-blue adapter.
+- Solved the production PP-OCRv5 asset-source gap by vendoring the official
+  English recognizer assets from RapidAI/RapidOCR ModelScope release `v3.8.0`
+  into `map_boundary_builder/ocr_models`, with provenance and SHA-256 hashes
+  recorded beside the files. The downloaded ModelScope files exactly matched
+  the local RapidOCR cache hashes:
+  `en_PP-OCRv5_rec_mobile.onnx`
+  `c3461add59bb4323ecba96a492ab75e06dda42467c9e3d0c18db5d1d21924be8` and
+  `ppocrv5_en_dict.txt`
+  `e025a66d31f327ba0c232e03f407ae8d105e1e709e7ccb3f408aa778c24e70d6`.
+  A local simulation of production missing those assets failed the strict
+  no-catalog gate
+  (`out/sim-prod-missing-v5-assets-strict-20260531/full-report.json`):
+  Orlando Waymo IoU fell to `0.931476` from `0.960371`, Phoenix exceeded the
+  active latency budget at `1.242208s`, active/evaluated totals were
+  `3.711539s`/`5.884976s`, and OCR rose to `2.644153s` active. After vendoring,
+  local `/api/health` reported `pipeline-81451a354bd6ef14`, configured
+  profile `en-ppocrv5`, assets available `true`, and effective profile
+  `en-ppocrv5`. Focused OCR/API tests passed together (`174 passed`), full
+  pytest passed `385` tests plus 12 subtests, and `py_compile` plus
+  `git diff --check` passed. The strict no-catalog gate
+  `out/vendored-ppocrv5-assets-strict-20260531/full-report.json` passed 8/8
+  active fixtures plus seven drift smokes against
+  `out/effective-recognition-profile-strict-20260531/full-report.json`,
+  preserving avg/min IoU `0.968082`/`0.942536` with no regression issues and
+  staying inside latency budgets at active/evaluated totals
+  `2.744726s`/`4.730578s`, max active fixture `0.542517s`, active OCR
+  `1.701349s`, and evaluated OCR `3.073471s`. A temporary wheel build smoke
+  could not run because the local venv lacks `setuptools`, but Vercel's
+  `excludeFiles` pattern does not exclude `ocr_models/**`, and the runtime now
+  prefers env override paths, then bundled app assets, then RapidOCR's package
+  cache.

@@ -854,6 +854,40 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertTrue(config["rapidocr_bright_blue_recognition_assets_available"])
         self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "en-ppocrv5")
 
+    def test_runtime_config_prefers_bundled_v5_recognition_assets(self) -> None:
+        with TemporaryDirectory() as workdir:
+            package_root = Path(workdir) / "package"
+            bundled_models_dir = package_root / "ocr_models"
+            bundled_models_dir.mkdir(parents=True)
+            bundled_rec_model = bundled_models_dir / "en_PP-OCRv5_rec_mobile.onnx"
+            bundled_rec_keys = bundled_models_dir / "ppocrv5_en_dict.txt"
+            bundled_rec_model.write_bytes(b"bundled-model")
+            bundled_rec_keys.write_text("a\nb\n", encoding="utf-8")
+
+            rapidocr_root = Path(workdir) / "rapidocr"
+            rapidocr_models_dir = rapidocr_root / "models"
+            rapidocr_models_dir.mkdir(parents=True)
+            (rapidocr_models_dir / "en_PP-OCRv5_rec_mobile.onnx").write_bytes(b"rapidocr-model")
+            (rapidocr_models_dir / "ppocrv5_en_dict.txt").write_text("c\nd\n", encoding="utf-8")
+
+            def fake_resource_files(package: str) -> Path:
+                if package == "map_boundary_builder":
+                    return package_root
+                if package == "rapidocr":
+                    return rapidocr_root
+                raise ModuleNotFoundError(package)
+
+            with patch.object(
+                runtime_config_module.importlib_resources,
+                "files",
+                side_effect=fake_resource_files,
+            ):
+                self.assertEqual(
+                    runtime_config_module.rapidocr_english_ppocrv5_asset_paths(),
+                    (bundled_rec_model, bundled_rec_keys),
+                )
+                self.assertTrue(runtime_config_module.rapidocr_english_ppocrv5_assets_available())
+
     def test_runtime_config_reports_missing_v5_recognition_assets(self) -> None:
         with TemporaryDirectory() as workdir:
             models_dir = Path(workdir) / "models"
