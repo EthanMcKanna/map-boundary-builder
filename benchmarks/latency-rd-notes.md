@@ -8310,3 +8310,17 @@ with zero failures in 0.531s.
   avg/min IoU 0.967842/0.942536, no regression issues, active/evaluated totals
   3.021164s/5.003363s, and evaluated OCR 3.584794s under the active 4s and
   evaluated 6s budgets.
+- Deployed GIF upload support to Vercel production as
+  `dpl_3jGQd3Mr8CMPpxdsYiumx6L31KBE` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production alias
+  `https://mapboundary.app` reported `pipeline-386224b119105ab3`, and the
+  served HTML now includes `PNG, JPG, WebP, AVIF, GIF, TIFF, SVG` in the upload
+  copy. A live GIF upload of the converted Tesla Dallas fixture returned HTTP
+  201, status `complete`, filename `Tesla Dallas.gif`, city Dallas, style
+  gray-fill, confidence 0.972523, catalog `dallas-tesla`,
+  `catalog_shape_iou=0.972523`, bbox
+  `[-96.8582001, 32.7624321, -96.7552567, 32.8723526]`,
+  `build_boundary_s=0.102735`, `total_before_send_s=0.817862`, and stage
+  timings inspect 0.039040s, extract 0.042622s, georeference 0.000005s, export
+  0.000701s. The live response was saved at
+  `out/gif-support-20260531/prod-gif-response.txt`.
