@@ -9363,3 +9363,16 @@ with zero failures in 0.531s.
   `out/prewarm-eager-strict-20260531/full-report.json`, passed 8/8 active
   fixtures plus seven drift smokes, and stayed within latency budgets with
   active/evaluated totals `2.994499s`/`5.007895s`.
+- Production proof for no-history pixel-cache work suppression: deployed
+  committed head `f691923` as Vercel deployment
+  `dpl_ur1ic57Aw8RhCkLF3jCkpBuwetAT`, aliased to `mapboundary.app`. Hosted
+  `/api/health?warm=ocr` returned `ok: true`, warm status `ok`, and backend
+  `pipeline-64ad23bb71268a34`. Hosted HTML referenced
+  `/static/app.js?v=asset-5c746c585e5323b6`, and the fetched production
+  `app.js` contained the raw-only no-history return plus the selected-image
+  warmup history guard. A production-page Playwright proof cleared
+  `mapBoundaryBuilder.history.v1`, held large decoded-pixel digests unresolved,
+  selected `Tesla Houston.png`, observed zero pixel reads and zero pixel-digest
+  calls before Build, clicked Build, and saw the mocked `/api/runs` request
+  leave in 47ms; screenshot saved to
+  `out/prod-no-history-pixel-cache-20260531/no-history-cache-proof.png`.
