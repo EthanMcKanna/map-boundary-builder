@@ -8711,3 +8711,20 @@ with zero failures in 0.531s.
   active fixtures plus seven catalog-miss smokes with exact active avg/min IoU
   `0.967842`/`0.942536`, active/evaluated totals `2.772086s`/`4.861501s`,
   no regression issues, and active/evaluated latency budgets under `4s`/`6s`.
+- Production proof for the warmup pipeline-hash hardening: after pushing
+  `b00c10a`, `https://mapboundary.app/api/health` already reported
+  `pipeline-71612730440b8d0c`, confirming the current production backend hash
+  includes `runtime_warmup.py` (`out/prod-health-before-warmup-hash-20260531.json`).
+  `/api/health?warm=ocr` stayed healthy with warm status `ok`, extractor warm
+  style `bright-blue`, warm detector limits `[608, 480]`, and
+  `rapidocr_rec_batch_num=24`
+  (`out/prod-health-warm-warmup-hash-20260531.json`). A fresh no-catalog
+  Nashville upload using neutral filename `upload.png` returned the expected
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` result with
+  confidence `0.82`, three controls, bbox
+  `[-86.8464007, 36.1088135, -86.6905828, 36.2428345]`, `catalog_slug: null`,
+  and `total_before_send_s=2.324265` with `cache_hit=miss`
+  (`out/prod-smoke-warmup-hash-20260531/nashville-response.json`). The exact
+  repeat hit the raw run-result cache with the same bbox/source/confidence at
+  `total_before_send_s=0.004533`
+  (`out/prod-smoke-warmup-hash-20260531/nashville-repeat-response.json`).
