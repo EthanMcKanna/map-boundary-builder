@@ -8728,3 +8728,19 @@ with zero failures in 0.531s.
   repeat hit the raw run-result cache with the same bbox/source/confidence at
   `total_before_send_s=0.004533`
   (`out/prod-smoke-warmup-hash-20260531/nashville-repeat-response.json`).
+- Accepted a second pipeline-hash/profile observability hardening. JSON upload
+  parsing now participates in `get_pipeline_version()`, closing a cache
+  reliability gap where future `upload_payload.py` changes could alter
+  filename/field normalization for API requests without changing the advertised
+  pipeline hash or run-result cache namespace. API and local web run profiles
+  also now include the active pipeline version, so production samples and cache
+  hits carry the code-path identity directly in the response profile rather
+  than requiring a separate health lookup. The focused hash/API/upload tests
+  passed 62/62, full `PYTHONPATH=. pytest` passed 362 tests plus 12 subtests,
+  and `compileall` passed. The new local hash is
+  `pipeline-75b9631cf0a4b002`. Strict no-catalog drift gate
+  `out/upload-payload-hash-strict-20260531/full-report.json` preserved exact
+  active avg/min IoU `0.967842`/`0.942536` versus
+  `out/pipeline-warmup-hash-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `3.047959s`/`5.128111s`.

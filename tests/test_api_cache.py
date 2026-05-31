@@ -695,6 +695,38 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertEqual(payload["profile"], profile)
 
+    def test_create_run_profile_includes_pipeline_version_on_cache_hit(self) -> None:
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {},
+            {"image": ("Phoenix.png", b"image-bytes")},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        request.send_json = send_json
+        cached = {
+            "city": "Phoenix",
+            "summary": {"city": "Phoenix"},
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+        with (
+            patch("api.index.get_pipeline_version", return_value="pipeline-profile"),
+            patch("api.index.raw_run_result_cache_key", return_value="raw-key"),
+            patch("api.index.read_run_result_cache", return_value=cached),
+        ):
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
+        self.assertEqual(payload["profile"]["cache_hit"], "raw")
+
     def test_event_stage_elapsed_seconds_sums_repeated_stages(self) -> None:
         events = [
             {"stage": "queued", "message": "Run queued"},

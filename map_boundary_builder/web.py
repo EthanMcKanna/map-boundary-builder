@@ -165,7 +165,10 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         allow_catalog = allow_catalog_for_request(fields)
         if catalog_probe_only or fast_catalog_handoff:
             events: list[dict[str, Any]] = []
-            profile: dict[str, Any] = {"upload_bytes": len(image_bytes)}
+            profile: dict[str, Any] = {
+                "pipeline_version": get_pipeline_version(),
+                "upload_bytes": len(image_bytes),
+            }
 
             def progress(event: dict[str, Any]) -> None:
                 events.append({"timestamp": time.time(), **event})
@@ -228,7 +231,10 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             image_path=image_path,
             output_path=output_path,
             debug_dir=debug_dir,
-            profile={"upload_bytes": len(image_bytes)},
+            profile={
+                "pipeline_version": get_pipeline_version(),
+                "upload_bytes": len(image_bytes),
+            },
         )
         with RUNS_LOCK:
             RUNS[run_id] = state

@@ -37,6 +37,7 @@ PIPELINE_VERSION_FILES = (
     "runner.py",
     "runtime_config.py",
     "runtime_warmup.py",
+    "upload_payload.py",
 )
 PIPELINE_VERSION_REPO_FILES = (
     "api/index.py",

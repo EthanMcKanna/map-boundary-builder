@@ -200,6 +200,7 @@ class handler(BaseHTTPRequestHandler):
         request_started = time.perf_counter()
         fields, files, upload_encoding = self.parse_upload_request()
         profile: dict[str, Any] = {
+            "pipeline_version": get_pipeline_version(),
             "parse_upload_s": elapsed_seconds(request_started),
             "upload_encoding": upload_encoding,
         }
