@@ -8233,3 +8233,29 @@ with zero failures in 0.531s.
   failures, avg/min IoU 0.967842/0.942536, no regression issues,
   active/evaluated totals 2.850909s/4.973401s, and evaluated OCR 3.523898s
   under the active 4s and evaluated 6s budgets.
+- Deployed the JPEG visual run-result cache key to Vercel production as
+  `dpl_FQCJyTVGaW3MdUsDK4xCeLudBEKM` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production aliases
+  `https://mapboundary.app` and `https://map-boundary-builder.vercel.app` both
+  reported `pipeline-a832c592db035343`, `rapidocr_rec_batch_num=24`,
+  `rapidocr_cls_batch_num=24`, `rapidocr_bright_blue_detector_limit_type=max`,
+  `rapidocr_bright_blue_detector_limit_side_len=480`,
+  `rapidocr_bright_blue_recognition_profile=en-ppocrv5`, RapidOCR 1.4.4, and
+  onnxruntime 1.26.0 from `/api/health`. A fresh live Dallas Tesla JPEG
+  metadata pair had different raw SHA-256 values
+  (`a78063c66db76d7c8c0c4ff904760c67b840459434ff69e6b8e253276a093b54` and
+  `e8809826b2884dd597d981071a3de9e4d5edb7a3917d4102c9bd5d538790d86f`) but the
+  same JPEG visual digest
+  `a87c2b5d8ab98ae455908c9ae636125f9851e4e8c7fe29337cdb1edee8d48eb1` and the
+  same upload filename hint. The first production upload returned HTTP 201,
+  status `complete`, city Dallas, style gray-fill, confidence 0.983733, catalog
+  `dallas-tesla`, `catalog_shape_iou=0.983733`, `cache_hit=miss`,
+  `build_boundary_s=0.108028`, `total_before_send_s=0.175628`, and stage
+  timings inspect 0.054795s, extract 0.052218s, georeference 0.000005s, export
+  0.000712s. The second metadata variant returned HTTP 201 with `cached=true`,
+  `cache_hit=jpeg-visual`, `raw_cache_lookup_s=0.000548`,
+  `jpeg_commentless_cache_lookup_s=0.000631`, `jpeg_visual_cache_lookup_s=0.000706`,
+  `raw_cache_write_s=0.000379`, and `total_before_send_s=0.002554`. The
+  counted smoke responses were saved at
+  `out/prod-smoke-c3573f3/jpeg-visual-first-response.txt` and
+  `out/prod-smoke-c3573f3/jpeg-visual-second-response.txt`.
