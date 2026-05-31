@@ -54,6 +54,7 @@ from api.index import (
 from map_boundary_builder.asset_response import web_asset_response, web_asset_version
 from map_boundary_builder.runner import (
     BoundaryBuildOptions,
+    CatalogProbeMiss,
     catalog_matching_enabled,
     should_overlap_ocr_with_extraction,
     should_try_pre_ocr_catalog,
@@ -812,6 +813,50 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-import-failure")
         self.assertEqual(payload["profile"]["cache_hit"], "miss")
         self.assertIn("build_boundary_s", payload["profile"])
+        self.assertEqual(payload["events"][-1]["stage"], "failed")
+        self.assertEqual(payload["events"][-1]["status"], "failed")
+        self.assertEqual(payload["events"][-1]["details"], {"error": "runner import unavailable"})
+
+    def test_create_run_catalog_miss_includes_terminal_event(self) -> None:
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {"catalog_probe_only": "1"},
+            {"image": ("Bay Area.png", b"not-an-image")},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        details = {
+            "active_shape_iou_is_low": False,
+            "best_active_catalog_slug": "bay-area-waymo",
+            "best_active_catalog_iou": 0.91,
+        }
+
+        def build_boundary_miss(*args, **kwargs):
+            raise CatalogProbeMiss("No known service-area shape matched the catalog probe.", details=details)
+
+        request.send_json = send_json
+        with (
+            patch("api.index.get_pipeline_version", return_value="pipeline-catalog-miss-terminal"),
+            patch("api.index.read_run_result_cache", return_value=None),
+            patch("api.index.write_run_result_cache"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=build_boundary_miss),
+        ):
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.OK)
+        self.assertEqual(payload["status"], "catalog_miss")
+        self.assertEqual(payload["catalog_probe_miss"], details)
+        self.assertEqual(payload["events"][-1]["stage"], "catalog_miss")
+        self.assertEqual(payload["events"][-1]["status"], "catalog_miss")
+        self.assertEqual(payload["events"][-1]["message"], "Catalog probe missed")
+        self.assertEqual(payload["events"][-1]["details"], details)
 
     def test_event_stage_elapsed_seconds_sums_repeated_stages(self) -> None:
         events = [
@@ -866,7 +911,13 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["percent"], 100)
         self.assertEqual(payload["profile"], profile)
         self.assertIn("Could not infer", payload["error"])
-        self.assertEqual(payload["events"], events)
+        self.assertEqual(payload["events"][:-1], events)
+        self.assertEqual(payload["events"][-1]["stage"], "failed")
+        self.assertEqual(payload["events"][-1]["status"], "failed")
+        self.assertEqual(
+            payload["events"][-1]["details"],
+            {"error": "Could not infer a reliable map location."},
+        )
 
     def test_health_payload_can_prewarm_generation_runtime(self) -> None:
         with (

@@ -389,6 +389,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             from map_boundary_builder.runner import CatalogProbeMiss, build_boundary
         except Exception as exc:
+            events = generation_failure_events(events, exc)
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
             profile["cache_hit"] = "miss"
@@ -412,6 +413,13 @@ class handler(BaseHTTPRequestHandler):
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
         except CatalogProbeMiss as exc:
+            events = terminal_run_events(
+                events,
+                stage="catalog_miss",
+                message="Catalog probe missed",
+                status="catalog_miss",
+                details=exc.details,
+            )
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
             profile["cache_hit"] = "miss"
@@ -440,6 +448,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_json(payload, status=HTTPStatus.OK)
             return
         except Exception as exc:
+            events = generation_failure_events(events, exc)
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
             profile["cache_hit"] = "miss"
@@ -823,6 +832,38 @@ def generation_error_status(exc: Exception) -> HTTPStatus:
     return HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+def generation_failure_events(events: list[dict[str, Any]], exc: Exception) -> list[dict[str, Any]]:
+    return terminal_run_events(
+        events,
+        stage="failed",
+        message="Generation failed",
+        status="failed",
+        details={"error": str(exc)},
+    )
+
+
+def terminal_run_events(
+    events: list[dict[str, Any]],
+    *,
+    stage: str,
+    message: str,
+    status: str,
+    details: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if events and events[-1].get("stage") == stage and events[-1].get("status") == status:
+        return events[-20:]
+    event: dict[str, Any] = {
+        "timestamp": time.time(),
+        "stage": stage,
+        "message": message,
+        "percent": 100,
+        "status": status,
+    }
+    if details:
+        event["details"] = details
+    return [*events[-19:], event]
+
+
 def generation_error_payload(
     exc: Exception,
     run_id: str,
@@ -830,6 +871,7 @@ def generation_error_payload(
     events: list[dict[str, Any]],
     profile: dict[str, Any],
 ) -> dict[str, Any]:
+    events = generation_failure_events(events, exc)
     return {
         "id": run_id,
         "filename": Path(original_filename).name or "uploaded-image",

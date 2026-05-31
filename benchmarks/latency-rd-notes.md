@@ -9073,3 +9073,20 @@ with zero failures in 0.531s.
   top-level error, `total_before_send_s: 0.000345`, and a synthetic final event
   `Generation failure ready from cache` whose `details` preserved
   `{"error": "No service-area polygon could be extracted from the image."}`.
+- Accepted fresh terminal events for API failure and catalog-miss responses.
+  Production proof for the previous cached-failure hardening exposed an
+  asymmetry: a fresh failed blank upload returned HTTP 422 with top-level
+  `status: failed` and `error`, but its final event still showed the last
+  running stage (`extract`), while the cached replay had a clean terminal
+  failure event with `details.error`. Fresh API generation failures now append
+  `stage: failed`, `status: failed`, `percent: 100`, and error details before
+  payload creation/cache writes; fresh catalog probe misses likewise append a
+  terminal `catalog_miss` event with the probe details. Focused API cache tests
+  passed 56/56, `compileall` passed, full `PYTHONPATH=. .venv/bin/pytest -q`
+  passed 370 tests plus 12 subtests, and the local hash is
+  `pipeline-64ad23bb71268a34`. Strict no-catalog drift gate
+  `out/fresh-failure-terminal-events-strict-20260531/full-report.json`
+  preserved exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/cached-failed-event-details-strict-20260531/full-report.json`, passed
+  8/8 active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.908416s`/`4.976961s`.
