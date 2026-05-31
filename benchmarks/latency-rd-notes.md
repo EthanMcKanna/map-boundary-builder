@@ -8922,3 +8922,23 @@ with zero failures in 0.531s.
   (`out/prod-smoke-catalog-miss-event-details-20260531/generic-probe-response.json`
   and
   `out/prod-smoke-catalog-miss-event-details-20260531/generic-probe-repeat-response.json`).
+- Accepted a small prepared-array OCR hot-path cleanup. `extract_ocr_labels()`
+  eagerly opened the source image to compare dimensions with `prepared_bgr`
+  even when RapidOCR already returned enough labels and Tesseract fallback would
+  never run. The source-shape read is now lazy and only happens on the prepared
+  Tesseract fallback branch; existing fallback coordinate behavior is
+  preserved. A focused regression test proves a successful prepared RapidOCR
+  pass no longer calls `source_image_shape`, and the same focused OCR file
+  passed 105/105. A microbench on `Waymo Dallas.png` with RapidOCR mocked to
+  succeed showed current prepared OCR made zero source-shape calls versus 200
+  eager source-shape reads in the simulated old path; the median isolated
+  saving was tiny (`0.0540ms` eager versus `0.0244ms` current), so this is a
+  cleanup of unnecessary hot-path I/O rather than a broad OCR speed
+  breakthrough. `compileall` passed, full `PYTHONPATH=. .venv/bin/pytest -q`
+  passed 367 tests plus 12 subtests, and the local hash is
+  `pipeline-4572aee1f1a73ad7`. Strict no-catalog drift gate
+  `out/lazy-prepared-ocr-shape-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/catalog-miss-event-details-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.900867s`/`4.968868s`.

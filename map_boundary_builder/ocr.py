@@ -94,9 +94,17 @@ def extract_ocr_labels(
 ) -> list[OcrLabel]:
     use_tesseract = tesseract_available()
     label_shape = ocr_label_target_shape(image_path, prepared_bgr)
-    prepared_bgr_has_distinct_shape = (
-        prepared_bgr is not None and prepared_bgr.shape[:2] != source_image_shape(Path(image_path))
-    )
+    prepared_bgr_has_distinct_shape: bool | None = None
+
+    def prepared_bgr_shape_differs_from_source() -> bool:
+        nonlocal prepared_bgr_has_distinct_shape
+        if prepared_bgr is None:
+            return False
+        if prepared_bgr_has_distinct_shape is None:
+            source_shape = source_image_shape(Path(image_path))
+            prepared_bgr_has_distinct_shape = source_shape is None or prepared_bgr.shape[:2] != source_shape
+        return prepared_bgr_has_distinct_shape
+
     use_raw_cache_key = cache and prepared_bgr is None
     cache_key = (
         ocr_cache_key(
@@ -250,7 +258,7 @@ def extract_ocr_labels(
     words: list[OcrLabel] = list(rapid_words)
     used_tesseract_fallback = False
     if count_useful_labels(words) < TESSERACT_FALLBACK_MIN_USEFUL_LABELS and use_tesseract:
-        if prepared_bgr_has_distinct_shape:
+        if prepared_bgr_shape_differs_from_source():
             words = run_tesseract_array(prepared_bgr)
         else:
             words = run_tesseract_words(image_path)
@@ -258,7 +266,7 @@ def extract_ocr_labels(
         if len(words) < 80:
             preprocessed_words = (
                 run_preprocessed_tesseract_bgr(prepared_bgr)
-                if prepared_bgr_has_distinct_shape
+                if prepared_bgr_shape_differs_from_source()
                 else run_preprocessed_tesseract_words(image_path)
             )
             words.extend(word for word in preprocessed_words if is_useful_text(word.text))

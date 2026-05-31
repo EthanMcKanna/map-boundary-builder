@@ -1393,6 +1393,32 @@ class OcrGroupingTests(unittest.TestCase):
         preprocessed.assert_not_called()
         self.assertIn("University Park", {label.text for label in labels})
 
+    def test_prepared_ocr_skips_source_shape_read_when_rapidocr_has_enough_labels(self) -> None:
+        prepared_bgr = np.zeros((100, 120, 3), dtype=np.uint8)
+        rapid_labels = [
+            OcrLabel("University Park", x=10, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Highland Park", x=110, y=10, width=80, height=20, confidence=96),
+            OcrLabel("Dallas", x=60, y=50, width=70, height=20, confidence=96),
+        ]
+
+        with (
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(ocr_module, "tesseract_available", return_value=True),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=rapid_labels),
+            patch.object(
+                ocr_module,
+                "source_image_shape",
+                side_effect=AssertionError("source shape is only needed for prepared-image Tesseract fallback"),
+            ),
+            patch.object(ocr_module, "run_tesseract_words") as tesseract,
+            patch.object(ocr_module, "run_preprocessed_tesseract_words") as preprocessed,
+        ):
+            labels = extract_ocr_labels("unused.png", prepared_bgr=prepared_bgr)
+
+        tesseract.assert_not_called()
+        preprocessed.assert_not_called()
+        self.assertIn("Dallas", {label.text for label in labels})
+
 
 class PlaceCandidateTests(unittest.TestCase):
     def test_geocode_many_preserves_request_order_and_dedupes(self) -> None:
