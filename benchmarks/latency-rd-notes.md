@@ -8506,10 +8506,12 @@ with zero failures in 0.531s.
   uniform-border/padding variants and for small untrimmed images, and disk
   extraction caching still opts into full keying. Large ordinary screenshots
   now skip the expensive full-RGB visual cache hash unless the cheap edge probe
-  actually found a trimmed canonical image. A direct active-fixture extraction
-  microbench showed exact same geometries while reducing cache-miss extraction
-  work from `0.300893s` to `0.225039s` across the eight active fixtures. The
-  production-shaped arbitrary gate
+  actually found a trimmed canonical image. A cache-off prototype showed the
+  lower bound by reducing active extraction work from `0.300893s` to
+  `0.225039s`, and the shipped guarded policy preserved exact geometries while
+  reducing the same direct active-fixture microbench from `0.324696s` under the
+  old always-key policy to `0.285901s` (`0.229702s` remains the cache-off lower
+  bound). The production-shaped arbitrary gate
   `out/trimmed-cache-gate-nocatalog-20260531/full-report.json` passed 8/8
   active plus seven drift smokes with zero IoU/mean-IoU regression against
   `out/nocatalog-current-20260531-rerun/full-report.json`; active total
@@ -8521,3 +8523,18 @@ with zero failures in 0.531s.
   issues, and latency budgets clean. Focused extraction tests, runner/API tests,
   full `pytest` 354/354, compileall, `node --check`, and `git diff --check`
   passed.
+- Deployed the guarded extraction-cache policy as
+  `dpl_5YYUPZenTauYJUjfC8jRE1A7YonJ`, aliased to `https://mapboundary.app`,
+  with live health on `pipeline-9090d1bfb0187752`. Production timing is still
+  noisy and should be monitored rather than over-weighted: a fresh Dallas
+  no-catalog probe preserved the expected bbox/source/confidence but was slow at
+  `2.036162s` total-before-send, while a second cache-busted Dallas request on
+  the warm instance preserved the same output at `1.373224s` with extract
+  `0.250206s`. Dallas still takes the trimmed canonical-cache branch because
+  the source has a 5px uniform border, so it is not the pure new branch. A
+  Phoenix no-catalog probe exercised the large-untrimmed branch and preserved
+  the expected `ocr-georeference:nominatim-label-fit+osm-road-refine` output,
+  but total time was `3.384463s` because OCR (`2.302167s`) and road refinement
+  (`0.448051s`) dominated. Keep the guarded policy for the local first-run
+  improvement and exact-regression gates, but continue treating production
+  arbitrary-path latency as OCR-bound and noisy.
