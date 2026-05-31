@@ -55,3 +55,9 @@ def test_pipeline_version_tracks_runtime_config() -> None:
     sources = dict(pipeline_version_sources())
 
     assert "runtime_config.py" in sources
+
+
+def test_pipeline_version_tracks_runtime_warmup() -> None:
+    sources = dict(pipeline_version_sources())
+
+    assert "runtime_warmup.py" in sources

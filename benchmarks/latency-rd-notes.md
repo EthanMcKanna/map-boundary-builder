@@ -8672,3 +8672,42 @@ with zero failures in 0.531s.
   remained OCR/extraction-heavy at `3.402697s` total-before-send, but the
   georeference stage stayed bounded at `0.093435s`, consistent with skipping
   the prior live direct-context geocoder wait.
+- Rejected delaying OCR until after extraction as a broad arbitrary-path speed
+  lever. A local API-like Bay Area neutral no-catalog profile reproduced the
+  production stage shape while showing the local warm path is already
+  subsecond after RapidOCR warmup: `out/api-like-bayarea-neutral-block-20260531/full-report.json`
+  completed the neutral Bay Area Waymo smoke in `1.491296s` with extract
+  `0.353125s`, OCR `1.080852s`, and georeference `0.052777s`; after
+  `warm_rapidocr_runtime()`, the same local image repeated at `0.446562s` and
+  the fixture copy repeated at `0.335329s`
+  (`out/profile-two-bayarea-warmed-20260531/`). A monkeypatched no-overlap
+  prototype preserved exact active IoUs but was slower than a same-session
+  current control: `out/probe-no-overlap-nocatalog-20260531/full-report.json`
+  passed 8/8 active plus seven drift smokes at `3.154509s` active and
+  `5.492873s` evaluated, while
+  `out/current-nocatalog-same-session-20260531/full-report.json` passed with
+  the same avg/min IoU (`0.967842`/`0.942536`) at `2.981549s` active and
+  `5.127219s` evaluated. Keep OCR/extraction overlap enabled; the production
+  long pole remains RapidOCR/ONNX speed and server CPU variance, not an
+  ordering bug.
+- Rejected a larger synthetic extraction warmup. The current warmup only runs a
+  tiny 256px bright-blue extraction, so I tested adding a 1600px polygon/hole
+  extraction before the same Bay Area neutral no-catalog build. The A/B in
+  `out/warm-extraction-ab-20260531/summary.json` was not durable: current
+  small warmup produced first-build totals `0.589266s`, `0.439845s`,
+  `0.455956s`, and `0.440989s`, while the larger extraction warmup produced
+  `0.524844s`, `0.463951s`, `0.456771s`, and `0.444299s`. Extraction stage
+  timings remained around `0.143s`-`0.153s` after the first pair. Do not add
+  more warmup work until it proves a clear production-visible win.
+- Accepted a pipeline-version observability hardening for warmup/runtime
+  changes. `runtime_warmup.py` now participates in `get_pipeline_version()`, so
+  future cron/API warmup behavior changes are visible in `/api/health`, asset
+  cache keys, and run-result cache keys instead of deploying under an unchanged
+  backend pipeline hash. Focused pipeline/runtime-warmup tests passed 8/8, and
+  `pipeline_version_sources()` now confirms `runtime_warmup.py` is included
+  with local hash `pipeline-71612730440b8d0c`. The strict no-catalog
+  drift-smoke gate
+  `out/pipeline-warmup-hash-strict-20260531/full-report.json` passed 8/8
+  active fixtures plus seven catalog-miss smokes with exact active avg/min IoU
+  `0.967842`/`0.942536`, active/evaluated totals `2.772086s`/`4.861501s`,
+  no regression issues, and active/evaluated latency budgets under `4s`/`6s`.
