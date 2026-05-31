@@ -124,6 +124,7 @@ LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
 LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO = 0.92
 LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
 LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE = 0.98
+FAST_TEXT_OCR_LOW_RES_RETRY_MAX_MIN_DIMENSION = 320
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_IOU = 0.92
 FILENAME_HINTED_AVRIDE_LIGHT_FILL_MIN_MARGIN = 0.16
 FILENAME_HINTED_AVRIDE_PROVIDER_ONLY_MIN_IOU = 0.90
@@ -1123,7 +1124,13 @@ def build_boundary(
         style=extraction.style,
         progress=progress,
     )
-    if should_fallback_fast_text_ocr(labels_future_filtered, georef, style=extraction.style):
+    if should_fallback_fast_text_ocr(
+        labels_future_filtered,
+        georef,
+        style=extraction.style,
+        width=width,
+        height=height,
+    ):
         emit_progress(
             progress,
             stage="ocr",
@@ -1468,12 +1475,30 @@ def fast_text_ocr_min_area_for_style(style: str | None) -> float | None:
     return FAST_TEXT_OCR_MIN_AREA
 
 
-def should_fallback_fast_text_ocr(filtered: bool, georef, *, style: str) -> bool:
+def should_fallback_fast_text_ocr(
+    filtered: bool,
+    georef,
+    *,
+    style: str,
+    width: int | None = None,
+    height: int | None = None,
+) -> bool:
     if not filtered:
         return False
     if fast_text_ocr_min_area_for_style(style) is None:
         return True
     if georef is None:
+        return True
+    if (
+        width is not None
+        and height is not None
+        and should_allow_sparse_regional_georef_fit(style, width, height)
+        and sparse_ocr_georeference_lacks_support(
+            georef,
+            width=width,
+            height=height,
+        )
+    ):
         return True
     return georef.transform.confidence < FAST_TEXT_OCR_FALLBACK_CONFIDENCE
 
@@ -2545,6 +2570,7 @@ def fit_georeference(
     style: str | None = None,
     progress: ProgressCallback | None = None,
 ):
+    sparse_regional_fit = should_allow_sparse_regional_georef_fit(style, width, height)
     emit_progress(
         progress,
         stage="georeference",
@@ -2573,6 +2599,7 @@ def fit_georeference(
                 road_feature_distance=road_feature_distance,
                 anchor_marker_dots=anchor_marker_dots,
                 allow_road_refinement=should_allow_label_fit_road_refinement(style),
+                allow_sparse_regional_fit=sparse_regional_fit,
             )
             if is_credible_context_hint_georeference(georef):
                 return georef
@@ -2620,6 +2647,7 @@ def fit_georeference(
             road_feature_distance=road_feature_distance,
             anchor_marker_dots=anchor_marker_dots,
             allow_road_refinement=should_allow_label_fit_road_refinement(style),
+            allow_sparse_regional_fit=sparse_regional_fit,
         )
 
     if georef is None and road_context_candidates and road_network_context_fallback_enabled():
@@ -2639,6 +2667,10 @@ def should_anchor_marker_dots(style: str) -> bool:
 
 def should_allow_label_fit_road_refinement(style: str | None) -> bool:
     return style != "light-fill"
+
+
+def should_allow_sparse_regional_georef_fit(style: str | None, width: int, height: int) -> bool:
+    return style == "gray-fill" and min(width, height) < FAST_TEXT_OCR_LOW_RES_RETRY_MAX_MIN_DIMENSION
 
 
 def sparse_ocr_georeference_lacks_support(georef, *, width: int, height: int) -> bool:

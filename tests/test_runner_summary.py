@@ -374,11 +374,47 @@ def test_fast_text_ocr_fallback_guard(monkeypatch) -> None:
     monkeypatch.setattr(runner, "FAST_TEXT_OCR_FALLBACK_CONFIDENCE", 0.80)
     low_confidence = SimpleNamespace(transform=SimpleNamespace(confidence=0.79))
     high_confidence = SimpleNamespace(transform=SimpleNamespace(confidence=0.80))
+    sparse_high_confidence = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="San Francisco Bay Area",
+            lon=-122.45,
+            lat=38.01,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=418.0,
+            rotation_radians=-0.22,
+            confidence=0.82,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object()],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
 
     assert runner.should_fallback_fast_text_ocr(False, None, style="bright-blue") is False
     assert runner.should_fallback_fast_text_ocr(True, None, style="bright-blue") is True
     assert runner.should_fallback_fast_text_ocr(True, low_confidence, style="bright-blue") is True
     assert runner.should_fallback_fast_text_ocr(True, high_confidence, style="bright-blue") is False
+    assert (
+        runner.should_fallback_fast_text_ocr(
+            True,
+            sparse_high_confidence,
+            style="gray-fill",
+            width=278,
+            height=280,
+        )
+        is True
+    )
+    assert (
+        runner.should_fallback_fast_text_ocr(
+            True,
+            sparse_high_confidence,
+            style="gray-fill",
+            width=556,
+            height=560,
+        )
+        is False
+    )
     assert runner.should_fallback_fast_text_ocr(True, high_confidence, style="dark-teal") is True
 
 

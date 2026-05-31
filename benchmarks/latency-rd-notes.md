@@ -7917,3 +7917,31 @@ with zero failures in 0.531s.
   `total_before_send_s` 2.000383s); a warmed cache-miss repeat completed in
   `build_boundary_s` 0.572210s / `total_before_send_s` 0.573960s, under the
   sub-second target for this rescued low-resolution case.
+- Accepted a low-resolution gray-fill sparse-label rescue for Bay Area Tesla.
+  The half-scale fast-text path produced a sparse unsupported regional fit, so
+  gray-fill inputs with `min(width, height) < 320` now retry full-detail OCR and
+  only those low-resolution fits can use the wider 600 m/px robust similarity
+  cap. This keeps normal-resolution gray-fill behavior on the previous 500 m/px
+  cap. A broad first prototype was rejected because unscoped robust limits
+  changed existing fixtures; during that probe the cached robust-fit key was
+  also fixed to score candidates against the real control count instead of the
+  wrapper cache-key tuple length. The accepted half-scale report
+  `out/sparse-fallback-lowres-fit-half-currentref-nocatalog-20260531/full-report.json`
+  improved from 13/15 to 14/15 versus the Willowbrook-alias baseline: Bay Area
+  Tesla passed at IoU 0.807080, area ratio 1.043183, centroid error 4450.3m,
+  duration 0.135803s, source `ocr-georeference:nominatim-label-fit`, while
+  Las Vegas Zoox still failed closed. The only regression issue is the
+  benchmark's aggregate average-IoU drop, caused by adding a newly scored
+  borderline fixture; all 13 previously compared half-scale fixtures preserved
+  per-fixture IoU.
+- Normal gates stayed clean for the low-resolution sparse-label rescue. The
+  current-reference no-catalog gate
+  `out/sparse-fallback-lowres-fit-currentref-nocatalog-20260531/full-report.json`
+  passed 15/15 with avg/min IoU 0.950465/0.794177, max 0.587644s, total
+  4.810545s, no zero-drop regression issues, and `--max-duration-s 1` /
+  `--max-total-duration-s 5` passing. The strict active plus drift-smoke gate
+  `out/sparse-fallback-lowres-fit-strict-nocatalog-20260531/full-report.json`
+  passed 8/8 scored with seven catalog-miss smokes, avg/min IoU
+  0.967842/0.942536, max 0.495472s, total 2.648171s, no regression issues, and
+  `--max-duration-s 1` / `--max-total-duration-s 4` passing. Focused
+  OCR/runner tests passed 160/160 and full `pytest` passed 316/316.

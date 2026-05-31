@@ -32,6 +32,10 @@ MAX_SPARSE_GEOCODED_LABELS = 32
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
+MAX_ROBUST_SIMILARITY_METERS_PER_PIXEL = 500.0
+MAX_SPARSE_ROBUST_SIMILARITY_METERS_PER_PIXEL = 600.0
+MAX_SPARSE_ROBUST_SIMILARITY_INLIER_RESIDUAL_M = 6500.0
+MAX_TWO_CONTROL_SIMILARITY_METERS_PER_PIXEL = 500.0
 DIRECT_CONTEXT_QUERY_LIMIT = 6
 DIRECT_CONTEXT_MAX_QUERIES = 10
 DIRECT_CONTEXT_LIVE_QUERY_LIMIT = 3
@@ -515,6 +519,7 @@ def georeference_from_labels(
     road_feature_distance: np.ndarray | None = None,
     anchor_marker_dots: bool = True,
     allow_road_refinement: bool = True,
+    allow_sparse_regional_fit: bool = False,
 ) -> GeoreferenceResult | None:
     control_labels = labels
     if label_y_min is not None:
@@ -540,6 +545,7 @@ def georeference_from_labels(
             allow_two_control_fit=allow_two_control_fit,
             road_feature_distance=road_feature_distance,
             allow_road_refinement=allow_road_refinement,
+            allow_sparse_regional_fit=allow_sparse_regional_fit,
         )
         if result is not None:
             if city is None and city_context.query == "Inferred map area":
@@ -812,6 +818,7 @@ def georeference_from_label_context(
     allow_two_control_fit: bool = False,
     road_feature_distance: np.ndarray | None = None,
     allow_road_refinement: bool = True,
+    allow_sparse_regional_fit: bool = False,
 ) -> GeoreferenceResult | None:
     city_center = city_context.center
     controls = build_control_points(
@@ -828,6 +835,7 @@ def georeference_from_label_context(
             image_path,
             city_center,
             allow_two_control_fit=allow_two_control_fit,
+            allow_sparse_regional_fit=allow_sparse_regional_fit,
         )
         if fit is not None:
             scale, rotation, tx, ty, inliers, residuals = fit
@@ -3048,8 +3056,20 @@ def choose_similarity_fit(
     city_center: GeocodeResult,
     *,
     allow_two_control_fit: bool,
+    allow_sparse_regional_fit: bool = False,
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
-    robust_fit = robust_similarity_fit(controls)
+    use_sparse_robust_limits = allow_two_control_fit and allow_sparse_regional_fit
+    robust_fit = robust_similarity_fit(
+        controls,
+        max_meters_per_pixel=(
+            MAX_SPARSE_ROBUST_SIMILARITY_METERS_PER_PIXEL
+            if use_sparse_robust_limits
+            else MAX_ROBUST_SIMILARITY_METERS_PER_PIXEL
+        ),
+        max_inlier_residual_m=(
+            MAX_SPARSE_ROBUST_SIMILARITY_INLIER_RESIDUAL_M if use_sparse_robust_limits else None
+        ),
+    )
     candidates: list[tuple[str, tuple[float, float, float, float, list[int], list[float]]]] = []
     if robust_fit is not None:
         candidates.append(("multi", robust_fit))
@@ -3107,7 +3127,7 @@ def two_control_similarity_fit(
     if pixel_distance < 80.0 or mercator_distance < 1200.0:
         return None
     scale = mercator_distance / pixel_distance
-    if scale <= 0.0 or scale > 500.0:
+    if scale <= 0.0 or scale > MAX_TWO_CONTROL_SIMILARITY_METERS_PER_PIXEL:
         return None
     rotation = float(atan2(mercator_vector[1], mercator_vector[0]) - atan2(pixel_vector[1], pixel_vector[0]))
     if abs(rotation) > 0.35:
@@ -3118,6 +3138,13 @@ def two_control_similarity_fit(
     all_mercator = np.array([control.mercator for control in controls], dtype=float)
     residuals = np.linalg.norm(apply_similarity(all_pixels, scale, rotation, tx, ty) - all_mercator, axis=1).tolist()
     return scale, rotation, float(tx), float(ty), [first_index, second_index], residuals
+
+
+def robust_similarity_inlier_threshold(scale: float, max_inlier_residual_m: float | None) -> float:
+    threshold = max(1200.0, scale * 90.0)
+    if max_inlier_residual_m is not None:
+        threshold = min(max(0.0, float(max_inlier_residual_m)), threshold)
+    return threshold
 
 
 def build_similarity_road_scorer(
@@ -3155,34 +3182,42 @@ def build_similarity_road_scorer(
 
 def robust_similarity_fit(
     controls: list[ControlPoint],
+    *,
+    max_meters_per_pixel: float = MAX_ROBUST_SIMILARITY_METERS_PER_PIXEL,
+    max_inlier_residual_m: float | None = None,
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
     if len(controls) < 2:
         return None
-    key = tuple(
-        (
-            float(control.pixel[0]),
-            float(control.pixel[1]),
-            float(control.mercator[0]),
-            float(control.mercator[1]),
-        )
-        for control in controls
+    key = (
+        round(max(0.0, float(max_meters_per_pixel)), 6),
+        None if max_inlier_residual_m is None else round(max(0.0, float(max_inlier_residual_m)), 6),
+        tuple(
+            (
+                float(control.pixel[0]),
+                float(control.pixel[1]),
+                float(control.mercator[0]),
+                float(control.mercator[1]),
+            )
+            for control in controls
+        ),
     )
     return _robust_similarity_fit_cached(key)
 
 
 @lru_cache(maxsize=256)
 def _robust_similarity_fit_cached(
-    key: tuple[tuple[float, float, float, float], ...],
+    key: tuple[float, float | None, tuple[tuple[float, float, float, float], ...]],
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
-    if len(key) < 2:
+    max_meters_per_pixel, max_inlier_residual_m, control_key = key
+    if len(control_key) < 2:
         return None
-    pixel = np.array([(item[0], item[1]) for item in key], dtype=float)
-    merc = np.array([(item[2], item[3]) for item in key], dtype=float)
+    pixel = np.array([(item[0], item[1]) for item in control_key], dtype=float)
+    merc = np.array([(item[2], item[3]) for item in control_key], dtype=float)
 
     best: tuple[float, float, float, float, list[int], list[float]] | None = None
     best_score: float | None = None
     total_spread = control_spread(pixel)
-    for i, j in combinations(range(len(key)), 2):
+    for i, j in combinations(range(len(control_key)), 2):
         p1, p2 = pixel[i], pixel[j]
         m1, m2 = merc[i], merc[j]
         p_vec = p2 - p1
@@ -3192,13 +3227,13 @@ def _robust_similarity_fit_cached(
         if p_norm < 30 or m_norm < 300:
             continue
         scale = float(m_norm / p_norm)
-        if scale <= 0 or scale > 500:
+        if scale <= 0 or scale > max_meters_per_pixel:
             continue
         rotation = float(atan2(m_vec[1], m_vec[0]) - atan2(p_vec[1], p_vec[0]))
         transformed = apply_similarity(pixel, scale, rotation, 0.0, 0.0)
         tx, ty = (m1 - transformed[i]).tolist()
         residuals = np.linalg.norm(apply_similarity(pixel, scale, rotation, tx, ty) - merc, axis=1).tolist()
-        threshold = max(1200.0, scale * 90.0)
+        threshold = robust_similarity_inlier_threshold(scale, max_inlier_residual_m)
         inliers = [idx for idx, residual in enumerate(residuals) if residual <= threshold]
         if len(inliers) < 2:
             continue
@@ -3209,7 +3244,7 @@ def _robust_similarity_fit_cached(
         if abs(r_rotation) > 0.35:
             continue
         r_residuals = np.linalg.norm(apply_similarity(pixel, r_scale, r_rotation, r_tx, r_ty) - merc, axis=1).tolist()
-        r_threshold = max(1200.0, r_scale * 90.0)
+        r_threshold = robust_similarity_inlier_threshold(r_scale, max_inlier_residual_m)
         r_inliers = [idx for idx, residual in enumerate(r_residuals) if residual <= r_threshold]
         if len(r_inliers) < 3:
             continue
@@ -3217,12 +3252,20 @@ def _robust_similarity_fit_cached(
         median, p90 = residual_median_p90([r_residuals[idx] for idx in r_inliers], empty=float("inf"))
         if median > 2500.0 or p90 > 6500.0:
             continue
-        score = fit_candidate_score(len(r_inliers), len(key), spread, total_spread, median, p90, r_rotation)
+        score = fit_candidate_score(
+            len(r_inliers),
+            len(control_key),
+            spread,
+            total_spread,
+            median,
+            p90,
+            r_rotation,
+        )
         if best_score is None or score > best_score:
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
 
-    for seed in combinations(range(len(key)), 3):
+    for seed in combinations(range(len(control_key)), 3):
         refined = fit_similarity(pixel[list(seed)], merc[list(seed)])
         if refined is None:
             continue
@@ -3230,7 +3273,7 @@ def _robust_similarity_fit_cached(
         if abs(r_rotation) > 0.35:
             continue
         r_residuals = np.linalg.norm(apply_similarity(pixel, r_scale, r_rotation, r_tx, r_ty) - merc, axis=1).tolist()
-        r_threshold = max(1200.0, r_scale * 90.0)
+        r_threshold = robust_similarity_inlier_threshold(r_scale, max_inlier_residual_m)
         r_inliers = [idx for idx, residual in enumerate(r_residuals) if residual <= r_threshold]
         if len(r_inliers) < 3:
             continue
@@ -3238,7 +3281,15 @@ def _robust_similarity_fit_cached(
         median, p90 = residual_median_p90([r_residuals[idx] for idx in r_inliers])
         if median > 2500.0 or p90 > 6500.0:
             continue
-        score = fit_candidate_score(len(r_inliers), len(key), spread, total_spread, median, p90, r_rotation)
+        score = fit_candidate_score(
+            len(r_inliers),
+            len(control_key),
+            spread,
+            total_spread,
+            median,
+            p90,
+            r_rotation,
+        )
         if best_score is None or score > best_score:
             best_score = score
             best = (r_scale, r_rotation, r_tx, r_ty, r_inliers, r_residuals)
