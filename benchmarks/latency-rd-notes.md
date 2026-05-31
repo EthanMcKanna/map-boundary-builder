@@ -9454,3 +9454,19 @@ with zero failures in 0.531s.
   active fixtures plus seven drift smokes, and stayed within latency budgets
   with active/evaluated totals `3.282092s`/`5.423555s` and max active fixture
   `0.716013s`.
+- Production proof for current-pipeline browser-history gating: deployed
+  committed head `0f2cf3b` as Vercel deployment
+  `map-boundary-builder-7ebfld5ke-ethanmckannas-projects.vercel.app`, aliased
+  to `mapboundary.app`. Hosted `/api/health?warm=ocr` returned `ok: true`,
+  warm status `ok`, and backend `pipeline-64ad23bb71268a34`. Hosted HTML
+  referenced `/static/app.js?v=asset-5635518401113fe4`, and the fetched
+  production `app.js` contained `hasCurrentRunCacheHistoryEntries`,
+  `runCacheKeyMatchesPipelineVersion`, and the current-history guards in the
+  submit and selected-image warmup paths. A production Playwright proof seeded
+  only `pipeline-stale` browser-history keys, patched
+  `File.prototype.arrayBuffer()` to never resolve, selected the same
+  sub-probe-threshold PNG, intercepted `/api/runs`, and reached the mocked
+  successful upload once in `192ms` with `arrayBufferReads=0` before Build;
+  the single array-buffer read appeared only after success during async history
+  persistence. Console had zero warnings/errors, and the screenshot was saved
+  to `out/prod-stale-history-cache-20260531/stale-history-cache-proof.png`.
