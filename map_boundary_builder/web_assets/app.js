@@ -1551,6 +1551,12 @@ function connectEvents(runId) {
       stopEstimatedProgress();
       finishWithError(event.message);
     }
+    if (event.status === "failed") {
+      eventSource.close();
+      stopEstimatedProgress();
+      await loadFailureSnapshot(runId);
+      updateRunButton();
+    }
   });
   eventSource.onerror = () => {
     if (eventSource.readyState === EventSource.CLOSED) return;
@@ -1619,19 +1625,20 @@ function applyEvent(event) {
   }
   latestRunEvents = [...latestRunEvents, event].slice(-20);
   const label = stageLabels[event.stage] || event.stage;
+  const displayMessage = failed ? event.details?.error || event.message || label : event.message || label;
   const step = progressStepForEvent(event);
   if (event.status === "complete") {
     latestRunStatus = "completed";
     markAllProgressStepsDone();
   } else if (failed) {
     latestRunStatus = "failed";
-    latestRunError = event.details?.error || event.message || latestRunError;
-    markProgressStep(step || activeProgressStep || "georeference", "error", event.message || label);
+    latestRunError = displayMessage || latestRunError;
+    markProgressStep(step || activeProgressStep || "georeference", "error", displayMessage);
   } else if (step) {
     markPreviousProgressStepsDone(step);
     markProgressStep(step, "running", humanProgressMessage(event));
   }
-  setStatus(event.message || label, progressPercentForEvent(event), failed ? "error" : event.status, {
+  setStatus(displayMessage, progressPercentForEvent(event), failed ? "error" : event.status, {
     step,
     note: humanProgressNote(event),
   });
@@ -1892,6 +1899,21 @@ async function loadArtifacts(runId) {
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
   updateReportTrigger();
+}
+
+async function loadFailureSnapshot(runId) {
+  try {
+    const status = await fetchJson(`/api/runs/${runId}`);
+    latestRunId = status.id || runId;
+    latestRunStatus = "failed";
+    latestRunError = status.error || latestRunError;
+    latestRunEvents = Array.isArray(status.events) ? status.events : latestRunEvents;
+    latestRunSummary = status.summary || latestRunSummary;
+    latestRunProfile = status.profile || latestRunProfile;
+    showFailureReport();
+  } catch (error) {
+    console.warn("Could not load failed run details", error);
+  }
 }
 
 function queueHistorySave(payload) {

@@ -1151,6 +1151,11 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"formData.set(\"run_id\", latestRunId || \"\");", app_js)
         self.assertIn(b"formData.set(\"events\", JSON.stringify(latestRunEvents));", app_js)
         self.assertIn(b"formData.set(\"profile\", JSON.stringify(latestRunProfile || {}));", app_js)
+        self.assertIn(b'if (event.status === "failed") {', app_js)
+        self.assertIn(b"await loadFailureSnapshot(runId);", app_js)
+        self.assertIn(b"async function loadFailureSnapshot(runId) {", app_js)
+        self.assertIn(b"latestRunProfile = status.profile || latestRunProfile;", app_js)
+        self.assertIn(b"function isFailureEvent(event) {", app_js)
 
     def test_normalized_cache_lookup_defaults_to_fast_path_but_can_opt_in(self) -> None:
         self.assertFalse(bool_field({}, "normalized_cache_lookup", default=False))

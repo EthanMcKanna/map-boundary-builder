@@ -9146,3 +9146,33 @@ with zero failures in 0.531s.
   terminal `Generation failed` event, and the `pipeline-prod-browser-proof`
   profile. Screenshot saved to
   `out/prod-smoke-frontend-failed-payload-20260531/report-proof.png`.
+- Accepted local web failure-event parity with the API failure contract. The
+  local threaded web server still emitted background generation failures as
+  `stage: error`/`status: error` with only the message, while production API
+  failures now use terminal `stage: failed`/`status: failed` events with
+  `details.error`; local catalog-probe misses also lacked a terminal miss event
+  in their immediate payload. Local web background failures now emit terminal
+  failed events with error details, keep the final snapshot profile populated,
+  and treat `failed` as a terminal SSE status; local catalog-probe misses append
+  a terminal `catalog_miss` event with probe details. The frontend now closes
+  `failed` SSE streams, fetches the final run snapshot so reports include
+  `profile`, and displays `details.error` instead of a generic failure message.
+  Focused local-web/API/frontend tests passed 60/60, `node --check` passed,
+  `compileall` passed, and full `PYTHONPATH=. .venv/bin/pytest -q` passed
+  373 tests plus 12 subtests. Backend hash stayed
+  `pipeline-64ad23bb71268a34`; final asset hash is
+  `asset-25def13ee0ceb93e`. The first strict no-catalog gate
+  `out/local-web-failed-events-strict-20260531/full-report.json` preserved exact
+  IoU but was discarded as OCR-noisy because evaluated duration hit
+  `6.232901s` against the 6s budget. The rerun
+  `out/local-web-failed-events-strict-rerun-20260531/full-report.json`
+  preserved exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/frontend-failed-payload-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.735008s`/`4.581973s`. A real local
+  browser proof against `http://127.0.0.1:8765` uploaded a blank PNG through the
+  normal async/SSE path, displayed the detailed extraction failure, submitted a
+  report through intercepted `/api/reports`, and confirmed the multipart body
+  included the detailed error, terminal `Generation failed` event, and final
+  profile; screenshot saved to
+  `out/local-web-failed-events-browser-20260531/report-proof-profile.png`.

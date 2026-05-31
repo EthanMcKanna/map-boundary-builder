@@ -25,7 +25,7 @@ from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generatio
 from .upload_payload import UploadPayloadError, json_upload_body_limit, parse_json_upload_body
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-TERMINAL_STATUSES = {"complete", "error"}
+TERMINAL_STATUSES = {"complete", "error", "failed"}
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 
@@ -186,10 +186,14 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             try:
                 build_started = time.perf_counter()
                 result = build_boundary(image_path, city, output_path, debug_dir=None, options=options, progress=progress)
-                profile["build_boundary_s"] = elapsed_seconds(build_started)
-                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-                profile["total_before_send_s"] = profile["build_boundary_s"]
             except CatalogProbeMiss as exc:
+                events = terminal_events(
+                    events,
+                    stage="catalog_miss",
+                    message="Catalog probe missed",
+                    status="catalog_miss",
+                    details=exc.details,
+                )
                 profile["build_boundary_s"] = elapsed_seconds(build_started)
                 profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
                 profile["total_before_send_s"] = profile["build_boundary_s"]
@@ -207,6 +211,9 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                     status=HTTPStatus.OK,
                 )
                 return
+            profile["build_boundary_s"] = elapsed_seconds(build_started)
+            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            profile["total_before_send_s"] = profile["build_boundary_s"]
             self.send_json(
                 {
                     "id": run_id,
@@ -455,18 +462,24 @@ def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
             profile = dict(state.profile or {})
             if "build_started" in locals():
                 profile["build_boundary_s"] = elapsed_seconds(build_started)
-                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
                 profile["total_before_send_s"] = profile["build_boundary_s"]
             state.profile = profile
         record_event(
             state,
             {
-                "stage": "error",
-                "message": str(exc),
-                "percent": state.percent,
-                "status": "error",
+                "stage": "failed",
+                "message": "Generation failed",
+                "percent": 100,
+                "status": "failed",
+                "details": {"error": str(exc)},
             },
         )
+        with state.condition:
+            profile = dict(state.profile or {})
+            if "build_started" in locals():
+                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
+            state.profile = profile
+            state.condition.notify_all()
 
 
 def elapsed_seconds(started: float) -> float:
@@ -487,6 +500,28 @@ def event_stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float
     return {stage: round(total, 6) for stage, total in totals.items()}
 
 
+def terminal_events(
+    events: list[dict[str, Any]],
+    *,
+    stage: str,
+    message: str,
+    status: str,
+    details: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if events and events[-1].get("stage") == stage and events[-1].get("status") == status:
+        return events[-20:]
+    event: dict[str, Any] = {
+        "timestamp": time.time(),
+        "stage": stage,
+        "message": message,
+        "percent": 100,
+        "status": status,
+    }
+    if details:
+        event["details"] = details
+    return [*events[-19:], event]
+
+
 def record_event(state: RunState, event: dict[str, Any]) -> None:
     enriched = {
         "timestamp": time.time(),
@@ -498,8 +533,10 @@ def record_event(state: RunState, event: dict[str, Any]) -> None:
         state.percent = int(enriched.get("percent", state.percent))
         if state.status == "complete":
             state.summary = enriched.get("details") if isinstance(enriched.get("details"), dict) else state.summary
-        elif state.status == "error":
-            state.error = str(enriched.get("message", "Run failed."))
+        elif state.status in {"error", "failed"}:
+            details = enriched.get("details")
+            error = details.get("error") if isinstance(details, dict) else None
+            state.error = str(error or enriched.get("message", "Run failed."))
         state.condition.notify_all()
 
 
