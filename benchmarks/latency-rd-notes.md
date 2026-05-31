@@ -8381,3 +8381,21 @@ with zero failures in 0.531s.
   `build_boundary_s=0.039759`. Validation passed `compileall`, `node --check
   map_boundary_builder/web_assets/app.js`, focused upload/API/image/report
   tests 70/70, full `unittest discover` 218/218, and full `pytest` 347/347.
+- Deployed the hosted TIFF JSON fallback to Vercel production as
+  `dpl_AxoLRuS9ULCnUC6kNVzo774qPmDq`, aliased to `https://mapboundary.app`.
+  The live health endpoint reported `pipeline-ddaffd945efaecf4`, Pillow 12.2.0,
+  RapidOCR 1.4.4, onnxruntime 1.26.0, and cv2 4.10.0; served `/static/app.js`
+  contains the `requiresJsonUpload` / `isTiffFile` / `uploadJsonPayload` path.
+  A current raw TIFF multipart POST is still denied before app code with HTTP
+  403 and `x-vercel-mitigated: deny`, while the same TIFF bytes sent as
+  JSON/base64 returned HTTP 201, status `complete`, filename
+  `Tesla Dallas.tiff`, city Dallas, style gray-fill, confidence 0.972523,
+  catalog `dallas-tesla`, `catalog_shape_iou=0.972523`, bbox
+  `[-96.8582001, 32.7624321, -96.7552567, 32.8723526]`,
+  `upload_encoding=json-base64`, `build_boundary_s=0.143653`,
+  `total_before_send_s=0.228618`, and stage timings inspect 0.067052s, extract
+  0.075457s, georeference 0.000005s, export 0.000640s. An exact JSON/base64
+  repeat returned HTTP 201 from raw cache with `cached=true`, `cache_hit=raw`,
+  and `total_before_send_s=0.007774`. Live evidence was saved under
+  `out/tiff-normalization-20260531/prod-tiff-json-response.txt` and
+  `out/tiff-normalization-20260531/prod-tiff-json-repeat-response.txt`.
