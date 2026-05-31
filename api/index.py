@@ -50,6 +50,9 @@ JPEG_SIGNATURE = b"\xff\xd8"
 JPEG_COMMENT_MARKER = 0xFE
 JPEG_START_OF_SCAN_MARKER = 0xDA
 JPEG_END_OF_IMAGE = b"\xff\xd9"
+WEBP_RIFF_SIGNATURE = b"RIFF"
+WEBP_SIGNATURE = b"WEBP"
+WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".svg", ".svgz"}
 FILENAME_HINT_CACHE_NOISE_TOKENS = {
     "app",
@@ -263,6 +266,24 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        webp_visual_cache_started = time.perf_counter()
+        webp_visual_cache_key = webp_visual_run_result_cache_key(image_bytes, city, options)
+        if webp_visual_cache_key is not None:
+            cached = read_run_result_cache(webp_visual_cache_key)
+        profile["webp_visual_cache_lookup_s"] = elapsed_seconds(webp_visual_cache_started)
+        if webp_visual_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "webp-visual"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            self.send_json(
+                payload,
+                status=cached_run_response_status(payload),
+            )
+            return
+
         cache_key: str | None = None
         profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         if normalized_cache_lookup:
@@ -329,6 +350,8 @@ class handler(BaseHTTPRequestHandler):
                 write_run_result_cache(png_visual_cache_key, payload)
             if jpeg_commentless_cache_key is not None:
                 write_run_result_cache(jpeg_commentless_cache_key, payload)
+            if webp_visual_cache_key is not None:
+                write_run_result_cache(webp_visual_cache_key, payload)
             write_run_result_cache(raw_cache_key, payload)
             self.send_json(payload, status=HTTPStatus.OK)
             return
@@ -345,6 +368,8 @@ class handler(BaseHTTPRequestHandler):
                     write_run_result_cache(png_visual_cache_key, payload)
                 if jpeg_commentless_cache_key is not None:
                     write_run_result_cache(jpeg_commentless_cache_key, payload)
+                if webp_visual_cache_key is not None:
+                    write_run_result_cache(webp_visual_cache_key, payload)
                 write_run_result_cache(raw_cache_key, payload)
             self.send_json(
                 payload,
@@ -375,6 +400,8 @@ class handler(BaseHTTPRequestHandler):
             write_run_result_cache(png_visual_cache_key, payload)
         if jpeg_commentless_cache_key is not None:
             write_run_result_cache(jpeg_commentless_cache_key, payload)
+        if webp_visual_cache_key is not None:
+            write_run_result_cache(webp_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
         profile["cache_hit"] = "miss"
@@ -725,6 +752,13 @@ def jpeg_commentless_run_result_cache_key(image_bytes: bytes, city: str | None, 
     return run_result_cache_key_for_hash("jpeg_commentless_sha256", visual_hash, city, options)
 
 
+def webp_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = webp_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash("webp_visual_sha256", visual_hash, city, options)
+
+
 def run_result_cache_key_for_hash(
     image_hash_name: str,
     image_hash: str,
@@ -882,6 +916,39 @@ def jpeg_commentless_sha256(image_bytes: bytes) -> str | None:
 
 def jpeg_marker_has_no_payload(marker: int) -> bool:
     return marker == 0x01 or marker == 0xD8 or marker == 0xD9 or 0xD0 <= marker <= 0xD7
+
+
+def webp_visual_sha256(image_bytes: bytes) -> str | None:
+    if (
+        len(image_bytes) < 12
+        or image_bytes[:4] != WEBP_RIFF_SIGNATURE
+        or image_bytes[8:12] != WEBP_SIGNATURE
+    ):
+        return None
+    riff_size = int.from_bytes(image_bytes[4:8], "little")
+    if riff_size + 8 > len(image_bytes):
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"webp-visual-v1")
+    digest.update(WEBP_SIGNATURE)
+    offset = 12
+    riff_end = 8 + riff_size
+    while offset + 8 <= riff_end:
+        chunk_type = image_bytes[offset : offset + 4]
+        chunk_length = int.from_bytes(image_bytes[offset + 4 : offset + 8], "little")
+        data_start = offset + 8
+        data_end = data_start + chunk_length
+        padded_end = data_end + (chunk_length % 2)
+        if padded_end > len(image_bytes) or padded_end > riff_end:
+            return None
+        if chunk_type not in WEBP_NON_VISUAL_CHUNKS:
+            digest.update(chunk_type)
+            digest.update(chunk_length.to_bytes(4, "little"))
+            digest.update(image_bytes[data_start:data_end])
+        offset = padded_end
+    if offset != riff_end:
+        return None
+    return digest.hexdigest()
 
 
 def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:

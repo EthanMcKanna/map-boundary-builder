@@ -44,6 +44,8 @@ from api.index import (
     RUN_RESULT_MEMORY_CACHE_MAX,
     run_result_cache_tmp_path,
     run_result_cache_key,
+    webp_visual_run_result_cache_key,
+    webp_visual_sha256,
     write_run_result_cache,
 )
 from map_boundary_builder.asset_response import web_asset_response, web_asset_version
@@ -64,6 +66,15 @@ def jpeg_bytes(image: Image.Image, **save_options: object) -> bytes:
 def insert_jpeg_segment(image_bytes: bytes, marker: int, payload: bytes) -> bytes:
     segment_length = len(payload) + 2
     return image_bytes[:2] + bytes((0xFF, marker)) + segment_length.to_bytes(2, "big") + payload + image_bytes[2:]
+
+
+def insert_webp_chunk(image_bytes: bytes, chunk_type: bytes, payload: bytes) -> bytes:
+    assert len(chunk_type) == 4
+    chunk = chunk_type + len(payload).to_bytes(4, "little") + payload
+    if len(payload) % 2:
+        chunk += b"\x00"
+    riff_size = int.from_bytes(image_bytes[4:8], "little") + len(chunk)
+    return image_bytes[:4] + riff_size.to_bytes(4, "little") + image_bytes[8:] + chunk
 
 
 class ApiRunCacheTests(unittest.TestCase):
@@ -409,6 +420,44 @@ class ApiRunCacheTests(unittest.TestCase):
             jpeg_commentless_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
         )
         self.assertIsNone(jpeg_commentless_run_result_cache_key(b"not a jpeg", None, BoundaryBuildOptions()))
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_webp_visual_hash_ignores_metadata_only(self) -> None:
+        base = BytesIO()
+        changed = BytesIO()
+        Image.new("RGB", (4, 3), (12, 34, 56)).save(base, format="WEBP", lossless=True)
+        Image.new("RGB", (4, 3), (12, 34, 57)).save(changed, format="WEBP", lossless=True)
+        first = insert_webp_chunk(base.getvalue(), b"EXIF", b"first metadata")
+        second = insert_webp_chunk(base.getvalue(), b"XMP ", b"second metadata")
+        color_profile = insert_webp_chunk(base.getvalue(), b"ICCP", b"profile")
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(webp_visual_sha256(first), webp_visual_sha256(second))
+        self.assertNotEqual(webp_visual_sha256(first), webp_visual_sha256(changed.getvalue()))
+        self.assertNotEqual(webp_visual_sha256(base.getvalue()), webp_visual_sha256(color_profile))
+        self.assertIsNone(webp_visual_sha256(b"not a webp"))
+        self.assertIsNone(webp_visual_sha256(base.getvalue()[:-1]))
+
+    @unittest.skipUnless(features.check("webp"), "Pillow WebP support required")
+    def test_webp_visual_run_cache_key_ignores_metadata_but_keeps_options(self) -> None:
+        base = BytesIO()
+        Image.new("RGB", (4, 3), (12, 34, 56)).save(base, format="WEBP", lossless=True)
+        first = insert_webp_chunk(base.getvalue(), b"EXIF", b"cache bust a")
+        second = insert_webp_chunk(base.getvalue(), b"XMP ", b"cache bust b")
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            webp_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            webp_visual_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            webp_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            webp_visual_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(webp_visual_run_result_cache_key(b"not a webp", None, BoundaryBuildOptions()))
 
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:
         cache_key = run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())

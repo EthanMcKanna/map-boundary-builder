@@ -8180,3 +8180,16 @@ with zero failures in 0.531s.
   server-side `total_before_send_s=0.004438`. The smoke responses were saved at
   `out/prod-smoke-40e78fa/nashville-response.txt` and
   `out/prod-smoke-40e78fa/nashville-repeat-response.txt`.
+- Accepted a cheap WebP visual run-result cache key. The API cache ladder now
+  parses WebP RIFF chunks and skips only metadata chunks (`EXIF`, `XMP `), so
+  cache-busted WebP uploads can reuse results without opting into the expensive
+  decoded-pixel normalized cache path. Visual chunks, ICC profiles, options,
+  pipeline version, and semantic filename hints remain part of the key. Focused
+  API cache tests passed 44/44, and a real Zoox SF WebP metadata stress check
+  confirmed raw keys differ while WebP visual keys match and the second metadata
+  variant reads the first cached result. Full `pytest` passed 328/328. The
+  strict drift-smoke benchmark `out/webp-visual-cache-20260531/full-report.json`
+  passed against `out/concurrent-cache-hardening-20260531/full-report.json` with
+  8/8 active fixtures, zero smoke failures, avg/min IoU 0.967842/0.942536, no
+  regression issues, active/evaluated totals 3.023630s/5.096346s, and evaluated
+  OCR 3.467865s under the active 4s and evaluated 6s budgets.
