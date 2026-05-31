@@ -1252,6 +1252,36 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"function hasCachedRunHistoryEntries() {", app_js)
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
 
+    def test_frontend_skips_pixel_cache_wait_without_cached_history(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        helper_start = app_js.index(b"async function buildRunCacheKeys(file, formData) {")
+        pixel_hash = app_js.index(b"const pixelHashPromise = pixelImageContentHash(file);", helper_start)
+        cache_keys_promise = app_js.index(b"const cacheKeysPromise = pixelHashPromise", pixel_hash)
+        no_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) {", cache_keys_promise)
+        raw_only_return = app_js.index(b"return { lookupKeys: [rawKey], cacheKeysPromise };", no_history_guard)
+        quick_wait = app_js.index(
+            b"const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);",
+            raw_only_return,
+        )
+
+        self.assertLess(pixel_hash, cache_keys_promise)
+        self.assertLess(cache_keys_promise, no_history_guard)
+        self.assertLess(no_history_guard, raw_only_return)
+        self.assertLess(raw_only_return, quick_wait)
+
+        warmup_start = app_js.index(b"function scheduleSelectedImageHashWarmup() {")
+        warmup_task_guard = app_js.index(
+            b"if (!task || isSvgFile(task.file) || requiresJsonUpload(task.file)) return;",
+            warmup_start,
+        )
+        warmup_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) return;", warmup_task_guard)
+        warmup_pixel_hash = app_js.index(b"task.pixelHash().catch((error) => {", warmup_history_guard)
+
+        self.assertLess(warmup_task_guard, warmup_history_guard)
+        self.assertLess(warmup_history_guard, warmup_pixel_hash)
+
     def test_frontend_leaves_svgz_uploads_for_backend_rasterization(self) -> None:
         app_js, mime = web_asset_response("app.js")
 

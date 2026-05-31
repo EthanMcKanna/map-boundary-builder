@@ -1223,13 +1223,6 @@ async function buildRunCacheKeys(file, formData) {
       return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
     }
     const pixelHashPromise = pixelImageContentHash(file);
-    const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
-    const lookupKeys = cacheKeysForHashes({
-      pipelineVersion,
-      settingsHash,
-      rawImageHash,
-      pixelImageHash: quickPixelHash,
-    });
     const cacheKeysPromise = pixelHashPromise
       .then((pixelImageHash) => cacheKeysForHashes({
         pipelineVersion,
@@ -1238,6 +1231,16 @@ async function buildRunCacheKeys(file, formData) {
         pixelImageHash,
       }))
       .catch(() => [rawKey]);
+    if (!hasCachedRunHistoryEntries()) {
+      return { lookupKeys: [rawKey], cacheKeysPromise };
+    }
+    const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
+    const lookupKeys = cacheKeysForHashes({
+      pipelineVersion,
+      settingsHash,
+      rawImageHash,
+      pixelImageHash: quickPixelHash,
+    });
     return { lookupKeys, cacheKeysPromise };
   } catch (error) {
     console.warn("Could not build local run cache key", error);
@@ -1325,6 +1328,7 @@ function createImageHashTask(file) {
 function scheduleSelectedImageHashWarmup() {
   const task = selectedImageHashTask;
   if (!task || isSvgFile(task.file) || requiresJsonUpload(task.file)) return;
+  if (!hasCachedRunHistoryEntries()) return;
   const start = () => {
     if (selectedImageHashTask === task) {
       task.pixelHash().catch((error) => {

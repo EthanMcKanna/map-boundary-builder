@@ -9337,3 +9337,29 @@ with zero failures in 0.531s.
   cancel, clicked Build, observed one prewarm abort and one mocked `/api/runs`
   request, then displayed the synthetic failed payload; screenshot saved to
   `out/prod-prewarm-eager-browser-20260531/prewarm-eager-proof.png`.
+- Accepted no-history pixel-cache work suppression. The browser previously
+  scheduled decoded-pixel cache-key warmup after every image selection and
+  waited up to `RUN_CACHE_PIXEL_HASH_WAIT_MS` during submit even when there were
+  no GeoJSON-bearing local history entries to match. The submit path now
+  returns raw cache lookup keys immediately when local history has no cacheable
+  runs, while still starting the decoded-pixel key promise for future history
+  storage; selected-image pixel warmup also returns early when there is no
+  cached history. This removes avoidable first-run/no-history browser work
+  without changing cache semantics when history exists. Local checks:
+  `node --check map_boundary_builder/web_assets/app.js`, focused
+  `PYTHONPATH=. .venv/bin/pytest tests/test_api_cache.py -q` passed 63 tests,
+  full `PYTHONPATH=. .venv/bin/pytest -q` passed 380 tests plus 12 subtests,
+  and `git diff --check` passed. A Browser plugin page check verified
+  `http://127.0.0.1:8879` loaded the app without console warnings/errors. A
+  local Playwright proof cleared `mapBoundaryBuilder.history.v1`, held large
+  decoded-pixel digests unresolved, selected `Tesla Houston.png`, observed zero
+  pixel reads and zero pixel-digest calls before Build, then clicked Build and
+  saw the mocked `/api/runs` request leave in 45ms; screenshot saved to
+  `out/no-history-pixel-cache-browser-20260531/no-history-cache-proof.png`.
+  Backend hash stayed `pipeline-64ad23bb71268a34`; the new asset hash is
+  `asset-5c746c585e5323b6`. Strict no-catalog drift gate
+  `out/no-history-pixel-cache-strict-20260531/full-report.json` preserved active
+  avg/min IoU `0.968082`/`0.942536` versus
+  `out/prewarm-eager-strict-20260531/full-report.json`, passed 8/8 active
+  fixtures plus seven drift smokes, and stayed within latency budgets with
+  active/evaluated totals `2.994499s`/`5.007895s`.
