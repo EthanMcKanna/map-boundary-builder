@@ -7698,3 +7698,15 @@ with zero failures in 0.531s.
   `out/final-overlay-webp-method0-nocatalog-20260531/full-report.json` (8/8
   scored fixtures plus seven drift smokes, avg/min IoU 0.967842/0.942536), full
   pytest (308 tests plus 9 subtests), `node --check`, and `git diff --check`.
+- Deployed the WebP method change to production as `pipeline-3f4fb95d268e01c2`
+  with Vercel deployment `dpl_3nNi9mkm1u6gAnT3dTZpcCF1CSi6` aliased to
+  `https://mapboundary.app`. Post-deploy cache-busted Phoenix no-catalog probes
+  preserved the same
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` bbox output. The
+  overlay-enabled probe returned `build_boundary_s` 4.340623s, export
+  0.208764s, and an inline overlay data URL length of 111,255 characters; the
+  paired `include_overlay=0` probe returned `build_boundary_s` 3.391368s and
+  export 0.001228s. Treat the production timings as a smoke check rather than a
+  controlled benchmark because Vercel instance variance remains visible, but the
+  deployed overlay export stage moved in the expected direction versus the
+  pre-change 0.248371s Phoenix sample.
