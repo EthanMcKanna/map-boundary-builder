@@ -7750,3 +7750,30 @@ with zero failures in 0.531s.
   regression (`out/probe-fasttext-min1400-currentref-nocatalog-20260531/full-report.json`).
   Keep the current 1300 threshold; these labels are still needed for robust
   regional fits.
+- Rejected lowering the global RapidOCR input max dimension from 1600. The
+  hypothesis was that reducing the recognizer crop source would cut OCR work
+  more directly than detector caps, but both tested caps lost important
+  georeference evidence. `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1400` failed the
+  current-reference no-catalog gate at 14/15, avg/min IoU 0.915984/0.758698,
+  active total 4.663748s; Nashville dropped to 0.758698 IoU and lost
+  `+osm-road-refine`, while Phoenix fell to 0.853339 and Bay Area Waymo to
+  0.791952 (`out/probe-ocrmax1400-currentref-nocatalog-20260531/full-report.json`).
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1500` also failed at 14/15,
+  avg/min IoU 0.921646/0.755715, active total 4.987946s; Phoenix dropped to
+  0.755715 and Bay Area Waymo to 0.785556
+  (`out/probe-ocrmax1500-currentref-nocatalog-20260531/full-report.json`).
+  A fast-first/fallback path does not look attractive from these probes because
+  the bad 1400px fits are only reliably recoverable after spending the first
+  OCR pass, and falling back would erase the small wins on the cases that pass.
+- Rejected naive OCR upscaling for small screenshots as a robustness fix. The
+  half-scale stress fixture set is not a ship gate because the current code
+  already fails 3/15 low-resolution/current-reference cases, but upscaling
+  small OCR inputs to 1000px did not improve that pattern: it still failed
+  Houston Tesla, Bay Area Tesla, and Las Vegas Zoox, worsened avg/min IoU from
+  0.856894/0.468703 to 0.886879/0.642472 only by changing the failed shapes,
+  and increased active total from 10.993181s to 26.089384s due to a 21.10s Las
+  Vegas OCR/georef failure
+  (`out/stress-half-control-nocatalog-20260531/full-report.json`,
+  `out/probe-small-ocr-upscale1000-half-currentref-nocatalog-20260531/full-report.json`).
+  Low-resolution robustness likely needs extraction/georeference-specific
+  rescue logic rather than blanket OCR resizing.
