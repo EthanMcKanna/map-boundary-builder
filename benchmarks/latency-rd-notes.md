@@ -8942,3 +8942,21 @@ with zero failures in 0.531s.
   `out/catalog-miss-event-details-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.900867s`/`4.968868s`.
+- Production proof for the prepared-array OCR shape-read cleanup: deployed
+  `pipeline-4572aee1f1a73ad7` as Vercel deployment
+  `dpl_JjT1yp425DKFpuH1vVGXqYCQTHPR`, aliased to `mapboundary.app`.
+  Production health and OCR warm checks were saved under
+  `out/prod-smoke-lazy-prepared-ocr-shape-20260531/`; health reported
+  `pipeline-4572aee1f1a73ad7`, and the OCR warm path completed with
+  `rapidocr_inference_warmed: true` after loading the active catalog, seed
+  entries, and bright-blue extraction warmup. A one-pixel-distinct copy of
+  `Waymo Dallas.png` was posted with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0` to avoid stale run and
+  visual-cache hits. The response was a fresh miss (`cache_hit: miss`,
+  `id: 1780243034-f3369cf7`) with `status: complete`, city `Dallas`, style
+  `bright-blue`, bbox `[-96.8748943, 32.7334002, -96.729715, 32.86549]`,
+  `georeference_source: ocr-georeference:nominatim-label-fit`,
+  combined/georeference confidence `0.946`, no catalog slug, OCR stage
+  `1.286930s`, and `total_before_send_s: 1.886372`. This confirms the shipped
+  hash preserves the expected no-catalog OCR georeference behavior; the local
+  microbench remains the only speed evidence for the tiny shape-read saving.
