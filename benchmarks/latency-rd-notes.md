@@ -8631,3 +8631,13 @@ with zero failures in 0.531s.
   `out/miami-seed-currentref-gate-20260531/full-report.json` preserved 15/15
   current-reference IoUs (`0.996223/0.943345` avg/min). Focused geocoder tests
   passed 10 tests plus 12 subtests, and the geocoder seed JSON validated.
+- Deployed the Miami seed/miss update as
+  `dpl_6GzJWwX1A1mw3DgHxAvJszWncc3G`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-829ad58eac00aefd` with RapidOCR 1.4.4,
+  onnxruntime 1.26.0, Pillow 12.2.0, and cv2 4.10.0. A production neutral
+  Miami no-catalog upload using filename `upload.png` preserved the seeded
+  no-live-geocoder output (`ocr-georeference:nominatim-label-fit`, confidence
+  `0.716`, bbox `[-80.3384598, 25.6891271, -80.111409, 25.9830697]`) at
+  `2.624609s` total-before-send. The production sample was still OCR-heavy
+  (`1.593609s` OCR) and noisier than local, but georeference stayed bounded at
+  `0.472013s` instead of the prior 8s live-geocoder cold path.
