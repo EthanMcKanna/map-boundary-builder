@@ -8276,3 +8276,18 @@ with zero failures in 0.531s.
   failures, avg/min IoU 0.967842/0.942536, no regression issues,
   active/evaluated totals 3.183671s/5.352809s, and evaluated OCR 3.688441s
   under the active 4s and evaluated 6s budgets.
+- Deployed AVIF upload support to Vercel production as
+  `dpl_8NvngKM6SnvY5DwbJBkvvzJKN7JG` after `npx vercel@latest build --prod`
+  succeeded with CLI 54.6.1, Python 3.12, and `uv` 0.11.16. Production aliases
+  `https://mapboundary.app` and `https://map-boundary-builder.vercel.app` both
+  reported `pipeline-f334eaf2f74de6af`; health also reported Pillow 12.2.0,
+  RapidOCR 1.4.4, onnxruntime 1.26.0, rec/cls batch 24, and the existing
+  bright-blue `det_limit_type=max` / 480px / `en-ppocrv5` settings. A live AVIF
+  upload of the converted Tesla Dallas fixture returned HTTP 201, status
+  `complete`, filename `Tesla Dallas.avif`, city Dallas, style gray-fill,
+  confidence 0.972523, catalog `dallas-tesla`, `catalog_shape_iou=0.972523`,
+  bbox `[-96.8582001, 32.7624321, -96.7552567, 32.8723526]`,
+  `build_boundary_s=0.103218`, `total_before_send_s=0.400654`, and stage
+  timings inspect 0.023571s, extract 0.058968s, georeference 0.000005s, export
+  0.000607s. The live response was saved at
+  `out/avif-support-20260531/prod-avif-response.txt`.
