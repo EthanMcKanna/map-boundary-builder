@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, PngImagePlugin
 
 import map_boundary_builder.ocr as ocr_module
+import map_boundary_builder.runtime_config as runtime_config_module
 from map_boundary_builder.georeference import (
     CityContext,
     ControlPoint,
@@ -818,9 +819,9 @@ class OcrGroupingTests(unittest.TestCase):
             rec_keys.write_text("a\nb\n", encoding="utf-8")
 
             with patch.object(
-                ocr_module.importlib_resources,
-                "files",
-                return_value=Path(workdir),
+                ocr_module,
+                "rapidocr_english_ppocrv5_asset_paths",
+                return_value=(rec_model, rec_keys),
             ):
                 ocr_module.rapidocr_recognition_profile_kwargs.cache_clear()
                 try:
@@ -832,6 +833,57 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(kwargs["rec_keys_path"], str(rec_keys))
         self.assertEqual(kwargs["rec_img_shape"], [3, 48, 320])
         self.assertEqual(ocr_module.rapidocr_recognition_profile_kwargs("unknown"), {})
+
+    def test_runtime_config_reports_v5_recognition_asset_availability(self) -> None:
+        with TemporaryDirectory() as workdir:
+            models_dir = Path(workdir) / "models"
+            models_dir.mkdir()
+            rec_model = models_dir / "en_PP-OCRv5_rec_mobile.onnx"
+            rec_keys = models_dir / "ppocrv5_en_dict.txt"
+            rec_model.write_bytes(b"model")
+            rec_keys.write_text("a\nb\n", encoding="utf-8")
+
+            with patch.object(
+                runtime_config_module.importlib_resources,
+                "files",
+                return_value=Path(workdir),
+            ):
+                self.assertTrue(runtime_config_module.rapidocr_english_ppocrv5_assets_available())
+                config = runtime_config_module.ocr_runtime_config()
+
+        self.assertTrue(config["rapidocr_bright_blue_recognition_assets_available"])
+
+    def test_runtime_config_reports_missing_v5_recognition_assets(self) -> None:
+        with TemporaryDirectory() as workdir:
+            models_dir = Path(workdir) / "models"
+            models_dir.mkdir()
+
+            with patch.object(
+                runtime_config_module.importlib_resources,
+                "files",
+                return_value=Path(workdir),
+            ):
+                self.assertFalse(runtime_config_module.rapidocr_english_ppocrv5_assets_available())
+                config = runtime_config_module.ocr_runtime_config()
+
+        self.assertFalse(config["rapidocr_bright_blue_recognition_assets_available"])
+
+    def test_runtime_config_can_use_explicit_v5_recognition_asset_paths(self) -> None:
+        with TemporaryDirectory() as workdir:
+            rec_model = Path(workdir) / "rec.onnx"
+            rec_keys = Path(workdir) / "keys.txt"
+            rec_model.write_bytes(b"model")
+            rec_keys.write_text("a\nb\n", encoding="utf-8")
+
+            with (
+                patch.object(runtime_config_module, "RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH", str(rec_model)),
+                patch.object(runtime_config_module, "RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH", str(rec_keys)),
+            ):
+                self.assertEqual(
+                    runtime_config_module.rapidocr_english_ppocrv5_asset_paths(),
+                    (rec_model, rec_keys),
+                )
+                self.assertTrue(runtime_config_module.rapidocr_english_ppocrv5_assets_available())
 
     def test_ocr_cache_key_depends_on_fast_text_rescue_filter(self) -> None:
         with TemporaryDirectory() as workdir:

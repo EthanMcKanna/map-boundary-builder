@@ -4,7 +4,6 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
-import importlib.resources as importlib_resources
 import csv
 import hashlib
 import json
@@ -38,6 +37,7 @@ from .runtime_config import (
     RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
+    rapidocr_english_ppocrv5_asset_paths,
     rapidocr_warm_detector_limits,
 )
 
@@ -1176,12 +1176,10 @@ def rapidocr_recognition_profile_kwargs(recognition_profile: str | None = None) 
     profile = normalized_rapidocr_recognition_profile(recognition_profile)
     if profile != RAPIDOCR_RECOGNITION_PROFILE_EN_PPOCRV5:
         return {}
-    try:
-        models_dir = importlib_resources.files("rapidocr").joinpath("models")
-    except Exception:
+    asset_paths = rapidocr_english_ppocrv5_asset_paths()
+    if asset_paths is None:
         return {}
-    rec_model_path = models_dir / "en_PP-OCRv5_rec_mobile.onnx"
-    rec_keys_path = models_dir / "ppocrv5_en_dict.txt"
+    rec_model_path, rec_keys_path = asset_paths
     if not all(path.is_file() for path in (rec_model_path, rec_keys_path)):
         return {}
     return {

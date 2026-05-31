@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.resources as importlib_resources
 import os
+from pathlib import Path
 from typing import Any
 
 
@@ -64,6 +66,14 @@ RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE = (
     os.environ.get("MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5").strip().lower()
     or "default"
 )
+RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH = os.environ.get(
+    "MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH",
+    "",
+).strip()
+RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH = os.environ.get(
+    "MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH",
+    "",
+).strip()
 RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION",
     1000,
@@ -124,6 +134,30 @@ def rapidocr_warm_detector_limits() -> list[int]:
     return limits
 
 
+def rapidocr_english_ppocrv5_asset_paths() -> tuple[Path, Path] | None:
+    if RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH and RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH:
+        return Path(RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH), Path(RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH)
+    try:
+        models_dir = importlib_resources.files("rapidocr").joinpath("models")
+    except Exception:
+        return None
+    return models_dir / "en_PP-OCRv5_rec_mobile.onnx", models_dir / "ppocrv5_en_dict.txt"
+
+
+def rapidocr_english_ppocrv5_assets_available() -> bool:
+    asset_paths = rapidocr_english_ppocrv5_asset_paths()
+    return asset_paths is not None and all(path.is_file() for path in asset_paths)
+
+
+def rapidocr_bright_blue_recognition_assets_available() -> bool:
+    profile = RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE.strip().lower()
+    if profile in {"", "default", "ppocrv4", "ch-ppocrv4"}:
+        return True
+    if profile in {"en-ppocrv5", "ppocrv5-en", "v5-en"}:
+        return rapidocr_english_ppocrv5_assets_available()
+    return False
+
+
 def ocr_runtime_config() -> dict[str, Any]:
     return {
         "rapidocr_max_dimension": RAPIDOCR_MAX_DIMENSION,
@@ -135,6 +169,9 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_bright_blue_detector_limit_side_len": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
         "rapidocr_bright_blue_detector_limit_type": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
         "rapidocr_bright_blue_recognition_profile": RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
+        "rapidocr_bright_blue_recognition_assets_available": (
+            rapidocr_bright_blue_recognition_assets_available()
+        ),
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,

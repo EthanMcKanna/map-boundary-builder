@@ -9470,3 +9470,72 @@ with zero failures in 0.531s.
   the single array-buffer read appeared only after success during async history
   persistence. Console had zero warnings/errors, and the screenshot was saved
   to `out/prod-stale-history-cache-20260531/stale-history-cache-proof.png`.
+- Refreshed the arbitrary no-catalog profile after the stale browser-history
+  cache deploy. Strict drift gate
+  `out/current-profile-after-stale-cache-20260531/full-report.json` passed 8/8
+  active fixtures plus seven drift smokes against
+  `out/stale-history-cache-strict-20260531/full-report.json`, preserving
+  avg/min IoU `0.968082`/`0.942536`. The active/evaluated totals were
+  `3.094636s`/`5.191272s`, max active fixture `0.645629s`, and the stage
+  totals again showed OCR as the dominant wall (`2.052919s` active,
+  `3.507618s` evaluated) ahead of extraction (`0.815936s` active,
+  `1.325992s` evaluated). A subprocess Dallas profile with CLI profile events
+  (`out/profile-events-subprocess-dallas-20260531/full-report.json`) passed at
+  IoU `0.957010`, `0.713429s` wall, and stage timings `0.282799s` OCR,
+  `0.207721s` extraction, `0.003740s` georeference.
+- Prototyped RapidOCR 3.8.1 as an alternate bright-blue OCR backend in a
+  temporary target directory without changing runtime code. A direct all-style
+  adapter was faster but rejected because it moved Austin Tesla IoU from
+  `0.977460` to `0.971158` and dropped compared mean IoU by `0.000565`
+  (`out/probe-rapidocr38-adapter-nocatalog-20260531/full-report.json`). A
+  bright-blue-only adapter, leaving gray-fill on the current
+  `rapidocr-onnxruntime` path, passed the same strict no-catalog drift gate
+  with exact avg/min IoU `0.968082`/`0.942536` and no regression issues
+  (`out/probe-rapidocr38-brightblue-only-nocatalog-20260531/full-report.json`).
+  It reduced active/evaluated totals to `2.779472s`/`4.766672s`, active OCR to
+  `1.781046s`, evaluated OCR to `3.151982s`, and max active fixture to
+  `0.533112s`. This is promising but not shipped: adding the modern `rapidocr`
+  package changes the package namespace that the current PP-OCRv5 resource
+  lookup depends on, so the adapter needs a durable dependency/model-path design
+  and at least one repeat/stress gate before it is safe to commit as runtime
+  behavior.
+- Follow-up RapidOCR 3.8.1 dependency-shape probes narrowed that blocker. A
+  bright-blue-only adapter using modern RapidOCR's packaged default recognizer,
+  avoiding the local PP-OCRv5 asset, failed the strict no-catalog gate
+  (`out/probe-rapidocr38-brightblue-defaultrec-nocatalog-20260531/full-report.json`):
+  Orlando Waymo IoU moved from `0.960371` to `0.931476`, Phoenix Waymo slowed
+  to `1.309893s`, active OCR rose to `2.711309s`, and the run failed both
+  regression and latency budgets. Repeating the PP-OCRv5-backed bright-blue
+  adapter confirmed the speed signal instead of a one-run fluke:
+  `out/probe-rapidocr38-brightblue-v5-repeat-nocatalog-20260531/full-report.json`
+  passed with exact avg/min IoU `0.968082`/`0.942536`, active/evaluated totals
+  `2.791468s`/`4.798823s`, active OCR `1.777942s`, and max active fixture
+  `0.553368s`. Clean package inspection still blocks shipping: a clean target
+  install of `rapidocr-onnxruntime==1.4.4` plus `rapidocr==3.8.1` contains only
+  `ch_PP-OCRv4_*` and `ppocrv5_dict.txt`, not
+  `en_PP-OCRv5_rec_mobile.onnx`. The next safe implementation path is therefore
+  not a simple dependency swap; it needs a deliberate PP-OCRv5 asset source
+  (vendored, build-time fetched, or replaced by an equally validated packaged
+  recognizer) before a production default can move to the faster modern
+  bright-blue detector path.
+- Accepted a reliability/observability prerequisite for that OCR-engine R&D:
+  runtime config and `/api/health` now report
+  `rapidocr_bright_blue_recognition_assets_available`, and the PP-OCRv5
+  recognition asset lookup supports explicit
+  `MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH` /
+  `MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH` overrides before falling
+  back to the package `rapidocr/models` directory. This does not change the
+  OCR hot path when assets are already present, but it prevents future
+  production speed tests from silently assuming the bright-blue recognizer is
+  available after dependency changes. Local `/api/health` construction returned
+  `pipeline-14b97da9acca9948`, profile `en-ppocrv5`, and
+  `rapidocr_bright_blue_recognition_assets_available: true` in this workspace.
+  Focused tests passed: `PYTHONPATH=. .venv/bin/pytest
+  tests/test_ocr_georeference.py -q` (`109 passed`) and
+  `PYTHONPATH=. .venv/bin/pytest tests/test_api_cache.py -q` (`64 passed`);
+  full `PYTHONPATH=. .venv/bin/pytest -q` passed `384` tests plus 12 subtests.
+  Strict no-catalog drift gate
+  `out/recognition-asset-health-strict-20260531/full-report.json` preserved
+  exact avg/min IoU `0.968082`/`0.942536`, passed 8/8 active fixtures plus
+  seven drift smokes, and stayed inside budgets with active/evaluated totals
+  `3.036814s`/`5.065892s`.
