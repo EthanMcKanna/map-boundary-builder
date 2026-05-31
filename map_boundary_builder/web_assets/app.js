@@ -398,7 +398,7 @@ form.addEventListener("submit", async (event) => {
       note: "Looking for a matching image and settings in this browser.",
     });
     const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);
-    const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);
+    const deferredCacheKeysPromise = () => cacheKeysFromLookupPromise(cacheLookupPromise);
     const firstFastResult = await Promise.race([
       catalogProbePromise.then((result) => ({ type: "catalog-probe", result })),
       cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then((cachedEntry) => (
@@ -1206,20 +1206,24 @@ async function buildRunCacheKeys(file, formData) {
     return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
   }
   try {
+    const settingsSignature = runCacheSettingsSignature(file, formData);
+    if (!hasCachedRunHistoryEntries()) {
+      return {
+        lookupKeys: [],
+        cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),
+      };
+    }
     const pipelineVersion = await fetchRunCachePipelineVersion();
     if (!pipelineVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
-    const settingsSignature = JSON.stringify({
-      filename_hint: filenameHintCacheValue(file.name || ""),
-      settings: Object.fromEntries(
-        RUN_CACHE_SETTING_FIELDS.map((field) => [field, String(formData.get(field) ?? "")]),
-      ),
-    });
     const [rawImageHash, settingsHash] = await Promise.all([
       rawImageContentHash(file),
       sha256Hex(new TextEncoder().encode(settingsSignature)),
     ]);
     const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
     if (requiresJsonUpload(file)) {
+      return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
+    }
+    if (!hasCachedRunHistoryEntries()) {
       return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
     }
     const pixelHashPromise = pixelImageContentHash(file);
@@ -1231,9 +1235,6 @@ async function buildRunCacheKeys(file, formData) {
         pixelImageHash,
       }))
       .catch(() => [rawKey]);
-    if (!hasCachedRunHistoryEntries()) {
-      return { lookupKeys: [rawKey], cacheKeysPromise };
-    }
     const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
     const lookupKeys = cacheKeysForHashes({
       pipelineVersion,
@@ -1245,6 +1246,45 @@ async function buildRunCacheKeys(file, formData) {
   } catch (error) {
     console.warn("Could not build local run cache key", error);
     return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
+  }
+}
+
+function runCacheSettingsSignature(file, formData) {
+  return JSON.stringify({
+    filename_hint: filenameHintCacheValue(file.name || ""),
+    settings: Object.fromEntries(
+      RUN_CACHE_SETTING_FIELDS.map((field) => [field, String(formData.get(field) ?? "")]),
+    ),
+  });
+}
+
+function lazyRunCacheKeys(file, settingsSignature) {
+  let cacheKeysPromise = null;
+  return () => {
+    cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignature);
+    return cacheKeysPromise;
+  };
+}
+
+async function runCacheKeysFromImage(file, settingsSignature) {
+  const pipelineVersion = await fetchRunCachePipelineVersion();
+  if (!pipelineVersion) return [];
+  const [rawImageHash, settingsHash] = await Promise.all([
+    rawImageContentHash(file),
+    sha256Hex(new TextEncoder().encode(settingsSignature)),
+  ]);
+  const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
+  if (requiresJsonUpload(file)) return [rawKey];
+  try {
+    const pixelImageHash = await pixelImageContentHash(file);
+    return cacheKeysForHashes({
+      pipelineVersion,
+      settingsHash,
+      rawImageHash,
+      pixelImageHash,
+    });
+  } catch (error) {
+    return [rawKey];
   }
 }
 
@@ -2130,7 +2170,7 @@ function hasCachedRunHistoryEntries() {
 async function cacheKeysFromPromise(cacheKeysPromise) {
   if (!cacheKeysPromise) return [];
   try {
-    const keys = await cacheKeysPromise;
+    const keys = typeof cacheKeysPromise === "function" ? await cacheKeysPromise() : await cacheKeysPromise;
     return Array.isArray(keys) ? keys : [];
   } catch (error) {
     return [];

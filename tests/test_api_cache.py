@@ -1176,7 +1176,9 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         cache_start = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
-        deferred_cache = app_js.index(b"const deferredCacheKeysPromise = cacheKeysFromLookupPromise(cacheLookupPromise);")
+        deferred_cache = app_js.index(
+            b"const deferredCacheKeysPromise = () => cacheKeysFromLookupPromise(cacheLookupPromise);"
+        )
         race_start = app_js.index(b"const firstFastResult = await Promise.race([")
         probe_race = app_js.index(b'catalogProbePromise.then((result) => ({ type: "catalog-probe", result }))')
         cache_race = app_js.index(b"cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then")
@@ -1252,24 +1254,41 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"function hasCachedRunHistoryEntries() {", app_js)
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
 
-    def test_frontend_skips_pixel_cache_wait_without_cached_history(self) -> None:
+    def test_frontend_lazily_builds_cache_keys_without_cached_history(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         helper_start = app_js.index(b"async function buildRunCacheKeys(file, formData) {")
-        pixel_hash = app_js.index(b"const pixelHashPromise = pixelImageContentHash(file);", helper_start)
-        cache_keys_promise = app_js.index(b"const cacheKeysPromise = pixelHashPromise", pixel_hash)
-        no_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) {", cache_keys_promise)
-        raw_only_return = app_js.index(b"return { lookupKeys: [rawKey], cacheKeysPromise };", no_history_guard)
+        settings_signature = app_js.index(
+            b"const settingsSignature = runCacheSettingsSignature(file, formData);",
+            helper_start,
+        )
+        no_history_guard = app_js.index(b"if (!hasCachedRunHistoryEntries()) {", settings_signature)
+        lazy_return = app_js.index(
+            b"cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),",
+            no_history_guard,
+        )
+        pipeline_fetch = app_js.index(b"const pipelineVersion = await fetchRunCachePipelineVersion();", lazy_return)
+        raw_hash = app_js.index(b"rawImageContentHash(file),", pipeline_fetch)
+        pixel_hash = app_js.index(b"const pixelHashPromise = pixelImageContentHash(file);", raw_hash)
         quick_wait = app_js.index(
             b"const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);",
-            raw_only_return,
+            pixel_hash,
         )
 
-        self.assertLess(pixel_hash, cache_keys_promise)
-        self.assertLess(cache_keys_promise, no_history_guard)
-        self.assertLess(no_history_guard, raw_only_return)
-        self.assertLess(raw_only_return, quick_wait)
+        self.assertLess(settings_signature, no_history_guard)
+        self.assertLess(no_history_guard, lazy_return)
+        self.assertLess(lazy_return, pipeline_fetch)
+        self.assertLess(pipeline_fetch, raw_hash)
+        self.assertLess(raw_hash, pixel_hash)
+        self.assertLess(pixel_hash, quick_wait)
+        self.assertIn(b"function lazyRunCacheKeys(file, settingsSignature) {", app_js)
+        self.assertIn(b"cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignature);", app_js)
+        self.assertIn(b"async function runCacheKeysFromImage(file, settingsSignature) {", app_js)
+        self.assertIn(
+            b'const keys = typeof cacheKeysPromise === "function" ? await cacheKeysPromise() : await cacheKeysPromise;',
+            app_js,
+        )
 
         warmup_start = app_js.index(b"function scheduleSelectedImageHashWarmup() {")
         warmup_task_guard = app_js.index(

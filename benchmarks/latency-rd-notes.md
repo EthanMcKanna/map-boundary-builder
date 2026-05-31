@@ -9376,3 +9376,34 @@ with zero failures in 0.531s.
   calls before Build, clicked Build, and saw the mocked `/api/runs` request
   leave in 47ms; screenshot saved to
   `out/prod-no-history-pixel-cache-20260531/no-history-cache-proof.png`.
+- Accepted lazy no-history run-cache key generation. After the prior no-history
+  pixel-cache suppression, first-run uploads still awaited raw-byte hashing
+  before they could reach `/api/runs`, even though no local history entry could
+  match. `buildRunCacheKeys()` now captures the settings signature, returns no
+  lookup keys, and hands back a lazy cache-key producer when there are no
+  GeoJSON-bearing cached history entries. The lazy producer computes raw and
+  decoded-pixel keys only when a successful run is saved to history; the
+  history-present path still computes raw/pixel lookup keys before upload so
+  cache hits are preserved. Local checks: `node --check
+  map_boundary_builder/web_assets/app.js`, focused
+  `PYTHONPATH=. .venv/bin/pytest tests/test_api_cache.py -q` passed 63 tests,
+  full `PYTHONPATH=. .venv/bin/pytest -q` passed 380 tests plus 12 subtests,
+  and `git diff --check` passed. Browser plugin page check verified
+  `http://127.0.0.1:8880` loaded without console warnings/errors. A local
+  Playwright proof cleared history, replaced `File.arrayBuffer()` with a
+  never-resolving promise, selected `Tesla Houston.png`, observed zero
+  array-buffer reads and zero pixel reads before Build, then clicked Build and
+  saw the mocked `/api/runs` request leave in 23ms; screenshot saved to
+  `out/lazy-no-history-cache-browser-20260531/lazy-cache-proof.png`. A second
+  local Playwright proof returned a mocked successful inline GeoJSON run and
+  verified no file/pixel reads before Build, then one array-buffer read, one
+  pixel read, and two saved history cache keys after history persistence;
+  screenshot saved to
+  `out/lazy-no-history-cache-browser-20260531/lazy-cache-success-proof.png`.
+  Backend hash stayed `pipeline-64ad23bb71268a34`; the new asset hash is
+  `asset-0114f6701c328986`. Strict no-catalog drift gate
+  `out/lazy-no-history-cache-strict-20260531/full-report.json` preserved active
+  avg/min IoU `0.968082`/`0.942536` versus
+  `out/no-history-pixel-cache-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven drift smokes, and stayed within latency budgets
+  with active/evaluated totals `3.110689s`/`5.153432s`.
