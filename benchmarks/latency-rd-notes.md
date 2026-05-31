@@ -8583,3 +8583,51 @@ with zero failures in 0.531s.
   georeference `0.419998s`, and road refinement `0.408766s`. The production
   path remains OCR-bound and noisy, but the deploy did not change geometry and
   the warmed cache-busted sample is consistent with the fresh-cache local win.
+- OCR substage profiling confirms the next broad latency wall is still
+  RapidOCR/ONNX rather than extraction. The scratch profile
+  `out/ocr-substage-profile-20260531/profile.json` measured the active
+  fast-text OCR path at 138 selected boxes, `1.894992s` in detection and
+  `0.841526s` in recognition across the eight active fixtures (`2.755402s`
+  total). Dallas Waymo spent `0.531s` in detection for only nine selected boxes,
+  Los Angeles `0.379s` detection plus `0.181s` recognition, and Phoenix
+  `0.221s` detection plus `0.299s` recognition for 44 selected boxes. The
+  cold Phoenix cProfile `out/profile-phoenix-after-roadcache.pstats` showed
+  ONNX Runtime calls dominating, with RapidOCR session setup still visible on
+  cold local runs. This rules out another extraction-only change as sufficient
+  for arbitrary sub-second generation.
+- Re-ran the ten real Downloads stress screenshots after the road-cache deploy.
+  Catalog-enabled current behavior in
+  `out/stress-current-after-roadcache-20260531/stress-summary.json` completed
+  all ten successfully; verified catalog entries now turn Houston and Miami into
+  fast catalog hits (`0.087850s` and `0.068433s` total elapsed respectively),
+  while Avride/Waymo/Zoox catalog hits remained under `0.283s`. The arbitrary
+  no-catalog neutral-hint stress pass
+  `out/stress-current-nocatalog-after-roadcache-20260531/stress-summary.json`
+  also completed all ten, with nine under `0.639s`, but exposed a cold
+  Miami-specific live-geocoder trap: `/Users/ethanmckanna/Downloads/miami.png`
+  spent `8.089038s` in georeference when the filename hint was neutral and live
+  network was allowed. With live network blocked and a fresh cache, the same
+  screenshot completed in `0.872593s` at the previously accepted 5-control
+  fit (`out/miami-neutral-blocked-fresh-20260531.summary.json`), proving the
+  slow path was optional live geocoding rather than required geometry work.
+- Accepted a small Miami geocoder-seed expansion to avoid that live cold path.
+  Bundled seeds now include the useful `North Miami Beach` Nominatim result and
+  explicit miss payloads for the misleading contextual `North Miami Beach,
+  Miami` and `West Miami Coral Gables` OCR queries, including Photon miss
+  payloads where an empty Nominatim seed would otherwise fall through to live
+  network. A fresh-cache, network-enabled neutral Miami CLI run no longer wrote
+  any geocoder cache files and completed without live geocoder I/O in
+  `1.007419s` (`out/miami-neutral-seeded-fresh-20260531.summary.json`), versus
+  the earlier `8.635960s` neutral-hint total; the difference was OCR noise and
+  the same accepted 5-control `0.716` fit. The targeted fresh-cache
+  block-network smoke
+  `out/miami-seeded-block-network-smoke-20260531/full-report.json` passed with
+  `catalog_slug: null`, no failures, and georeference `0.232899s`. The strict
+  no-catalog gate `out/miami-seed-nocatalog-gate-20260531/full-report.json`
+  preserved exact active IoUs (`0.967842/0.942536` avg/min) with zero regression
+  issues against
+  `out/road-refine-cache-emptyguard-nocatalog-20260531/full-report.json`, and
+  the current-reference catalog gate
+  `out/miami-seed-currentref-gate-20260531/full-report.json` preserved 15/15
+  current-reference IoUs (`0.996223/0.943345` avg/min). Focused geocoder tests
+  passed 10 tests plus 12 subtests, and the geocoder seed JSON validated.

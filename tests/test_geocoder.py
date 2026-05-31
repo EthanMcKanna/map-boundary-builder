@@ -185,6 +185,47 @@ class GeocoderSeedTests(unittest.TestCase):
                             self.assertGreaterEqual(result.lat, 25.60)
                             self.assertLessEqual(result.lat, 25.90)
 
+    def test_bundled_north_miami_beach_seed_serves_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("North Miami Beach", limit=3)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].display_name,
+            "North Miami Beach, Miami-Dade County, Florida, 33162, United States",
+        )
+        self.assertEqual(
+            results[0].bbox,
+            (-80.2085683, 25.9004315, -80.1308922, 25.9571715),
+        )
+
+    def test_bundled_miami_noise_misses_avoid_network(self) -> None:
+        queries = [
+            "North Miami Beach, Miami",
+            "West Miami Coral Gables, Miami",
+            "West Miami Coral Gables",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                for query in queries:
+                    with self.subTest(query=query):
+                        results = geocoder.geocode(query, limit=3)
+                        self.assertEqual(results, [])
+
 
 if __name__ == "__main__":
     unittest.main()
