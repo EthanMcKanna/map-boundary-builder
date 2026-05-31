@@ -1266,6 +1266,10 @@ def cached_run_event_details(
 ) -> dict[str, Any]:
     if status == "catalog_miss" and isinstance(payload.get("catalog_probe_miss"), dict):
         return payload["catalog_probe_miss"]
+    if status == "failed":
+        error = payload.get("error")
+        if isinstance(error, str) and error:
+            return {"error": error}
     return summary
 
 

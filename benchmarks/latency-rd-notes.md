@@ -9043,3 +9043,17 @@ with zero failures in 0.531s.
   import-failure branch itself remains covered by the focused local regression
   test because intentionally breaking the production runner import would be
   destructive.
+- Accepted cached failure event detail preservation. Cached 422 generation
+  failures already preserved the top-level `error`, but the synthetic cached
+  event carried empty `details`, making repeated failed uploads less useful for
+  diagnostics and report payloads than the analogous cached catalog-miss path.
+  Cached failed events now include `details: {"error": ...}` while successful
+  cached runs and catalog misses keep their existing details behavior. Focused
+  API cache tests passed 55/55, `compileall` passed, full
+  `PYTHONPATH=. .venv/bin/pytest -q` passed 369 tests plus 12 subtests, and the
+  local hash is `pipeline-55073fdd67b50303`. Strict no-catalog drift gate
+  `out/cached-failed-event-details-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/api-import-error-guard-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.902514s`/`4.948244s`.

@@ -602,6 +602,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["filename"], "Bad.png")
         self.assertIn("Could not infer", payload["error"])
         self.assertEqual(payload["events"][-1]["message"], "Generation failure ready from cache")
+        self.assertEqual(
+            payload["events"][-1]["details"],
+            {"error": "Could not infer a reliable map location."},
+        )
         self.assertEqual(cached_run_response_status(payload), HTTPStatus.UNPROCESSABLE_ENTITY)
 
     def test_catalog_miss_cache_round_trip_and_payload_rehydration(self) -> None:
