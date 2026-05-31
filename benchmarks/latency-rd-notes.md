@@ -7865,3 +7865,21 @@ with zero failures in 0.531s.
   failed the zero-drop regression check. Keep the 1300px fast-text filter; low
   resolution still needs a better independent georeference signal, not more
   tiny OCR boxes.
+- Rejected lowering the bright-blue RapidOCR detector cap from 480 to 448 after
+  the OCR bounds hardening. The first strict active plus drift-smoke probe
+  looked promising (`out/probe-detmax448-after-bounds-nocatalog-20260531/full-report.json`:
+  8/8 scored, avg/min IoU 0.967842/0.942536, total 2.565426s, max 0.475304s,
+  versus the 480px control's 2.611622s / 0.486389s), and the broader
+  current-reference probe also preserved exact geometry
+  (`out/probe-detmax448-currentref-after-bounds-nocatalog-20260531/full-report.json`:
+  15/15, avg/min IoU 0.950465/0.794177, total 4.403238s, max 0.484191s).
+  A paired repeat showed the apparent win was not durable: the current 480px
+  default repeated at 4.309941s total / 0.480385s max
+  (`out/probe-detmax480-currentref-repeat-nocatalog-20260531/full-report.json`),
+  while 448px repeated at 4.377222s total / 0.492846s max
+  (`out/probe-detmax448-currentref-repeat-nocatalog-20260531/full-report.json`).
+  The earlier 384px probe also preserved geometry but was slower than control
+  (`out/probe-detmax384-after-bounds-nocatalog-20260531/full-report.json`:
+  total 2.808419s, max 0.534349s). Keep the current 480px bright-blue detector
+  cap; the detector-cap surface is now bracketed at 384, 448, and 480 without a
+  robust speed win.
