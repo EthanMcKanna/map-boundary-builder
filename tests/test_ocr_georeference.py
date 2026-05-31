@@ -32,12 +32,14 @@ from map_boundary_builder.georeference import (
     is_noisy_regional_control_query,
     is_noisy_poi_query,
     is_reliable_single_token_context,
+    low_res_two_control_regional_fit_without_road_evidence,
     place_query_text,
     place_tokens,
     prune_single_noisy_similarity_control,
     residual_median_p90,
     should_try_road_refinement,
     single_tokens_supported_by_fuller_labels,
+    sparse_high_residual_fit_without_road_evidence,
     sparse_rotated_fit_without_road_evidence,
 )
 from map_boundary_builder.geocoder import GeocodeResult
@@ -1975,6 +1977,83 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 residual_median_m=1080.0,
                 residual_p90_m=1350.0,
                 road_match=None,
+            )
+        )
+
+    def test_sparse_high_residual_fit_requires_more_label_or_road_evidence(self) -> None:
+        self.assertTrue(
+            sparse_high_residual_fit_without_road_evidence(
+                inlier_count=4,
+                residual_p90_m=3999.0,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            sparse_high_residual_fit_without_road_evidence(
+                inlier_count=4,
+                residual_p90_m=3999.0,
+                road_match=object(),
+            )
+        )
+        self.assertFalse(
+            sparse_high_residual_fit_without_road_evidence(
+                inlier_count=5,
+                residual_p90_m=3999.0,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            sparse_high_residual_fit_without_road_evidence(
+                inlier_count=4,
+                residual_p90_m=3200.0,
+                road_match=None,
+            )
+        )
+
+    def test_low_res_two_control_regional_fit_requires_more_evidence(self) -> None:
+        self.assertTrue(
+            low_res_two_control_regional_fit_without_road_evidence(
+                inlier_count=2,
+                meters_per_pixel=418.0,
+                width=278,
+                height=280,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            low_res_two_control_regional_fit_without_road_evidence(
+                inlier_count=2,
+                meters_per_pixel=179.0,
+                width=284,
+                height=291,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            low_res_two_control_regional_fit_without_road_evidence(
+                inlier_count=2,
+                meters_per_pixel=418.0,
+                width=556,
+                height=560,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            low_res_two_control_regional_fit_without_road_evidence(
+                inlier_count=3,
+                meters_per_pixel=418.0,
+                width=278,
+                height=280,
+                road_match=None,
+            )
+        )
+        self.assertFalse(
+            low_res_two_control_regional_fit_without_road_evidence(
+                inlier_count=2,
+                meters_per_pixel=418.0,
+                width=278,
+                height=280,
+                road_match=object(),
             )
         )
 

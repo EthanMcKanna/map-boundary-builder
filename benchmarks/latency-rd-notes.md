@@ -7777,3 +7777,20 @@ with zero failures in 0.531s.
   `out/probe-small-ocr-upscale1000-half-currentref-nocatalog-20260531/full-report.json`).
   Low-resolution robustness likely needs extraction/georeference-specific
   rescue logic rather than blanket OCR resizing.
+- Accepted a narrow sparse-georeference fail-closed guard for low-resolution
+  no-catalog uploads. The half-scale stress control emitted two confidently
+  wrong GeoJSONs: Bay Area Tesla had only two OCR controls at 418m/px on a
+  278x280 image, while Las Vegas Zoox had four controls but a p90 residual near
+  4km. The guard now rejects only OCR georeferences with either <=4 no-road
+  controls and p90 residual above 3500m, or a two-control no-road fit below
+  320px min side with scale >=250m/px. That changed the half-scale stress
+  failures from one error plus two bad polygons to three explicit sparse-label
+  errors while preserving the other 12 passing outputs
+  (`out/sparseguard-half-currentref-nocatalog-20260531/full-report.json`,
+  12/15, avg/min successful IoU 0.913031/0.822031). The current-reference
+  no-catalog gate preserved exact IoUs against the control with no regression
+  issues (`out/sparseguard-current-defaultcache-nocatalog-20260531/full-report.json`,
+  15/15, avg/min IoU 0.950465/0.794177, total 4.662416s), and the strict
+  active plus drift-smoke gate passed with no regression issues
+  (`out/sparseguard-strict-nocatalog-20260531/full-report.json`, 8/8 scored,
+  avg/min IoU 0.967842/0.942536, seven drift smokes with zero failures).

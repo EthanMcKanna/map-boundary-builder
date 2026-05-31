@@ -389,6 +389,104 @@ def test_light_fill_label_fits_skip_road_refinement() -> None:
     assert runner.should_allow_label_fit_road_refinement("light-fill") is False
 
 
+def test_sparse_ocr_georeference_rejects_low_res_regional_two_point_fit() -> None:
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="San Francisco Bay Area",
+            lon=-122.45,
+            lat=38.01,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=418.0,
+            rotation_radians=-0.22,
+            confidence=0.825,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object()],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+
+    assert runner.sparse_ocr_georeference_lacks_support(georef, width=278, height=280) is True
+    assert runner.sparse_ocr_georeference_lacks_support(georef, width=556, height=560) is False
+
+
+def test_sparse_ocr_georeference_rejects_high_p90_without_road_evidence() -> None:
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Las Vegas",
+            lon=-115.32,
+            lat=36.19,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=80.8,
+            rotation_radians=-0.17,
+            confidence=0.758,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object(), object(), object()],
+        residual_median_m=296.0,
+        residual_p90_m=3999.0,
+    )
+
+    assert runner.sparse_ocr_georeference_lacks_support(georef, width=311, height=292) is True
+
+    road_supported = GeoreferenceResult(
+        transform=georef.transform,
+        control_points=georef.control_points,
+        residual_median_m=georef.residual_median_m,
+        residual_p90_m=georef.residual_p90_m,
+        road_match=object(),
+    )
+    assert runner.sparse_ocr_georeference_lacks_support(road_supported, width=311, height=292) is False
+
+
+def test_build_boundary_fails_closed_for_sparse_unsupported_georeference(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "tiny-bay-area.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (278, 280), (245, 245, 245)).save(image_path)
+    rgb = np.full((280, 278, 3), 245, dtype=np.uint8)
+    mask = np.zeros((280, 278), dtype=bool)
+    mask[70:210, 80:220] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="gray-fill",
+        pixel_geometry=Polygon([(80, 70), (220, 70), (220, 210), (80, 210)]),
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=1.0,
+    )
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="San Francisco Bay Area",
+            lon=-122.45,
+            lat=38.01,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=418.0,
+            rotation_radians=-0.22,
+            confidence=0.825,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object()],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
+
+    with pytest.raises(ValueError, match="sparse OCR labels"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False),
+        )
+
+
 def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None:
     monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 512)
     monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max")

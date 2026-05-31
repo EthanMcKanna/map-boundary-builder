@@ -51,6 +51,8 @@ from .georeference import (
     georeference_from_labels,
     infer_city_contexts,
     is_credible_context_hint_georeference,
+    low_res_two_control_regional_fit_without_road_evidence,
+    sparse_high_residual_fit_without_road_evidence,
 )
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
@@ -1162,6 +1164,11 @@ def build_boundary(
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
             "Provide a higher-resolution map crop with readable city or neighborhood labels."
+        )
+    if sparse_ocr_georeference_lacks_support(georef, width=width, height=height):
+        raise ValueError(
+            "Could not infer a reliable map location and georeference from sparse OCR labels. "
+            "Provide a higher-resolution map crop with more readable place labels."
         )
 
     geo_transform = georef.transform
@@ -2632,6 +2639,25 @@ def should_anchor_marker_dots(style: str) -> bool:
 
 def should_allow_label_fit_road_refinement(style: str | None) -> bool:
     return style != "light-fill"
+
+
+def sparse_ocr_georeference_lacks_support(georef, *, width: int, height: int) -> bool:
+    if not str(georef.transform.source).startswith("ocr-georeference:"):
+        return False
+    control_count = len(georef.control_points)
+    if sparse_high_residual_fit_without_road_evidence(
+        control_count,
+        georef.residual_p90_m,
+        georef.road_match,
+    ):
+        return True
+    return low_res_two_control_regional_fit_without_road_evidence(
+        control_count,
+        georef.transform.meters_per_pixel,
+        width,
+        height,
+        georef.road_match,
+    )
 
 
 def road_network_context_fallback_enabled() -> bool:

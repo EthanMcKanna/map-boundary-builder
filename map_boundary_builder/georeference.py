@@ -765,6 +765,32 @@ def sparse_rotated_fit_without_road_evidence(
     return residual_median_m >= 800.0 and residual_p90_m >= 1200.0
 
 
+def sparse_high_residual_fit_without_road_evidence(
+    inlier_count: int,
+    residual_p90_m: float,
+    road_match: object | None,
+) -> bool:
+    if road_match is not None:
+        return False
+    if inlier_count > 4:
+        return False
+    return residual_p90_m > 3500.0
+
+
+def low_res_two_control_regional_fit_without_road_evidence(
+    inlier_count: int,
+    meters_per_pixel: float,
+    width: int,
+    height: int,
+    road_match: object | None,
+) -> bool:
+    if road_match is not None:
+        return False
+    if inlier_count != 2:
+        return False
+    return min(width, height) < 320 and meters_per_pixel >= 250.0
+
+
 def georeference_control_spread_m(controls: list[ControlPoint]) -> float:
     if len(controls) < 2:
         return 0.0
