@@ -921,7 +921,11 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
 
 def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
     report = {
-        "summary": {"total_duration_s": 4.2},
+        "summary": {
+            "total_duration_s": 4.2,
+            "smoked_skipped_duration_s": 0.9,
+            "evaluated_duration_s": 5.1,
+        },
         "scores": [
             {"slug": "phoenix-waymo", "status": "active", "duration_s": 1.21},
             {"slug": "miami-waymo", "status": "reference_mismatch", "duration_s": 6.0},
@@ -933,9 +937,11 @@ def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
         report,
         max_duration_s=1.0,
         max_total_duration_s=4.0,
+        max_evaluated_duration_s=5.0,
     )
 
     assert check["passed"] is False
+    assert check["max_evaluated_duration_s"] == 5.0
     assert check["issues"] == [
         {
             "slug": "phoenix-waymo",
@@ -950,6 +956,12 @@ def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
             "max_total_duration_s": 4.0,
             "excess_s": 0.2,
         },
+        {
+            "kind": "evaluated_duration_budget_exceeded",
+            "evaluated_duration_s": 5.1,
+            "max_evaluated_duration_s": 5.0,
+            "excess_s": 0.1,
+        },
     ]
 
 
@@ -963,13 +975,42 @@ def test_report_latency_budget_check_passes_when_within_budget() -> None:
         "scores": [{"slug": "dallas-tesla", "status": "active", "duration_s": 0.19}],
     }
 
-    check = check_report_latency_budgets(report, max_duration_s=1.0, max_total_duration_s=3.0)
+    check = check_report_latency_budgets(
+        report,
+        max_duration_s=1.0,
+        max_total_duration_s=3.0,
+        max_evaluated_duration_s=3.5,
+    )
 
     assert check["passed"] is True
+    assert check["max_evaluated_duration_s"] == 3.5
     assert check["active_total_duration_s"] == 2.9
     assert check["smoked_skipped_duration_s"] == 0.4
     assert check["evaluated_duration_s"] == 3.3
     assert check["issues"] == []
+
+
+def test_report_latency_budget_check_computes_evaluated_duration_when_missing() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 2.5,
+            "smoked_skipped_duration_s": 0.8,
+        },
+        "scores": [{"slug": "orlando-waymo", "status": "active", "duration_s": 0.24}],
+    }
+
+    check = check_report_latency_budgets(report, max_evaluated_duration_s=3.0)
+
+    assert check["passed"] is False
+    assert check["evaluated_duration_s"] == 3.3
+    assert check["issues"] == [
+        {
+            "kind": "evaluated_duration_budget_exceeded",
+            "evaluated_duration_s": 3.3,
+            "max_evaluated_duration_s": 3.0,
+            "excess_s": 0.3,
+        }
+    ]
 
 
 def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, monkeypatch) -> None:

@@ -276,6 +276,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional absolute maximum total active-fixture duration budget.",
     )
+    parser.add_argument(
+        "--max-evaluated-duration-s",
+        type=float,
+        default=None,
+        help="Optional absolute maximum active plus smoke-checked fixture duration budget.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -328,11 +334,16 @@ def main(argv: list[str] | None = None) -> int:
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
         report["summary"]["passed"] = bool(report["summary"]["passed"] and regression_check["passed"])
-    if args.max_duration_s is not None or args.max_total_duration_s is not None:
+    if (
+        args.max_duration_s is not None
+        or args.max_total_duration_s is not None
+        or args.max_evaluated_duration_s is not None
+    ):
         latency_budget_check = check_report_latency_budgets(
             report,
             max_duration_s=args.max_duration_s,
             max_total_duration_s=args.max_total_duration_s,
+            max_evaluated_duration_s=args.max_evaluated_duration_s,
         )
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
@@ -1265,9 +1276,13 @@ def check_report_latency_budgets(
     *,
     max_duration_s: float | None = None,
     max_total_duration_s: float | None = None,
+    max_evaluated_duration_s: float | None = None,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
+    evaluated_budget = (
+        None if max_evaluated_duration_s is None else max(0.0, float(max_evaluated_duration_s))
+    )
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = parse_report_duration(report.get("summary", {}).get("evaluated_duration_s"))
@@ -1300,10 +1315,21 @@ def check_report_latency_budgets(
                     "excess_s": round(active_total_duration - total_budget, 6),
                 }
             )
+    if evaluated_budget is not None:
+        if evaluated_duration is not None and evaluated_duration > evaluated_budget:
+            issues.append(
+                {
+                    "kind": "evaluated_duration_budget_exceeded",
+                    "evaluated_duration_s": round(evaluated_duration, 6),
+                    "max_evaluated_duration_s": evaluated_budget,
+                    "excess_s": round(evaluated_duration - evaluated_budget, 6),
+                }
+            )
     return {
         "passed": not issues,
         "max_duration_s": duration_budget,
         "max_total_duration_s": total_budget,
+        "max_evaluated_duration_s": evaluated_budget,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
@@ -1449,6 +1475,12 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(
                     f"       total duration {issue['total_duration_s']:.3f}s "
                     f"> budget {issue['max_total_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "evaluated_duration_budget_exceeded":
+                print(
+                    f"       evaluated duration {issue['evaluated_duration_s']:.3f}s "
+                    f"> budget {issue['max_evaluated_duration_s']:.3f}s "
                     f"(+{issue['excess_s']:.3f}s)"
                 )
 

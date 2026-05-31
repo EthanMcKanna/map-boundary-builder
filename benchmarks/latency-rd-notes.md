@@ -8037,3 +8037,15 @@ with zero failures in 0.531s.
   catalog-hit failures, active total 2.726766s, smoke total 1.985669s, and
   evaluated total 4.712435s. Targeted benchmark tests passed 25/25; full
   `pytest` passed 318/318.
+- Accepted an optional evaluated-duration latency budget for smoke-aware gates.
+  `--max-total-duration-s` remains the active scored-fixture budget for
+  backward compatibility, and the new `--max-evaluated-duration-s` separately
+  checks active plus smoke-checked fixture time. This lets overnight
+  drift-smoke runs enforce total validation work without weakening the existing
+  active-fixture SLA. The real strict drift-smoke gate
+  `out/evaluated-duration-budget-20260531/full-report.json` passed with 8/8
+  active fixtures, seven smoke-checked `reference_mismatch` fixtures, zero
+  catalog-hit failures, active total 2.992521s, smoke total 2.048223s,
+  evaluated total 5.040743s, `--max-total-duration-s 4`, and
+  `--max-evaluated-duration-s 6`. Targeted benchmark tests passed 26/26; full
+  `pytest` passed 319/319.
