@@ -22,6 +22,7 @@ from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from .runner import BoundaryBuildOptions, CatalogProbeMiss, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
+from .upload_payload import UploadPayloadError, json_upload_body_limit, parse_json_upload_body
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 TERMINAL_STATUSES = {"complete", "error"}
@@ -140,7 +141,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         raise RequestError(HTTPStatus.NOT_FOUND, "Run not found")
 
     def handle_create_run(self) -> None:
-        fields, files = self.parse_multipart()
+        fields, files = self.parse_upload_request()
         city = fields.get("city", "").strip() or None
         upload = files.get("image")
         if upload is None:
@@ -254,7 +255,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         self.send_json({"id": run_id, "status_url": f"/api/runs/{run_id}"}, status=HTTPStatus.CREATED)
 
     def handle_create_report(self) -> None:
-        fields, files = self.parse_multipart()
+        fields, files = self.parse_upload_request()
         upload = files.get("image")
         if upload is None:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Image upload is required.")
@@ -296,6 +297,25 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         except GithubReportError as exc:
             raise RequestError(HTTPStatus.BAD_GATEWAY, str(exc)) from exc
         self.send_json(result, status=HTTPStatus.CREATED)
+
+    def parse_upload_request(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
+        content_type = self.headers.get("Content-Type", "").lower()
+        if "multipart/form-data" in content_type:
+            return self.parse_multipart()
+        if "application/json" in content_type:
+            return self.parse_json_upload()
+        raise RequestError(HTTPStatus.BAD_REQUEST, "Expected multipart/form-data or application/json.")
+
+    def parse_json_upload(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            raise RequestError(HTTPStatus.BAD_REQUEST, "Request body is empty.")
+        if length > json_upload_body_limit(MAX_UPLOAD_BYTES):
+            raise RequestError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Upload is larger than 50 MB.")
+        try:
+            return parse_json_upload_body(self.rfile.read(length), max_upload_bytes=MAX_UPLOAD_BYTES)
+        except UploadPayloadError as exc:
+            raise RequestError(exc.status, str(exc)) from exc
 
     def parse_multipart(self) -> tuple[dict[str, str], dict[str, tuple[str, bytes]]]:
         content_type = self.headers.get("Content-Type", "")

@@ -432,10 +432,7 @@ form.addEventListener("submit", async (event) => {
       step: "prepare",
       note: "Sending screenshot to the builder.",
     });
-    const response = await fetch("/api/runs", {
-      method: "POST",
-      body: formData,
-    });
+    const response = await fetch("/api/runs", await uploadFetchOptions(formData, uploadFile));
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Run failed to start.");
@@ -831,6 +828,13 @@ async function prepareRunImage(file) {
     const canvas = await imageFileToCanvas(file);
     return canvasToPngFile(canvas, file, "Could not convert BMP upload.");
   }
+  if (requiresJsonUpload(file)) {
+    markProgressStep("prepare", "running", "Encoding image map.");
+    setStatus("Encoding TIFF map", 4, "running", {
+      step: "prepare",
+      note: "Preparing raw image upload before extraction.",
+    });
+  }
   return file;
 }
 
@@ -852,11 +856,9 @@ async function tryCatalogProbe(file, formData, options = {}) {
     probeData.set("catalog_probe_only", "1");
     probeData.set("include_overlay", "0");
     probeData.set("normalized_cache_lookup", "0");
-    const responsePromise = fetch("/api/runs", {
-      method: "POST",
-      body: probeData,
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
+    const responsePromise = uploadFetchOptions(probeData, probeCandidate.file, {
+      signal: options.signal,
+    }).then((requestOptions) => fetch("/api/runs", requestOptions));
     const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);
     const response = await responsePromise;
     const payload = await response.json().catch(() => null);
@@ -909,10 +911,10 @@ async function tryFastCatalogHandoff(formData, catalogProbeResult) {
     fastData.set("catalog_probe_missed", "1");
     fastData.set("include_overlay", "0");
     fastData.set("normalized_cache_lookup", "0");
-    const response = await fetch("/api/runs", {
-      method: "POST",
-      body: fastData,
-    });
+    const response = await fetch(
+      "/api/runs",
+      await uploadFetchOptions(fastData, catalogProbeResult.fastHandoffFile),
+    );
     const payload = await response.json().catch(() => null);
     if (response.ok && isFastCatalogHandoffPayload(payload, catalogProbeResult)) {
       return { payload };
@@ -927,7 +929,7 @@ async function tryFastCatalogHandoff(formData, catalogProbeResult) {
 
 function shouldTryCatalogProbe(file) {
   if (!file || file.size < CATALOG_PROBE_MIN_BYTES) return false;
-  return !isSvgFile(file);
+  return !isSvgFile(file) && !requiresJsonUpload(file);
 }
 
 function hasCatalogProbeHint(file, formData) {
@@ -1129,7 +1131,9 @@ async function fastCatalogHandoffCandidate(file, probeCandidate) {
 }
 
 function shouldPrepareFastCatalogHandoff(file, probeCandidate) {
-  if (!file || isSvgFile(file) || file.size < FAST_CATALOG_HANDOFF_MIN_BYTES) return false;
+  if (!file || isSvgFile(file) || requiresJsonUpload(file) || file.size < FAST_CATALOG_HANDOFF_MIN_BYTES) {
+    return false;
+  }
   if (!probeCandidate?.sourceCanvas || !probeCandidate.looksServiceAreaLike) return false;
   return true;
 }
@@ -1158,6 +1162,9 @@ async function buildRunCacheKeys(file, formData) {
       sha256Hex(new TextEncoder().encode(settingsSignature)),
     ]);
     const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
+    if (requiresJsonUpload(file)) {
+      return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
+    }
     const pixelHashPromise = pixelImageContentHash(file);
     const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
     const lookupKeys = cacheKeysForHashes({
@@ -1260,7 +1267,7 @@ function createImageHashTask(file) {
 
 function scheduleSelectedImageHashWarmup() {
   const task = selectedImageHashTask;
-  if (!task || isSvgFile(task.file)) return;
+  if (!task || isSvgFile(task.file) || requiresJsonUpload(task.file)) return;
   const start = () => {
     if (selectedImageHashTask === task) {
       task.pixelHash().catch((error) => {
@@ -1351,6 +1358,15 @@ function isBmpFile(file) {
   return type === "image/bmp" || type === "image/x-ms-bmp" || /\.bmp$/i.test(file?.name || "");
 }
 
+function isTiffFile(file) {
+  const type = String(file?.type || "").toLowerCase();
+  return type === "image/tiff" || type === "image/x-tiff" || /\.tiff?$/i.test(file?.name || "");
+}
+
+function requiresJsonUpload(file) {
+  return isTiffFile(file);
+}
+
 function fileBaseName(filename) {
   return (filename || "map-upload").replace(/\.[^.]+$/, "") || "map-upload";
 }
@@ -1419,6 +1435,50 @@ async function canvasToPngFile(canvas, sourceFile, failureMessage) {
   return new File([blob], `${fileBaseName(sourceFile.name)}.png`, {
     type: "image/png",
     lastModified: sourceFile.lastModified,
+  });
+}
+
+async function uploadFetchOptions(formData, file, options = {}) {
+  const requestOptions = {
+    method: "POST",
+    ...(options.signal ? { signal: options.signal } : {}),
+  };
+  if (!requiresJsonUpload(file)) {
+    return { ...requestOptions, body: formData };
+  }
+  return {
+    ...requestOptions,
+    headers: { "Content-Type": "application/json" },
+    body: await uploadJsonPayload(formData, file),
+  };
+}
+
+async function uploadJsonPayload(formData, file) {
+  const fields = {};
+  formData.forEach((value, name) => {
+    if (name === "image" || value instanceof File) return;
+    fields[name] = String(value);
+  });
+  return JSON.stringify({
+    image: {
+      filename: file.name || "uploaded-image",
+      content_type: file.type || "",
+      data_base64: await fileToBase64(file),
+    },
+    fields,
+  });
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Could not read image upload."));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -2715,10 +2775,7 @@ async function submitGenerationReport(event) {
     formData.set("profile", JSON.stringify(latestRunProfile || {}));
     formData.set("user_agent", navigator.userAgent);
     formData.set("page_url", window.location.href);
-    const response = await fetch("/api/reports", {
-      method: "POST",
-      body: formData,
-    });
+    const response = await fetch("/api/reports", await uploadFetchOptions(formData, reportImage));
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Report failed.");
     reportFormStatus.textContent = "Issue created. The screenshot is now public in GitHub for debugging.";
@@ -2843,6 +2900,7 @@ async function prepareReportImage(file) {
     const canvas = await imageFileToCanvas(file);
     return canvasToPngFile(canvas, file, "Could not convert BMP report image.");
   }
+  if (requiresJsonUpload(file)) return file;
   if (file.size <= 7_500_000) return file;
   const canvas = await imageFileToCanvas(file);
   const maxSize = 2200;

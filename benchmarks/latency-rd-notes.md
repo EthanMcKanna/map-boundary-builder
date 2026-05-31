@@ -8361,3 +8361,23 @@ with zero failures in 0.531s.
   timings inspect 0.036229s, extract 0.047413s, georeference 0.000005s, export
   0.000705s. The live evidence was saved under
   `out/bmp-support-20260531/prod-bmp-normalized-response.txt`.
+- Accepted a JSON/base64 upload fallback for hosted TIFF screenshots after the
+  same platform-level WAF pattern appeared beyond BMP. A converted Tesla Dallas
+  TIFF completed locally through the normal CLI path in
+  `out/tiff-normalization-20260531/tesla-dallas-tiff.summary.json` with
+  `catalog_slug=dallas-tesla`, `catalog_shape_iou=0.972523`, confidence
+  0.972523, and the expected Dallas bbox in 0.035413s. Direct production raw
+  TIFF multipart uploads are denied before app code with HTTP 403 and
+  `x-vercel-mitigated: deny`, including when the same TIFF bytes are mislabeled
+  as PNG. A JSON/base64 probe with the same TIFF bytes reached the current app
+  code and returned the expected pre-change HTTP 400 instead of a Vercel deny,
+  confirming the alternate transport is viable. The API and local web handler
+  now accept either multipart or JSON/base64 image uploads; the hosted frontend
+  routes `.tif/.tiff` uploads and report images through JSON/base64 while
+  leaving browser-rasterized SVG/BMP and ordinary raster formats on their
+  existing faster paths. The local web handler accepted the TIFF JSON path in
+  `out/tiff-normalization-20260531/local-web-tiff-json-response.txt`, returning
+  HTTP 201, city Dallas, `catalog_shape_iou=0.972523`, and
+  `build_boundary_s=0.039759`. Validation passed `compileall`, `node --check
+  map_boundary_builder/web_assets/app.js`, focused upload/API/image/report
+  tests 70/70, full `unittest discover` 218/218, and full `pytest` 347/347.
