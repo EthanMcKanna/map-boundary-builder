@@ -83,6 +83,9 @@ let activeImageMode = "original";
 let generationRuntimePrewarm = null;
 let generationRuntimePrewarmScheduled = false;
 let generationRuntimePrewarmAbortController = null;
+let generationRuntimePrewarmScheduleToken = 0;
+let generationRuntimePrewarmIdleCallbackId = null;
+let generationRuntimePrewarmTimeoutId = null;
 let selectedImageHashTask = null;
 let pendingRunCacheKeys = [];
 let pendingRunCacheKeysPromise = null;
@@ -770,19 +773,30 @@ function setSelectedFile(file) {
   setStatus("Image ready", 0, "idle", {
     note: "Review settings, then run the boundary export.",
   });
-  scheduleGenerationRuntimePrewarm();
+  scheduleGenerationRuntimePrewarm({ eager: true });
   scheduleSelectedImageHashWarmup();
   renderHistory();
   activateTab("input");
 }
 
-function scheduleGenerationRuntimePrewarm() {
-  if (generationRuntimePrewarm || generationRuntimePrewarmScheduled || isRunButtonRunning()) return;
+function scheduleGenerationRuntimePrewarm(options = {}) {
+  if (generationRuntimePrewarm || isRunButtonRunning()) return;
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   if (connection?.saveData) return;
+
+  if (generationRuntimePrewarmScheduled) {
+    if (!options.eager) return;
+    clearScheduledGenerationRuntimePrewarm();
+  }
+
   generationRuntimePrewarmScheduled = true;
+  generationRuntimePrewarmScheduleToken += 1;
+  const scheduleToken = generationRuntimePrewarmScheduleToken;
 
   const start = () => {
+    if (scheduleToken !== generationRuntimePrewarmScheduleToken) return;
+    generationRuntimePrewarmIdleCallbackId = null;
+    generationRuntimePrewarmTimeoutId = null;
     if (isRunButtonRunning()) {
       generationRuntimePrewarmScheduled = false;
       return;
@@ -817,15 +831,31 @@ function scheduleGenerationRuntimePrewarm() {
       });
   };
 
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(start, { timeout: 1500 });
+  if (!options.eager && typeof window.requestIdleCallback === "function") {
+    generationRuntimePrewarmIdleCallbackId = window.requestIdleCallback(start, { timeout: 1500 });
   } else {
-    window.setTimeout(start, 400);
+    const delayMs = options.eager ? 0 : 400;
+    generationRuntimePrewarmTimeoutId = window.setTimeout(start, delayMs);
+  }
+}
+
+function clearScheduledGenerationRuntimePrewarm() {
+  generationRuntimePrewarmScheduleToken += 1;
+  generationRuntimePrewarmScheduled = false;
+  if (generationRuntimePrewarmIdleCallbackId !== null) {
+    if (typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(generationRuntimePrewarmIdleCallbackId);
+    }
+    generationRuntimePrewarmIdleCallbackId = null;
+  }
+  if (generationRuntimePrewarmTimeoutId !== null) {
+    window.clearTimeout(generationRuntimePrewarmTimeoutId);
+    generationRuntimePrewarmTimeoutId = null;
   }
 }
 
 function cancelPendingGenerationRuntimePrewarm() {
-  generationRuntimePrewarmScheduled = false;
+  clearScheduledGenerationRuntimePrewarm();
   if (generationRuntimePrewarmAbortController) {
     generationRuntimePrewarmAbortController.abort();
     generationRuntimePrewarmAbortController = null;

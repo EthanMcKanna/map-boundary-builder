@@ -9298,3 +9298,28 @@ with zero failures in 0.531s.
   Deferred Pixel Cache Proof` from browser cache with zero `/api/runs` requests;
   screenshot saved to
   `out/prod-deferred-pixel-cache-20260531/deferred-pixel-cache-hit.png`.
+- Accepted eager selected-image runtime prewarm scheduling. Page load still
+  schedules `/api/health?warm=ocr` on idle, but image selection now upgrades a
+  merely queued idle warmup into an immediate timer-backed warmup instead of
+  returning early because the startup warmup flag was set. The browser also
+  tracks the pending idle callback/timer and invalidates stale callbacks when
+  prewarm is rescheduled or canceled, while preserving the later accepted
+  submit behavior that aborts an in-flight warmup before the real `/api/runs`
+  request. This improves impatient first-run users without changing backend
+  extraction, OCR, georeference, catalog, or cache semantics. Local checks:
+  `node --check map_boundary_builder/web_assets/app.js`, focused
+  `PYTHONPATH=. .venv/bin/pytest tests/test_api_cache.py -q` passed 62 tests,
+  full `PYTHONPATH=. .venv/bin/pytest -q` passed 379 tests plus 12 subtests,
+  and `git diff --check` passed. The local browser proof against
+  `http://127.0.0.1:8878` stubbed `requestIdleCallback`, selected
+  `Tesla Houston.png`, observed one `/api/health?warm=ocr` before Build,
+  confirmed the startup idle callback was canceled once, clicked Build,
+  observed one prewarm abort and one mocked `/api/runs` request, and saved
+  `out/prewarm-eager-browser-20260531/prewarm-eager-proof.png`. Backend hash
+  stayed `pipeline-64ad23bb71268a34`; the new asset hash is
+  `asset-a87028119704cbe4`. Strict no-catalog drift gate
+  `out/prewarm-eager-strict-20260531/full-report.json` preserved active avg/min
+  IoU `0.968082`/`0.942536` versus
+  `out/deferred-pixel-cache-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven drift smokes, and stayed within latency budgets
+  with active/evaluated totals `3.155113s`/`5.241223s`.

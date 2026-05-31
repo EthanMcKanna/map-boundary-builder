@@ -1043,6 +1043,61 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertIn(b'name="normalized_cache_lookup" value="0"', html)
 
+    def test_frontend_eagerly_reschedules_generation_prewarm_after_image_selection(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        startup_schedule = app_js.index(b"scheduleGenerationRuntimePrewarm();")
+        select_schedule = app_js.index(b"scheduleGenerationRuntimePrewarm({ eager: true });")
+        function_start = app_js.index(b"function scheduleGenerationRuntimePrewarm(options = {}) {")
+        scheduled_guard = app_js.index(b"if (generationRuntimePrewarmScheduled) {", function_start)
+        eager_guard = app_js.index(b"if (!options.eager) return;", scheduled_guard)
+        clear_pending = app_js.index(b"clearScheduledGenerationRuntimePrewarm();", eager_guard)
+        idle_schedule = app_js.index(
+            b"if (!options.eager && typeof window.requestIdleCallback === \"function\")",
+            function_start,
+        )
+        eager_delay = app_js.index(b"const delayMs = options.eager ? 0 : 400;", idle_schedule)
+
+        self.assertLess(startup_schedule, select_schedule)
+        self.assertLess(function_start, scheduled_guard)
+        self.assertLess(scheduled_guard, eager_guard)
+        self.assertLess(eager_guard, clear_pending)
+        self.assertLess(clear_pending, idle_schedule)
+        self.assertLess(idle_schedule, eager_delay)
+
+    def test_frontend_cancels_stale_scheduled_generation_prewarm_callbacks(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        self.assertIn(b"let generationRuntimePrewarmScheduleToken = 0;", app_js)
+        self.assertIn(b"let generationRuntimePrewarmIdleCallbackId = null;", app_js)
+        self.assertIn(b"let generationRuntimePrewarmTimeoutId = null;", app_js)
+
+        function_start = app_js.index(b"function scheduleGenerationRuntimePrewarm(options = {}) {")
+        token_increment = app_js.index(b"generationRuntimePrewarmScheduleToken += 1;", function_start)
+        token_capture = app_js.index(b"const scheduleToken = generationRuntimePrewarmScheduleToken;", token_increment)
+        stale_guard = app_js.index(
+            b"if (scheduleToken !== generationRuntimePrewarmScheduleToken) return;",
+            token_capture,
+        )
+        cancel_start = app_js.index(b"function clearScheduledGenerationRuntimePrewarm() {")
+        cancel_token = app_js.index(b"generationRuntimePrewarmScheduleToken += 1;", cancel_start)
+        cancel_idle = app_js.index(b"window.cancelIdleCallback(generationRuntimePrewarmIdleCallbackId);", cancel_token)
+        clear_timeout = app_js.index(b"window.clearTimeout(generationRuntimePrewarmTimeoutId);", cancel_idle)
+        submit_cancel = app_js.index(b"function cancelPendingGenerationRuntimePrewarm() {")
+        clear_before_abort = app_js.index(b"clearScheduledGenerationRuntimePrewarm();", submit_cancel)
+        abort_active = app_js.index(b"generationRuntimePrewarmAbortController.abort();", clear_before_abort)
+
+        self.assertLess(function_start, token_increment)
+        self.assertLess(token_increment, token_capture)
+        self.assertLess(token_capture, stale_guard)
+        self.assertLess(cancel_start, cancel_token)
+        self.assertLess(cancel_token, cancel_idle)
+        self.assertLess(cancel_idle, clear_timeout)
+        self.assertLess(submit_cancel, clear_before_abort)
+        self.assertLess(clear_before_abort, abort_active)
+
     def test_frontend_marks_unhinted_skipped_catalog_probe_as_missed(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
