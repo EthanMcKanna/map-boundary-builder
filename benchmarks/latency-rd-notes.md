@@ -7679,3 +7679,22 @@ with zero failures in 0.531s.
   (`out/probe-ort-default-control-detmax480-v5rec-nocatalog-20260531/full-report.json`).
   The tiny local timing movement is within normal run noise and does not justify
   changing production runtime defaults.
+- Accepted a faster WebP encoder setting for inline overlay previews. The
+  public frontend already submits normal full-generation requests with
+  `include_overlay=0`, but direct/default API callers can still request inline
+  overlays, and a fresh production Phoenix probe showed the overlay path adding
+  material server time: with `include_overlay=1`, `build_boundary_s` was
+  3.459261s and export was 0.248371s; with `include_overlay=0`, the paired
+  pixel-busted upload preserved the same `ocr-georeference:nominatim-label-fit+osm-road-refine`
+  output at `build_boundary_s` 2.410014s and export 0.001412s. The preview
+  encoder now keeps WebP quality/dimensions but uses Pillow `method=0` instead
+  of `method=2`. On the Phoenix 1200px overlay microbench, method 0 encoded at
+  median 0.014278s versus 0.025728s for method 2, with median payload size
+  increasing from 63,002 bytes to 79,396 bytes. A direct overlay-path smoke over
+  Phoenix, Nashville, Los Angeles, and Dallas preserved sources/confidence and
+  produced WebP overlays between 67,210 and 82,436 bytes with median export
+  stage 0.042464s. Validation passed focused image/API/runner tests
+  (108/108), the strict no-catalog smoke
+  `out/final-overlay-webp-method0-nocatalog-20260531/full-report.json` (8/8
+  scored fixtures plus seven drift smokes, avg/min IoU 0.967842/0.942536), full
+  pytest (308 tests plus 9 subtests), `node --check`, and `git diff --check`.

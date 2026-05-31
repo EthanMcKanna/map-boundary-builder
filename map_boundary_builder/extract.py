@@ -859,6 +859,6 @@ def write_overlay_image(
         cv2.drawContours(out, contours, -1, outline_color, thickness=outline_width, lineType=cv2.LINE_AA)
     image = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), mode="RGB")
     if Path(path).suffix.lower() == ".webp":
-        image.save(path, format="WEBP", quality=82, method=2)
+        image.save(path, format="WEBP", quality=82, method=0)
     else:
         image.save(path)
