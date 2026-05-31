@@ -9057,3 +9057,19 @@ with zero failures in 0.531s.
   `out/api-import-error-guard-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven catalog-miss smokes, and stayed within latency
   budgets with active/evaluated totals `2.902514s`/`4.948244s`.
+- Production proof for cached failure event detail preservation: deployed
+  `pipeline-55073fdd67b50303` as Vercel deployment
+  `dpl_3fV5hdhJLv36sRV6azCY1YnFqRPM`, aliased to `mapboundary.app`. Health and
+  OCR warm checks under
+  `out/prod-smoke-cached-failed-event-details-20260531/` reported the new hash;
+  warmup loaded 19 catalog entries, seed resources, bright-blue extraction, and
+  `rapidocr_inference_warmed: true` with `total_s: 0.347408`. A unique all-white
+  PNG with a cache-busting text chunk was posted with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0`; the first production
+  response returned HTTP 422, `cache_hit: miss`, `status: failed`, top-level
+  error `No service-area polygon could be extracted from the image.`, and
+  `total_before_send_s: 0.064465`. Reposting the exact same bytes returned HTTP
+  422 with `cached: true`, `cache_hit: raw`, `status: failed`, the same
+  top-level error, `total_before_send_s: 0.000345`, and a synthetic final event
+  `Generation failure ready from cache` whose `details` preserved
+  `{"error": "No service-area polygon could be extracted from the image."}`.
