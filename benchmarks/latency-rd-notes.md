@@ -7945,3 +7945,18 @@ with zero failures in 0.531s.
   0.967842/0.942536, max 0.495472s, total 2.648171s, no regression issues, and
   `--max-duration-s 1` / `--max-total-duration-s 4` passing. Focused
   OCR/runner tests passed 160/160 and full `pytest` passed 316/316.
+- Production deployment proof for the low-resolution gray-fill sparse-label
+  rescue: runtime commit `e026a2f` deployed as
+  `dpl_6AJ2cuDfgjje9ktw477GPCLcD5MS`, aliased to `https://mapboundary.app`,
+  with health reporting `pipeline-ff5b38206d082765`. A live half-scale Bay
+  Area Tesla no-catalog upload with `include_overlay=0` and normalized cache
+  disabled completed via `ocr-georeference:nominatim-label-fit` with
+  `catalog_slug: null`, confidence 0.834, four controls, m/px
+  522.3811625323235, residual median/p90 328.9m/1136.8m, and bbox
+  `[-122.5990952, 37.1381886, -121.7225353, 37.8951126]`. The first
+  post-deploy cache miss paid warm georeference cost (`build_boundary_s`
+  1.178995s, `total_before_send_s` 1.246848s). A warmed one-pixel-altered
+  cache-miss repeat still reported `cache_hit: miss`, preserved the same
+  bbox/source/controls, and completed in `build_boundary_s` 0.555315s /
+  `total_before_send_s` 0.557145s, under the sub-second target for this rescued
+  low-resolution case.
