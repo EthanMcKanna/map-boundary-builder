@@ -186,7 +186,7 @@ const RUN_BUTTON_LABELS = {
   running: "Building",
 };
 const EMPTY_DROP_TITLE = "Drop or paste map screenshot";
-const EMPTY_DROP_META = "PNG, JPG, WebP, AVIF, TIFF, SVG";
+const EMPTY_DROP_META = "PNG, JPG, WebP, AVIF, GIF, TIFF, SVG";
 const CLIPBOARD_IMAGE_EXTENSIONS = new Map([
   ["image/avif", "avif"],
   ["image/png", "png"],

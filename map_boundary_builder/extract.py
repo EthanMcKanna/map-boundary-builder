@@ -105,6 +105,8 @@ def pil_image_to_rgb_array(image: Image.Image) -> np.ndarray:
 def pil_image_to_rgb(image: Image.Image) -> Image.Image:
     if image.mode == "RGB":
         return image.copy()
+    if "transparency" in image.info and "A" not in image.getbands():
+        image = image.convert("RGBA")
     if "A" not in image.getbands():
         return image.convert("RGB")
 

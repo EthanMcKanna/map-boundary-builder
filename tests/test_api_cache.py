@@ -90,6 +90,9 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_api_safe_extension_allows_avif(self) -> None:
         self.assertEqual(api_index.safe_extension("upload.avif"), ".avif")
 
+    def test_api_safe_extension_allows_gif(self) -> None:
+        self.assertEqual(api_index.safe_extension("upload.gif"), ".gif")
+
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))

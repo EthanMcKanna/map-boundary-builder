@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image
 
 
-RASTER_IMAGE_EXTENSIONS = {".avif", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
+RASTER_IMAGE_EXTENSIONS = {".avif", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff"}
 SVG_IMAGE_EXTENSIONS = {".svg", ".svgz"}
 SUPPORTED_IMAGE_EXTENSIONS = RASTER_IMAGE_EXTENSIONS | SVG_IMAGE_EXTENSIONS
 

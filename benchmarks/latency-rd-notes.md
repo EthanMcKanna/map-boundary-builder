@@ -8291,3 +8291,22 @@ with zero failures in 0.531s.
   timings inspect 0.023571s, extract 0.058968s, georeference 0.000005s, export
   0.000607s. The live response was saved at
   `out/avif-support-20260531/prod-avif-response.txt`.
+- Accepted explicit GIF upload/discovery support as a small robustness
+  improvement. The browser paste path and GitHub debug reports already treated
+  GIF as an image format, but the API/local extension allowlists and benchmark
+  discovery did not preserve `.gif`, and paletted transparency needed the same
+  white-composite behavior as transparent PNG/WebP. The API, local image IO,
+  benchmark discovery, empty upload copy, and palette transparency conversion
+  now handle GIF consistently. A converted Tesla Dallas GIF completed through
+  the normal CLI path in `out/gif-support-20260531/tesla-dallas-gif.summary.json`
+  with `catalog_slug=dallas-tesla`, `catalog_shape_iou=0.972523`, confidence
+  0.972523, and the expected Dallas bbox in 0.020059s. Targeted image, API,
+  and benchmark tests passed 92/92 and `node --check
+  map_boundary_builder/web_assets/app.js` passed. Full `pytest` passed 338
+  tests plus 9 subtests. The strict drift-smoke benchmark
+  `out/gif-support-20260531-strict/full-report.json` passed against
+  `out/avif-support-20260531-strict/full-report.json` with 8/8 active fixtures,
+  seven smoke-checked `reference_mismatch` fixtures, zero smoke failures,
+  avg/min IoU 0.967842/0.942536, no regression issues, active/evaluated totals
+  3.021164s/5.003363s, and evaluated OCR 3.584794s under the active 4s and
+  evaluated 6s budgets.

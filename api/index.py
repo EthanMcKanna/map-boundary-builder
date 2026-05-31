@@ -62,6 +62,7 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     ".jpg",
     ".jpeg",
     ".webp",
+    ".gif",
     ".tif",
     ".tiff",
     ".svg",
