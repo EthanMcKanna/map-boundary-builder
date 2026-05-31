@@ -7960,3 +7960,29 @@ with zero failures in 0.531s.
   bbox/source/controls, and completed in `build_boundary_s` 0.555315s /
   `total_before_send_s` 0.557145s, under the sub-second target for this rescued
   low-resolution case.
+- Rejected the next obvious low-resolution Las Vegas Zoox rescues. A focused
+  current run
+  `out/zoox-lowres-current-fail-20260531/full-report.json` still fails closed
+  in 0.547140s with the sparse-label error, which is preferred to the guarded
+  bad polygon. Direct diagnostics on the half-scale `Zoox Las Vegas.png`
+  showed fast/full OCR already reads many labels, including `Las Vegas`,
+  `Paradlse`, `S Las Vegas Bd`, `W-Flamingo-R`, `Spring-Mountain-Rd`,
+  `HUNTRIDG`, and `CHARLESTON RANCHO`, but the current fit's four inliers are
+  clustered near the top of the screenshot (`HUNTRIDG`, `CHARLESTON RANCHO`,
+  `CHARLESTON`, `Lindell-Rd`). If the sparse guard is bypassed, that fit scores
+  only IoU 0.468703, area ratio 1.998159, and centroid error 3245.5m against
+  the current `las-vegas-zoox` catalog geometry. Lowering the OCR text-area
+  filter to 900px or 700px produced no georeference; 500px produced only a
+  three-control, confidence-0.515 fit at IoU 0.396863.
+- Also rejected an OCR alias / road-search rescue for the same Las Vegas
+  half-scale case. Adding a tempting `paradlse -> paradise` alias locally made
+  the internal residuals look much better (five controls, residual median/p90
+  255.4m/927.8m), but the exported polygon moved farther from the reference:
+  IoU 0.021196, area ratio 0.673099, centroid error 9874.6m. Raising the
+  detector limit to 768px produced a similarly dangerous internally clean but
+  geographically wrong fit (`Southbound Valley View after Flamingo`, five
+  controls, residual p90 647.6m, IoU 0.043640). The existing city-context road
+  search is not a fallback either: a direct Las Vegas search took 21.978547s and
+  returned IoU 0.060657, area ratio 2.213496, centroid error 15244.7m. Keep
+  Las Vegas Zoox failing closed until there is a stronger independent
+  georeference signal; do not add the `Paradlse` alias for this path.
