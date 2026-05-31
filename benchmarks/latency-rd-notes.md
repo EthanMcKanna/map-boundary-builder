@@ -9607,3 +9607,24 @@ with zero failures in 0.531s.
   `excludeFiles` pattern does not exclude `ocr_models/**`, and the runtime now
   prefers env override paths, then bundled app assets, then RapidOCR's package
   cache.
+- Production deploy for vendored PP-OCRv5 assets: Vercel deployment
+  `dpl_2ACmD15WbiYmNLCSwGubyV6XQ8YX` went READY at
+  `map-boundary-builder-5dn49sgzc-ethanmckannas-projects.vercel.app` and was
+  aliased to `mapboundary.app`. Live health now reports
+  `pipeline-81451a354bd6ef14`,
+  `rapidocr_bright_blue_recognition_profile: en-ppocrv5`,
+  `rapidocr_bright_blue_recognition_assets_available: true`, and
+  `rapidocr_bright_blue_effective_recognition_profile: en-ppocrv5`; the warmed
+  health call also reported the same effective profile with warm `status: ok`,
+  `rapidocr_inference_warmed: true`, `rapidocr_s: 5.113172`, and
+  `total_s: 5.568162`. A real production cache-busted no-catalog Waymo
+  Nashville `/api/runs` smoke with overlay disabled completed on the same
+  pipeline with `cache_hit: miss`, server `total_before_send_s: 2.265463`,
+  `build_boundary_s: 2.251185`, and stage timings `extract: 0.408880`,
+  `ocr: 1.346309`, `georeference: 0.393305`, `export: 0.001516`. The result
+  stayed on `bright-blue`, inferred `Nashville`, used
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, and returned
+  confidence `0.82` with `catalog_slug: null`. Health artifacts were saved at
+  `out/prod-vendored-ppocrv5-health-20260531.json` and
+  `out/prod-vendored-ppocrv5-health-warm-20260531.json`; the production smoke
+  response was saved under `out/prod-vendored-ppocrv5-smoke-20260531/`.
