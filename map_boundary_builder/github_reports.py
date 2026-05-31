@@ -247,7 +247,7 @@ def github_json(
 
 def safe_report_extension(filename: str) -> str:
     ext = Path(filename).suffix.lower()
-    if ext in {".avif", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+    if ext in {".avif", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}:
         return ext
     return ".png"
 

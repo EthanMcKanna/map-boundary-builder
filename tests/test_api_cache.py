@@ -96,6 +96,10 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_api_safe_extension_allows_bmp(self) -> None:
         self.assertEqual(api_index.safe_extension("upload.bmp"), ".bmp")
 
+    def test_api_safe_extension_allows_tiff(self) -> None:
+        self.assertEqual(api_index.safe_extension("upload.tif"), ".tif")
+        self.assertEqual(api_index.safe_extension("upload.tiff"), ".tiff")
+
     def test_ocr_overlap_only_when_pre_ocr_catalog_cannot_return(self) -> None:
         self.assertFalse(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=True))
         self.assertTrue(should_overlap_ocr_with_extraction(city_input=None, allow_catalog=False))

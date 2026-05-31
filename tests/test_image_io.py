@@ -22,6 +22,10 @@ class SvgImageIoTests(unittest.TestCase):
     def test_safe_image_extension_preserves_bmp(self) -> None:
         self.assertEqual(safe_image_extension("map.bmp"), ".bmp")
 
+    def test_safe_image_extension_preserves_tiff(self) -> None:
+        self.assertEqual(safe_image_extension("map.tif"), ".tif")
+        self.assertEqual(safe_image_extension("map.tiff"), ".tiff")
+
     def test_svg_is_rasterized_before_pillow_reads_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -132,6 +136,20 @@ class SvgImageIoTests(unittest.TestCase):
             image.save(bmp_path, format="BMP")
 
             rgb = load_rgb(bmp_path)
+
+            self.assertEqual(rgb.shape, (1, 2, 3))
+            self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))
+            self.assertEqual(tuple(rgb[0, 1]), (98, 76, 54))
+
+    def test_tiff_loads_as_rgb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tiff_path = Path(tmp) / "opaque.tiff"
+            image = Image.new("RGB", (2, 1), (0, 0, 0))
+            image.putpixel((0, 0), (12, 34, 56))
+            image.putpixel((1, 0), (98, 76, 54))
+            image.save(tiff_path, format="TIFF")
+
+            rgb = load_rgb(tiff_path)
 
             self.assertEqual(rgb.shape, (1, 2, 3))
             self.assertEqual(tuple(rgb[0, 0]), (12, 34, 56))

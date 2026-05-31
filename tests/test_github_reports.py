@@ -9,6 +9,11 @@ def test_safe_report_extension_preserves_bmp() -> None:
     assert safe_report_extension("uploaded-map.bmp") == ".bmp"
 
 
+def test_safe_report_extension_preserves_tiff() -> None:
+    assert safe_report_extension("uploaded-map.tif") == ".tif"
+    assert safe_report_extension("uploaded-map.tiff") == ".tiff"
+
+
 def test_issue_body_includes_runtime_profile() -> None:
     report = GenerationReport(
         filename="slow-map.png",

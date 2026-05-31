@@ -8422,3 +8422,14 @@ with zero failures in 0.531s.
   from `Tesla Dallas.retry.jpg`. Evidence was saved at
   `out/retry-json-prod-20260531/retry-json-prod-browser.json` and
   `out/retry-json-prod-20260531/retry-json-prod-browser.png`.
+- Tightened TIFF consistency across validation and debugging surfaces. The
+  runtime, API, and hosted UI already accepted TIFF, but benchmark screenshot
+  discovery did not include `.tif/.tiff`, and GitHub report attachment naming
+  did not preserve TIFF extensions. The benchmark now discovers TIFF fixtures,
+  report uploads preserve `.tif/.tiff`, and focused API/image/report/benchmark
+  coverage passed 73/73. Full `pytest` passed 352/352. The strict full
+  benchmark gate in `out/tiff-consistency-20260531-strict-repeat/full-report.json`
+  passed against `out/bmp-support-20260531-strict/full-report.json` with 15/15
+  scored fixtures, avg/min IoU 0.996223/0.943345, no regression issues,
+  active/evaluated totals 0.797751s/0.797751s, and latency budgets
+  `max_total_duration_s=4` plus `max_evaluated_duration_s=6`.
