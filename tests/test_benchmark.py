@@ -704,6 +704,7 @@ def test_report_regression_check_flags_fixture_iou_drop() -> None:
 
     assert check["passed"] is False
     assert check["compared_fixtures"] == 1
+    assert check["compared_iou_fixtures"] == 1
     assert check["issues"] == [
         {
             "slug": "orlando-waymo",
@@ -714,9 +715,10 @@ def test_report_regression_check_flags_fixture_iou_drop() -> None:
         },
         {
             "kind": "average_iou_drop",
-            "baseline_average_iou": 0.95,
-            "candidate_average_iou": 0.94,
-            "drop": 0.01,
+            "baseline_average_iou": 0.931476,
+            "candidate_average_iou": 0.781303,
+            "drop": 0.150173,
+            "average_iou_scope": "compared_fixtures",
         },
     ]
 
@@ -739,6 +741,33 @@ def test_report_regression_check_allows_configured_tolerance() -> None:
     )
 
     assert check["passed"] is True
+    assert check["issues"] == []
+
+
+def test_report_regression_check_ignores_newly_scored_fixture_in_mean() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.90},
+        "scores": [
+            {"slug": "orlando-waymo", "status": "active", "iou": 0.90},
+            {"slug": "bay-area-tesla", "status": "reference_mismatch", "iou": None},
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.85},
+        "scores": [
+            {"slug": "orlando-waymo", "status": "active", "iou": 0.90},
+            {"slug": "bay-area-tesla", "status": "active", "iou": 0.80},
+        ],
+    }
+
+    check = compare_report_regressions(candidate, baseline, max_mean_iou_drop=0.0)
+
+    assert check["passed"] is True
+    assert check["compared_fixtures"] == 1
+    assert check["compared_iou_fixtures"] == 1
+    assert check["baseline_average_iou"] == 0.90
+    assert check["candidate_average_iou"] == 0.90
+    assert check["average_iou_scope"] == "compared_fixtures"
     assert check["issues"] == []
 
 

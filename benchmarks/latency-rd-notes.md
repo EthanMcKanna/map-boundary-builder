@@ -7986,3 +7986,17 @@ with zero failures in 0.531s.
   returned IoU 0.060657, area ratio 2.213496, centroid error 15244.7m. Keep
   Las Vegas Zoox failing closed until there is a stronger independent
   georeference signal; do not add the `Paradlse` alias for this path.
+- Accepted a benchmark-regression reliability fix for newly scored fixtures.
+  The regression checker now computes mean-IoU drops over the same active
+  numeric fixture set used for per-fixture comparison instead of trusting raw
+  report-summary averages, whose denominator changes when a previously failed
+  fixture becomes newly scored. This preserves the average-IoU regression guard
+  for real drops while preventing the low-resolution half-scale rescue from
+  being mislabeled as a regression solely because Bay Area Tesla entered the
+  scored set. The real half-scale current-reference no-catalog comparison
+  `out/regression-comparable-mean-half-currentref-nocatalog-20260531/full-report.json`
+  still correctly fails the overall benchmark because Las Vegas Zoox fails
+  closed and the summary average is 0.896061, but the regression check now
+  passes with 13 comparable fixtures, compared average IoU
+  0.902906 -> 0.902906, and no issues. Targeted benchmark tests passed 24/24;
+  full `pytest` passed 317/317.

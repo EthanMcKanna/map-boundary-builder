@@ -1152,6 +1152,7 @@ def compare_report_regressions(
         else max(0.0, float(max_duration_increase_ratio))
     )
     duration_tolerance_s = max(0.0, float(max_duration_increase_s))
+    compared_iou_pairs: list[tuple[float, float]] = []
     for slug, baseline_score in sorted(baseline_scores.items()):
         candidate_score = candidate_scores.get(slug)
         if candidate_score is None:
@@ -1163,7 +1164,10 @@ def compare_report_regressions(
                 }
             )
             continue
-        drop = float(baseline_score["iou"]) - float(candidate_score["iou"])
+        baseline_iou = float(baseline_score["iou"])
+        candidate_iou = float(candidate_score["iou"])
+        compared_iou_pairs.append((baseline_iou, candidate_iou))
+        drop = baseline_iou - candidate_iou
         if drop > tolerance:
             issues.append(
                 {
@@ -1192,8 +1196,12 @@ def compare_report_regressions(
                         }
                     )
 
-    baseline_mean = float(baseline_report.get("summary", {}).get("average_iou", 0.0))
-    candidate_mean = float(report.get("summary", {}).get("average_iou", 0.0))
+    baseline_mean = (
+        mean(pair[0] for pair in compared_iou_pairs) if compared_iou_pairs else 0.0
+    )
+    candidate_mean = (
+        mean(pair[1] for pair in compared_iou_pairs) if compared_iou_pairs else 0.0
+    )
     mean_drop = baseline_mean - candidate_mean
     mean_tolerance = max(0.0, float(max_mean_iou_drop))
     if mean_drop > mean_tolerance:
@@ -1203,6 +1211,7 @@ def compare_report_regressions(
                 "baseline_average_iou": round(baseline_mean, 6),
                 "candidate_average_iou": round(candidate_mean, 6),
                 "drop": round(mean_drop, 6),
+                "average_iou_scope": "compared_fixtures",
             }
         )
     total_duration_tolerance = (
@@ -1238,6 +1247,10 @@ def compare_report_regressions(
         "max_total_duration_increase_ratio": total_duration_tolerance,
         "max_total_duration_increase_s": total_duration_tolerance_s,
         "compared_fixtures": len(baseline_scores),
+        "compared_iou_fixtures": len(compared_iou_pairs),
+        "baseline_average_iou": round(baseline_mean, 6),
+        "candidate_average_iou": round(candidate_mean, 6),
+        "average_iou_scope": "compared_fixtures",
         "issues": issues,
     }
 
@@ -1377,8 +1390,13 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"{issue['candidate_iou']:.6f} (drop {issue['drop']:.6f})"
                 )
             elif issue["kind"] == "average_iou_drop":
+                label = (
+                    "compared-fixture average IoU"
+                    if issue.get("average_iou_scope") == "compared_fixtures"
+                    else "average IoU"
+                )
                 print(
-                    f"       average IoU {issue['baseline_average_iou']:.6f} -> "
+                    f"       {label} {issue['baseline_average_iou']:.6f} -> "
                     f"{issue['candidate_average_iou']:.6f} (drop {issue['drop']:.6f})"
                 )
             elif issue["kind"] == "duration_increase":
