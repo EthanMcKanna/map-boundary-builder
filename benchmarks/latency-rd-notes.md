@@ -9285,3 +9285,16 @@ with zero failures in 0.531s.
   `out/svgz-frontend-pass-through-strict-20260531/full-report.json`, passed 8/8
   active fixtures plus seven drift smokes, and stayed within latency budgets
   with active/evaluated totals `3.032665s`/`5.262939s`.
+- Production proof for bounded deferred-pixel browser-cache lookup: deployed the
+  asset update as Vercel deployment `dpl_AjwG1Y46kJbDB8hZzAwANZVWA55X`,
+  aliased to `mapboundary.app`. Hosted `/api/health` stayed healthy on backend
+  `pipeline-64ad23bb71268a34`; the hosted HTML referenced
+  `/static/app.js?v=asset-fb5ca6354f429bb7`, and the fetched production
+  `app.js` contained `RUN_CACHE_DEFERRED_HISTORY_WAIT_MS`, `includeDeferred`,
+  `hasCachedRunHistoryEntries`, and the deferred
+  `cacheKeysFromPromise(lookup?.cacheKeysPromise)` call. A production-page
+  Playwright proof seeded a browser-history entry with only the decoded-pixel
+  cache key, forced the quick 60ms pixel lookup to miss, then restored `Prod
+  Deferred Pixel Cache Proof` from browser cache with zero `/api/runs` requests;
+  screenshot saved to
+  `out/prod-deferred-pixel-cache-20260531/deferred-pixel-cache-hit.png`.
