@@ -8843,3 +8843,19 @@ with zero failures in 0.531s.
   and profile pipeline version at `total_before_send_s=0.004783`
   (`out/prod-smoke-generation-env-cache-key-20260531/nashville-response.json`
   and `out/prod-smoke-generation-env-cache-key-20260531/nashville-repeat-response.json`).
+- Accepted catalog-probe miss cache detail preservation. The browser fast
+  handoff path uses structured `catalog_probe_miss` details from probe misses
+  to decide whether a low-IoU catalog miss should continue into the full
+  generation flow, but cached `catalog_miss` payloads were reduced to
+  `status`/`error` only. That made a repeated probe miss less informative than
+  the fresh response and could skip the deterministic handoff profile. The
+  run-result cache now preserves `catalog_probe_miss` dictionaries for
+  `catalog_miss` payloads, and the cache round-trip test covers the restored
+  details. `compileall` passed, full `PYTHONPATH=. .venv/bin/pytest -q` passed
+  366 tests plus 12 subtests, and the local hash is
+  `pipeline-72f6cc115e8b400b`. Strict no-catalog drift gate
+  `out/catalog-miss-details-cache-strict-20260531/full-report.json` preserved
+  exact active avg/min IoU `0.967842`/`0.942536` versus
+  `out/generation-env-cache-key-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven catalog-miss smokes, and stayed within latency
+  budgets with active/evaluated totals `2.793877s`/`4.808037s`.

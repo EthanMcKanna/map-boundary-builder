@@ -1164,6 +1164,8 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
             "status": "catalog_miss",
             "error": payload.get("error"),
         }
+        if isinstance(payload.get("catalog_probe_miss"), dict):
+            cached["catalog_probe_miss"] = payload.get("catalog_probe_miss")
     else:
         cached = {
             "city": payload.get("city"),

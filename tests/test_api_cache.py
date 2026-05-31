@@ -612,6 +612,11 @@ class ApiRunCacheTests(unittest.TestCase):
         miss_payload = {
             "status": "catalog_miss",
             "error": "No known service-area shape matched the catalog probe.",
+            "catalog_probe_miss": {
+                "active_shape_iou_is_low": False,
+                "best_active_catalog_slug": "bay-area-waymo",
+                "best_active_catalog_iou": 0.91,
+            },
             "profile": {"build_boundary_s": 0.05},
             "events": [{"stage": "extract"}],
         }
@@ -630,11 +635,17 @@ class ApiRunCacheTests(unittest.TestCase):
             {
                 "status": "catalog_miss",
                 "error": "No known service-area shape matched the catalog probe.",
+                "catalog_probe_miss": {
+                    "active_shape_iou_is_low": False,
+                    "best_active_catalog_slug": "bay-area-waymo",
+                    "best_active_catalog_iou": 0.91,
+                },
             },
         )
         self.assertEqual(payload["id"], "1234-miss")
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["status"], "catalog_miss")
+        self.assertEqual(payload["catalog_probe_miss"]["best_active_catalog_slug"], "bay-area-waymo")
         self.assertEqual(payload["filename"], "Bay Area probe.jpg")
         self.assertIn("No known service-area shape", payload["error"])
         self.assertEqual(payload["events"][-1]["message"], "Catalog miss ready from cache")
