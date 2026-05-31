@@ -813,21 +813,25 @@ function cancelPendingGenerationRuntimePrewarm() {
 }
 
 async function prepareRunImage(file) {
-  if (!isSvgFile(file)) return file;
-  markProgressStep("prepare", "running", "Converting vector map.");
-  setStatus("Rasterizing SVG map", 4, "running", {
-    step: "prepare",
-    note: "Converting vector upload before extraction.",
-  });
-  const canvas = await svgFileToCanvas(file);
-  const blob = await canvasToBlob(canvas, "image/png");
-  if (!blob) {
-    throw new Error("Could not rasterize SVG upload.");
+  if (isSvgFile(file)) {
+    markProgressStep("prepare", "running", "Converting vector map.");
+    setStatus("Rasterizing SVG map", 4, "running", {
+      step: "prepare",
+      note: "Converting vector upload before extraction.",
+    });
+    const canvas = await svgFileToCanvas(file);
+    return canvasToPngFile(canvas, file, "Could not rasterize SVG upload.");
   }
-  return new File([blob], `${fileBaseName(file.name)}.png`, {
-    type: "image/png",
-    lastModified: file.lastModified,
-  });
+  if (isBmpFile(file)) {
+    markProgressStep("prepare", "running", "Converting bitmap map.");
+    setStatus("Converting BMP map", 4, "running", {
+      step: "prepare",
+      note: "Converting bitmap upload before extraction.",
+    });
+    const canvas = await imageFileToCanvas(file);
+    return canvasToPngFile(canvas, file, "Could not convert BMP upload.");
+  }
+  return file;
 }
 
 async function tryCatalogProbe(file, formData, options = {}) {
@@ -1342,6 +1346,11 @@ function isSvgFile(file) {
   return file?.type === "image/svg+xml" || /\.svgz?$/i.test(file?.name || "");
 }
 
+function isBmpFile(file) {
+  const type = String(file?.type || "").toLowerCase();
+  return type === "image/bmp" || type === "image/x-ms-bmp" || /\.bmp$/i.test(file?.name || "");
+}
+
 function fileBaseName(filename) {
   return (filename || "map-upload").replace(/\.[^.]+$/, "") || "map-upload";
 }
@@ -1400,6 +1409,17 @@ function imageFileToCanvas(file, targetSize = null) {
 
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function canvasToPngFile(canvas, sourceFile, failureMessage) {
+  const blob = await canvasToBlob(canvas, "image/png");
+  if (!blob) {
+    throw new Error(failureMessage);
+  }
+  return new File([blob], `${fileBaseName(sourceFile.name)}.png`, {
+    type: "image/png",
+    lastModified: sourceFile.lastModified,
+  });
 }
 
 function connectEvents(runId) {
@@ -2819,6 +2839,10 @@ function dataUrlToFile(dataUrl, filename) {
 }
 
 async function prepareReportImage(file) {
+  if (isBmpFile(file)) {
+    const canvas = await imageFileToCanvas(file);
+    return canvasToPngFile(canvas, file, "Could not convert BMP report image.");
+  }
   if (file.size <= 7_500_000) return file;
   const canvas = await imageFileToCanvas(file);
   const maxSize = 2200;

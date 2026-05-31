@@ -8341,4 +8341,7 @@ with zero failures in 0.531s.
   seven smoke-checked `reference_mismatch` fixtures, zero smoke failures,
   avg/min IoU 0.967842/0.942536, no regression issues, active/evaluated totals
   3.050349s/5.124506s, and evaluated OCR 3.685981s under the active 4s and
-  evaluated 6s budgets.
+  evaluated 6s budgets. A direct hosted raw-BMP multipart smoke was denied by
+  Vercel before app code (`x-vercel-mitigated: deny`), so the hosted browser
+  path now normalizes BMP uploads and report images to PNG before POSTing while
+  preserving local/server BMP decoding for non-Vercel paths.
