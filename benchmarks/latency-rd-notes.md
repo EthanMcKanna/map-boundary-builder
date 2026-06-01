@@ -10313,3 +10313,24 @@ with zero failures in 0.531s.
   saved only about `0.05s` over the existing lower-layer cache path, so the
   code was reverted and only the evidence was kept. Focused API cache tests
   still passed after revert (`67 passed`).
+- Rejected a coarse 5-bit scaled-extraction memory cache layered below the
+  run-result cache. A focused prototype proved the intended path
+  (`coarse-hit`) and an in-process Bay Area Waymo low-bit variant smoke
+  (`out/coarse-extraction-proto-20260601.json`) improved the second request
+  from the current-code control's `0.124844s` before send / `0.110823s`
+  extraction to `0.098928s` before send / `0.079729s` extraction while
+  preserving confidence `0.846`, 13 controls, and
+  `ocr-georeference:nominatim-label-fit`. The broad current-reference gate
+  still passed with exact avg/min IoU `0.949771`/`0.794177`, but it was slower
+  than the accepted default in aggregate:
+  `out/coarse-scaled-extraction-currentref-gate-20260601/full-report.json`
+  took `6.291571s` total with `1.245131s` active extraction versus
+  `5.336556s` total and `1.128181s` extraction for
+  `out/bright-blue-det320-default-currentref-gate-20260601/full-report.json`.
+  Repeat-profile max/median/average also regressed from
+  `0.118838s`/`0.062499s`/`0.051935s` to
+  `0.126410s`/`0.066040s`/`0.055249s`, and repeat extraction regressed from
+  `0.066131s`/`0.054078s`/`0.039261s` max/median/average to
+  `0.070333s`/`0.057457s`/`0.041684s`. Because the only observed win was a
+  narrow low-bit variant case and the benchmarked default path worsened, the
+  code/test prototype was reverted and only the evidence was kept.
