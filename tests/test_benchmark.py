@@ -189,7 +189,17 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
     assert repeat_profile["summary"]["subsecond_samples"] == 1
     assert repeat_profile["summary"]["subsecond_fixture_min_duration_count"] == 1
     assert repeat_profile["summary"]["min_duration_s"] == 0.8
+    assert repeat_profile["summary"]["stage_duration_s"] == {
+        "ocr": {
+            "samples": 1,
+            "min_duration_s": 0.4,
+            "median_duration_s": 0.4,
+            "average_duration_s": 0.4,
+            "max_duration_s": 0.4,
+        }
+    }
     assert repeat_profile["fixtures"]["phoenix-waymo"]["min_iou"] == 0.99
+    assert repeat_profile["fixtures"]["phoenix-waymo"]["stage_duration_s"]["ocr"]["max_duration_s"] == 0.4
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
 
@@ -1449,6 +1459,9 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
                 "subsecond_samples": 3,
                 "max_duration_s": 0.98,
                 "median_duration_s": 0.7,
+                "stage_duration_s": {
+                    "ocr": {"max_duration_s": 0.72},
+                },
             }
         },
     }
@@ -1457,6 +1470,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
         report,
         max_repeat_profile_duration_s=1.0,
         max_repeat_profile_median_duration_s=0.8,
+        max_repeat_profile_stage_duration_s={"ocr": 0.8},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
     )
@@ -1465,6 +1479,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     assert check["repeat_profile_analyzed_samples"] == 4
     assert check["repeat_profile_max_duration_s"] == 0.98
     assert check["repeat_profile_median_duration_s"] == 0.7
+    assert check["repeat_profile_stage_duration_s"] == {"ocr": 0.72}
     assert check["repeat_profile_pass_ratio"] == 1.0
     assert check["repeat_profile_subsecond_ratio"] == 0.75
     assert check["issues"] == []
@@ -1524,10 +1539,48 @@ def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> N
     ]
 
 
+def test_report_latency_budget_check_flags_repeat_profile_stage_budget_failures() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [{"slug": "nashville-waymo", "status": "active", "duration_s": 0.7}],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "stage_duration_s": {
+                    "ocr": {"max_duration_s": 1.2},
+                },
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_repeat_profile_stage_duration_s={"extract": 0.2, "ocr": 1.0},
+    )
+
+    assert check["passed"] is False
+    assert check["max_repeat_profile_stage_duration_s"] == {"extract": 0.2, "ocr": 1.0}
+    assert check["repeat_profile_stage_duration_s"] == {"ocr": 1.2}
+    assert check["issues"] == [
+        {
+            "stage": "extract",
+            "kind": "repeat_profile_stage_duration_missing",
+            "max_repeat_profile_stage_duration_s": 0.2,
+        },
+        {
+            "stage": "ocr",
+            "kind": "repeat_profile_stage_duration_budget_exceeded",
+            "repeat_profile_stage_duration_s": 1.2,
+            "max_repeat_profile_stage_duration_s": 1.0,
+            "excess_s": 0.2,
+        },
+    ]
+
+
 def test_report_latency_budget_check_flags_missing_repeat_profile() -> None:
     check = check_report_latency_budgets(
         {"summary": {"total_duration_s": 2.5}, "scores": []},
-        max_repeat_profile_duration_s=1.0,
+        max_repeat_profile_stage_duration_s={"ocr": 1.0},
     )
 
     assert check["passed"] is False
@@ -1551,6 +1604,7 @@ def test_report_latency_budget_check_flags_incomplete_repeat_profile_metrics() -
         report,
         max_repeat_profile_duration_s=1.0,
         max_repeat_profile_median_duration_s=0.8,
+        max_repeat_profile_stage_duration_s={"ocr": 0.8},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
     )
@@ -1564,6 +1618,11 @@ def test_report_latency_budget_check_flags_incomplete_repeat_profile_metrics() -
         {
             "kind": "repeat_profile_median_duration_missing",
             "max_repeat_profile_median_duration_s": 0.8,
+        },
+        {
+            "stage": "ocr",
+            "kind": "repeat_profile_stage_duration_missing",
+            "max_repeat_profile_stage_duration_s": 0.8,
         },
         {
             "kind": "repeat_profile_pass_ratio_missing",

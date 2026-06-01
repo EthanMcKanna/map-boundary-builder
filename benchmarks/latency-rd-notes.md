@@ -9848,3 +9848,24 @@ with zero failures in 0.531s.
   latency checks with no issues, emitted no `repeat_profile` when omitted, and
   measured `5.920002s` evaluated with OCR `4.052240s`, extraction `1.480497s`,
   georeference `0.356616s`, and road match `0.017862s`.
+- Added analyzed repeat-profile stage summaries and a stage-level warm budget
+  gate so future sub-second runs can prove where the warm time is going. The
+  repeat-profile summary and per-fixture summaries now include
+  `stage_duration_s` distributions for analyzed samples, and
+  `--max-repeat-profile-stage-duration-s STAGE=SECONDS` gates max analyzed
+  repeat stage duration alongside the existing total-duration and ratio gates.
+  Focused benchmark tests passed (`43 passed`), `compileall` and
+  `git diff --check` passed, and full pytest passed
+  (`398 passed, 12 subtests passed`). The real stage-gated Phoenix/Nashville
+  run (`out/repeat-profile-stage-budget-gate-20260601/full-report.json`) passed
+  with primary avg/min IoU `0.985051`/`0.983820`; all four analyzed repeat
+  samples passed under `1.0s`, with max/median total duration
+  `0.734349s`/`0.536930s`, pass ratio `1.0`, and sub-second ratio `1.0`.
+  Warm analyzed stage maxes were OCR `0.586960s`, extraction `0.130516s`,
+  georeference `0.015748s`, export `0.000680s`, and inspect `0.000269s`,
+  all under the explicit stage budgets. The default-off strict broad gate
+  (`out/repeat-profile-stage-default-off-strict-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.968082`/`0.942536`, passed regression and
+  latency checks with no issues, emitted no `repeat_profile` when omitted, and
+  measured `6.247394s` evaluated with OCR `4.258746s`, extraction `1.572557s`,
+  georeference `0.378683s`, and road match `0.017247s`.

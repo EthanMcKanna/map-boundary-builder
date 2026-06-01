@@ -290,6 +290,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum analyzed repeat-profile median duration budget.",
     )
     parser.add_argument(
+        "--max-repeat-profile-stage-duration-s",
+        action="append",
+        default=[],
+        metavar="STAGE=SECONDS",
+        help=(
+            "Optional maximum analyzed repeat-profile per-stage duration budget. "
+            "Repeat or comma-separate entries such as ocr=0.8,extract=0.3."
+        ),
+    )
+    parser.add_argument(
         "--min-repeat-profile-pass-ratio",
         type=float,
         default=None,
@@ -432,6 +442,9 @@ def main(argv: list[str] | None = None) -> int:
         max_evaluated_stage_duration_s = parse_stage_duration_budgets(
             args.max_evaluated_stage_duration_s
         )
+        max_repeat_profile_stage_duration_s = parse_stage_duration_budgets(
+            args.max_repeat_profile_stage_duration_s
+        )
     except ValueError as exc:
         parser.error(str(exc))
     if args.repeat_profile_runs < 0:
@@ -506,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_evaluated_road_match_s is not None
         or args.max_repeat_profile_duration_s is not None
         or args.max_repeat_profile_median_duration_s is not None
+        or bool(max_repeat_profile_stage_duration_s)
         or args.min_repeat_profile_pass_ratio is not None
         or args.min_repeat_profile_subsecond_ratio is not None
     ):
@@ -518,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
             max_repeat_profile_duration_s=args.max_repeat_profile_duration_s,
             max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
+            max_repeat_profile_stage_duration_s=max_repeat_profile_stage_duration_s,
             min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
             min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
         )
@@ -871,6 +886,7 @@ def summarize_repeat_profile_samples(
             "subsecond_fixture_min_duration_count": subsecond_fixture_count,
             **repeat_profile_duration_stats(analyzed_samples),
             **repeat_profile_iou_stats(analyzed_samples),
+            "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
         },
         "fixtures": fixture_summaries,
         "samples": samples,
@@ -887,6 +903,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "subsecond_samples": count_subsecond_samples(analyzed_samples),
         **repeat_profile_duration_stats(analyzed_samples),
         **repeat_profile_iou_stats(analyzed_samples),
+        "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
     }
 
 
@@ -911,19 +928,7 @@ def repeat_profile_duration_stats(samples: list[dict[str, Any]]) -> dict[str, fl
         for duration in (parse_report_duration(sample.get("duration_s")) for sample in samples)
         if duration is not None
     ]
-    if not durations:
-        return {
-            "min_duration_s": None,
-            "median_duration_s": None,
-            "average_duration_s": None,
-            "max_duration_s": None,
-        }
-    return {
-        "min_duration_s": round(min(durations), 6),
-        "median_duration_s": round(float(median(durations)), 6),
-        "average_duration_s": round(float(mean(durations)), 6),
-        "max_duration_s": round(max(durations), 6),
-    }
+    return duration_distribution_stats(durations)
 
 
 def repeat_profile_iou_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
@@ -940,6 +945,44 @@ def repeat_profile_iou_stats(samples: list[dict[str, Any]]) -> dict[str, float |
     return {
         "min_iou": round(min(ious), 6),
         "average_iou": round(float(mean(ious)), 6),
+    }
+
+
+def repeat_profile_stage_duration_stats(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    stage_durations: dict[str, list[float]] = {}
+    for sample in samples:
+        raw_stage_durations = sample.get("stage_elapsed_s")
+        if not isinstance(raw_stage_durations, dict):
+            continue
+        for stage, duration in raw_stage_durations.items():
+            if not isinstance(stage, str) or not stage:
+                continue
+            parsed_duration = parse_report_duration(duration)
+            if parsed_duration is None:
+                continue
+            stage_durations.setdefault(stage, []).append(parsed_duration)
+    return {
+        stage: {
+            "samples": len(durations),
+            **duration_distribution_stats(durations),
+        }
+        for stage, durations in sorted(stage_durations.items())
+    }
+
+
+def duration_distribution_stats(durations: list[float]) -> dict[str, float | None]:
+    if not durations:
+        return {
+            "min_duration_s": None,
+            "median_duration_s": None,
+            "average_duration_s": None,
+            "max_duration_s": None,
+        }
+    return {
+        "min_duration_s": round(min(durations), 6),
+        "median_duration_s": round(float(median(durations)), 6),
+        "average_duration_s": round(float(mean(durations)), 6),
+        "max_duration_s": round(max(durations), 6),
     }
 
 
@@ -1889,6 +1932,7 @@ def check_report_latency_budgets(
     max_evaluated_road_match_s: float | None = None,
     max_repeat_profile_duration_s: float | None = None,
     max_repeat_profile_median_duration_s: float | None = None,
+    max_repeat_profile_stage_duration_s: dict[str, float] | None = None,
     min_repeat_profile_pass_ratio: float | None = None,
     min_repeat_profile_subsecond_ratio: float | None = None,
 ) -> dict[str, Any]:
@@ -1917,6 +1961,11 @@ def check_report_latency_budgets(
         if max_repeat_profile_median_duration_s is None
         else max(0.0, float(max_repeat_profile_median_duration_s))
     )
+    repeat_profile_stage_budgets = {
+        stage: max(0.0, float(duration))
+        for stage, duration in (max_repeat_profile_stage_duration_s or {}).items()
+        if stage
+    }
     repeat_profile_pass_ratio_budget = (
         None
         if min_repeat_profile_pass_ratio is None
@@ -1939,6 +1988,7 @@ def check_report_latency_budgets(
         repeat_profile_summary,
         "median_duration_s",
     )
+    repeat_profile_stage_durations = report_repeat_profile_stage_durations(repeat_profile_summary)
     repeat_profile_pass_ratio = report_repeat_profile_sample_ratio(
         repeat_profile_summary,
         "passed_samples",
@@ -2020,6 +2070,7 @@ def check_report_latency_budgets(
         for budget in (
             repeat_profile_duration_budget,
             repeat_profile_median_duration_budget,
+            repeat_profile_stage_budgets if repeat_profile_stage_budgets else None,
             repeat_profile_pass_ratio_budget,
             repeat_profile_subsecond_ratio_budget,
         )
@@ -2064,6 +2115,29 @@ def check_report_latency_budgets(
                         repeat_profile_median_duration - repeat_profile_median_duration_budget,
                         6,
                     ),
+                }
+            )
+    for stage, stage_budget in sorted(repeat_profile_stage_budgets.items()):
+        if not has_repeat_profile_samples:
+            continue
+        stage_duration = repeat_profile_stage_durations.get(stage)
+        if stage_duration is None:
+            issues.append(
+                {
+                    "stage": stage,
+                    "kind": "repeat_profile_stage_duration_missing",
+                    "max_repeat_profile_stage_duration_s": stage_budget,
+                }
+            )
+            continue
+        if stage_duration > stage_budget:
+            issues.append(
+                {
+                    "stage": stage,
+                    "kind": "repeat_profile_stage_duration_budget_exceeded",
+                    "repeat_profile_stage_duration_s": round(stage_duration, 6),
+                    "max_repeat_profile_stage_duration_s": stage_budget,
+                    "excess_s": round(stage_duration - stage_budget, 6),
                 }
             )
     if repeat_profile_pass_ratio_budget is not None and has_repeat_profile_samples:
@@ -2112,6 +2186,7 @@ def check_report_latency_budgets(
         "max_evaluated_road_match_s": evaluated_road_match_budget,
         "max_repeat_profile_duration_s": repeat_profile_duration_budget,
         "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
+        "max_repeat_profile_stage_duration_s": repeat_profile_stage_budgets,
         "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
         "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
@@ -2132,6 +2207,7 @@ def check_report_latency_budgets(
             if repeat_profile_median_duration is not None
             else None
         ),
+        "repeat_profile_stage_duration_s": repeat_profile_stage_durations,
         "repeat_profile_pass_ratio": (
             round(repeat_profile_pass_ratio, 6)
             if repeat_profile_pass_ratio is not None
@@ -2168,6 +2244,23 @@ def report_repeat_profile_duration(summary: dict[str, Any] | None, key: str) -> 
     if summary is None:
         return None
     return parse_report_duration(summary.get(key))
+
+
+def report_repeat_profile_stage_durations(summary: dict[str, Any] | None) -> dict[str, float]:
+    if summary is None:
+        return {}
+    raw_stage_durations = summary.get("stage_duration_s")
+    if not isinstance(raw_stage_durations, dict):
+        return {}
+    stage_durations: dict[str, float] = {}
+    for stage, stats in raw_stage_durations.items():
+        if not isinstance(stage, str) or not stage or not isinstance(stats, dict):
+            continue
+        duration = parse_report_duration(stats.get("max_duration_s"))
+        if duration is None:
+            continue
+        stage_durations[stage] = round(duration, 6)
+    return dict(sorted(stage_durations.items()))
 
 
 def report_repeat_profile_sample_ratio(summary: dict[str, Any] | None, key: str) -> float | None:
