@@ -9724,3 +9724,23 @@ with zero failures in 0.531s.
   versus `out/runner-ocr-cache-control-20260601/full-report.json`, but slowed
   evaluated time `9.414741s -> 9.991796s` and evaluated OCR
   `7.134587s -> 7.950456s`.
+- Added explicit road-match regression and latency-budget gates to the
+  benchmark harness. The new CLI knobs,
+  `--max-evaluated-road-match-increase-ratio`,
+  `--max-evaluated-road-match-increase-s`, and
+  `--max-evaluated-road-match-s`, compare and budget the evaluated active plus
+  smoke road-refinement total from benchmark summaries, with fallback support
+  for reports that only expose active/smoke road-match fields. Focused
+  benchmark tests now cover a failing road-match regression, a small
+  absolute-noise pass, and a failing road-match budget (`33 passed`);
+  `compileall`, `git diff --check`, and full pytest also passed
+  (`387 passed, 12 subtests passed`). The first real road-gated strict run,
+  `out/benchmark-road-match-gates-20260601/full-report.json`, proved the new
+  road gates passed but rejected the broad `--max-evaluated-duration-s 12`
+  budget during a noisy smoke-included sample (`16.738065s` evaluated). The
+  accepted run,
+  `out/benchmark-road-match-gates-relaxed-20260601/full-report.json`, kept
+  exact avg/min IoU `0.968082`/`0.942536`, passed regression and latency
+  checks with no issues, and reported evaluated road-match elapsed
+  `0.018412s` against a `1.0s` budget: Phoenix stayed at score `0.705669`,
+  `0.009030s`, and Nashville stayed at score `0.772836`, `0.009382s`.

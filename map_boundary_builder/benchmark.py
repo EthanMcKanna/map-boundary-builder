@@ -301,6 +301,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allowed absolute per-stage active plus smoke-checked duration increase before ratio checks fail.",
     )
     parser.add_argument(
+        "--max-evaluated-road-match-increase-ratio",
+        type=float,
+        default=None,
+        help=(
+            "Optional maximum active plus smoke-checked road-match elapsed increase "
+            "ratio against --baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-evaluated-road-match-increase-s",
+        type=float,
+        default=0.0,
+        help="Allowed absolute active plus smoke-checked road-match elapsed increase before ratio checks fail.",
+    )
+    parser.add_argument(
         "--max-duration-s",
         type=float,
         default=None,
@@ -317,6 +332,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Optional absolute maximum active plus smoke-checked fixture duration budget.",
+    )
+    parser.add_argument(
+        "--max-evaluated-road-match-s",
+        type=float,
+        default=None,
+        help="Optional absolute maximum active plus smoke-checked road-match elapsed budget.",
     )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
@@ -372,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.max_evaluated_stage_duration_increase_ratio
             ),
             max_evaluated_stage_duration_increase_s=args.max_evaluated_stage_duration_increase_s,
+            max_evaluated_road_match_increase_ratio=args.max_evaluated_road_match_increase_ratio,
+            max_evaluated_road_match_increase_s=args.max_evaluated_road_match_increase_s,
         )
         report["regression_check"] = regression_check
         report["summary"]["regression_check_passed"] = regression_check["passed"]
@@ -380,12 +403,14 @@ def main(argv: list[str] | None = None) -> int:
         args.max_duration_s is not None
         or args.max_total_duration_s is not None
         or args.max_evaluated_duration_s is not None
+        or args.max_evaluated_road_match_s is not None
     ):
         latency_budget_check = check_report_latency_budgets(
             report,
             max_duration_s=args.max_duration_s,
             max_total_duration_s=args.max_total_duration_s,
             max_evaluated_duration_s=args.max_evaluated_duration_s,
+            max_evaluated_road_match_s=args.max_evaluated_road_match_s,
         )
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
@@ -1281,6 +1306,8 @@ def compare_report_regressions(
     max_evaluated_duration_increase_s: float = 0.0,
     max_evaluated_stage_duration_increase_ratio: float | None = None,
     max_evaluated_stage_duration_increase_s: float = 0.0,
+    max_evaluated_road_match_increase_ratio: float | None = None,
+    max_evaluated_road_match_increase_s: float = 0.0,
 ) -> dict[str, Any]:
     candidate_scores = active_iou_scores_by_slug(report)
     baseline_scores = active_iou_scores_by_slug(baseline_report)
@@ -1442,6 +1469,32 @@ def compare_report_regressions(
                     }
                 )
 
+    evaluated_road_match_tolerance = (
+        None
+        if max_evaluated_road_match_increase_ratio is None
+        else max(0.0, float(max_evaluated_road_match_increase_ratio))
+    )
+    evaluated_road_match_tolerance_s = max(0.0, float(max_evaluated_road_match_increase_s))
+    if evaluated_road_match_tolerance is not None:
+        baseline_road_match = report_evaluated_road_match_elapsed(baseline_report)
+        candidate_road_match = report_evaluated_road_match_elapsed(report)
+        if baseline_road_match is not None and candidate_road_match is not None and baseline_road_match > 0:
+            road_match_increase_s = candidate_road_match - baseline_road_match
+            road_match_increase_ratio = candidate_road_match / baseline_road_match - 1.0
+            if (
+                road_match_increase_s > evaluated_road_match_tolerance_s
+                and road_match_increase_ratio > evaluated_road_match_tolerance
+            ):
+                issues.append(
+                    {
+                        "kind": "evaluated_road_match_elapsed_increase",
+                        "baseline_evaluated_road_match_elapsed_s": round(baseline_road_match, 6),
+                        "candidate_evaluated_road_match_elapsed_s": round(candidate_road_match, 6),
+                        "increase_s": round(road_match_increase_s, 6),
+                        "increase_ratio": round(road_match_increase_ratio, 6),
+                    }
+                )
+
     return {
         "passed": not issues,
         "baseline_report": str(baseline_path) if baseline_path is not None else None,
@@ -1455,6 +1508,8 @@ def compare_report_regressions(
         "max_evaluated_duration_increase_s": evaluated_duration_tolerance_s,
         "max_evaluated_stage_duration_increase_ratio": evaluated_stage_duration_tolerance,
         "max_evaluated_stage_duration_increase_s": evaluated_stage_duration_tolerance_s,
+        "max_evaluated_road_match_increase_ratio": evaluated_road_match_tolerance,
+        "max_evaluated_road_match_increase_s": evaluated_road_match_tolerance_s,
         "compared_fixtures": len(baseline_scores),
         "compared_iou_fixtures": len(compared_iou_pairs),
         "compared_evaluated_stage_durations": compared_evaluated_stage_durations,
@@ -1471,15 +1526,22 @@ def check_report_latency_budgets(
     max_duration_s: float | None = None,
     max_total_duration_s: float | None = None,
     max_evaluated_duration_s: float | None = None,
+    max_evaluated_road_match_s: float | None = None,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
     evaluated_budget = (
         None if max_evaluated_duration_s is None else max(0.0, float(max_evaluated_duration_s))
     )
+    evaluated_road_match_budget = (
+        None
+        if max_evaluated_road_match_s is None
+        else max(0.0, float(max_evaluated_road_match_s))
+    )
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = report_evaluated_duration(report)
+    evaluated_road_match = report_evaluated_road_match_elapsed(report)
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
         for row in report.get("scores", []):
@@ -1517,14 +1579,28 @@ def check_report_latency_budgets(
                     "excess_s": round(evaluated_duration - evaluated_budget, 6),
                 }
             )
+    if evaluated_road_match_budget is not None:
+        if evaluated_road_match is not None and evaluated_road_match > evaluated_road_match_budget:
+            issues.append(
+                {
+                    "kind": "evaluated_road_match_budget_exceeded",
+                    "evaluated_road_match_elapsed_s": round(evaluated_road_match, 6),
+                    "max_evaluated_road_match_s": evaluated_road_match_budget,
+                    "excess_s": round(evaluated_road_match - evaluated_road_match_budget, 6),
+                }
+            )
     return {
         "passed": not issues,
         "max_duration_s": duration_budget,
         "max_total_duration_s": total_budget,
         "max_evaluated_duration_s": evaluated_budget,
+        "max_evaluated_road_match_s": evaluated_road_match_budget,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
+        "evaluated_road_match_elapsed_s": (
+            round(evaluated_road_match, 6) if evaluated_road_match is not None else None
+        ),
         "issues": issues,
     }
 
@@ -1564,6 +1640,20 @@ def report_evaluated_duration(report: dict[str, Any]) -> float | None:
     if active_total_duration is None and smoke_total_duration is None:
         return None
     return (active_total_duration or 0.0) + (smoke_total_duration or 0.0)
+
+
+def report_evaluated_road_match_elapsed(report: dict[str, Any]) -> float | None:
+    summary = report.get("summary", {})
+    if not isinstance(summary, dict):
+        return None
+    evaluated_elapsed = parse_report_duration(summary.get("evaluated_road_match_elapsed_s"))
+    if evaluated_elapsed is not None:
+        return evaluated_elapsed
+    active_elapsed = parse_report_duration(summary.get("active_road_match_elapsed_s"))
+    smoke_elapsed = parse_report_duration(summary.get("smoked_skipped_road_match_elapsed_s"))
+    if active_elapsed is None and smoke_elapsed is None:
+        return None
+    return (active_elapsed or 0.0) + (smoke_elapsed or 0.0)
 
 
 def print_table(report: dict[str, Any], report_path: Path) -> None:

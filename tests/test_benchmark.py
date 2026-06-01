@@ -1026,6 +1026,43 @@ def test_report_regression_check_can_flag_evaluated_duration_increase() -> None:
     ]
 
 
+def test_report_regression_check_can_flag_evaluated_road_match_increase() -> None:
+    baseline = {
+        "summary": {
+            "average_iou": 0.95,
+            "evaluated_road_match_elapsed_s": 0.4,
+        },
+        "scores": [{"slug": "nashville-waymo", "status": "active", "iou": 0.986282}],
+    }
+    candidate = {
+        "summary": {
+            "average_iou": 0.95,
+            "evaluated_road_match_elapsed_s": 0.7,
+        },
+        "scores": [{"slug": "nashville-waymo", "status": "active", "iou": 0.986282}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_evaluated_road_match_increase_ratio=0.2,
+        max_evaluated_road_match_increase_s=0.05,
+    )
+
+    assert check["passed"] is False
+    assert check["max_evaluated_road_match_increase_ratio"] == 0.2
+    assert check["max_evaluated_road_match_increase_s"] == 0.05
+    assert check["issues"] == [
+        {
+            "kind": "evaluated_road_match_elapsed_increase",
+            "baseline_evaluated_road_match_elapsed_s": 0.4,
+            "candidate_evaluated_road_match_elapsed_s": 0.7,
+            "increase_s": 0.3,
+            "increase_ratio": 0.75,
+        }
+    ]
+
+
 def test_report_regression_check_can_flag_evaluated_stage_duration_increase() -> None:
     baseline = {
         "summary": {
@@ -1072,6 +1109,7 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
             "total_duration_s": 4.0,
             "evaluated_duration_s": 5.0,
             "evaluated_stage_duration_s": {"ocr": 5.0},
+            "evaluated_road_match_elapsed_s": 0.2,
         },
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.1}],
     }
@@ -1081,6 +1119,7 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
             "total_duration_s": 4.2,
             "evaluated_duration_s": 5.2,
             "evaluated_stage_duration_s": {"ocr": 5.2},
+            "evaluated_road_match_elapsed_s": 0.23,
         },
         "scores": [{"slug": "austin-tesla", "status": "active", "iou": 0.973925, "duration_s": 0.19}],
     }
@@ -1096,6 +1135,8 @@ def test_report_regression_check_duration_ratio_can_ignore_small_absolute_noise(
         max_evaluated_duration_increase_s=0.25,
         max_evaluated_stage_duration_increase_ratio=0.01,
         max_evaluated_stage_duration_increase_s=0.25,
+        max_evaluated_road_match_increase_ratio=0.01,
+        max_evaluated_road_match_increase_s=0.05,
     )
 
     assert check["passed"] is True
@@ -1192,6 +1233,31 @@ def test_report_latency_budget_check_computes_evaluated_duration_when_missing() 
             "evaluated_duration_s": 3.3,
             "max_evaluated_duration_s": 3.0,
             "excess_s": 0.3,
+        }
+    ]
+
+
+def test_report_latency_budget_check_flags_road_match_excess() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 2.5,
+            "active_road_match_elapsed_s": 0.35,
+            "smoked_skipped_road_match_elapsed_s": 0.25,
+        },
+        "scores": [{"slug": "nashville-waymo", "status": "active", "duration_s": 0.7}],
+    }
+
+    check = check_report_latency_budgets(report, max_evaluated_road_match_s=0.5)
+
+    assert check["passed"] is False
+    assert check["max_evaluated_road_match_s"] == 0.5
+    assert check["evaluated_road_match_elapsed_s"] == 0.6
+    assert check["issues"] == [
+        {
+            "kind": "evaluated_road_match_budget_exceeded",
+            "evaluated_road_match_elapsed_s": 0.6,
+            "max_evaluated_road_match_s": 0.5,
+            "excess_s": 0.1,
         }
     ]
 
