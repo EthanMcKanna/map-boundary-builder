@@ -10158,3 +10158,25 @@ with zero failures in 0.531s.
   `scaled_cache: miss-stored`; `out/prod-warm-engine-keys-second-20260601.json`
   completed in `0.287470s` total with OCR `0.010054s`, extraction `0.236189s`,
   and `scaled_cache: hit`.
+- Reduced the synthetic RapidOCR warm sample from the full OCR max dimension
+  to a bounded `608px` default via
+  `MAP_BOUNDARY_RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION`, with `0` preserving the
+  previous full-dimension fallback. Fresh-process A/B probes on clean Bay Area
+  Waymo no-catalog generation showed the smaller sample cuts warmup work while
+  preserving the same output: `out/warm-sample-side-subprocess-ab-20260601/`
+  measured current full-dimension warmup at `0.671335s`-`0.690984s`, while
+  `608px` warmup measured `0.261951s` and `0.266813s`; all samples preserved
+  confidence `0.846`, 13 controls, and the same bbox/source. The real
+  `prewarm_generation_runtime()` comparison
+  (`out/prewarm-sample608-ab-20260601/summary.json`) reduced total local
+  prewarm from `0.714211s`/`0.742809s` with rollback env `0` to
+  `0.303826s`/`0.305368s` at the new default, while follow-on Bay Area
+  generation stayed `0.493928s`/`0.515265s` with identical confidence and
+  controls. Focused API/OCR/warmup tests passed (`181 passed`), local health
+  reported `rapidocr_warm_sample_max_dimension: 608`, the broad
+  current-reference no-catalog gate
+  (`out/warm-sample608-currentref-gate-20260601/full-report.json`) preserved
+  exact avg/min IoU `0.949771`/`0.794177` with zero regression or
+  latency-budget issues, analyzed repeat max/median/average
+  `0.118099s`/`0.060943s`/`0.051495s`, and the full suite passed
+  (`407 passed, 12 subtests passed`).

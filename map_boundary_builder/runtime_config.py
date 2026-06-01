@@ -80,6 +80,10 @@ RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION",
     1000,
 )
+RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION",
+    608,
+)
 RAPIDOCR_CLS_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", 24, minimum=1)
 RAPIDOCR_REC_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", 24, minimum=1)
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = env_int(
@@ -255,6 +259,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
         "rapidocr_warm_detector_limits": rapidocr_warm_detector_limits(),
         "rapidocr_warm_engine_keys": rapidocr_warm_engine_keys_config(),
+        "rapidocr_warm_sample_max_dimension": RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION,
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,

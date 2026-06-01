@@ -1281,7 +1281,7 @@ class OcrGroupingTests(unittest.TestCase):
             },
         )
 
-    def test_warm_rapidocr_runtime_uses_realistic_map_input_shape(self) -> None:
+    def test_warm_rapidocr_runtime_uses_bounded_map_input_shape(self) -> None:
         calls = []
 
         class FakeWarmEngine:
@@ -1295,13 +1295,37 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "rapidocr_engine", return_value=FakeWarmEngine()),
                 patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1600),
+                patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 608),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
             ):
                 self.assertTrue(warm_rapidocr_runtime())
         finally:
             warm_rapidocr_runtime.cache_clear()
 
-        self.assertEqual(calls, [((1600, 1600, 3), False), ((1600, 1600, 3), False)])
+        self.assertEqual(calls, [((608, 608, 3), False), ((608, 608, 3), False)])
+
+    def test_warm_rapidocr_runtime_can_fallback_to_ocr_max_dimension_sample(self) -> None:
+        calls = []
+
+        class FakeWarmEngine:
+            def __call__(self, image, *, use_cls=None):
+                calls.append((image.shape, use_cls))
+                return [], 0.0
+
+        try:
+            warm_rapidocr_runtime.cache_clear()
+            with (
+                patch.object(ocr_module, "rapidocr_engine", return_value=FakeWarmEngine()),
+                patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+                patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1200),
+                patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 0),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+            ):
+                self.assertTrue(warm_rapidocr_runtime())
+        finally:
+            warm_rapidocr_runtime.cache_clear()
+
+        self.assertEqual(calls, [((1200, 1200, 3), False), ((1200, 1200, 3), False)])
 
     def test_rapidocr_warm_engine_keys_skip_unused_default_bright_blue_limit(self) -> None:
         with (

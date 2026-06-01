@@ -35,6 +35,7 @@ from .runtime_config import (
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
+    RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
     rapidocr_english_ppocrv5_asset_paths,
@@ -989,7 +990,9 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str]]:
 
 
 def rapidocr_warm_sample() -> np.ndarray:
-    warm_side = effective_rapidocr_max_dimension()
+    warm_side = RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION
+    if warm_side <= 0:
+        warm_side = effective_rapidocr_max_dimension()
     if warm_side <= 0:
         warm_side = 1600
     warm_side = max(384, min(1600, warm_side))
