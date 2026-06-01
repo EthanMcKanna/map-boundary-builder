@@ -10436,3 +10436,23 @@ with zero failures in 0.531s.
   `0.949771 -> 0.948689`. The code/test prototype was therefore reverted and
   not deployed; keep the evidence as a lead for a future fix that can match or
   beat the older eight-control Miami fit without weakening regression policy.
+- Rejected lowering the bright-blue RapidOCR detector cap below `320` as a
+  speed lever after a sequential Waymo-only current-reference sweep. Caps
+  `64,80,96,112,128,144,160,176,192,208,224,240,256,272,288,304,320` all
+  preserved the exact same avg/min IoU `0.951463`/`0.898272` across the nine
+  Waymo fixtures, but active totals stayed in the same noisy band. The best
+  observed totals were `208` at `3.956269s` and `160` at `3.960163s`, while
+  the current `320` report (`out/bright-blue-det320-waymo-seq2-20260601/`)
+  took `4.008197s`; OCR totals were likewise flat/noisy (`96` `2.720076s`,
+  `208` `2.758600s`, `320` `2.812471s`). Direct RapidOCR introspection
+  explains the flat curve: upstream `TextDetector.get_preprocess()` ignores
+  `limit_side_len` for `limit_type=max` and instead selects internal detector
+  limits `960`, `1500`, or `2000` from input size, so the `64-320` bright-blue
+  sweep was mostly reusing the same 960px detector preprocessor. A patched
+  prototype that forced `max` to honor the configured cap did speed the
+  detector but was not reliable: cap `480` failed five of nine Waymo fixtures
+  with active total `63.74s`, cap `608` failed Houston and dropped avg/min IoU
+  to `0.903`/`0.836`, and cap `800` still failed Houston and Nashville with
+  avg/min IoU `0.858`/`0.720`. Keep the current production behavior and treat
+  detector downscaling as unsafe until there is an OCR-quality guard or
+  recovery path.
