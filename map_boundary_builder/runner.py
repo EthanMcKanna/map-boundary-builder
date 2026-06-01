@@ -129,6 +129,14 @@ FOCUS_GEOREF_OCR_MAX_DIMENSION = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION", "550")),
 )
+FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN", "416")),
+)
+FOCUS_GEOREF_OCR_MIN_TEXT_AREA = max(
+    0.0,
+    float(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_MIN_TEXT_AREA", "500")),
+)
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_TINY_MAX_IMAGE_DIMENSION = 320
@@ -836,6 +844,8 @@ def build_boundary(
                 details={
                     "crop_area_ratio": round(focus_georef_ocr_crop_area_ratio(extraction, rgb=rgb), 4),
                     "rapidocr_max_dimension": focus_georef_ocr_max_dimension_for_style(extraction.style),
+                    "rapidocr_detector_limit_side_len": focus_georef_ocr_detector_limit_for_style(extraction.style),
+                    "rapidocr_min_text_area": focus_georef_ocr_min_text_area_for_style(extraction.style),
                 },
             )
             labels = extract_focus_georef_labels_from_rgb(str(image_path), rgb, extraction=extraction)
@@ -1496,6 +1506,12 @@ def extract_focus_georef_labels_from_rgb(
     focus_max_dimension = focus_georef_ocr_max_dimension_for_style(extraction.style)
     if focus_max_dimension is not None:
         ocr_kwargs["rapidocr_max_dimension"] = focus_max_dimension
+    focus_detector_limit = focus_georef_ocr_detector_limit_for_style(extraction.style)
+    if focus_detector_limit is not None:
+        ocr_kwargs["rapidocr_detector_limit_side_len"] = focus_detector_limit
+    focus_min_text_area = focus_georef_ocr_min_text_area_for_style(extraction.style)
+    if focus_min_text_area is not None:
+        ocr_kwargs["rapidocr_min_text_area"] = focus_min_text_area
     labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
         return labels
@@ -1549,6 +1565,22 @@ def focus_georef_ocr_max_dimension_for_style(style: str | None) -> int | None:
     if FOCUS_GEOREF_OCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
         return rapidocr_max_dimension_for_extraction_style(style)
     return FOCUS_GEOREF_OCR_MAX_DIMENSION
+
+
+def focus_georef_ocr_detector_limit_for_style(style: str | None) -> int | None:
+    if style not in FOCUS_GEOREF_OCR_STYLES:
+        return rapidocr_detector_limit_for_ocr_style(style)
+    if FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN <= 0:
+        return rapidocr_detector_limit_for_ocr_style(style)
+    return FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN
+
+
+def focus_georef_ocr_min_text_area_for_style(style: str | None) -> float | None:
+    if style not in FOCUS_GEOREF_OCR_STYLES:
+        return fast_text_ocr_min_area_for_style(style)
+    if FOCUS_GEOREF_OCR_MIN_TEXT_AREA <= 0.0:
+        return fast_text_ocr_min_area_for_style(style)
+    return FOCUS_GEOREF_OCR_MIN_TEXT_AREA
 
 
 def focus_georef_ocr_crop_area_ratio(extraction, *, rgb) -> float:

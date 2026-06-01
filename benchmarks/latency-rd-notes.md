@@ -11224,3 +11224,32 @@ with zero failures in 0.531s.
   `3.342466s` before send with stage timings `extract=0.526345s`,
   `ocr=1.949213s`, `georeference=0.232265s`, and `export=0.305557s`
   (`out/prod-focuscap550-ann-arbor-upload-20260601.json`).
+- Tuned the focused dark-teal OCR detector after the production cap run showed
+  serverless OCR was still dominant. A local focused-crop sweep on the Ann
+  Arbor AVIF found that very aggressive `det_limit=256` with
+  `min_text_area=1200` could make isolated OCR extremely fast
+  (`~0.115s`) but was too brittle in the full runner: it lost the exact
+  `Ann Arbor` label in one fresh-cache pass, triggered the full-detail OCR
+  fallback, and slowed the run to `3.910953s`
+  (`out/ann-arbor-focusdet256-min1200-probe-20260601.json`). The accepted
+  conservative setting is focused-only `det_limit=416` plus
+  `min_text_area=500`, exposed through
+  `MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN` and
+  `MAP_BOUNDARY_FOCUS_GEOREF_OCR_MIN_TEXT_AREA`. The real fresh-cache CLI smoke
+  (`out/ann-arbor-focusdet416-min500-20260601.json`) stayed on focused OCR
+  without fallback, read 19 labels including `Ann Arbor`, `Amtrak Station`,
+  `Ann Arbor Farmer's Market`, and `Michigan Union`, finished in `1.047206s`,
+  and cut the OCR stage to `0.469714s` while preserving confidence `0.805`,
+  3 controls, residuals `558.0m`/`693.7m`, and bbox
+  `[-83.7511388, 42.2634926, -83.7306125, 42.2879679]`. Compared with the
+  previous focused-cap output, polygon IoU was `0.978562`, area ratio was
+  `1.015567`, and centroid shift was about `[-0.000022, -0.000040]` degrees.
+  Regression gates stayed clean after adding the final observability/runtime
+  env keys: no-catalog passed 15/15 with avg/min IoU
+  `0.952958`/`0.843889` and no regression issues against
+  `out/focus-georef-ocr-cap550-currentref-20260601/full-report.json`
+  (`out/focus-georef-ocr-det416-min500-final-currentref-20260601/full-report.json`);
+  catalog passed 15/15 with avg/min IoU `0.996223`/`0.943345` and no
+  regression issues against
+  `out/focus-georef-ocr-cap550-catalog-20260601/full-report.json`
+  (`out/focus-georef-ocr-det416-min500-final-catalog-20260601/full-report.json`).
