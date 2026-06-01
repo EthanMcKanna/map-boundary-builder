@@ -120,6 +120,11 @@ PROVIDER_UI_FOCUS_CROP_STYLES = {"dark-teal"}
 PROVIDER_UI_FOCUS_CROP_MIN_X_FRACTION = 0.10
 PROVIDER_UI_FOCUS_CROP_MAX_X_FRACTION = 0.95
 PROVIDER_UI_FOCUS_CROP_Y_PAD_RATIO = 0.05
+FOCUS_GEOREF_OCR_STYLES = {"dark-teal"}
+FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO = max(
+    0.0,
+    float(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO", "0.35")),
+)
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_TINY_MAX_IMAGE_DIMENSION = 320
@@ -296,8 +301,10 @@ def build_boundary(
         width, height = img.size
 
     labels_future: Future[list[Any]] | None = None
+    labels: list[Any] | None = None
     labels_future_filtered = False
     labels_future_current_catalog_shortcut = False
+    labels_from_focus_georef_ocr = False
     provider_ui_labels_future: Future[list[Any]] | None = None
     provider_ui_fast_ocr_max_dimension: int | None = None
     ocr_executor: ThreadPoolExecutor | None = None
@@ -678,6 +685,11 @@ def build_boundary(
                     and provider_ui_fast_ocr_max_dimension is not None
                     and PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0
                 )
+                focus_georef_ocr_after_refine = (
+                    not low_res_catalog_rgb
+                    and provider_ui_fast_ocr_max_dimension is None
+                    and focus_georef_ocr_enabled(extraction, rgb=rgb, city_input=city_input)
+                )
                 if (
                     city_input is None
                     and allow_catalog
@@ -692,6 +704,8 @@ def build_boundary(
                         rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                     )
                 elif provider_ui_crop_after_refine:
+                    pass
+                elif focus_georef_ocr_after_refine:
                     pass
                 else:
                     labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
@@ -804,7 +818,37 @@ def build_boundary(
             else None
         )
         if (
-            labels_future is None
+            labels is None
+            and labels_future is None
+            and provider_ui_fast_ocr_max_dimension is None
+            and focus_georef_ocr_enabled(extraction, rgb=rgb, city_input=city_input)
+        ):
+            ensure_georeference_resource_preload()
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Reading focused map labels",
+                percent=43,
+                details={
+                    "crop_area_ratio": round(focus_georef_ocr_crop_area_ratio(extraction, rgb=rgb), 4),
+                    "rapidocr_max_dimension": rapidocr_max_dimension_for_extraction_style(extraction.style),
+                },
+            )
+            labels = extract_focus_georef_labels_from_rgb(str(image_path), rgb, extraction=extraction)
+            labels_from_focus_georef_ocr = True
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Focused map labels read",
+                percent=47,
+                details={
+                    "label_count": len(labels),
+                    "top_labels": [label.text for label in labels[:8]],
+                },
+            )
+        if (
+            labels is None
+            and labels_future is None
             and city_input is None
             and allow_catalog
             and provider_ui_fast_ocr_max_dimension is not None
@@ -909,7 +953,7 @@ def build_boundary(
                     progress=progress,
                     georeference_source="catalog-shape-match:provider-ui-label",
                 )
-        if labels_future is None:
+        if labels is None and labels_future is None:
             ensure_full_rgb()
             if ocr_executor is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
@@ -938,13 +982,14 @@ def build_boundary(
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
             road_feature_future = road_feature_executor.submit(image_feature_distance, rgb)
-        emit_progress(
-            progress,
-            stage="ocr",
-            message="Reading map labels on server",
-            percent=44,
-        )
-        labels = labels_future.result()
+        if labels is None:
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Reading map labels on server",
+                percent=44,
+            )
+            labels = labels_future.result()
     finally:
         if ocr_executor is not None:
             ocr_executor.shutdown(wait=False, cancel_futures=True)
@@ -1138,6 +1183,43 @@ def build_boundary(
         style=extraction.style,
         progress=progress,
     )
+    if should_fallback_focus_georef_ocr(labels_from_focus_georef_ocr, georef):
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Retrying map labels at full detail",
+            percent=47,
+        )
+        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels_from_focus_georef_ocr = False
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Full-detail map labels read",
+            percent=48,
+            details={
+                "label_count": len(labels),
+                "top_labels": [label.text for label in labels[:8]],
+            },
+        )
+        georef = fit_georeference(
+            labels,
+            image_path,
+            extraction.pixel_geometry,
+            rgb=rgb,
+            city_input=city_input,
+            context_hints=filename_city_contexts(filename_hint) if city_input is None else None,
+            width=width,
+            height=height,
+            coverage_ratio=extraction.coverage_ratio,
+            min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+            road_feature_distance=road_feature_distance,
+            anchor_marker_dots=should_anchor_marker_dots(extraction.style),
+            style=extraction.style,
+            progress=progress,
+        )
     if should_fallback_fast_text_ocr(
         labels_future_filtered,
         georef,
@@ -1396,6 +1478,67 @@ def extract_provider_ui_labels_from_rgb(
     ]
 
 
+def extract_focus_georef_labels_from_rgb(
+    image_path: str | Path,
+    rgb,
+    *,
+    extraction,
+) -> list[Any]:
+    crop, offset_x, offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
+    ocr_kwargs = ocr_kwargs_for_style(extraction.style, cache=runner_ocr_cache_enabled())
+    labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
+    if offset_x == 0 and offset_y == 0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + offset_x,
+            y=label.y + offset_y,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
+
+
+def ocr_kwargs_for_style(style: str | None, *, cache: bool) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {"cache": cache}
+    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    if rapidocr_max_dimension is not None:
+        kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    if rapidocr_detector_limit is not None:
+        kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    if rapidocr_detector_limit_type is not None:
+        kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+    rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
+    if rapidocr_recognition_profile is not None:
+        kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
+    if rapidocr_min_text_area is not None:
+        kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+    return kwargs
+
+
+def focus_georef_ocr_enabled(extraction, *, rgb, city_input: str | None) -> bool:
+    return (
+        city_input is None
+        and extraction.style in FOCUS_GEOREF_OCR_STYLES
+        and provider_ui_focus_crop_enabled(extraction)
+        and 0.0 < focus_georef_ocr_crop_area_ratio(extraction, rgb=rgb) <= FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO
+    )
+
+
+def focus_georef_ocr_crop_area_ratio(extraction, *, rgb) -> float:
+    height, width = rgb.shape[:2]
+    image_area = max(float(width * height), 1.0)
+    crop, _offset_x, _offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
+    crop_height, crop_width = crop.shape[:2]
+    return float(crop_width * crop_height) / image_area
+
+
 def provider_ui_focus_crop_enabled(extraction) -> bool:
     return (
         PROVIDER_UI_FOCUS_CROP_ENABLED
@@ -1494,6 +1637,12 @@ def fast_text_ocr_min_area_for_style(style: str | None) -> float | None:
     if FAST_TEXT_OCR_MIN_AREA <= 0.0 or style not in FAST_TEXT_OCR_STYLES:
         return None
     return FAST_TEXT_OCR_MIN_AREA
+
+
+def should_fallback_focus_georef_ocr(focused: bool, georef) -> bool:
+    if not focused:
+        return False
+    return not is_credible_context_hint_georeference(georef)
 
 
 def should_fallback_fast_text_ocr(

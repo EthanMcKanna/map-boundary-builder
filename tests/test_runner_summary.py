@@ -256,6 +256,39 @@ def test_provider_ui_fast_ocr_allows_gray_fill_non_tall_screens() -> None:
     assert runner.provider_ui_fast_ocr_max_dimension_for_style("dark-teal", width=1200, height=1014) is None
 
 
+def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
+    rgb = np.zeros((700, 1000, 3), dtype=np.uint8)
+    small_dark_teal = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(200, 120), (500, 120), (500, 620), (200, 620)]),
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+    large_dark_teal = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (1000, 0), (1000, 700), (0, 700)]),
+        coverage_ratio=0.95,
+        contour_count=1,
+        confidence=1.0,
+    )
+    gray_fill = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="gray-fill",
+        pixel_geometry=small_dark_teal.pixel_geometry,
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    assert runner.focus_georef_ocr_enabled(small_dark_teal, rgb=rgb, city_input=None)
+    assert not runner.focus_georef_ocr_enabled(small_dark_teal, rgb=rgb, city_input="Ann Arbor")
+    assert not runner.focus_georef_ocr_enabled(large_dark_teal, rgb=rgb, city_input=None)
+    assert not runner.focus_georef_ocr_enabled(gray_fill, rgb=rgb, city_input=None)
+
+
 def test_provider_ui_crop_ocr_max_dimension_uses_gray_fill_cap() -> None:
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("gray-fill", rapidocr_max_dimension=1200) == 450
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("dark-teal", rapidocr_max_dimension=1200) == 750
@@ -756,7 +789,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
             confidence=0.9,
             source="ocr-georeference:nominatim-label-fit",
         ),
-        control_points=[],
+        control_points=[SimpleNamespace(), SimpleNamespace(), SimpleNamespace()],
         residual_median_m=0.0,
         residual_p90_m=0.0,
     )
@@ -787,6 +820,120 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
             "cache": True,
         }
     ]
+
+
+def test_dark_teal_catalog_miss_uses_focused_georef_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown-dark-teal.png"
+    Image.new("RGB", (1000, 700), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((700, 1000, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(200, 120), (500, 120), (500, 620), (200, 620)]),
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+    ocr_rgb_shapes: list[tuple[int, ...]] = []
+    labels = [
+        OcrLabel("Ann Arbor", 565, 340, 100, 24, 96.0),
+        OcrLabel("Michigan Union", 520, 460, 130, 24, 96.0),
+        OcrLabel("Amtrak Station", 500, 240, 130, 24, 96.0),
+    ]
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Ann Arbor",
+            lon=-83.74,
+            lat=42.28,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=4.0,
+            rotation_radians=0.0,
+            confidence=0.82,
+            source="test-georef",
+        ),
+        control_points=[SimpleNamespace(), SimpleNamespace(), SimpleNamespace()],
+        residual_median_m=500.0,
+        residual_p90_m=800.0,
+    )
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **_kwargs):
+        ocr_rgb_shapes.append(tuple(prepared_rgb.shape))
+        return labels
+
+    def fake_fit_georeference(seen_labels, *_args, **_kwargs):
+        assert [label.text for label in seen_labels] == [label.text for label in labels]
+        return georef
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "fit_georeference", fake_fit_georeference)
+
+    result = build_boundary(image_path, None, output_path)
+
+    assert result.summary["city"] == "Ann Arbor"
+    assert ocr_rgb_shapes == [(580, 255, 3)]
+
+
+def test_focused_georef_ocr_falls_back_to_full_detail(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown-dark-teal.png"
+    Image.new("RGB", (1000, 700), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((700, 1000, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(200, 120), (500, 120), (500, 620), (200, 620)]),
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+    focus_labels = [OcrLabel("Hands On", 430, 340, 80, 24, 96.0)]
+    full_labels = [OcrLabel("Ann Arbor", 565, 340, 100, 24, 96.0)]
+    ocr_rgb_shapes: list[tuple[int, ...]] = []
+    fit_label_batches: list[list[OcrLabel]] = []
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Ann Arbor",
+            lon=-83.74,
+            lat=42.28,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=4.0,
+            rotation_radians=0.0,
+            confidence=0.82,
+            source="test-georef",
+        ),
+        control_points=[SimpleNamespace(), SimpleNamespace(), SimpleNamespace()],
+        residual_median_m=500.0,
+        residual_p90_m=800.0,
+    )
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **_kwargs):
+        shape = tuple(prepared_rgb.shape)
+        ocr_rgb_shapes.append(shape)
+        return focus_labels if shape == (580, 255, 3) else full_labels
+
+    def fake_fit_georeference(seen_labels, *_args, **_kwargs):
+        fit_label_batches.append(seen_labels)
+        return None if [label.text for label in seen_labels] == ["Hands On"] else georef
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "match_service_area_catalog", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "fit_georeference", fake_fit_georeference)
+
+    result = build_boundary(image_path, None, output_path)
+
+    assert result.summary["city"] == "Ann Arbor"
+    assert ocr_rgb_shapes == [(580, 255, 3), (700, 1000, 3)]
+    assert [[label.text for label in batch] for batch in fit_label_batches] == [["Hands On"], ["Ann Arbor"]]
 
 
 def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_path, monkeypatch) -> None:

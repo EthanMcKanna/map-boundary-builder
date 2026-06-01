@@ -40,6 +40,7 @@ from map_boundary_builder.georeference import (
     place_query_text,
     place_tokens,
     prune_single_noisy_similarity_control,
+    rank_city_contexts_for_georeferencing,
     residual_median_p90,
     should_try_road_refinement,
     should_prefer_specific_context_over_sparse_region,
@@ -2174,6 +2175,40 @@ class PlaceCandidateTests(unittest.TestCase):
 
         self.assertGreater(contexts[0].center.bbox[3], 25.94)
         self.assertTrue(any(context.center.display_name.startswith("Miami,") for context in contexts[1:]))
+
+    def test_small_exact_city_evidence_beats_sparse_synthetic_region(self) -> None:
+        region = CityContext(
+            query="South State Street",
+            center=GeocodeResult(
+                label="South State Street",
+                lon=-83.741,
+                lat=42.278,
+                display_name="South State Street",
+                bbox=(-83.84, 42.20, -83.66, 42.36),
+                importance=0.5,
+                place_type="region",
+            ),
+            inferred=True,
+            evidence=("Ann Arbor", "Michigan Union"),
+        )
+        city = CityContext(
+            query="Ann Arbor",
+            center=GeocodeResult(
+                label="Ann Arbor",
+                lon=-83.7485,
+                lat=42.2814,
+                display_name="Ann Arbor, Washtenaw County, Michigan, United States",
+                bbox=(-83.7996, 42.2227, -83.6758, 42.3239),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+            evidence=("Ann Arbor", "Michigan Union"),
+        )
+
+        contexts = rank_city_contexts_for_georeferencing([region, city])
+
+        self.assertEqual(contexts[0].query, "Ann Arbor")
 
     def test_cached_label_cluster_skips_live_direct_context_lookup(self) -> None:
         labels = [

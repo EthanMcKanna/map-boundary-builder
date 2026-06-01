@@ -11149,3 +11149,26 @@ with zero failures in 0.531s.
   and used the cleaner three inlier controls (`Ann Arbor`, `Amtrak Station`,
   `Michigan Union`). Residuals stayed `557.6m`/`692.3m`, and georeference
   confidence rose from `0.768` to `0.805` by avoiding noisy live controls.
+- Prototyped and accepted a guarded focused-map OCR path for dark-teal
+  screenshots where the extracted service-area geometry yields a crop covering
+  at most `35%` of the image. The crop path defers the full-image OCR that had
+  been launched after low-resolution catalog misses, reads focused map labels,
+  and falls back to full-detail OCR unless the cropped labels already produce a
+  credible georeference. A companion ranking fix gives small evidence sets with
+  an exact city label a modest city-context bonus, while preserving explicit
+  Bay Area filename contexts. On the arbitrary Ann Arbor AVIF
+  `/Users/ethanmckanna/Downloads/aa mm.avif`, the actual runner now takes the
+  focused path (`crop_area_ratio` `0.1863`), returns `city=Ann Arbor`, and
+  completes locally in `1.102405s` on the first patched run and `1.442172s` on
+  a fresh-cache rerun. The bbox remains effectively unchanged
+  (`[-83.7511045, 42.2635423, -83.7306813, 42.2879432]`), confidence stays
+  `0.805`, and residuals stay `558.9m`/`693.5m`. Validation stayed clean:
+  affected runner/OCR-georeference tests passed (`191 passed`), the full suite
+  passed (`432 passed`), `compileall` and `git diff --check` passed, the
+  no-catalog current-reference gate passed 15/15 with avg/min IoU
+  `0.952958`/`0.843889` and no regression issues against
+  `out/muted-green-currentref15-freshbase-20260601/full-report.json`
+  (`out/focus-georef-ocr-currentref-20260601/full-report.json`), and the
+  catalog gate preserved avg/min IoU `0.996223`/`0.943345` with no regression
+  issues against `out/muted-green-catalog15-20260601/full-report.json`
+  (`out/focus-georef-ocr-catalog-20260601/full-report.json`).

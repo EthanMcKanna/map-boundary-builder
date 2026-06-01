@@ -2019,7 +2019,20 @@ def city_context_georef_score(context: CityContext) -> float:
         score -= 2.2
     if context.query == "Inferred map area":
         score += 0.45
+    if is_exact_small_evidence_city_context(context):
+        score += 1.2
     return score
+
+
+def is_exact_small_evidence_city_context(context: CityContext) -> bool:
+    if context.center.place_type.lower() not in {"city", "municipality", "town", "village"}:
+        return False
+    if len(context.evidence) < 2 or len(context.evidence) > 4:
+        return False
+    query_tokens = place_tokens(context.query)
+    if not query_tokens:
+        return False
+    return any(place_tokens(evidence) == query_tokens for evidence in context.evidence)
 
 
 def geocoded_label_candidates(labels: list[OcrLabel]) -> list[LabelGeocodeCandidate]:
