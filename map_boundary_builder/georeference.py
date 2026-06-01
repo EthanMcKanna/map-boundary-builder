@@ -29,6 +29,10 @@ from .osm_roads import (
 
 MAX_GEOCODED_LABELS = 16
 MAX_SPARSE_GEOCODED_LABELS = 32
+MAX_STREET_RICH_GEOCODED_LABELS = max(
+    MAX_GEOCODED_LABELS,
+    int(os.environ.get("MAP_BOUNDARY_STREET_RICH_GEOCODED_LABELS", "64")),
+)
 MAX_PLACE_LABELS = 120
 MAX_CITY_INFERENCE_LABELS = 48
 MAX_CITY_CONTEXTS = 6
@@ -163,6 +167,25 @@ OCR_PLACE_TOKEN_ALIASES = {
     "vakland": "oakland",
     "villowbrook": "willowbrook",
     "wiishire": "wilshire",
+}
+ROAD_PLACE_TOKEN_ALIASES = {
+    "av": "avenue",
+    "ave": "avenue",
+    "bivd": "boulevard",
+    "blvd": "boulevard",
+    "cir": "circle",
+    "ct": "court",
+    "dr": "drive",
+    "hwy": "highway",
+    "ln": "lane",
+    "ne": "northeast",
+    "nw": "northwest",
+    "pkwy": "parkway",
+    "rd": "road",
+    "se": "southeast",
+    "st": "street",
+    "sw": "southwest",
+    "wy": "way",
 }
 ADMIN_CONTEXT_TYPES = {
     "borough",
@@ -562,6 +585,37 @@ def georeference_from_labels(
         control_labels = anchor_labels_to_marker_dots(control_labels, image_path, rgb=rgb)
     city_contexts = resolve_city_contexts(labels, city)
     best: tuple[float, GeoreferenceResult, CityContext] | None = None
+    tried_header_street_retry = False
+    if label_y_min is None:
+        header_filtered_labels = header_filtered_street_control_labels(control_labels, width, height)
+        if len(header_filtered_labels) < len(control_labels):
+            tried_header_street_retry = True
+            for city_context in city_contexts:
+                result = georeference_from_label_context(
+                    header_filtered_labels,
+                    image_path,
+                    city_context,
+                    width,
+                    height,
+                    rgb=rgb,
+                    min_control_points=min_control_points,
+                    allow_two_control_fit=allow_two_control_fit,
+                    road_feature_distance=road_feature_distance,
+                    allow_road_refinement=allow_road_refinement,
+                    allow_sparse_regional_fit=allow_sparse_regional_fit,
+                    expand_street_controls=True,
+                )
+                if result is None:
+                    continue
+                if city is None and city_context.query == "Inferred map area":
+                    result = georeference_result_with_city(result, city_context.center.display_name)
+                score = georeference_result_score(result)
+                if best is None or score > best[0]:
+                    best = (score, result, city_context)
+                if is_decisive_georeference_result(result):
+                    break
+            if best is not None:
+                return best[1]
     for city_context in city_contexts:
         result = georeference_from_label_context(
             control_labels,
@@ -589,6 +643,33 @@ def georeference_from_labels(
                 best = (score, result, city_context)
             if is_decisive_georeference_result(result):
                 break
+    if best is None and label_y_min is None and not tried_header_street_retry:
+        header_filtered_labels = header_filtered_street_control_labels(control_labels, width, height)
+        if len(header_filtered_labels) < len(control_labels):
+            for city_context in city_contexts:
+                result = georeference_from_label_context(
+                    header_filtered_labels,
+                    image_path,
+                    city_context,
+                    width,
+                    height,
+                    rgb=rgb,
+                    min_control_points=min_control_points,
+                    allow_two_control_fit=allow_two_control_fit,
+                    road_feature_distance=road_feature_distance,
+                    allow_road_refinement=allow_road_refinement,
+                    allow_sparse_regional_fit=allow_sparse_regional_fit,
+                    expand_street_controls=True,
+                )
+                if result is None:
+                    continue
+                if city is None and city_context.query == "Inferred map area":
+                    result = georeference_result_with_city(result, city_context.center.display_name)
+                score = georeference_result_score(result)
+                if best is None or score > best[0]:
+                    best = (score, result, city_context)
+                if is_decisive_georeference_result(result):
+                    break
     return best[1] if best is not None else None
 
 
@@ -734,6 +815,34 @@ def is_top_left_title_label(label: OcrLabel, width: int, height: int) -> bool:
     return bool(tokens)
 
 
+def header_filtered_street_control_labels(labels: list[OcrLabel], width: int, height: int) -> list[OcrLabel]:
+    header_cutoff_y = min(180.0, max(90.0, height * 0.12))
+    header_labels = [
+        label
+        for label in labels
+        if label.y < header_cutoff_y
+        and (label.width >= width * 0.08 or label.height >= height * 0.025)
+        and len(place_tokens(place_query_text(label.text))) >= 2
+    ]
+    if len(header_labels) < 2:
+        return labels
+    filtered = [label for label in labels if label.y >= header_cutoff_y]
+    street_labels = [label for label in filtered if is_street_control_label(label)]
+    if len(street_labels) < 5:
+        return labels
+    return street_labels[:12]
+
+
+def is_street_control_label(label: OcrLabel) -> bool:
+    if not ROAD_CONTEXT_CUE_RE.search(label.text):
+        return False
+    tokens = place_tokens(
+        place_query_text(label.text, normalize_road_tokens=True),
+        normalize_road_tokens=True,
+    )
+    return len(tokens) >= 2
+
+
 def georeference_result_with_city(result: GeoreferenceResult, city: str) -> GeoreferenceResult:
     if result.transform.city == city:
         return result
@@ -872,7 +981,10 @@ def georeference_from_label_context(
     road_feature_distance: np.ndarray | None = None,
     allow_road_refinement: bool = True,
     allow_sparse_regional_fit: bool = False,
+    expand_street_controls: bool = False,
 ) -> GeoreferenceResult | None:
+    if expand_street_controls:
+        allow_road_refinement = False
     city_center = city_context.center
     controls = build_control_points(
         labels,
@@ -880,6 +992,7 @@ def georeference_from_label_context(
         city_center,
         max_geocoded_labels=MAX_SPARSE_GEOCODED_LABELS if allow_two_control_fit else MAX_GEOCODED_LABELS,
         merge_control_sources=allow_two_control_fit,
+        expand_street_controls=expand_street_controls,
     )
     required_available_controls = 2 if allow_two_control_fit else min_control_points
     if len(controls) >= required_available_controls:
@@ -1723,13 +1836,13 @@ def clean_query_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def place_query_text(value: str) -> str:
+def place_query_text(value: str, *, normalize_road_tokens: bool = False) -> str:
     tokens: list[str] = []
     seen: set[str] = set()
     for part in re.split(r"[^a-z0-9]+", value.lower()):
-        if len(part) < 3:
+        token = normalize_place_token(part, normalize_road_tokens=normalize_road_tokens)
+        if token is None:
             continue
-        token = OCR_PLACE_TOKEN_ALIASES.get(part, part)
         if token in CITY_INFERENCE_STOP_TOKENS:
             continue
         if token in seen:
@@ -1737,6 +1850,17 @@ def place_query_text(value: str) -> str:
         seen.add(token)
         tokens.append(token)
     return " ".join(token.title() for token in tokens)
+
+
+def normalize_place_token(part: str, *, normalize_road_tokens: bool = False) -> str | None:
+    if not part:
+        return None
+    token = OCR_PLACE_TOKEN_ALIASES.get(part, ROAD_PLACE_TOKEN_ALIASES.get(part, part) if normalize_road_tokens else part)
+    if len(part) < 3 and (not normalize_road_tokens or part not in ROAD_PLACE_TOKEN_ALIASES):
+        return None
+    if len(token) < 3:
+        return None
+    return token
 
 
 def is_broad_context_result(result: GeocodeResult) -> bool:
@@ -2599,6 +2723,7 @@ def build_control_points(
     *,
     max_geocoded_labels: int = MAX_GEOCODED_LABELS,
     merge_control_sources: bool = False,
+    expand_street_controls: bool = False,
 ) -> list[ControlPoint]:
     # The geocoded and OSM-place paths are independent lookups; overlap them, and
     # accept a fast OSM-place fit only when it is already decisive.
@@ -2620,15 +2745,26 @@ def build_control_points(
                 if has_decisive_control_fit(place_controls):
                     return place_controls
 
+        geocode_label_limit = (
+            max(max_geocoded_labels, MAX_STREET_RICH_GEOCODED_LABELS)
+            if expand_street_controls
+            else max_geocoded_labels
+        )
+        stop_after_controls = None if expand_street_controls else 6 if merge_control_sources else 4
+
         geocoded_controls = build_geocoded_control_points(
             labels,
             city,
             city_center,
-            stop_after_controls=6 if merge_control_sources else 4,
-            max_labels=max_geocoded_labels,
+            stop_after_controls=stop_after_controls,
+            max_labels=geocode_label_limit,
             prefer_large_text=merge_control_sources,
             allow_network=False,
+            normalize_road_tokens=expand_street_controls,
         )
+        if expand_street_controls:
+            place_future.cancel()
+            return geocoded_controls
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
             place_future.cancel()
             return geocoded_controls
@@ -2653,10 +2789,11 @@ def build_control_points(
             labels,
             city,
             city_center,
-            stop_after_controls=6 if merge_control_sources else 4,
-            max_labels=max_geocoded_labels,
+            stop_after_controls=stop_after_controls,
+            max_labels=geocode_label_limit,
             prefer_large_text=merge_control_sources,
-            allow_network=True,
+            allow_network=not expand_street_controls,
+            normalize_road_tokens=expand_street_controls,
         )
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
             place_future.cancel()
@@ -2690,20 +2827,28 @@ def build_geocoded_control_points(
     max_labels: int = MAX_GEOCODED_LABELS,
     prefer_large_text: bool = False,
     allow_network: bool = True,
+    normalize_road_tokens: bool = False,
 ) -> list[ControlPoint]:
     city_x, city_y = city_center.mercator
     max_distance_m = 70000.0
     controls: list[ControlPoint] = []
     used_text: set[tuple[str, ...]] = set()
-    city_tokens = place_tokens(city)
-    single_token_fragments = single_tokens_supported_by_fuller_labels(labels)
+    city_tokens = place_tokens(city, normalize_road_tokens=normalize_road_tokens)
+    single_token_fragments = single_tokens_supported_by_fuller_labels(
+        labels,
+        normalize_road_tokens=normalize_road_tokens,
+    )
     label_specs: list[tuple[OcrLabel, str, list[str]]] = []
-    for label in rank_geocode_labels(labels, prefer_large_text=prefer_large_text)[:max_labels]:
-        raw_text_tokens = place_tokens(label.text)
+    for label in rank_geocode_labels(
+        labels,
+        prefer_large_text=prefer_large_text,
+        normalize_road_tokens=normalize_road_tokens,
+    )[:max_labels]:
+        raw_text_tokens = place_tokens(label.text, normalize_road_tokens=normalize_road_tokens)
         if raw_text_tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
-        query_text = place_query_text(label.text)
-        text_tokens = place_tokens(query_text)
+        query_text = place_query_text(label.text, normalize_road_tokens=normalize_road_tokens)
+        text_tokens = place_tokens(query_text, normalize_road_tokens=normalize_road_tokens)
         if not text_tokens or text_tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if len(text_tokens) > 4:
@@ -2748,7 +2893,11 @@ def build_geocoded_control_points(
             best_score = -1.0
             for results in query_results:
                 for candidate in results:
-                    if not primary_name_matches_label(candidate.display_name, query_text):
+                    if not primary_name_matches_label(
+                        candidate.display_name,
+                        query_text,
+                        normalize_road_tokens=normalize_road_tokens,
+                    ):
                         continue
                     cand_x, cand_y = candidate.mercator
                     distance = sqrt((cand_x - city_x) ** 2 + (cand_y - city_y) ** 2)
@@ -2765,10 +2914,17 @@ def build_geocoded_control_points(
     return controls
 
 
-def single_tokens_supported_by_fuller_labels(labels: list[OcrLabel]) -> set[str]:
+def single_tokens_supported_by_fuller_labels(
+    labels: list[OcrLabel],
+    *,
+    normalize_road_tokens: bool = False,
+) -> set[str]:
     supported: set[str] = set()
-    for label in rank_geocode_labels(labels):
-        tokens = place_tokens(place_query_text(label.text))
+    for label in rank_geocode_labels(labels, normalize_road_tokens=normalize_road_tokens):
+        tokens = place_tokens(
+            place_query_text(label.text, normalize_road_tokens=normalize_road_tokens),
+            normalize_road_tokens=normalize_road_tokens,
+        )
         if len(tokens) >= 2 and not tokens & CITY_INFERENCE_STOP_TOKENS:
             supported.update(tokens)
     return supported
@@ -3015,12 +3171,25 @@ def rank_place_labels(labels: list[OcrLabel]) -> list[OcrLabel]:
     )
 
 
-def rank_geocode_labels(labels: list[OcrLabel], *, prefer_large_text: bool = False) -> list[OcrLabel]:
+def rank_geocode_labels(
+    labels: list[OcrLabel],
+    *,
+    prefer_large_text: bool = False,
+    normalize_road_tokens: bool = False,
+) -> list[OcrLabel]:
     if prefer_large_text:
         return sorted(
             labels,
             key=lambda label: (
-                min(2, len(place_tokens(place_query_text(label.text)))),
+                min(
+                    2,
+                    len(
+                        place_tokens(
+                            place_query_text(label.text, normalize_road_tokens=normalize_road_tokens),
+                            normalize_road_tokens=normalize_road_tokens,
+                        )
+                    ),
+                ),
                 min(35.0, (label.width * label.height) / 90.0),
                 label.confidence,
                 len(label.text),
@@ -3030,7 +3199,15 @@ def rank_geocode_labels(labels: list[OcrLabel], *, prefer_large_text: bool = Fal
     return sorted(
         labels,
         key=lambda label: (
-            min(2, len(place_tokens(place_query_text(label.text)))),
+            min(
+                2,
+                len(
+                    place_tokens(
+                        place_query_text(label.text, normalize_road_tokens=normalize_road_tokens),
+                        normalize_road_tokens=normalize_road_tokens,
+                    )
+                ),
+            ),
             label.confidence,
             -len(label.text),
         ),
@@ -3129,20 +3306,29 @@ def geocode_contexts(city: str, city_center: GeocodeResult) -> list[str]:
     return contexts
 
 
-def primary_name_matches_label(display_name: str, label_text: str) -> bool:
-    label_tokens = place_tokens(label_text)
+def primary_name_matches_label(
+    display_name: str,
+    label_text: str,
+    *,
+    normalize_road_tokens: bool = False,
+) -> bool:
+    label_tokens = place_tokens(label_text, normalize_road_tokens=normalize_road_tokens)
     if not label_tokens:
         return False
-    primary_tokens = place_tokens(display_name.split(",", 1)[0])
+    primary_tokens = place_tokens(
+        display_name.split(",", 1)[0],
+        normalize_road_tokens=normalize_road_tokens,
+    )
     return label_tokens <= primary_tokens
 
 
-def place_tokens(value: str) -> set[str]:
+def place_tokens(value: str, *, normalize_road_tokens: bool = False) -> set[str]:
     tokens: set[str] = set()
     for part in re.split(r"[^a-z0-9]+", value.lower()):
-        if len(part) < 3:
+        token = normalize_place_token(part, normalize_road_tokens=normalize_road_tokens)
+        if token is None:
             continue
-        tokens.add(OCR_PLACE_TOKEN_ALIASES.get(part, part))
+        tokens.add(token)
     return tokens
 
 

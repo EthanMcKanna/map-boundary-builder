@@ -1703,6 +1703,14 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(place_query_text("LAKEWO"), "Lakewood")
         self.assertEqual(place_query_text("WIISHIRE"), "Wilshire")
 
+    def test_place_query_text_preserves_road_abbreviations(self) -> None:
+        self.assertEqual(place_query_text("Bridge St NW", normalize_road_tokens=True), "Bridge Street Northwest")
+        self.assertEqual(
+            place_query_text("Lake Michigan Dr NW", normalize_road_tokens=True),
+            "Lake Michigan Drive Northwest",
+        )
+        self.assertEqual(place_tokens("Division Ave N", normalize_road_tokens=True), {"division", "avenue"})
+
     def test_concatenated_dallas_labels_match_osm_place_controls(self) -> None:
         dallas = GeocodeResult(
             label="Dallas",
@@ -2320,6 +2328,70 @@ class RoadContextRankingTests(unittest.TestCase):
 
 
 class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_header_filtered_street_retry_expands_controls_after_miss(self) -> None:
+        context = CityContext(
+            query="Grand Rapids",
+            center=GeocodeResult(
+                label="Grand Rapids",
+                lon=-85.6681,
+                lat=42.9634,
+                display_name="Grand Rapids, Kent County, Michigan, United States",
+                bbox=(-85.75, 42.88, -85.56, 43.03),
+                importance=0.62,
+                place_type="city",
+            ),
+            inferred=False,
+        )
+        labels = [
+            OcrLabel("Grand Rapids MI", x=320, y=58, width=260, height=38, confidence=96),
+            OcrLabel("CITY OF GRAND RAPIDS", x=720, y=62, width=220, height=30, confidence=95),
+            OcrLabel("Bridge St NW", x=430, y=220, width=96, height=20, confidence=96),
+            OcrLabel("Monroe Ave NW", x=650, y=260, width=104, height=20, confidence=96),
+            OcrLabel("Lake Michigan Dr NW", x=390, y=330, width=146, height=20, confidence=96),
+            OcrLabel("Walker Ave NW", x=360, y=400, width=112, height=20, confidence=96),
+            OcrLabel("Seward St NW", x=540, y=450, width=102, height=20, confidence=96),
+        ]
+        retry_result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Grand Rapids",
+                lon=-85.67,
+                lat=42.96,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=4.0,
+                rotation_radians=0.0,
+                confidence=0.8,
+                source="ocr-georeference:nominatim-label-fit",
+            ),
+            control_points=[],
+            residual_median_m=800.0,
+            residual_p90_m=1200.0,
+        )
+        calls: list[tuple[list[OcrLabel], bool]] = []
+
+        def fake_label_context(call_labels, *_args, expand_street_controls: bool = False, **_kwargs):
+            calls.append((call_labels, expand_street_controls))
+            return retry_result if expand_street_controls else None
+
+        with (
+            patch("map_boundary_builder.georeference.resolve_city_contexts", return_value=[context]),
+            patch("map_boundary_builder.georeference.georeference_from_label_context", side_effect=fake_label_context),
+        ):
+            result = georeference_from_labels(
+                labels,
+                "grand-rapids.png",
+                "Grand Rapids",
+                1000,
+                1000,
+                min_control_points=3,
+                anchor_marker_dots=False,
+            )
+
+        self.assertIs(result, retry_result)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0][1])
+        self.assertEqual([label.text for label in calls[0][0]], [label.text for label in labels[2:]])
+
     def test_ready_place_controls_skip_live_geocoded_control_lookup(self) -> None:
         center = GeocodeResult(
             label="Las Vegas",

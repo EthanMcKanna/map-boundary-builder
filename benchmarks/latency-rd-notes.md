@@ -10955,3 +10955,69 @@ with zero failures in 0.531s.
   `0.752`, residual median/p90 `708.3m`/`808.3m`, and bbox
   `[-122.6569225,37.1641342,-121.6917363,37.8987853]`
   (`out/prod-region-anchor-bayarea-generic-20260601.json`).
+- Rejected promoting filename/shape-only road-context georeferencing ahead of
+  OCR. The remaining cold no-catalog misses are still dominated by first OCR
+  (`dallas-waymo` `0.936749s`, `phoenix-waymo` `0.907174s`,
+  `bay-area-waymo` `0.823119s` in
+  `out/region-anchor-currentref-gate-20260601/full-report.json`), so a
+  pre-OCR road/shape shortcut looked tempting. Direct probes disproved it. At
+  520px, where the line-feature matcher is eligible, Dallas and Phoenix both
+  timed out at 15s before returning a transform, while Bay Area returned quickly
+  but with unusable geometry (`0.278141` IoU, `1.875944` area ratio, and
+  `46.1km` centroid error in
+  `out/road-context-shortcut-probe-20260601.json`). At 800px, where the point
+  matcher can run without the line scorer, all three returned but remained too
+  slow and inaccurate for a production shortcut: Dallas `3.410657s`/`0.407045`
+  IoU, Phoenix `3.704930s`/`0.247686` IoU, and Bay Area
+  `1.809707s`-`3.295533s`/`0.270695` IoU
+  (`out/road-context-shortcut-probe-800-20260601.json`). Keep the road-context
+  path as a guarded fallback/refinement tool; do not run it before OCR without
+  a new verifier or a much narrower trigger.
+- Rejected two OCR-path overhead shortcuts after the road-context bypass
+  failed. First, disabling runner OCR cache lookups reduced a small slow-fixture
+  target probe from `3.64s` to `3.38s`
+  (`out/ocr-cache-off-target-probe-20260601/full-report.json` versus
+  `out/ocr-cache-disabled-target-probe-20260601/full-report.json`), but it did
+  not reliably clear the per-fixture target and would sacrifice the exact/near
+  OCR reuse that makes warm production repeats subsecond. A repeat probe with
+  OCR cache disabled still spent `0.807565s` average in OCR and had Phoenix at
+  `1.033358s` (`out/ocr-cache-disabled-repeat-probe-20260601/full-report.json`),
+  so this remains a diagnostic only. Second, a processing-resolution shortcut
+  tried to avoid duplicate resizing by sharing one 1600px image between OCR
+  and extraction. Direct PIL 1600/1400 loads were mixed and unsafe
+  (`out/processing-resolution-probe-20260601.json`): 1400px badly regressed
+  Phoenix, Los Angeles, Orlando, and San Antonio; 1600px sped Dallas but
+  inflated Phoenix/Nashville/Orlando georeference work and changed Houston.
+  A closer shared-OpenCV-resize probe preserved Dallas, Phoenix, and Los
+  Angeles geometry while cutting Dallas OCR from `0.762735s` to `0.522835s`,
+  but it still regressed active Orlando from `0.960371` to `0.901252` IoU and
+  San Antonio from `0.960578` to `0.944136`
+  (`out/shared-resize-processing-probe-20260601.json`). Do not switch the
+  no-catalog pipeline to lower processing coordinates unless a verifier can
+  prove equivalence before skipping the current full-coordinate path.
+- Accepted a header/street-label fallback for May Mobility-style dark-teal maps
+  with large title/logo bands above the actual map. The local Grand Rapids
+  stress image (`/Users/ethanmckanna/Downloads/mm gr.jpg`) previously failed
+  both auto and explicit `--city "Grand Rapids"` georeferencing: OCR saw
+  `Grand Rapids MI` and the street grid, but the normal control ranking spent
+  its early geocode budget on title/logo/legend labels and produced too few
+  coherent controls. A direct all-label live probe could recover a 5-control
+  street fit, but cold variants were unacceptable (`29.977084s`, then
+  `191.159074s` with a clean cache while live geocoder calls fanned out across
+  street-label candidates). The accepted path is intentionally narrower:
+  detect a top header band plus at least five road-like labels below it, try a
+  seed/cache-only expanded street-label fit before the legacy live path, skip
+  OSM road refinement for that retry, and package deterministic Grand Rapids
+  road geocoder seeds. The fresh-cache seeded proof
+  (`out/grand-rapids-mm-20260601/mm-gr-seeded-noroad.geojson`) succeeded with
+  the same bbox `[-85.6880948,42.9627515,-85.6672874,42.9725831]`, 5 controls,
+  confidence `0.781`, median/p90 residual `1065.1m`/`1148.3m`, total
+  `1.594614s`, and georeference `0.105835s`; the warm street-only proof was
+  similar at total `1.468187s`, georeference `0.192057s`. Active-regression
+  coverage stayed exact: `out/street-header-seeded-currentref-final-20260601/full-report.json`
+  passed 15/15 scored fixtures, avg/min IoU `0.952958`/`0.843889`, active total
+  `9.91s`, and zero regression issues against
+  `out/region-anchor-currentref-gate-20260601/full-report.json`. Focused
+  geocoder/georeference tests passed (`132 passed, 18 subtests passed`),
+  `compileall`, seed JSON validation, `git diff --check`, and full pytest
+  passed (`423 passed, 18 subtests passed`).

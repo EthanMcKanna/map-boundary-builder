@@ -8310,6 +8310,71 @@
         "place_rank": 24,
         "type": "neighbourhood"
       }
+    ],
+    "acb9bd2c084bb44cb5ff28e6": [
+      {
+        "place_id": 371093373,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 134444,
+        "lat": "42.9632425",
+        "lon": "-85.6678639",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.6146374165699607,
+        "addresstype": "city",
+        "name": "Grand Rapids",
+        "display_name": "Grand Rapids, Kent County, Michigan, United States",
+        "boundingbox": [
+          "42.8836480",
+          "43.0290471",
+          "-85.7518691",
+          "-85.5686460"
+        ]
+      },
+      {
+        "place_id": 370967898,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 136854,
+        "lat": "47.2371660",
+        "lon": "-93.5302140",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.48067024404998787,
+        "addresstype": "town",
+        "name": "Grand Rapids",
+        "display_name": "Grand Rapids, Itasca County, Minnesota, 55744, United States",
+        "boundingbox": [
+          "47.1951431",
+          "47.2822912",
+          "-93.5767632",
+          "-93.4683209"
+        ]
+      },
+      {
+        "place_id": 365912989,
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "osm_type": "relation",
+        "osm_id": 183386,
+        "lat": "41.4119963",
+        "lon": "-83.8643852",
+        "category": "boundary",
+        "type": "administrative",
+        "place_rank": 16,
+        "importance": 0.36341195681131827,
+        "addresstype": "village",
+        "name": "Grand Rapids",
+        "display_name": "Grand Rapids, Wood County, Ohio, United States",
+        "boundingbox": [
+          "41.4044672",
+          "41.4164200",
+          "-83.8770285",
+          "-83.8543320"
+        ]
+      }
     ]
   },
   "photon": {
@@ -37036,6 +37101,2197 @@
     },
     "cab0f65cdb42c4dfddc49c28": {
       "features": []
+    },
+    "cbb3e80691069b4f4ca7bd1a": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 255913760,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Division Avenue South",
+            "city": "Wyoming",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49548",
+            "countrycode": "US",
+            "extent": [
+              -85.6662514,
+              42.9182804,
+              -85.6662342,
+              42.9179419
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6662428,
+              42.9181111
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1066813886,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Division Avenue South",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49507",
+            "countrycode": "US",
+            "extent": [
+              -85.6673739,
+              42.9451169,
+              -85.6673656,
+              42.9446963
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6673698,
+              42.9449066
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 143497337,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Division Avenue South",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.6676116,
+              42.9536719,
+              -85.6675106,
+              42.9492584
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6675613,
+              42.9514651
+            ]
+          }
+        }
+      ]
+    },
+    "5ea8fc2633fbb8537bf1ba34": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 339840771,
+            "osm_key": "leisure",
+            "osm_value": "park",
+            "type": "other",
+            "name": "Fulton Street Farmers Market",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -85.6407218,
+              42.9649759,
+              -85.6401639,
+              42.9627933
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6404332,
+              42.9635919
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 163041612,
+            "osm_key": "landuse",
+            "osm_value": "cemetery",
+            "type": "other",
+            "name": "Fulton Street Cemetery",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -85.6499989,
+              42.9650024,
+              -85.6470304,
+              42.9629003
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6487433,
+              42.9638911
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 184849294,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Fulton Street East",
+            "locality": "Heritage Hill Historic District",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.6543914,
+              42.9629281,
+              -85.649444,
+              42.962814
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6519178,
+              42.9628661
+            ]
+          }
+        }
+      ]
+    },
+    "5a5fe53983beb5dd51dc7a50": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 7613424150,
+            "osm_key": "railway",
+            "osm_value": "station",
+            "type": "house",
+            "name": "Fulton Street",
+            "street": "Broadway",
+            "locality": "Financial District",
+            "district": "Manhattan",
+            "city": "New York",
+            "state": "New York",
+            "country": "United States",
+            "postcode": "10008",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -74.0095697,
+              40.7103638
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 7613424151,
+            "osm_key": "railway",
+            "osm_value": "station",
+            "type": "house",
+            "name": "Fulton Street",
+            "street": "William Street",
+            "locality": "Financial District",
+            "district": "Manhattan",
+            "city": "New York",
+            "state": "New York",
+            "country": "United States",
+            "postcode": "10045",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -74.0065858,
+              40.709426
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 5106082641,
+            "osm_key": "railway",
+            "osm_value": "stop",
+            "type": "house",
+            "name": "Fulton Street",
+            "street": "William Street",
+            "locality": "Financial District",
+            "district": "Manhattan",
+            "city": "New York",
+            "state": "New York",
+            "country": "United States",
+            "postcode": "10045",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -74.0072098,
+              40.7088431
+            ]
+          }
+        }
+      ]
+    },
+    "f66e75183c2dd57ef617b9f1": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 124424084,
+            "osm_key": "amenity",
+            "osm_value": "university",
+            "type": "house",
+            "housenumber": "715",
+            "name": "Northwestern Michigan College Great Lakes Campus",
+            "street": "East Front Street",
+            "locality": "Oak Park",
+            "city": "Traverse City",
+            "county": "Grand Traverse",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49686",
+            "countrycode": "US",
+            "extent": [
+              -85.6076241,
+              44.766698,
+              -85.6055117,
+              44.7642252
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6065954,
+              44.7654713
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 322235431,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Michigan Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.6738644,
+              42.9703693,
+              -85.6728911,
+              42.9703621
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6733778,
+              42.9703662
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 58393201,
+            "osm_key": "building",
+            "osm_value": "yes",
+            "type": "house",
+            "name": "First United Methodist Church",
+            "street": "Church Street",
+            "city": "Highland Park",
+            "county": "Wayne",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48203",
+            "countrycode": "US",
+            "extent": [
+              -83.1032405,
+              42.4153428,
+              -83.1026933,
+              42.4149903
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.1029675,
+              42.4151765
+            ]
+          }
+        }
+      ]
+    },
+    "a95f201fa5648c950d28a6b0": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 92362017,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "First Street Northwest",
+            "city": "Altona",
+            "state": "Manitoba",
+            "country": "Canada",
+            "postcode": "R0G 0B7",
+            "countrycode": "CA",
+            "extent": [
+              -97.5593787,
+              49.1078824,
+              -97.5593449,
+              49.1035014
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -97.559355,
+              49.105692
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 493044663,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "First Street Northwest",
+            "locality": "North Capitol Street",
+            "district": "Ward 6",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20260",
+            "countrycode": "US",
+            "extent": [
+              -77.01217,
+              38.9013301,
+              -77.0121605,
+              38.9002185
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0121643,
+              38.9007744
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 6052418,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "First Street Northwest",
+            "locality": "North Capitol Street",
+            "district": "Ward 6",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20529",
+            "countrycode": "US",
+            "extent": [
+              -77.0125476,
+              38.8996581,
+              -77.012182,
+              38.8994072
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0123421,
+              38.8995023
+            ]
+          }
+        }
+      ]
+    },
+    "70853139c6b4b61e0ed921ae": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 556368503,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "Sixth Street Bridge",
+            "street": "6th Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6753319,
+              42.9767982,
+              -85.6733012,
+              42.9765795
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6743165,
+              42.9766889
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17851949,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Bridge Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6757059,
+              42.9704886,
+              -85.674018,
+              42.9703686
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6748618,
+              42.9704305
+            ]
+          }
+        }
+      ]
+    },
+    "8685fdf415e9e36387b4de45": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 556368503,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "Sixth Street Bridge",
+            "street": "6th Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6753319,
+              42.9767982,
+              -85.6733012,
+              42.9765795
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6743165,
+              42.9766889
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17851949,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Bridge Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6757059,
+              42.9704886,
+              -85.674018,
+              42.9703686
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6748618,
+              42.9704305
+            ]
+          }
+        }
+      ]
+    },
+    "fc239de4878ca97863b58595": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 9960309497,
+            "osm_key": "information",
+            "osm_value": "board",
+            "type": "house",
+            "name": "First Friends Church and Bridges Signage",
+            "street": "55th Street Northwest",
+            "county": "Stark",
+            "state": "Ohio",
+            "country": "United States",
+            "postcode": "44709",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -81.3694433,
+              40.8601352
+            ]
+          }
+        }
+      ]
+    },
+    "dc6ac407e6941f47104a3ec4": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 251494452,
+            "osm_key": "tourism",
+            "osm_value": "hotel",
+            "type": "house",
+            "housenumber": "187",
+            "name": "Amway Grand Plaza",
+            "street": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.6731682,
+              42.9671405,
+              -85.6723793,
+              42.9664909
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6725488,
+              42.9668113
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1058209059,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49505",
+            "countrycode": "US",
+            "extent": [
+              -85.6703055,
+              42.9996534,
+              -85.670274,
+              42.9993088
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6703043,
+              42.9994787
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1483723333,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6707185,
+              42.9823033,
+              -85.6705404,
+              42.9821562
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6705794,
+              42.9821805
+            ]
+          }
+        }
+      ]
+    },
+    "15a3c6dfa4a429d83ac3821e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 647590993,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49505",
+            "countrycode": "US",
+            "extent": [
+              -85.6683725,
+              43.0063234,
+              -85.6682104,
+              43.0060513
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6682955,
+              43.0061899
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1429853785,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.672153,
+              42.9690329,
+              -85.6720812,
+              42.9685965
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6720819,
+              42.9688102
+            ]
+          }
+        }
+      ]
+    },
+    "7470a0fe8be964d9ebafb126": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1429853783,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49503",
+            "countrycode": "US",
+            "extent": [
+              -85.6721996,
+              42.9690329,
+              -85.6721396,
+              42.9685965
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6721944,
+              42.9688161
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17842460,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Monroe Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49505",
+            "countrycode": "US",
+            "extent": [
+              -85.6734364,
+              42.96638,
+              -85.6721376,
+              42.963265
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.672308,
+              42.9646406
+            ]
+          }
+        }
+      ]
+    },
+    "98c58cb0f00fa7703c10ef33": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 556368503,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "Sixth Street Bridge",
+            "street": "6th Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6753319,
+              42.9767982,
+              -85.6733012,
+              42.9765795
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6743165,
+              42.9766889
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17851949,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Bridge Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6757059,
+              42.9704886,
+              -85.674018,
+              42.9703686
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6748618,
+              42.9704305
+            ]
+          }
+        }
+      ]
+    },
+    "5ea3862dd43bc146015d57dc": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17851949,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Bridge Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6757059,
+              42.9704886,
+              -85.674018,
+              42.9703686
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6748618,
+              42.9704305
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 556368503,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "Sixth Street Bridge",
+            "street": "6th Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6753319,
+              42.9767982,
+              -85.6733012,
+              42.9765795
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6743165,
+              42.9766889
+            ]
+          }
+        }
+      ]
+    },
+    "2026dbbce458f2384f5be2de": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 683283841,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Bridge Street Northwest",
+            "city": "Saint Francis",
+            "county": "Anoka",
+            "state": "Minnesota",
+            "country": "United States",
+            "postcode": "55070",
+            "countrycode": "US",
+            "extent": [
+              -93.3566189,
+              45.3870212,
+              -93.3540207,
+              45.386965
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -93.3553198,
+              45.3869872
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 556368503,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "Sixth Street Bridge",
+            "street": "6th Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6753319,
+              42.9767982,
+              -85.6733012,
+              42.9765795
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6743165,
+              42.9766889
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 710292690,
+            "osm_key": "man_made",
+            "osm_value": "bridge",
+            "type": "house",
+            "name": "M Street Bridge",
+            "street": "M Street Northwest",
+            "district": "Georgetown",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20007",
+            "countrycode": "US",
+            "extent": [
+              -77.0559979,
+              38.9053502,
+              -77.0549103,
+              38.9051749
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0554409,
+              38.9052796
+            ]
+          }
+        }
+      ]
+    },
+    "c2bd2a771df4c9b9b2306692": {
+      "type": "FeatureCollection",
+      "features": []
+    },
+    "d0f3e9b548406eb96956cdde": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 354028667,
+            "osm_key": "amenity",
+            "osm_value": "place_of_worship",
+            "type": "house",
+            "name": "First United Methodist Church",
+            "street": "Second Street",
+            "district": "Hermansville",
+            "city": "Meyer Township",
+            "county": "Menominee",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49847",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -87.6038889,
+              45.7105556
+            ]
+          }
+        }
+      ]
+    },
+    "5dcb933de7d3d0a4632f9118": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 5558595,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Second Street Northwest",
+            "city": "Browning",
+            "county": "Glacier",
+            "state": "Montana",
+            "country": "United States",
+            "postcode": "58417",
+            "countrycode": "US",
+            "extent": [
+              -113.0182516,
+              48.5600533,
+              -113.0182365,
+              48.5559609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -113.018244,
+              48.5580071
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 92361854,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Second Street Northwest",
+            "city": "Altona",
+            "state": "Manitoba",
+            "country": "Canada",
+            "postcode": "R0G 0B2",
+            "countrycode": "CA",
+            "extent": [
+              -97.5617256,
+              49.1079118,
+              -97.5616619,
+              49.1034908
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -97.5617132,
+              49.1057007
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 92362488,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Second Street Northwest",
+            "city": "Altona",
+            "state": "Manitoba",
+            "country": "Canada",
+            "postcode": "R0G 0B7",
+            "countrycode": "CA",
+            "extent": [
+              -97.5611888,
+              49.1108378,
+              -97.5611463,
+              49.1080126
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -97.5611527,
+              49.1094262
+            ]
+          }
+        }
+      ]
+    },
+    "70c49a5815765de4484f66c2": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17864039,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "Seward Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.683174,
+              42.9850773,
+              -85.6830317,
+              42.9814559
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831029,
+              42.9832666
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 6419692019,
+            "osm_key": "shop",
+            "osm_value": "supermarket",
+            "type": "house",
+            "housenumber": "405",
+            "name": "Bridge Street Market",
+            "street": "Seward Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831005,
+              42.9712317
+            ]
+          }
+        }
+      ]
+    },
+    "e80d88500f3f0a034e708e7e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17864039,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "Seward Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.683174,
+              42.9850773,
+              -85.6830317,
+              42.9814559
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831029,
+              42.9832666
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1087056593,
+            "osm_key": "craft",
+            "osm_value": "builder",
+            "type": "house",
+            "name": "Fence Consultants of West Michigan",
+            "street": "Seward Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.683613,
+              42.982175,
+              -85.683304,
+              42.981823
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6834585,
+              42.981999
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 6419692019,
+            "osm_key": "shop",
+            "osm_value": "supermarket",
+            "type": "house",
+            "housenumber": "405",
+            "name": "Bridge Street Market",
+            "street": "Seward Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831005,
+              42.9712317
+            ]
+          }
+        }
+      ]
+    },
+    "cefbd45e4b6584caf5ef2b9f": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17864039,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "Seward Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.683174,
+              42.9850773,
+              -85.6830317,
+              42.9814559
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831029,
+              42.9832666
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 14315309,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Seward Street",
+            "locality": "Inner Northwest",
+            "district": "Pioneer Park",
+            "city": "Las Vegas",
+            "county": "Clark",
+            "state": "Nevada",
+            "country": "United States",
+            "postcode": "88128",
+            "countrycode": "US",
+            "extent": [
+              -115.2606297,
+              36.1868706,
+              -115.2606224,
+              36.1860447
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -115.260626,
+              36.1864576
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 6419692019,
+            "osm_key": "shop",
+            "osm_value": "supermarket",
+            "type": "house",
+            "housenumber": "405",
+            "name": "Bridge Street Market",
+            "street": "Seward Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6831005,
+              42.9712317
+            ]
+          }
+        }
+      ]
+    },
+    "6b0ec43a786ab55bd80ae45e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 12943857406,
+            "osm_key": "amenity",
+            "osm_value": "charging_station",
+            "type": "house",
+            "housenumber": "2755",
+            "name": "Grand Rapids, MI - Lake Michigan Drive Northwest Supercharger",
+            "street": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7367796,
+              42.9719539
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1389989040,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6804864,
+              42.966363,
+              -85.680122,
+              42.9661678
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6802997,
+              42.966256
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 728099350,
+            "osm_key": "highway",
+            "osm_value": "trunk",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49534",
+            "countrycode": "US",
+            "extent": [
+              -85.7203468,
+              42.9714843,
+              -85.7200208,
+              42.97148
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7201838,
+              42.9714822
+            ]
+          }
+        }
+      ]
+    },
+    "a6825e7a851a7caa02a99c3b": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1389989040,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6804864,
+              42.966363,
+              -85.680122,
+              42.9661678
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6802997,
+              42.966256
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 728099350,
+            "osm_key": "highway",
+            "osm_value": "trunk",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49534",
+            "countrycode": "US",
+            "extent": [
+              -85.7203468,
+              42.9714843,
+              -85.7200208,
+              42.97148
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7201838,
+              42.9714822
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 702165812,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.7048527,
+              42.9656708,
+              -85.7025417,
+              42.9656261
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7036972,
+              42.9656491
+            ]
+          }
+        }
+      ]
+    },
+    "aafb4bac04eec68b88ee4861": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1259556160,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49534",
+            "countrycode": "US",
+            "extent": [
+              -85.7081866,
+              42.9662577,
+              -85.7068904,
+              42.9659285
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7075385,
+              42.9660931
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1385660490,
+            "osm_key": "highway",
+            "osm_value": "trunk",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49534",
+            "countrycode": "US",
+            "extent": [
+              -85.7171058,
+              42.9713731,
+              -85.7162938,
+              42.9708852
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7166606,
+              42.9711898
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1081297112,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Lake Michigan Drive Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.6992212,
+              42.966542,
+              -85.6988396,
+              42.9665093
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6990305,
+              42.9665263
+            ]
+          }
+        }
+      ]
+    },
+    "56bb4693f060f1662f6338f6": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1414812289,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Alpine Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49544",
+            "countrycode": "US",
+            "extent": [
+              -85.6882509,
+              42.992473,
+              -85.68825,
+              42.9921315
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6882505,
+              42.9923023
+            ]
+          }
+        }
+      ]
+    },
+    "650e009abccecc76b99ef0d8": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1414812289,
+            "osm_key": "highway",
+            "osm_value": "secondary",
+            "type": "street",
+            "name": "Alpine Avenue Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49544",
+            "countrycode": "US",
+            "extent": [
+              -85.6882509,
+              42.992473,
+              -85.68825,
+              42.9921315
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6882505,
+              42.9923023
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 41081497,
+            "osm_key": "highway",
+            "osm_value": "trunk",
+            "type": "street",
+            "name": "Alpine Avenue Northwest",
+            "locality": "Alpine",
+            "district": "Alpine Township",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49544",
+            "countrycode": "US",
+            "extent": [
+              -85.6901777,
+              43.072687,
+              -85.6900678,
+              43.0581341
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6901172,
+              43.0654107
+            ]
+          }
+        }
+      ]
+    },
+    "1b2b02c493cffbd6a0a65712": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1434301500,
+            "osm_key": "highway",
+            "osm_value": "trunk",
+            "type": "street",
+            "name": "Alpine Avenue Northwest",
+            "locality": "Alpine",
+            "district": "Alpine Township",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49544",
+            "countrycode": "US",
+            "extent": [
+              -85.6902353,
+              43.079189,
+              -85.6902334,
+              43.0788026
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6902343,
+              43.0789958
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17857112,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "Alpine Avenue Northwest",
+            "locality": "Englishville",
+            "district": "Alpine Township",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49345",
+            "countrycode": "US",
+            "extent": [
+              -85.690136,
+              43.116776,
+              -85.690078,
+              43.101804
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6900948,
+              43.1092912
+            ]
+          }
+        }
+      ]
+    },
+    "d377d01bef879b22a681350e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 183521776,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.685544,
+              42.973921,
+              -85.679879,
+              42.973713
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.68271,
+              42.9738675
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 183521775,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.700131,
+              42.974322,
+              -85.685544,
+              42.9739
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6928329,
+              42.974147
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 18112275,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Northwest 3rd Street",
+            "district": "North Star Moblie Home Park",
+            "city": "Grand Rapids",
+            "county": "Itasca",
+            "state": "Minnesota",
+            "country": "United States",
+            "postcode": "55744",
+            "countrycode": "US",
+            "extent": [
+              -93.5670459,
+              47.240548,
+              -93.5355854,
+              47.2349324
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -93.5518752,
+              47.2350731
+            ]
+          }
+        }
+      ]
+    },
+    "3da025f2b74d301e4bea8132": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 183521776,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.685544,
+              42.973921,
+              -85.679879,
+              42.973713
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.68271,
+              42.9738675
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 183521775,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "city": "Grand Rapids",
+            "county": "Kent",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49504",
+            "countrycode": "US",
+            "extent": [
+              -85.700131,
+              42.974322,
+              -85.685544,
+              42.9739
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.6928329,
+              42.974147
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 353958668,
+            "osm_key": "amenity",
+            "osm_value": "place_of_worship",
+            "type": "house",
+            "name": "Northwest Oshtemo Church",
+            "street": "North 3rd Street",
+            "city": "Oshtemo Charter Township",
+            "county": "Kalamazoo",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49009",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.7355673,
+              42.316704
+            ]
+          }
+        }
+      ]
+    },
+    "9b5dfc0f8c0970e927677020": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 323495034,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "locality": "Downtown East",
+            "district": "Ward 6",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20004",
+            "countrycode": "US",
+            "extent": [
+              -77.0151795,
+              38.8996608,
+              -77.0151697,
+              38.8984253
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0151775,
+              38.899043
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 810755711,
+            "osm_key": "highway",
+            "osm_value": "tertiary",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "locality": "Downtown East",
+            "district": "Ward 6",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20548",
+            "countrycode": "US",
+            "extent": [
+              -77.0151727,
+              38.8997545,
+              -77.0151664,
+              38.8996608
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0151699,
+              38.8997077
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 302630838,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "3rd Street Northwest",
+            "locality": "Brightwood Park",
+            "district": "Ward 4",
+            "city": "Washington",
+            "state": "District of Columbia",
+            "country": "United States",
+            "postcode": "20011",
+            "countrycode": "US",
+            "extent": [
+              -77.0159372,
+              38.9532448,
+              -77.0158852,
+              38.952204
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -77.0159104,
+              38.9527244
+            ]
+          }
+        }
+      ]
     }
   },
   "version": 1
