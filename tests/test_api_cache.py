@@ -1069,7 +1069,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_max_dimension"], 1600)
         self.assertEqual(cold["ocr"]["rapidocr_detector_limit_side_len"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_side_len"], 608)
-        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_side_len"], 448)
+        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_side_len"], 320)
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_type"], "max")
         self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_assets_available"], bool)
         self.assertIn(
@@ -1082,7 +1082,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
         self.assertEqual(
             cold["ocr"]["rapidocr_warm_engine_keys"],
-            [[608, "default", "default"], [448, "en-ppocrv5", "max"]],
+            [[608, "default", "default"], [320, "en-ppocrv5", "max"]],
         )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)
         self.assertTrue(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])

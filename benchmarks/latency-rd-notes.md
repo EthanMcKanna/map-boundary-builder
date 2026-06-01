@@ -10263,3 +10263,26 @@ with zero failures in 0.531s.
   to `4`, returned `cache_hit: raw-compatible`, backfilled the exact raw key
   in `0.000595s`, and completed in `0.004528s` before send with the same
   confidence/source/control points and no generation stage.
+- Tested lowering general extraction resolution before changing code. Caps of
+  `1400`, `1200`, `1000`, and `800` all passed the broad no-catalog benchmark,
+  but each introduced fixture-level IoU drops against the strict current
+  reference baseline; even `1400` failed the zero-drop regression gate on
+  Houston Waymo, Phoenix Waymo, and San Antonio Waymo. This speed/quality trade
+  was rejected for now because the saved extraction time was not worth making
+  large-area boundaries less stable.
+- Accepted a style-specific RapidOCR detector cap reduction for bright-blue
+  screenshots from `448` to `320`. The sweep preserved the full benchmark's
+  exact avg/min IoU `0.949771`/`0.794177` and unchanged confidence/source for
+  the Waymo bright-blue fixtures, while reducing active OCR time from
+  `4.287725s` in the baseline to `3.659075s` in the quick sweep
+  (`out/bright-blue-det-320-sweep-20260601/full-report.json`). The stricter
+  gate (`out/bright-blue-det320-currentref-gate-20260601/full-report.json`)
+  passed with zero regression or latency-budget issues, exact avg/min IoU
+  `0.949771`/`0.794177`, active OCR `3.921638s`, and all 15 repeat fixtures
+  subsecond with max/median/average `0.120360s`/`0.062837s`/`0.052516s`.
+  After making `320` the code default, the same strict gate
+  (`out/bright-blue-det320-default-currentref-gate-20260601/full-report.json`)
+  again passed with zero regression or latency-budget issues, runtime warm
+  engine keys `[[608, default, default], [320, en-ppocrv5, max]]`, active OCR
+  `3.865222s`, and repeat max/median/average
+  `0.118838s`/`0.062499s`/`0.051935s`.
