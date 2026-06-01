@@ -5,7 +5,7 @@ import gzip
 from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -20,6 +20,7 @@ from api.index import (
     allow_catalog_for_request,
     authorized_cron_request,
     bool_field,
+    cached_payload_satisfies_success_options,
     cached_run_payload,
     cached_run_response_status,
     cron_warm_generation_payload,
@@ -41,15 +42,19 @@ from api.index import (
     png_visual_sha256,
     _RUN_RESULT_MEMORY_CACHE,
     raw_run_result_cache_key,
+    raw_run_result_success_cache_key,
     remember_run_result_cache,
     read_run_result_cache,
+    read_run_result_cache_with_success_fallback,
     RUN_RESULT_MEMORY_CACHE_MAX_BYTES,
     RUN_RESULT_MEMORY_CACHE_MAX,
     run_result_cache_tmp_path,
     run_result_cache_key,
+    run_result_success_cache_key,
     webp_visual_run_result_cache_key,
     webp_visual_sha256,
     write_run_result_cache,
+    write_success_run_result_cache_keys,
 )
 from map_boundary_builder.asset_response import web_asset_response, web_asset_version
 from map_boundary_builder.runner import (
@@ -276,6 +281,74 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(changed_catalog_probe_missed_options, changed_catalog_probe_miss_low_iou_options)
         self.assertNotEqual(base, changed_allow_catalog)
         self.assertNotEqual(base, changed_overlay_mode)
+
+    def test_success_run_cache_key_ignores_only_min_confidence(self) -> None:
+        low_threshold = BoundaryBuildOptions(min_confidence=0.55)
+        high_threshold = BoundaryBuildOptions(min_confidence=0.80)
+        more_controls = BoundaryBuildOptions(min_confidence=0.80, min_control_points=4)
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(b"image-a", None, low_threshold),
+            raw_run_result_cache_key(b"image-a", None, high_threshold),
+        )
+        self.assertEqual(
+            raw_run_result_success_cache_key(b"image-a", None, low_threshold),
+            raw_run_result_success_cache_key(b"image-a", None, high_threshold),
+        )
+        self.assertEqual(
+            run_result_success_cache_key(b"image-a", None, low_threshold),
+            run_result_success_cache_key(b"image-a", None, high_threshold),
+        )
+        self.assertNotEqual(
+            raw_run_result_success_cache_key(b"image-a", None, high_threshold),
+            raw_run_result_success_cache_key(b"image-a", None, more_controls),
+        )
+
+    def test_success_run_cache_fallback_requires_requested_thresholds(self) -> None:
+        success_key = raw_run_result_success_cache_key(b"image-a", None, BoundaryBuildOptions())
+        payload = {
+            "id": "old-run",
+            "filename": "old.png",
+            "city": "Phoenix",
+            "status": "complete",
+            "summary": {
+                "city": "Phoenix",
+                "combined_confidence": 0.846,
+                "control_points": 13,
+            },
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+
+        write_success_run_result_cache_keys(payload, success_key)
+        cached, compatible = read_run_result_cache_with_success_fallback(
+            "exact-miss",
+            success_key,
+            options=BoundaryBuildOptions(min_confidence=0.80, min_control_points=13),
+        )
+
+        self.assertTrue(compatible)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["summary"]["combined_confidence"], 0.846)
+        self.assertIsNone(
+            read_run_result_cache_with_success_fallback(
+                "exact-miss",
+                success_key,
+                options=BoundaryBuildOptions(min_confidence=0.90),
+            )[0]
+        )
+        self.assertIsNone(
+            read_run_result_cache_with_success_fallback(
+                "exact-miss",
+                success_key,
+                options=BoundaryBuildOptions(min_control_points=14),
+            )[0]
+        )
+        self.assertFalse(
+            cached_payload_satisfies_success_options(
+                {"status": "catalog_miss", "summary": payload["summary"], "artifacts": payload["artifacts"]},
+                BoundaryBuildOptions(),
+            )
+        )
 
     def test_run_cache_filename_hint_uses_semantic_basename(self) -> None:
         options = BoundaryBuildOptions(filename_hint="/tmp/uploads/Dallas.png")
@@ -785,6 +858,62 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(captured["status"], HTTPStatus.CREATED)
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
         self.assertEqual(payload["profile"]["cache_hit"], "raw")
+
+    def test_create_run_uses_success_cache_when_min_confidence_still_passes(self) -> None:
+        image_bytes = b"image-bytes"
+        filename = "Phoenix.png"
+        with TemporaryDirectory() as workdir, patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)):
+            cached_options = SimpleNamespace(
+                simplify_px=6.0,
+                min_confidence=0.55,
+                min_control_points=3,
+                include_overlay=True,
+                preview_max_dimension=1200,
+                overlay_format="webp",
+                write_mask_artifact=False,
+                allow_catalog=True,
+                catalog_probe_only=False,
+                catalog_probe_missed=False,
+                catalog_probe_miss_low_iou=False,
+                filename_hint=filename,
+            )
+            success_key = raw_run_result_success_cache_key(image_bytes, None, cached_options)
+            write_success_run_result_cache_keys(
+                {
+                    "id": "old-run",
+                    "filename": filename,
+                    "city": "Phoenix",
+                    "status": "complete",
+                    "summary": {
+                        "city": "Phoenix",
+                        "combined_confidence": 0.846,
+                        "control_points": 13,
+                    },
+                    "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+                },
+                success_key,
+            )
+            request = api_index.handler.__new__(api_index.handler)
+            request.parse_upload_request = lambda: (
+                {"min_confidence": "0.8"},
+                {"image": (filename, image_bytes)},
+                "multipart",
+            )
+            captured: dict[str, object] = {}
+
+            def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+                captured["payload"] = payload
+                captured["status"] = status
+
+            request.send_json = send_json
+            request.handle_create_run()
+
+            payload = captured["payload"]
+            assert isinstance(payload, dict)
+            self.assertEqual(captured["status"], HTTPStatus.CREATED)
+            self.assertEqual(payload["profile"]["cache_hit"], "raw-compatible")
+            self.assertIn("raw_cache_write_s", payload["profile"])
+            self.assertEqual(payload["summary"]["combined_confidence"], 0.846)
 
     def test_create_run_reports_runner_import_failure_without_secondary_error(self) -> None:
         request = api_index.handler.__new__(api_index.handler)

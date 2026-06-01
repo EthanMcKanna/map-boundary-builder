@@ -299,11 +299,24 @@ class handler(BaseHTTPRequestHandler):
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_started = time.perf_counter()
-        raw_cache_key = raw_run_result_cache_key(image_bytes, city, options)
-        cached = read_run_result_cache(raw_cache_key)
+        raw_cache_key, raw_success_cache_key = run_result_cache_key_pair_for_hash(
+            "image_raw_sha256",
+            hashlib.sha256(image_bytes).hexdigest(),
+            city,
+            options,
+        )
+        cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            raw_cache_key,
+            raw_success_cache_key,
+            options=options,
+        )
         profile["raw_cache_lookup_s"] = elapsed_seconds(raw_cache_started)
         if cached is not None:
-            profile["cache_hit"] = "raw"
+            if compatible_cache_hit:
+                raw_cache_write_started = time.perf_counter()
+                write_run_result_cache(raw_cache_key, cached)
+                profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "raw-compatible" if compatible_cache_hit else "raw"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
@@ -313,15 +326,31 @@ class handler(BaseHTTPRequestHandler):
             return
 
         png_visual_cache_started = time.perf_counter()
-        png_visual_cache_key = png_visual_run_result_cache_key(image_bytes, city, options)
+        png_visual_hash = png_visual_sha256(image_bytes)
+        if png_visual_hash is not None:
+            png_visual_cache_key, png_visual_success_cache_key = run_result_cache_key_pair_for_hash(
+                "png_visual_sha256",
+                png_visual_hash,
+                city,
+                options,
+            )
+        else:
+            png_visual_cache_key = None
+            png_visual_success_cache_key = None
         if png_visual_cache_key is not None:
-            cached = read_run_result_cache(png_visual_cache_key)
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                png_visual_cache_key,
+                png_visual_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
         profile["png_visual_cache_lookup_s"] = elapsed_seconds(png_visual_cache_started)
         if png_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "png-visual"
+            profile["cache_hit"] = "png-visual-compatible" if compatible_cache_hit else "png-visual"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
@@ -331,15 +360,31 @@ class handler(BaseHTTPRequestHandler):
             return
 
         jpeg_commentless_cache_started = time.perf_counter()
-        jpeg_commentless_cache_key = jpeg_commentless_run_result_cache_key(image_bytes, city, options)
+        jpeg_commentless_hash = jpeg_commentless_sha256(image_bytes)
+        if jpeg_commentless_hash is not None:
+            jpeg_commentless_cache_key, jpeg_commentless_success_cache_key = run_result_cache_key_pair_for_hash(
+                "jpeg_commentless_sha256",
+                jpeg_commentless_hash,
+                city,
+                options,
+            )
+        else:
+            jpeg_commentless_cache_key = None
+            jpeg_commentless_success_cache_key = None
         if jpeg_commentless_cache_key is not None:
-            cached = read_run_result_cache(jpeg_commentless_cache_key)
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                jpeg_commentless_cache_key,
+                jpeg_commentless_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
         profile["jpeg_commentless_cache_lookup_s"] = elapsed_seconds(jpeg_commentless_cache_started)
         if jpeg_commentless_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "jpeg-commentless"
+            profile["cache_hit"] = "jpeg-commentless-compatible" if compatible_cache_hit else "jpeg-commentless"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
@@ -349,15 +394,31 @@ class handler(BaseHTTPRequestHandler):
             return
 
         jpeg_visual_cache_started = time.perf_counter()
-        jpeg_visual_cache_key = jpeg_visual_run_result_cache_key(image_bytes, city, options)
+        jpeg_visual_hash = jpeg_visual_sha256(image_bytes)
+        if jpeg_visual_hash is not None:
+            jpeg_visual_cache_key, jpeg_visual_success_cache_key = run_result_cache_key_pair_for_hash(
+                "jpeg_visual_sha256",
+                jpeg_visual_hash,
+                city,
+                options,
+            )
+        else:
+            jpeg_visual_cache_key = None
+            jpeg_visual_success_cache_key = None
         if jpeg_visual_cache_key is not None:
-            cached = read_run_result_cache(jpeg_visual_cache_key)
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                jpeg_visual_cache_key,
+                jpeg_visual_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
         profile["jpeg_visual_cache_lookup_s"] = elapsed_seconds(jpeg_visual_cache_started)
         if jpeg_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "jpeg-visual"
+            profile["cache_hit"] = "jpeg-visual-compatible" if compatible_cache_hit else "jpeg-visual"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
@@ -367,15 +428,31 @@ class handler(BaseHTTPRequestHandler):
             return
 
         webp_visual_cache_started = time.perf_counter()
-        webp_visual_cache_key = webp_visual_run_result_cache_key(image_bytes, city, options)
+        webp_visual_hash = webp_visual_sha256(image_bytes)
+        if webp_visual_hash is not None:
+            webp_visual_cache_key, webp_visual_success_cache_key = run_result_cache_key_pair_for_hash(
+                "webp_visual_sha256",
+                webp_visual_hash,
+                city,
+                options,
+            )
+        else:
+            webp_visual_cache_key = None
+            webp_visual_success_cache_key = None
         if webp_visual_cache_key is not None:
-            cached = read_run_result_cache(webp_visual_cache_key)
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                webp_visual_cache_key,
+                webp_visual_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
         profile["webp_visual_cache_lookup_s"] = elapsed_seconds(webp_visual_cache_started)
         if webp_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "webp-visual"
+            profile["cache_hit"] = "webp-visual-compatible" if compatible_cache_hit else "webp-visual"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
             self.send_json(
@@ -388,14 +465,23 @@ class handler(BaseHTTPRequestHandler):
         profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         if normalized_cache_lookup:
             normalized_cache_started = time.perf_counter()
-            cache_key = run_result_cache_key(image_bytes, city, options)
-            cached = read_run_result_cache(cache_key)
+            cache_key, normalized_success_cache_key = run_result_cache_key_pair_for_hash(
+                "image_pixel_sha256",
+                normalized_image_sha256(image_bytes),
+                city,
+                options,
+            )
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                cache_key,
+                normalized_success_cache_key,
+                options=options,
+            )
             profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
             if cached is not None:
                 raw_cache_write_started = time.perf_counter()
                 write_run_result_cache(raw_cache_key, cached)
                 profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-                profile["cache_hit"] = "normalized"
+                profile["cache_hit"] = "normalized-compatible" if compatible_cache_hit else "normalized"
                 profile["total_before_send_s"] = elapsed_seconds(request_started)
                 payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
                 self.send_json(
@@ -530,6 +616,15 @@ class handler(BaseHTTPRequestHandler):
         if webp_visual_cache_key is not None:
             write_run_result_cache(webp_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
+        write_success_run_result_cache_keys(
+            payload,
+            raw_success_cache_key,
+            png_visual_success_cache_key,
+            jpeg_commentless_success_cache_key,
+            jpeg_visual_success_cache_key,
+            webp_visual_success_cache_key,
+            normalized_success_cache_key if cache_key is not None else None,
+        )
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
         profile["cache_hit"] = "miss"
         profile["total_before_send_s"] = elapsed_seconds(request_started)
@@ -917,8 +1012,28 @@ def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> 
     return run_result_cache_key_for_hash("image_pixel_sha256", normalized_image_sha256(image_bytes), city, options)
 
 
+def run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
+    return run_result_cache_key_for_hash(
+        "image_pixel_sha256",
+        normalized_image_sha256(image_bytes),
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
+
+
 def raw_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
     return run_result_cache_key_for_hash("image_raw_sha256", hashlib.sha256(image_bytes).hexdigest(), city, options)
+
+
+def raw_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
+    return run_result_cache_key_for_hash(
+        "image_raw_sha256",
+        hashlib.sha256(image_bytes).hexdigest(),
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
 
 
 def png_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
@@ -928,11 +1043,37 @@ def png_visual_run_result_cache_key(image_bytes: bytes, city: str | None, option
     return run_result_cache_key_for_hash("png_visual_sha256", visual_hash, city, options)
 
 
+def png_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = png_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "png_visual_sha256",
+        visual_hash,
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
+
+
 def jpeg_commentless_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
     visual_hash = jpeg_commentless_sha256(image_bytes)
     if visual_hash is None:
         return None
     return run_result_cache_key_for_hash("jpeg_commentless_sha256", visual_hash, city, options)
+
+
+def jpeg_commentless_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = jpeg_commentless_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "jpeg_commentless_sha256",
+        visual_hash,
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
 
 
 def jpeg_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
@@ -942,6 +1083,19 @@ def jpeg_visual_run_result_cache_key(image_bytes: bytes, city: str | None, optio
     return run_result_cache_key_for_hash("jpeg_visual_sha256", visual_hash, city, options)
 
 
+def jpeg_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = jpeg_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "jpeg_visual_sha256",
+        visual_hash,
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
+
+
 def webp_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
     visual_hash = webp_visual_sha256(image_bytes)
     if visual_hash is None:
@@ -949,11 +1103,26 @@ def webp_visual_run_result_cache_key(image_bytes: bytes, city: str | None, optio
     return run_result_cache_key_for_hash("webp_visual_sha256", visual_hash, city, options)
 
 
+def webp_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = webp_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "webp_visual_sha256",
+        visual_hash,
+        city,
+        options,
+        min_confidence_compatible=True,
+    )
+
+
 def run_result_cache_key_for_hash(
     image_hash_name: str,
     image_hash: str,
     city: str | None,
     options: Any,
+    *,
+    min_confidence_compatible: bool = False,
 ) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
@@ -962,7 +1131,11 @@ def run_result_cache_key_for_hash(
         image_hash_name: image_hash,
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),
-        "min_confidence": round(float(options.min_confidence), 4),
+        "min_confidence": (
+            "success-compatible"
+            if min_confidence_compatible
+            else round(float(options.min_confidence), 4)
+        ),
         "min_control_points": int(options.min_control_points),
         "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
@@ -976,6 +1149,24 @@ def run_result_cache_key_for_hash(
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def run_result_cache_key_pair_for_hash(
+    image_hash_name: str,
+    image_hash: str,
+    city: str | None,
+    options: Any,
+) -> tuple[str, str]:
+    return (
+        run_result_cache_key_for_hash(image_hash_name, image_hash, city, options),
+        run_result_cache_key_for_hash(
+            image_hash_name,
+            image_hash,
+            city,
+            options,
+            min_confidence_compatible=True,
+        ),
+    )
 
 
 def run_result_runtime_config() -> dict[str, Any]:
@@ -1237,6 +1428,42 @@ def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
     return payload
 
 
+def read_run_result_cache_with_success_fallback(
+    cache_key: str,
+    success_cache_key: str | None,
+    *,
+    options: Any,
+) -> tuple[dict[str, Any] | None, bool]:
+    cached = read_run_result_cache(cache_key)
+    if cached is not None:
+        return cached, False
+    if success_cache_key is None or success_cache_key == cache_key:
+        return None, False
+    cached = read_run_result_cache(success_cache_key)
+    if cached is None or not cached_payload_satisfies_success_options(cached, options):
+        return None, False
+    return cached, True
+
+
+def cached_payload_satisfies_success_options(payload: dict[str, Any], options: Any) -> bool:
+    if payload.get("status") in {"failed", "catalog_miss"}:
+        return False
+    summary = payload.get("summary")
+    if not isinstance(summary, dict) or not isinstance(payload.get("artifacts"), dict):
+        return False
+    try:
+        cached_confidence = float(summary.get("combined_confidence"))
+    except (TypeError, ValueError):
+        return False
+    if cached_confidence < float(getattr(options, "min_confidence", 0.0)):
+        return False
+    try:
+        control_points = int(summary.get("control_points"))
+    except (TypeError, ValueError):
+        return False
+    return control_points >= int(getattr(options, "min_control_points", 0))
+
+
 def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
     if payload.get("status") == "failed":
         cached = {
@@ -1266,6 +1493,16 @@ def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
     except OSError:
         tmp_path.unlink(missing_ok=True)
         return
+
+
+def write_success_run_result_cache_keys(
+    payload: dict[str, Any],
+    *cache_keys: str | None,
+) -> None:
+    if payload.get("status") != "complete":
+        return
+    for cache_key in dict.fromkeys(key for key in cache_keys if key is not None):
+        write_run_result_cache(cache_key, payload)
 
 
 def remember_run_result_cache(cache_key: str, payload: dict[str, Any], *, encoded: str | None = None) -> str:

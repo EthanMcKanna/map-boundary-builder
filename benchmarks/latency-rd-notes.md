@@ -10195,3 +10195,23 @@ with zero failures in 0.531s.
   `out/prod-warm-sample608-second-20260601.json` completed in `0.293446s`
   total with OCR `0.000196s`, extraction `0.254081s`, and
   `scaled_cache: hit`.
+- Added a success-only API run-result cache namespace that ignores
+  `min_confidence` only after generation succeeds, then reuses that cached
+  payload only when the cached `combined_confidence` and `control_points` still
+  satisfy the new request. Exact run-result keys remain threshold-specific, and
+  failed/catalog-miss payloads are not stored under the compatible key. This
+  targets repeated threshold tweaks and validation smokes that intentionally
+  change only `min_confidence`. The hot path derives exact and compatible keys
+  from one image hash per cache layer, avoiding duplicate upload hashing. An
+  in-process Bay Area Waymo API smoke
+  (`out/success-compatible-cache-smoke2-20260601.json`) generated the first
+  request in `0.961184s` before send, then served the second request with
+  `cache_hit: raw-compatible` in `0.001123s`, preserving confidence `0.846`,
+  13 controls, and `ocr-georeference:nominatim-label-fit`. Focused API and
+  pipeline tests passed (`74 passed`), the full suite passed (`410 passed, 12
+  subtests passed`), `compileall` and `git diff --check` passed, and the broad
+  current-reference no-catalog gate
+  (`out/success-compatible-cache-amended-currentref-gate-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177` with zero regression or
+  latency-budget issues. All 15 analyzed repeat samples stayed subsecond with
+  max/median/average `0.120488s`/`0.065364s`/`0.053866s`.
