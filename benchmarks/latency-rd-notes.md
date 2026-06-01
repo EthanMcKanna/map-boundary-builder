@@ -10491,3 +10491,30 @@ with zero failures in 0.531s.
   the failed low-resolution probe chain. The health and compact smoke responses
   were saved at `out/prod-refine-first-health-20260601.json` and
   `out/prod-refine-first-las-vegas-compact-20260601.json`.
+- Current no-catalog arbitrary-generation audit: the fresh local in-process
+  profile in `out/current-nocatalog-repeat-profile-20260601/full-report.json`
+  passed `15/15` with avg/min IoU `0.941932`/`0.794177`, active total
+  `6.875942s`, and every primary cache-miss fixture below one second. The
+  slowest primary cases were Dallas Waymo `0.841505s`, Phoenix Waymo
+  `0.810987s`, Houston Waymo `0.724213s`, and Los Angeles Waymo `0.643309s`;
+  total stage time was OCR-bound (`5.062536s` OCR, `1.534333s` extraction,
+  `0.243706s` georeference). The same report's warm repeat profile, after one
+  warmup per fixture, analyzed 30 samples with 30 passes, median `0.074444s`,
+  average `0.060820s`, max `0.147255s`, and all 15 fixtures subsecond. A live
+  production Phoenix no-catalog cache-miss smoke using `allow_catalog=0`,
+  `include_overlay=0`, and a metadata-only PNG variant also preserved the same
+  geometry path (`ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  confidence `0.886`, five controls, road-match score `0.705669`) but showed a
+  cold hosted instance still misses the subsecond target: HTTP `201`,
+  `cache_hit: miss`, `build_boundary_s: 3.664895`,
+  `total_before_send_s: 3.678689`, with `2.521835s` OCR, `0.588277s`
+  extraction, and `0.452784s` georeference. Reposting the exact same payload
+  hit raw result cache and returned in `0.005700s`. A second metadata-only
+  Phoenix miss on the warmed instance returned in `0.951981s` with `0.005658s`
+  OCR and a scaled extraction cache hit, confirming the hosted arbitrary path
+  can meet the target once the process is warm. The current deployed
+  `/api/health?warm=ocr` endpoint succeeds for that warmup path
+  (`out/prod-health-warm-after-nocatalog-20260601.json`);
+  the initial `out/prod-refine-first-health-20260601.json` did not request
+  warmup, so future production smoke gates should warm before measuring
+  arbitrary no-catalog cache misses.
