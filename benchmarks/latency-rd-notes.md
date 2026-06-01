@@ -10946,4 +10946,12 @@ with zero failures in 0.531s.
   also preserved exact avg/min IoU `0.996223`/`0.943345` with zero regression
   issues. Focused georeference tests passed (`119 passed`), `compileall` and
   `git diff --check` passed, and full pytest passed (`421 passed, 18 subtests
-  passed`).
+  passed`). Production deployment proof: commit `78ce5f5` deployed as
+  `dpl_275VJgqviF5nUEg6EojSQxJfaZgC`, aliased to `https://mapboundary.app`,
+  health reported `pipeline-8dea5cf9df29e3c5` with warm status `ok`
+  (`out/prod-region-anchor-health-20260601.json`), and a no-catalog production
+  upload of `Tesla Bay Area.png` under a generic filename returned the intended
+  3-control `San Francisco` fit in `0.738842s` before send with confidence
+  `0.752`, residual median/p90 `708.3m`/`808.3m`, and bbox
+  `[-122.6569225,37.1641342,-121.6917363,37.8987853]`
+  (`out/prod-region-anchor-bayarea-generic-20260601.json`).
