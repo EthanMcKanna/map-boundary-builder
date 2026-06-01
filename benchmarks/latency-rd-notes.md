@@ -10054,3 +10054,15 @@ with zero failures in 0.531s.
   max/median/average `0.117204s`/`0.060660s`/`0.051750s`, with repeat
   extraction max `0.065237s`. The full suite passed
   (`403 passed, 12 subtests passed`).
+- Production deployment `dpl_CrSxgdJz9HcPkZNdzQcdmDcfsuxb` reported
+  `pipeline-8aaeb68cef99f374` with
+  `MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS: "3000000"`, untrimmed
+  cache max `"1000000"`, scaled cache max `"24"`/`"3000000"`, and runner OCR
+  cache enabled. A clean Bay Area Waymo upload, no longer edge-noised, now
+  proves the bounded trimmed-cache behavior directly: the first forced
+  run-result miss (`out/prod-trimmed-cache-bound-first-20260601.json`) reported
+  `scaled_cache: miss-stored`, shape `[1600, 1600]`, and completed in
+  `2.370544s` total with extraction `0.463006s` and OCR `1.667478s`; the
+  second forced miss (`out/prod-trimmed-cache-bound-second-20260601.json`)
+  reported `scaled_cache: hit`, the same confidence/result, and completed in
+  `0.301261s` total with extraction `0.236790s` and OCR `0.011425s`.
