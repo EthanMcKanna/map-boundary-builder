@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from functools import lru_cache
 import hashlib
@@ -57,12 +58,11 @@ def refine_transform_with_osm_roads(
     initial: GeoreferenceTransform,
     *,
     lock_scale: bool = False,
-    feature_distance: np.ndarray | None = None,
+    feature_distance: np.ndarray | Future[np.ndarray] | None = None,
 ) -> RoadMatchResult | None:
     if city_center.bbox is None:
         return None
-    if feature_distance is None:
-        feature_distance = image_feature_distance(rgb)
+    feature_distance = resolved_image_feature_distance(rgb, feature_distance)
     use_cache = should_use_road_refine_cache(feature_distance)
     road_source_digest = road_points_source_digest(city_center.bbox)
     cache_key: str | None = None
@@ -189,6 +189,20 @@ def refine_transform_with_osm_roads(
     if cache_key is not None:
         write_road_refine_cache(cache_key, result)
     return result
+
+
+def resolved_image_feature_distance(
+    rgb: np.ndarray,
+    feature_distance: np.ndarray | Future[np.ndarray] | None = None,
+) -> np.ndarray:
+    if isinstance(feature_distance, Future):
+        try:
+            return feature_distance.result()
+        except Exception:
+            feature_distance = None
+    if feature_distance is None:
+        return image_feature_distance(rgb)
+    return feature_distance
 
 
 def should_use_road_refine_cache(feature_distance: np.ndarray) -> bool:

@@ -952,6 +952,8 @@ def build_boundary(
         if georef_resource_executor is not None:
             georef_resource_executor.shutdown(wait=False, cancel_futures=False)
     road_feature_distance = ready_future_result(road_feature_future)
+    if road_feature_distance is None and road_feature_future is not None and not road_feature_future.cancelled():
+        road_feature_distance = road_feature_future
     emit_progress(
         progress,
         stage="ocr",

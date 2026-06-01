@@ -10764,3 +10764,63 @@ with zero failures in 0.531s.
   (`out/brightblue-rec-default-nocatalog-currentref-20260601/full-report.json`).
   Keep the current fast-text area, fallback confidence, and bright-blue
   English recognizer defaults.
+- Rejected broader road-refinement and road-precompute toggles, then accepted
+  a narrower warm-road-refine reuse fix. Forcing road refinement beyond the
+  current skip policy improved a few shapes but was not safe as a broad rule:
+  the relaxed run
+  (`out/roadrefine-relaxed-skip-nocatalog-probe-20260601/full-report.json`)
+  improved San Antonio Waymo to `0.989098` and Orlando Waymo to `0.966555`,
+  but dropped avg/min IoU to `0.944246`/`0.794177`, spent `1.962290s` in
+  active road matching, and had many primary fixtures over 1s. Locking scale
+  globally was worse
+  (`out/roadrefine-relaxed-locked-nocatalog-probe-20260601/full-report.json`):
+  avg/min IoU fell to `0.933019`/`0.794177`, Nashville fell to `0.799036`,
+  Phoenix to `0.962943`, and Orlando to `0.947912`. Disabling the existing
+  bright-blue road-feature precompute also was not a default win. The broad
+  env-off gate
+  (`out/no-road-precompute-nocatalog-gate-20260601/full-report.json`)
+  preserved avg/min IoU `0.945247`/`0.843889` and all analyzed warm repeats
+  stayed subsecond, but primary active total rose to `9.839496s`, Dallas and
+  Phoenix exceeded 1s, and road-match elapsed rose to `0.118681s`; the matched
+  precompute-on control
+  (`out/road-precompute-nocatalog-repeat-gate-20260601/full-report.json`)
+  was slightly faster overall at `9.690257s`. A subprocess target A/B was
+  similarly mixed: env-off was `5.12s` total versus `5.20s` control on
+  Dallas/Phoenix/Nashville, but slowed Phoenix (`1.51s -> 1.77s`) and
+  Nashville (`1.29s -> 1.38s`). Keep the default precompute gate.
+- The accepted road-refine change fixes a specific duplicate-work case instead
+  of changing when road refinement runs. Production showed the warm arbitrary
+  Phoenix path can still spend most of a subsecond miss inside road refinement:
+  after `/api/health?warm=ocr`, a cache-busted Phoenix no-catalog miss still
+  took `3.677323s` before send with OCR `2.501028s`, extraction `0.605731s`,
+  georeference `0.452080s`, and `road_match_elapsed_s: 0.428966`
+  (`out/prod-current-phoenix-warm-followup-20260601.json`). Reposting the same
+  pixels under a different filename forced a run-result miss but hit OCR and
+  scaled extraction caches; it completed in `0.913581s`, but georeference still
+  dominated at `0.568063s` with `road_match_elapsed_s: 0.553586`
+  (`out/prod-current-phoenix-warm-followup-second-20260601.json`). Inspection
+  showed why: the runner starts `image_feature_distance(rgb)` in a background
+  future, but if OCR/extraction caches return before that future is done, the
+  old code passed `None` into georeference and road refinement recomputed the
+  same feature distance while the background work could still be running. The
+  runner now passes the in-flight `Future` through, and
+  `refine_transform_with_osm_roads()` resolves it only after
+  `should_try_road_refinement()` has decided road matching is actually needed.
+  Non-road-refined fits still do not wait on the background future.
+- Validation for lazy road-feature future reuse stayed clean. Focused
+  road/runner tests passed (`84 passed`), `compileall` and `git diff --check`
+  passed, and full pytest passed (`416 passed, 12 subtests passed`). The broad
+  current-reference no-catalog gate
+  (`out/road-feature-future-currentref-gate-20260601/full-report.json`) passed
+  15/15 fixtures with exact avg/min IoU `0.945247`/`0.843889`, zero regression
+  issues against
+  `out/current-nocatalog-nodebug-postfallback-20260601/full-report.json`, and
+  all analyzed warm repeats subsecond. Compared with the same precompute-on
+  control above, active total improved from `9.690257s` to `9.366860s`,
+  evaluated georeference stage from `0.383159s` to `0.338871s`, and repeat
+  average from `0.087055s` to `0.086093s` while preserving repeat pass ratio
+  `1.0`; Phoenix/Nashville repeat georeference remained small at `0.078268s`
+  and `0.050417s`. The default catalog gate
+  (`out/road-feature-future-catalog-gate-20260601/full-report.json`) also
+  passed 15/15 with exact avg/min IoU `0.996223`/`0.943345`, zero regression
+  issues, and active total `1.171s`.
