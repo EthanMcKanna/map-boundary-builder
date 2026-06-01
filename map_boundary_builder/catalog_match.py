@@ -86,6 +86,7 @@ def match_service_area_catalog(
     min_iou: float = CATALOG_MIN_IOU,
     min_margin: float = CATALOG_MIN_MARGIN,
     area_hint_texts: tuple[str, ...] | list[str] | None = None,
+    rotation_min_iou: float = CATALOG_ROTATION_MIN_IOU,
 ) -> ServiceAreaCatalogMatch | None:
     area_hints = tuple(text for text in (area_hint_texts or ()) if text.strip())
     candidates = [
@@ -98,7 +99,14 @@ def match_service_area_catalog(
 
     scored: list[tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon, float]] = []
     for entry in candidates:
-        scored.append(score_catalog_entry(pixel_geometry, entry, min_iou=min_iou))
+        scored.append(
+            score_catalog_entry(
+                pixel_geometry,
+                entry,
+                min_iou=min_iou,
+                rotation_min_iou=rotation_min_iou,
+            )
+        )
     scored.sort(key=lambda item: item[0], reverse=True)
     best_iou, best_area_ratio, best_entry, best_fitted, rotation_degrees = scored[0]
     runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
@@ -129,6 +137,7 @@ def match_service_area_catalog_for_city_hint(
     city_hint: str | None,
     min_iou: float = CATALOG_MIN_IOU,
     min_margin: float = CATALOG_MIN_MARGIN,
+    rotation_min_iou: float = CATALOG_ROTATION_MIN_IOU,
 ) -> ServiceAreaCatalogMatch | None:
     if city_hint is None or not city_hint.strip():
         return None
@@ -137,6 +146,7 @@ def match_service_area_catalog_for_city_hint(
         style=style,
         min_iou=min_iou,
         min_margin=min_margin,
+        rotation_min_iou=rotation_min_iou,
     )
     if match is None:
         return None
@@ -176,11 +186,13 @@ def match_catalog_entry(
     min_area_ratio: float = CATALOG_MIN_AREA_RATIO,
     max_area_ratio: float = CATALOG_MAX_AREA_RATIO,
     confidence_override: float | None = None,
+    rotation_min_iou: float = CATALOG_ROTATION_MIN_IOU,
 ) -> ServiceAreaCatalogMatch | None:
     best_iou, best_area_ratio, _entry, best_fitted, rotation_degrees = score_catalog_entry(
         pixel_geometry,
         entry,
         min_iou=min_iou,
+        rotation_min_iou=rotation_min_iou,
     )
     if best_iou < min_iou:
         return None
@@ -506,6 +518,7 @@ def score_catalog_entry(
     entry: ServiceAreaCatalogEntry,
     *,
     min_iou: float,
+    rotation_min_iou: float = CATALOG_ROTATION_MIN_IOU,
 ) -> tuple[float, float, ServiceAreaCatalogEntry, Polygon | MultiPolygon, float]:
     fitted = fit_pixel_geometry_to_reference_bounds(pixel_geometry, entry.mercator_geometry)
     metrics = compare_geometries(fitted, entry.mercator_geometry)
@@ -514,7 +527,7 @@ def score_catalog_entry(
     best_fitted = fitted
     best_rotation = 0.0
 
-    if best_iou >= min_iou or best_iou < CATALOG_ROTATION_MIN_IOU:
+    if best_iou >= min_iou or best_iou < rotation_min_iou:
         exact = score_exact_ordered_catalog_entry(pixel_geometry, entry)
         if exact is not None and exact[0] > best_iou:
             return exact

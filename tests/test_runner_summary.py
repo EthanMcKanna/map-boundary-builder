@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 import pytest
+from shapely.affinity import rotate
 from shapely.geometry import Polygon, mapping
 from shapely.ops import transform
 
@@ -324,6 +325,34 @@ def test_sparse_low_res_label_catalog_match_rejects_larger_map_crops() -> None:
     labels = [OcrLabel("Nashville", x=250, y=99, width=37, height=10, confidence=98.1)]
 
     assert runner.sparse_low_res_label_catalog_match(extraction, labels, width=420, height=236) is None
+
+
+def test_low_resolution_shape_catalog_match_retries_near_rotated_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    pixel_geometry = mercator_geometry_to_pixel(
+        entry.mercator_geometry.simplify(500, preserve_topology=True)
+    )
+    rotated_geometry = rotate(pixel_geometry, 1.5, origin="centroid", use_radians=False)
+    extraction = ExtractionResult(
+        mask=np.ones((236, 420), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=rotated_geometry,
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    match = runner.low_resolution_shape_catalog_match(
+        extraction,
+        width=420,
+        height=236,
+        city_input=None,
+    )
+
+    assert match is not None
+    assert match.entry.slug == "nashville-waymo"
+    assert match.iou >= runner.LOW_RES_SHAPE_CATALOG_MIN_IOU
+    assert match.rotation_degrees != 0.0
 
 
 def test_runner_ocr_cache_defaults_on_without_disk_cache(monkeypatch) -> None:

@@ -10373,3 +10373,31 @@ with zero failures in 0.531s.
   `1.000000 -> 0.990623` and compared average IoU
   `0.949771 -> 0.949188`. Keep OpenCV's default component labeling and contour
   extraction path until a broader rewrite proves speed without geometry drift.
+- Accepted a scoped low-resolution catalog-rotation rescue. A neutral filename
+  recheck of the saved Nashville issue #5 stress variants showed the default
+  catalog path recovered the original, contrast, JPEG, 360px downsample, and
+  1-degree rotations, but missed 2- and 3-degree rotated variants even though
+  their refined shape fits exceeded the normal low-res acceptance threshold
+  after corrective rotation. The catalog scorer now accepts an optional
+  `rotation_min_iou`, and only the low-resolution shape path lowers the
+  rotation-attempt floor from `0.94` to `0.92`; the final IoU, margin, area
+  ratio, image-size, and extraction-confidence gates stay unchanged. The
+  accepted stress report
+  `out/lowres-rotation-floor092-accepted-20260601/report.json` improved
+  neutral-hint issue #5 variants from `12/21` to `14/21` catalog completions,
+  rescuing `issue5-rotate-+2.png` at IoU `0.947694` / margin `0.290227` /
+  `-2.0` degrees and `issue5-rotate-+3.png` at IoU `0.940868` / margin
+  `0.293120` / `-2.0` degrees. Harder 180/240/300px downsample and large or
+  opposite-direction rotations still fail closed instead of relaxing acceptance
+  thresholds. Focused catalog/runner tests passed `90/90`, full `pytest`
+  passed `411/411`, `compileall` passed, and the relevant catalog-enabled
+  benchmark gate
+  `out/lowres-rotation-floor092-default-catalog-gate-20260601/full-report.json`
+  passed `15/15` scored fixtures with avg/min IoU `0.996`/`0.943`, active
+  total `1.10s`, and zero latency-budget issues. A separate no-catalog exact
+  baseline audit
+  `out/lowres-rotation-floor092-currentref-gate-20260601/full-report.json`
+  was not used as the ship gate for this catalog-only patch because it bypasses
+  the changed matcher and repeated the known Miami OCR/georeference variance
+  lower than the saved no-catalog baseline (`0.966714 -> 0.851050`) while still
+  passing all 15 fixtures against normal accuracy thresholds.
