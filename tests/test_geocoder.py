@@ -251,6 +251,54 @@ class GeocoderSeedTests(unittest.TestCase):
                         results = geocoder.geocode(query, limit=3)
                         self.assertEqual(results, [])
 
+    def test_bundled_ann_arbor_label_seeds_serve_without_network(self) -> None:
+        expected_names = {
+            "Ann Arbor": "Ann Arbor",
+            "Amtrak Station, Ann Arbor": "Ann Arbor Amtrak Station",
+            "Michigan Union, Ann Arbor": "Michigan Union",
+            "Nickols Arcade, Ann Arbor": "Nickels Arcade",
+            "Ross Schoolof Business, Ann Arbor": "Ross School of Business Building",
+            "Ann Arbor Farmer Market, Ann Arbor": "Ann Arbor Farmers Market",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                for query, expected_name in expected_names.items():
+                    with self.subTest(query=query):
+                        results = geocoder.geocode(query, limit=3)
+                        self.assertTrue(results)
+                        self.assertEqual(results[0].display_name.split(",", 1)[0], expected_name)
+                        self.assertIn("Ann Arbor", results[0].display_name)
+
+    def test_bundled_ann_arbor_noise_misses_avoid_network(self) -> None:
+        queries = [
+            "Whuon",
+            "Hands",
+            "Amtrak Station",
+            "Farmer Market",
+            "Uof Mmuseumof Art, Ann Arbor",
+            "May Mobility Ovia, Ann Arbor",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                for query in queries:
+                    with self.subTest(query=query):
+                        results = geocoder.geocode(query, limit=3)
+                        self.assertEqual(results, [])
+
 
 if __name__ == "__main__":
     unittest.main()

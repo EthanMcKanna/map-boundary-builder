@@ -8375,7 +8375,46 @@
           "-83.8543320"
         ]
       }
-    ]
+    ],
+    "13c14a793804e97df7d9f132": [],
+    "5ca8cc995ebd33f33f742383": [],
+    "665784a6175b7a737e0bbc99": [],
+    "458fe900ebbf3913426a2c93": [],
+    "63744a4683282820e2c916af": [],
+    "13ee83d64cdfc670cd434abb": [],
+    "5359b8e0386ec8072bba2d73": [],
+    "dd9fa74ab3ef2430410276f6": [],
+    "6f01ce49fa656dca24446253": [],
+    "1e937bf1532ced00d7020271": [],
+    "35ead832ec21f34f01a1a400": [],
+    "22cef6002139fcf7b7235c11": [],
+    "6654ab84d72f2381459588cb": [],
+    "a9ec05be1af5e57f0bae6a00": [],
+    "40d7bbda17093e5f566e5730": [],
+    "8a83b86c921df141de11b960": [],
+    "5b98e4e589425804d791f295": [],
+    "871b13841ec014521fad1798": [],
+    "ff74501461a42a315e2720e1": [],
+    "201d0a8c1a914fa9f527f76a": [],
+    "d81db5d1b1a37cd4f2d261b1": [],
+    "228e015f4d49c8746ff21b6d": [],
+    "da507b9ee8eca98e1f47782f": [],
+    "4ee24b343ec67f883b36ec85": [],
+    "e012bb3c5d92e209bcacc57a": [],
+    "b5fa0f60ffedf6e49d5247b7": [],
+    "425955cebb0e5134d2c2ec4b": [],
+    "a57464e4de9509dccec9f18f": [],
+    "c36bb80581d7fd5943a4a484": [],
+    "c2ccc120acfee7ac1e4b6924": [],
+    "8c5451aefd2dd8ea0b7a05b2": [],
+    "58eaf0ee5b793a2a460ef7a9": [],
+    "73446630735186d2ca49653d": [],
+    "28117b5610af76963910bba1": [],
+    "2f8dc1f3e7aa34d8d3ef1a69": [],
+    "deaaf543ec74b28f1aeaa377": [],
+    "94a9d75810aeeefeac04e40b": [],
+    "76ce3a632d2b11396a183379": [],
+    "2d159ce8237c2a92149d7b61": []
   },
   "photon": {
     "1ebcfe977872544c1ab5ded5": {
@@ -39292,6 +39331,1932 @@
           }
         }
       ]
+    },
+    "fd3e9788cbc99666f2d20c39": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 135130,
+            "osm_key": "place",
+            "osm_value": "city",
+            "type": "city",
+            "name": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -83.799572,
+              42.3238941,
+              -83.675807,
+              42.222668
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7484616,
+              42.2813722
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 7024286688,
+            "osm_key": "railway",
+            "osm_value": "station",
+            "type": "house",
+            "housenumber": "325",
+            "name": "Ann Arbor",
+            "street": "Depot Street",
+            "locality": "Old Fourth Ward",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7431905,
+              42.2877959
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 368014066,
+            "osm_key": "tourism",
+            "osm_value": "museum",
+            "type": "house",
+            "housenumber": "220",
+            "name": "Ann Arbor Hands-On Museum",
+            "street": "East Ann Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.7467066,
+              42.2820417,
+              -83.7461516,
+              42.2814708
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7465426,
+              42.2817132
+            ]
+          }
+        }
+      ]
+    },
+    "97383b6937acf0ab5ad40118": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203582,
+            "osm_key": "amenity",
+            "osm_value": "community_centre",
+            "type": "house",
+            "housenumber": "530",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7420307,
+              42.2755425,
+              -83.7410674,
+              42.2748045
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7415127,
+              42.2751698
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 10055342,
+            "osm_key": "boundary",
+            "osm_value": "administrative",
+            "type": "city",
+            "name": "Union Charter Township",
+            "county": "Isabella",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -84.8485227,
+              43.6406079,
+              -84.7273576,
+              43.5532637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -84.8228657,
+              43.596874
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 10151156,
+            "osm_key": "boundary",
+            "osm_value": "administrative",
+            "type": "city",
+            "name": "Union Township",
+            "county": "Branch",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49094",
+            "countrycode": "US",
+            "extent": [
+              -85.1767566,
+              42.0728118,
+              -85.060004,
+              41.9850151
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.118222,
+              42.0289306
+            ]
+          }
+        }
+      ]
+    },
+    "d805482687f9e0dad546b970": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193357104,
+            "osm_key": "building",
+            "osm_value": "commercial",
+            "type": "house",
+            "name": "Nickels Arcade",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418792,
+              42.2784967,
+              -83.74091,
+              42.2782973
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7413936,
+              42.2783581
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 453674974,
+            "osm_key": "highway",
+            "osm_value": "footway",
+            "type": "street",
+            "name": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418773,
+              42.2784194,
+              -83.7409127,
+              42.2784055
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741395,
+              42.2784125
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 1197859366,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Arcade Street",
+            "district": "Nettie",
+            "county": "Nicholas",
+            "state": "West Virginia",
+            "country": "United States",
+            "postcode": "26681",
+            "countrycode": "US",
+            "extent": [
+              -80.6848973,
+              38.2260233,
+              -80.6843153,
+              38.2245773
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.6845785,
+              38.2253143
+            ]
+          }
+        }
+      ]
+    },
+    "d69e2e8bbbf9a8fa2ed97814": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        }
+      ]
+    },
+    "9e1d31c9471b8c1af35b222e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 237743139,
+            "osm_key": "building",
+            "osm_value": "office",
+            "type": "house",
+            "housenumber": "1-24",
+            "name": "Ross Road Business Centre",
+            "street": "Ross Road",
+            "district": "Dallington",
+            "city": "Northampton",
+            "county": "West Northamptonshire",
+            "state": "England",
+            "country": "United Kingdom",
+            "postcode": "NN5 5AX",
+            "countrycode": "GB",
+            "extent": [
+              -0.9245342,
+              52.2386631,
+              -0.9230331,
+              52.2377272
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -0.9239186,
+              52.2382902
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154232149,
+            "osm_key": "building",
+            "osm_value": "university",
+            "type": "house",
+            "housenumber": "701",
+            "name": "Ross School of Business Building",
+            "street": "Tappan Avenue",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7379944,
+              42.2732386,
+              -83.7371768,
+              42.2721419
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7375416,
+              42.2727427
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203567,
+            "osm_key": "amenity",
+            "osm_value": "university",
+            "type": "house",
+            "name": "Ross School of Business",
+            "street": "Hill Street",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.7381069,
+              42.2733723,
+              -83.7358304,
+              42.2720637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7369737,
+              42.2727788
+            ]
+          }
+        }
+      ]
+    },
+    "0bbf63789d756db65af553ef": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 122396027,
+            "osm_key": "building",
+            "osm_value": "train_station",
+            "type": "house",
+            "housenumber": "325",
+            "name": "Ann Arbor Amtrak Station",
+            "street": "Depot Street",
+            "locality": "Old Fourth Ward",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.743371,
+              42.2879104,
+              -83.7430011,
+              42.2876707
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.743186,
+              42.2877905
+            ]
+          }
+        }
+      ]
+    },
+    "e79ec5474906e4a31fc969be": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 122396027,
+            "osm_key": "building",
+            "osm_value": "train_station",
+            "type": "house",
+            "housenumber": "325",
+            "name": "Ann Arbor Amtrak Station",
+            "street": "Depot Street",
+            "locality": "Old Fourth Ward",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.743371,
+              42.2879104,
+              -83.7430011,
+              42.2876707
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.743186,
+              42.2877905
+            ]
+          }
+        }
+      ]
+    },
+    "26ce7e3eb92c50a49bb25735": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 122399682,
+            "osm_key": "building",
+            "osm_value": "train_station",
+            "type": "house",
+            "housenumber": "501",
+            "name": "Jackson Amtrak Station",
+            "street": "East Michigan Avenue",
+            "city": "Jackson",
+            "county": "Jackson",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "49201",
+            "countrycode": "US",
+            "extent": [
+              -84.4004044,
+              42.2481891,
+              -84.3992882,
+              42.2477338
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -84.3998459,
+              42.2479585
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 71530728,
+            "osm_key": "building",
+            "osm_value": "train_station",
+            "type": "house",
+            "housenumber": "11",
+            "name": "Detroit Amtrak Station",
+            "street": "West Baltimore Avenue",
+            "district": "New Center",
+            "city": "Detroit",
+            "county": "Wayne",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48202",
+            "countrycode": "US",
+            "extent": [
+              -83.0724839,
+              42.3681063,
+              -83.0721598,
+              42.3678972
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.0723217,
+              42.3680016
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 122396027,
+            "osm_key": "building",
+            "osm_value": "train_station",
+            "type": "house",
+            "housenumber": "325",
+            "name": "Ann Arbor Amtrak Station",
+            "street": "Depot Street",
+            "locality": "Old Fourth Ward",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.743371,
+              42.2879104,
+              -83.7430011,
+              42.2876707
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.743186,
+              42.2877905
+            ]
+          }
+        }
+      ]
+    },
+    "a33a397a81bc0ec2b8bca317": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        }
+      ]
+    },
+    "031abdbfdeaaf625aa58bb92": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        }
+      ]
+    },
+    "23a1cf814a3a28b1dcabc2c6": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        }
+      ]
+    },
+    "44341e239399fefb6e60f218": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154232149,
+            "osm_key": "building",
+            "osm_value": "university",
+            "type": "house",
+            "housenumber": "701",
+            "name": "Ross School of Business Building",
+            "street": "Tappan Avenue",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7379944,
+              42.2732386,
+              -83.7371768,
+              42.2721419
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7375416,
+              42.2727427
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203567,
+            "osm_key": "amenity",
+            "osm_value": "university",
+            "type": "house",
+            "name": "Ross School of Business",
+            "street": "Hill Street",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.7381069,
+              42.2733723,
+              -83.7358304,
+              42.2720637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7369737,
+              42.2727788
+            ]
+          }
+        }
+      ]
+    },
+    "daa9302edc160b5d88da0a3c": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203567,
+            "osm_key": "amenity",
+            "osm_value": "university",
+            "type": "house",
+            "name": "Ross School of Business",
+            "street": "Hill Street",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.7381069,
+              42.2733723,
+              -83.7358304,
+              42.2720637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7369737,
+              42.2727788
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154232149,
+            "osm_key": "building",
+            "osm_value": "university",
+            "type": "house",
+            "housenumber": "701",
+            "name": "Ross School of Business Building",
+            "street": "Tappan Avenue",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7379944,
+              42.2732386,
+              -83.7371768,
+              42.2721419
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7375416,
+              42.2727427
+            ]
+          }
+        }
+      ]
+    },
+    "80018a472c9d94d66e5403bf": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154232149,
+            "osm_key": "building",
+            "osm_value": "university",
+            "type": "house",
+            "housenumber": "701",
+            "name": "Ross School of Business Building",
+            "street": "Tappan Avenue",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7379944,
+              42.2732386,
+              -83.7371768,
+              42.2721419
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7375416,
+              42.2727427
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203567,
+            "osm_key": "amenity",
+            "osm_value": "university",
+            "type": "house",
+            "name": "Ross School of Business",
+            "street": "Hill Street",
+            "locality": "Burns Park",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.7381069,
+              42.2733723,
+              -83.7358304,
+              42.2720637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7369737,
+              42.2727788
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 880857122,
+            "osm_key": "highway",
+            "osm_value": "primary",
+            "type": "street",
+            "name": "North Michigan Street",
+            "city": "Roseland",
+            "county": "Saint Joseph",
+            "state": "Indiana",
+            "country": "United States",
+            "postcode": "46624",
+            "countrycode": "US",
+            "extent": [
+              -86.2503154,
+              41.7105884,
+              -86.2503072,
+              41.7101238
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -86.2503112,
+              41.7103561
+            ]
+          }
+        }
+      ]
+    },
+    "b306013fec749d5fb1095a7c": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        }
+      ]
+    },
+    "347f27671b439e0ab90e15f7": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 13184318793,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "name": "Dixboro Farmers' Market",
+            "street": "Plymouth Road",
+            "district": "Dixboro",
+            "city": "Superior Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6566526,
+              42.3126342
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 7812309876,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "3233",
+            "name": "Dexter Farmers Market",
+            "street": "Alpine Street",
+            "city": "Dexter",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48130",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.8894712,
+              42.3395205
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193502052,
+            "osm_key": "amenity",
+            "osm_value": "marketplace",
+            "type": "house",
+            "housenumber": "315",
+            "name": "Ann Arbor Farmers Market",
+            "street": "Detroit Street",
+            "locality": "Kerrytown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48104",
+            "countrycode": "US",
+            "extent": [
+              -83.747013,
+              42.2842975,
+              -83.7460042,
+              42.283609
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7466147,
+              42.2839415
+            ]
+          }
+        }
+      ]
+    },
+    "0d4e93bb91d8f6d9361bda14": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 323459623,
+            "osm_key": "landuse",
+            "osm_value": "farmland",
+            "type": "other",
+            "name": "Oakland Avenue Farmer's Market",
+            "district": "New Center",
+            "city": "Detroit",
+            "county": "Wayne",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -83.0736059,
+              42.3877294,
+              -83.0727868,
+              42.3868611
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.0731964,
+              42.3872953
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 530706884,
+            "osm_key": "landuse",
+            "osm_value": "meadow",
+            "type": "other",
+            "housenumber": "200",
+            "name": "Durand Farmer's Market",
+            "street": "East Main Street",
+            "city": "Durand",
+            "county": "Shiawassee",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48429",
+            "countrycode": "US",
+            "extent": [
+              -83.9830899,
+              42.910795,
+              -83.982226,
+              42.9100186
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.9826567,
+              42.9104213
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 2704055934,
+            "osm_key": "highway",
+            "osm_value": "bus_stop",
+            "type": "house",
+            "name": "11 Mile / Farmer's Market (EB)",
+            "street": "East 11 Mile Road",
+            "city": "Royal Oak",
+            "county": "Oakland",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48067",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.1394498,
+              42.4898817
+            ]
+          }
+        }
+      ]
+    },
+    "90cebe097e49a28d630173bf": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203582,
+            "osm_key": "amenity",
+            "osm_value": "community_centre",
+            "type": "house",
+            "housenumber": "530",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7420307,
+              42.2755425,
+              -83.7410674,
+              42.2748045
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7415127,
+              42.2751698
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 2758637998,
+            "osm_key": "highway",
+            "osm_value": "bus_stop",
+            "type": "house",
+            "housenumber": "500",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7406178,
+              42.2753258
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 192429435,
+            "osm_key": "amenity",
+            "osm_value": "bank",
+            "type": "house",
+            "housenumber": "2929",
+            "name": "University Of Michigan Credit Union",
+            "street": "Plymouth Road",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48105",
+            "countrycode": "US",
+            "extent": [
+              -83.7031599,
+              42.3033445,
+              -83.702481,
+              42.3029054
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7028205,
+              42.303125
+            ]
+          }
+        }
+      ]
+    },
+    "520223a81b1ed13eb67a00c7": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203582,
+            "osm_key": "amenity",
+            "osm_value": "community_centre",
+            "type": "house",
+            "housenumber": "530",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7420307,
+              42.2755425,
+              -83.7410674,
+              42.2748045
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7415127,
+              42.2751698
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 2758637998,
+            "osm_key": "highway",
+            "osm_value": "bus_stop",
+            "type": "house",
+            "housenumber": "500",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7406178,
+              42.2753258
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 379033758,
+            "osm_key": "amenity",
+            "osm_value": "bank",
+            "type": "house",
+            "housenumber": "1861",
+            "name": "Washtenaw Federal Credit Union",
+            "street": "Whittaker Road",
+            "city": "Ypsilanti Charter Township",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48197",
+            "countrycode": "US",
+            "extent": [
+              -83.6186743,
+              42.2139578,
+              -83.6184487,
+              42.2137712
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.6185616,
+              42.2138633
+            ]
+          }
+        }
+      ]
+    },
+    "16f375cd018e4731d11aa3f1": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 154203582,
+            "osm_key": "amenity",
+            "osm_value": "community_centre",
+            "type": "house",
+            "housenumber": "530",
+            "name": "Michigan Union",
+            "street": "South State Street",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7420307,
+              42.2755425,
+              -83.7410674,
+              42.2748045
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7415127,
+              42.2751698
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 367068210,
+            "osm_key": "railway",
+            "osm_value": "station",
+            "type": "house",
+            "housenumber": "506",
+            "name": "Duluth Union Depot",
+            "street": "West Michigan Street",
+            "district": "Central Business District",
+            "city": "Duluth",
+            "county": "Saint Louis",
+            "state": "Minnesota",
+            "country": "United States",
+            "postcode": "55802",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -92.1035754,
+              46.7811706
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 10055342,
+            "osm_key": "boundary",
+            "osm_value": "administrative",
+            "type": "city",
+            "name": "Union Charter Township",
+            "county": "Isabella",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -84.8485227,
+              43.6406079,
+              -84.7273576,
+              43.5532637
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -84.8228657,
+              43.596874
+            ]
+          }
+        }
+      ]
+    },
+    "4e29d6652e465355cb1f8c0d": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193357104,
+            "osm_key": "building",
+            "osm_value": "commercial",
+            "type": "house",
+            "name": "Nickels Arcade",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418792,
+              42.2784967,
+              -83.74091,
+              42.2782973
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7413936,
+              42.2783581
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 453674974,
+            "osm_key": "highway",
+            "osm_value": "footway",
+            "type": "street",
+            "name": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418773,
+              42.2784194,
+              -83.7409127,
+              42.2784055
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741395,
+              42.2784125
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 4945806634,
+            "osm_key": "shop",
+            "osm_value": "antiques",
+            "type": "house",
+            "housenumber": "13-15",
+            "name": "Arcadian Antiques",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741293,
+              42.2783757
+            ]
+          }
+        }
+      ]
+    },
+    "d78478a16ed3699ea3011640": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193357104,
+            "osm_key": "building",
+            "osm_value": "commercial",
+            "type": "house",
+            "name": "Nickels Arcade",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418792,
+              42.2784967,
+              -83.74091,
+              42.2782973
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7413936,
+              42.2783581
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 453674974,
+            "osm_key": "highway",
+            "osm_value": "footway",
+            "type": "street",
+            "name": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418773,
+              42.2784194,
+              -83.7409127,
+              42.2784055
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741395,
+              42.2784125
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 4945806634,
+            "osm_key": "shop",
+            "osm_value": "antiques",
+            "type": "house",
+            "housenumber": "13-15",
+            "name": "Arcadian Antiques",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741293,
+              42.2783757
+            ]
+          }
+        }
+      ]
+    },
+    "2056cde16cc105bcd5a95cae": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 193357104,
+            "osm_key": "building",
+            "osm_value": "commercial",
+            "type": "house",
+            "name": "Nickels Arcade",
+            "street": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418792,
+              42.2784967,
+              -83.74091,
+              42.2782973
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.7413936,
+              42.2783581
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 453674974,
+            "osm_key": "highway",
+            "osm_value": "footway",
+            "type": "street",
+            "name": "Nickels Arcade",
+            "locality": "Germantown",
+            "city": "Ann Arbor",
+            "county": "Washtenaw",
+            "state": "Michigan",
+            "country": "United States",
+            "postcode": "48109",
+            "countrycode": "US",
+            "extent": [
+              -83.7418773,
+              42.2784194,
+              -83.7409127,
+              42.2784055
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -83.741395,
+              42.2784125
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 17865009,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "South Arcade Street",
+            "city": "Gladwin",
+            "county": "Gladwin County",
+            "state": "Michigan",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -84.48922,
+              43.975343,
+              -84.489088,
+              43.973577
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -84.4892071,
+              43.9744306
+            ]
+          }
+        }
+      ]
+    },
+    "2ad950440be928d7fe9ac313": {
+      "features": []
+    },
+    "4dfd612df0ffdc87e39ca9d2": {
+      "features": []
+    },
+    "c5ff00a731d8c4e35aa46f71": {
+      "features": []
+    },
+    "d83b89703361a8f8c3e09172": {
+      "features": []
+    },
+    "3c65e3f8f8b2e5bc7c816ef7": {
+      "features": []
+    },
+    "b98c71eff01609d6601f3991": {
+      "features": []
+    },
+    "f3a83ad98ec2fb8680393f36": {
+      "features": []
+    },
+    "36494b4dadec1fd7f88fa5a3": {
+      "features": []
+    },
+    "0f0e109ea7986c078727e5a6": {
+      "features": []
+    },
+    "046b15f368784f73bc6c08c3": {
+      "features": []
+    },
+    "d7504a99aee0ccbb36fa570b": {
+      "features": []
+    },
+    "1f18e7b7e166398beae1b181": {
+      "features": []
+    },
+    "4f7202374c29102bdc58dfd7": {
+      "features": []
+    },
+    "cb5942c2fa664a8ad1691be5": {
+      "features": []
+    },
+    "7f85dfe006fe29f2ea23734a": {
+      "features": []
+    },
+    "1d53af26ec5c929bf0937509": {
+      "features": []
     }
   },
   "version": 1

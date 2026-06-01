@@ -11132,3 +11132,20 @@ with zero failures in 0.531s.
   (`out/muted-green-catalog15-20260601/full-report.json`). Focused
   extraction/catalog/runner tests passed (`112 passed`), and the full suite
   passed (`426 passed, 18 subtests passed`).
+- Profiled the same Ann Arbor AVIF on a fresh temporary cache to isolate the
+  remaining georeference bottleneck after the muted-green extraction fix. The
+  cold runner path spent `19.855811s` total, with `17.613s` inside
+  `fit_georeference`; three live label geocode batches for Ann Arbor POIs took
+  `4.128s`, `4.787s`, and `4.965s` after city-context inference. Seeding the
+  Ann Arbor labels that formed the stable fit (`Ann Arbor`, city-qualified
+  `Amtrak Station`, `Michigan Union`, plus nearby campus/market context labels)
+  and seeding noisy OCR fragments (`Whuon`, `Hands`, `Uof Mmuseumof Art`,
+  `May Mobility Ovia`, and generic `Service Area`/`Amtrak Station`/
+  `Farmer Market`) as misses reproduced the same bbox
+  `[-83.7511602, 42.2634836, -83.7306417, 42.2879821]` with zero network calls.
+  The final trimmed seed set ran in `3.342551s` in simulation; validating the
+  actual on-disk bundle from a fresh process and fresh cache also made zero
+  network attempts, finished in `6.628572s` (`fit_georeference` `4.983463s`),
+  and used the cleaner three inlier controls (`Ann Arbor`, `Amtrak Station`,
+  `Michigan Union`). Residuals stayed `557.6m`/`692.3m`, and georeference
+  confidence rose from `0.768` to `0.805` by avoiding noisy live controls.
