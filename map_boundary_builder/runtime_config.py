@@ -135,6 +135,51 @@ def rapidocr_warm_detector_limits() -> list[int]:
     return limits
 
 
+def rapidocr_warm_engine_keys_config() -> list[list[int | str]]:
+    keys: list[list[int | str]] = []
+    generic_detector_limits = rapidocr_warm_detector_limits()
+    for detector_limit in generic_detector_limits:
+        key: list[int | str] = [detector_limit, "default", "default"]
+        if detector_limit > 0 and key not in keys:
+            keys.append(key)
+
+    bright_blue_profile = normalized_rapidocr_recognition_profile(
+        RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE
+    )
+    bright_blue_detector_type = normalized_rapidocr_detector_limit_type(
+        RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE
+    )
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN > 0 and (
+        bright_blue_profile != "default"
+        or bright_blue_detector_type != "default"
+        or RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN not in generic_detector_limits
+    ):
+        key = [
+            RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            bright_blue_profile,
+            bright_blue_detector_type,
+        ]
+        if key not in keys:
+            keys.append(key)
+    return keys
+
+
+def normalized_rapidocr_detector_limit_type(value: str | None = None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"max", "min"}:
+        return normalized
+    return "default"
+
+
+def normalized_rapidocr_recognition_profile(value: str | None = None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"", "default", "ppocrv4", "ch-ppocrv4"}:
+        return "default"
+    if normalized in {"en-ppocrv5", "ppocrv5-en", "v5-en"}:
+        return "en-ppocrv5"
+    return "default"
+
+
 def _rapidocr_english_ppocrv5_asset_paths(package: str, model_dir: str) -> tuple[Path, Path] | None:
     try:
         models_dir = importlib_resources.files(package).joinpath(model_dir)
@@ -209,6 +254,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
         "rapidocr_warm_detector_limits": rapidocr_warm_detector_limits(),
+        "rapidocr_warm_engine_keys": rapidocr_warm_engine_keys_config(),
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,

@@ -10123,3 +10123,28 @@ with zero failures in 0.531s.
   `scaled_cache: miss-stored`; `out/prod-warm-engine-prune-second-20260601.json`
   completed in `0.282705s` total with OCR `0.000195s`, extraction `0.236966s`,
   and `scaled_cache: hit`.
+- Rejected another post-extraction OCR crop shortcut for the arbitrary
+  no-catalog path. The centered crop probe
+  (`out/crop-ocr-centered-probe-20260601/report.json`) delayed OCR until after
+  extraction and read only a padded service-area crop before fitting the same
+  georeference. It failed 2/15 current-reference fixtures: Phoenix Waymo
+  produced no georeference, and Las Vegas Zoox misfit to IoU `0.047027`
+  despite confidence `0.813` from four controls. The run also lost the current
+  OCR/extraction overlap and totaled `7.429822s` with `5.220357s` in OCR. Keep
+  full-image OCR for the broad arbitrary path unless a future crop includes a
+  fail-closed fallback that preserves Phoenix and Las Vegas without adding more
+  latency than it saves.
+- Added warm-engine-key observability to the OCR runtime config so health and
+  benchmark reports prove the exact RapidOCR warmup shape, not just generic
+  detector limits. The current snapshot now reports
+  `[[608, default, default], [448, en-ppocrv5, max]]`, making future warmup
+  regressions visible in `/api/health`, benchmark `runtime_config`, and API
+  run-result cache keys. Focused API/OCR/warmup tests passed (`180 passed`),
+  local health parsing returned warm detector limits `[608]` with those two
+  engine keys, `compileall` and `git diff --check` passed, and the broad
+  current-reference no-catalog gate
+  (`out/warm-engine-keys-runtime-config-gate-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177` with zero regression or
+  latency-budget issues. Analyzed repeat samples stayed subsecond with
+  max/median/average `0.119288s`/`0.061330s`/`0.052519s`, repeat OCR max
+  `0.000099s`, and the full suite passed (`406 passed, 12 subtests passed`).

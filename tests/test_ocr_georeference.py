@@ -1337,6 +1337,12 @@ class OcrGroupingTests(unittest.TestCase):
             ],
         )
 
+    def test_runtime_config_exposes_current_rapidocr_warm_engine_keys(self) -> None:
+        self.assertEqual(
+            runtime_config_module.ocr_runtime_config()["rapidocr_warm_engine_keys"],
+            [list(key) for key in ocr_module.rapidocr_warm_engine_keys()],
+        )
+
     def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
         fast_engine = FakeRapidOcrEngine({False: []})
         classifier_engine = FakeRapidOcrEngine(
