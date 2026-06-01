@@ -10555,3 +10555,14 @@ with zero failures in 0.531s.
   starts the warmup during preparation without delaying upload, giving quick
   first uploads a chance to reuse a warm instance when Vercel routes that way
   while avoiding a guaranteed wait when it does not.
+- Production proof for the no-wait frontend warmup preservation: commit
+  `478be6a` deployed with Vercel CLI `54.6.1` as
+  `dpl_3jvjFtVE8DP68JmgfrQyoCbUsg1g`, aliased to `https://mapboundary.app`.
+  The served index referenced `app.js?v=asset-86ef62156b0732a8`; the downloaded
+  production JS contained `allowDuringRun` and
+  `scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true })`,
+  and did not contain the rejected `waitForGenerationRuntimePrewarm` helper or
+  `GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS` constant. The production health
+  response remained OK on `pipeline-d25a9f7b9d5cfc34`. Evidence files:
+  `out/prod-no-wait-prewarm-appjs-check-20260601.json` and
+  `out/prod-no-wait-prewarm-health-20260601.json`.
