@@ -3348,7 +3348,12 @@ def prune_single_noisy_similarity_control(
             continue
         median_improvement = base_median - median
         p90_improvement = base_p90 - p90
-        if median_improvement < max(150.0, base_median * 0.25):
+        enough_median_improvement = median_improvement >= max(150.0, base_median * 0.25)
+        enough_tail_improvement = (
+            median_improvement >= max(50.0, base_median * 0.10)
+            and p90_improvement >= max(800.0, base_p90 * 0.35)
+        )
+        if not (enough_median_improvement or enough_tail_improvement):
             continue
         if p90_improvement < max(250.0, base_p90 * 0.30):
             continue

@@ -9911,3 +9911,21 @@ with zero failures in 0.531s.
   remains the lowest current-reference IoU at `0.788285`, so future accuracy
   work should target regional scale/placement without replaying the rejected
   global OCR downscale or broad road-refinement lanes.
+- Improved broad regional label-fit robustness by relaxing the single-control
+  pruning gate for cases where dropping one control produces a large tail
+  residual improvement while still preserving spread and a non-worse fit score.
+  This targets the Bay Area Waymo regional-scale failure mode without using
+  catalog geometry in the fit. A focused Bay Area Waymo current-reference run
+  (`out/tail-prune-bay-area-waymo-20260601/full-report.json`) improved IoU
+  from the prior `0.788285` to `0.905665`, area ratio from `1.170161` to
+  `1.061927`, centroid error from `826.7m` to `399.9m`, and confidence from
+  `0.819` to `0.846` while staying on
+  `ocr-georeference:nominatim-label-fit`. The broad current-reference gate
+  (`out/tail-prune-currentref-repeat-gate-20260601/full-report.json`) passed
+  15/15 fixtures with avg/min IoU `0.949771`/`0.794177`; the only primary IoU
+  delta versus `out/default608-currentref-repeat-gate-20260601/full-report.json`
+  was Bay Area Waymo at `+0.117380`. Warm repeat budgets stayed clean with
+  all 15 analyzed samples subsecond, max/median/average duration
+  `0.584251s`/`0.404134s`/`0.332152s`, and warm stage maxes OCR `0.502316s`,
+  extraction `0.160922s`, georeference `0.021531s`, export `0.002747s`, and
+  inspect `0.001046s`.

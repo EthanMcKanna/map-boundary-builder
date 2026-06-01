@@ -1364,6 +1364,45 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertLess(pruned_median, base_median)
         self.assertLess(pruned_p90, base_p90)
 
+    def test_single_tail_noisy_similarity_control_can_be_pruned(self) -> None:
+        pixel = np.array(
+            [
+                [337.19515760895933, -1536.565374795545],
+                [1640.2999949997886, -1074.8483904150203],
+                [1159.8654894470196, -1576.185964767681],
+                [1429.8701175730664, -1339.7654817054727],
+                [1187.2371749720817, -181.02587440836874],
+                [1988.7868177719768, -1907.564103373709],
+                [1594.885423857382, -284.8243492782349],
+                [639.1488744144111, -1233.7047480357646],
+            ],
+            dtype=float,
+        )
+        merc = np.array(
+            [
+                [-6382418.393977106, 5694882.58011459],
+                [-6327200.478017818, 5715859.54445938],
+                [-6344166.705686818, 5689297.0674427645],
+                [-6336621.985824406, 5705598.755226152],
+                [-6349368.163219004, 5753488.578472509],
+                [-6311662.785261802, 5680458.802521589],
+                [-6332573.031581431, 5750546.54506408],
+                [-6370535.514534815, 5706426.675264899],
+            ],
+            dtype=float,
+        )
+        scale, rotation, tx, ty = fit_similarity(pixel, merc)
+        residuals = np.linalg.norm(apply_similarity(pixel, scale, rotation, tx, ty) - merc, axis=1).tolist()
+        fit = (scale, rotation, tx, ty, list(range(len(pixel))), residuals)
+
+        pruned = prune_single_noisy_similarity_control(fit, pixel, merc, control_spread(pixel))
+
+        self.assertEqual(pruned[4], [0, 1, 3, 4, 5, 6, 7])
+        base_median, base_p90 = residual_median_p90(residuals)
+        pruned_median, pruned_p90 = residual_median_p90([pruned[5][idx] for idx in pruned[4]])
+        self.assertLess(pruned_median, base_median)
+        self.assertLess(pruned_p90, base_p90 - 800.0)
+
     def test_single_noisy_similarity_control_keeps_stable_fit(self) -> None:
         pixel = np.array(
             [
