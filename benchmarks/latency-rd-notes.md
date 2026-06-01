@@ -9892,3 +9892,22 @@ with zero failures in 0.531s.
   avg/min IoU `0.968082`/`0.942536`, passed the repeat budgets with all eight
   analyzed samples subsecond, and measured `0.734301s` repeat max with OCR max
   `0.579245s`.
+- Broadened the default `608` validation beyond active fixtures. The
+  smoke-skipped strict gate
+  (`out/default608-smoke-skipped-strict-20260601/full-report.json`) recorded
+  the `608` runtime config, passed 8/8 active scored fixtures, smoke-completed
+  all seven reference-mismatch fixtures with zero failures, preserved active
+  avg/min IoU `0.968082`/`0.942536`, and kept evaluated stages under budget at
+  OCR `4.119411s`, extraction `1.451166s`, georeference `0.329788s`, export
+  `0.008885s`, inspect `0.006580s`, and road match `0.017139s`. A stronger
+  current-reference gate
+  (`out/default608-currentref-repeat-gate-20260601/full-report.json`) scored
+  all 15 fixtures against active/current catalog geometry with 15/15 passing,
+  avg/min IoU `0.941946`/`0.788285`, and max primary duration `0.847715s`;
+  after one warmup repeat per fixture, all 15 analyzed samples passed and were
+  subsecond with max/median/average duration `0.610518s`/`0.391357s`/`0.325089s`
+  and warm stage maxes OCR `0.451393s`, extraction `0.142395s`, georeference
+  `0.022736s`, export `0.001373s`, and inspect `0.000361s`. Bay Area Waymo
+  remains the lowest current-reference IoU at `0.788285`, so future accuracy
+  work should target regional scale/placement without replaying the rejected
+  global OCR downscale or broad road-refinement lanes.
