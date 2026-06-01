@@ -10847,3 +10847,22 @@ with zero failures in 0.531s.
   the immediately prior same-shape warm forced-miss sample from `0.913581s`
   total / `0.553586s` road match to `0.805476s` total / `0.472681s` road
   match without changing output geometry.
+- Rejected scoped large-road-refine memory first-write caching. The hypothesis
+  was that after the accepted lazy road-feature future reuse, a successful
+  large Phoenix/Nashville road refinement could remember its result in process
+  memory without enabling broad pre-search cache reads or disk writes. Focused
+  prototype tests passed while present (`21 passed`) and proved the intended
+  semantics: skip pre-read/pre-write for large feature fields on the first
+  search, then hit memory on the next identical call. The real target
+  benchmark did not justify the change, though:
+  `out/large-road-memory-cache-target-gate-20260601/full-report.json`
+  preserved Phoenix/Nashville IoU but made the warm target repeat profile
+  slower than the accepted road-feature-future baseline. Phoenix repeat
+  duration/georeference rose from about `0.189535s`/`0.078268s` in
+  `out/road-feature-future-currentref-gate-20260601/full-report.json` to
+  `0.198892s`/`0.078031s`; Nashville repeat duration/georeference rose from
+  about `0.153351s`/`0.050417s` to `0.180297s`/`0.064449s`. The key insight is
+  that once the feature future is available, the sampled road search is cheap;
+  hashing the large feature-distance matrix for a cache key costs enough to
+  erase or exceed the avoided work. The prototype was reverted, the original
+  road tests passed again (`20 passed`), and no runtime default changed.
