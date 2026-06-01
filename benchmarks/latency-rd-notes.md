@@ -10518,3 +10518,21 @@ with zero failures in 0.531s.
   the initial `out/prod-refine-first-health-20260601.json` did not request
   warmup, so future production smoke gates should warm before measuring
   arbitrary no-catalog cache misses.
+- Rejected road-refinement point caps and large road-cache first-write as
+  hosted-georeference speed levers. Lowering `MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS`
+  from `4000` to `2000` regressed Nashville Waymo IoU `0.986282 -> 0.799036`,
+  dropped compared average IoU `0.941932 -> 0.929449`, increased Phoenix
+  duration `0.811s -> 1.015s`, and increased evaluated road-match time
+  `0.018951s -> 0.135171s`
+  (`out/roadpoints2000-nocatalog-currentref-20260601/full-report.json`).
+  A `3000`-point cap still regressed Nashville to `0.906937`, dropped average
+  IoU to `0.936643`, and repeated runs confirmed clean regression reporting in
+  `out/roadpoints3000-nocatalog-currentref-rerun-20260601/full-report.json`.
+  Raising `MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS` to `6000000` preserved
+  avg/min IoU `0.941932`/`0.794177`, but failed the latency regression gate:
+  primary active total rose to `7.790636s`, with large per-fixture increases
+  for Bay Area Waymo, Bay Area Zoox, Las Vegas Zoox, and San Antonio Waymo; its
+  repeat profile was also slightly worse than baseline (average `0.064214s`
+  versus `0.060820s`, max `0.144778s` versus `0.147255s`). Keep the default
+  road-match sampling/cache policy until a more selective road-refine shortcut
+  can preserve Nashville and avoid broad primary latency noise.

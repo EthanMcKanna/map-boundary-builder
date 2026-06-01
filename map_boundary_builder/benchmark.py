@@ -2436,8 +2436,19 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"{issue['candidate_stage_duration_s']:.3f}s "
                     f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
                 )
-            else:
+            elif issue["kind"] == "evaluated_road_match_elapsed_increase":
+                print(
+                    f"       evaluated road-match duration "
+                    f"{issue['baseline_evaluated_road_match_elapsed_s']:.3f}s -> "
+                    f"{issue['candidate_evaluated_road_match_elapsed_s']:.3f}s "
+                    f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
+                )
+            elif issue["kind"] == "missing_candidate_score":
                 print(f"       {issue['slug']}: missing candidate score")
+            else:
+                slug = issue.get("slug")
+                label = f"{slug}: " if isinstance(slug, str) and slug else ""
+                print(f"       {label}{issue['kind']}")
     latency_budget_check = report.get("latency_budget_check")
     if latency_budget_check:
         print("")

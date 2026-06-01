@@ -1208,6 +1208,61 @@ def test_report_regression_check_can_flag_evaluated_road_match_increase() -> Non
     ]
 
 
+def test_print_table_reports_aggregate_road_match_regression(capsys, tmp_path: Path) -> None:
+    report = {
+        "mode": "full",
+        "summary": {
+            "passed": False,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 0,
+            "average_iou": 0.95,
+            "min_iou": 0.95,
+            "total_duration_s": 1.0,
+        },
+        "scores": [
+            {
+                "slug": "phoenix-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.95,
+                "area_ratio": 1.0,
+                "duration_s": 1.0,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+                "error": None,
+                "note": None,
+            }
+        ],
+        "inventory": {"references_without_images": []},
+        "regression_check": {
+            "passed": False,
+            "baseline_report": "baseline.json",
+            "issues": [
+                {
+                    "kind": "evaluated_road_match_elapsed_increase",
+                    "baseline_evaluated_road_match_elapsed_s": 0.4,
+                    "candidate_evaluated_road_match_elapsed_s": 0.7,
+                    "increase_s": 0.3,
+                    "increase_ratio": 0.75,
+                },
+                {
+                    "kind": "missing_candidate_score",
+                    "slug": "nashville-waymo",
+                    "baseline_iou": 0.986282,
+                },
+            ],
+        },
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "evaluated road-match duration 0.400s -> 0.700s" in output
+    assert "nashville-waymo: missing candidate score" in output
+
+
 def test_report_regression_check_can_flag_evaluated_stage_duration_increase() -> None:
     baseline = {
         "summary": {
