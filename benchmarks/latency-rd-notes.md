@@ -10037,3 +10037,20 @@ with zero failures in 0.531s.
   reported `scaled_cache: hit`, the same shape and confidence/result, and
   completed in `0.240379s` total with extraction `0.190510s` and OCR
   `0.010811s`.
+- Bounded the older canonical extraction memory cache for trimmed uploads with
+  `MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS` defaulting to `3000000`.
+  This closes a memory-reliability gap where a large screenshot with only a
+  tiny trim border could still retain a full-size canonical mask; for example,
+  the clean Bay Area Waymo production image trims from `2400x2400` to
+  `2390x2390` (`5712100` mask pixels), which now falls through to the bounded
+  scaled cache instead. A local real-image probe confirmed the repeat path
+  changes from full-cache (`scaled_cache: None`, one full extraction cache
+  entry) to scaled-cache (`miss-stored` then `hit`, zero full extraction cache
+  entries) with neutral/slightly better timings. Focused extraction/API/
+  benchmark tests passed (`124 passed`). The broad current-reference no-catalog
+  gate (`out/trimmed-extraction-cache-bound-currentref-gate-20260601/full-report.json`)
+  passed 15/15 fixtures, preserved exact avg/min IoU `0.949771`/`0.794177`,
+  had zero regression or latency-budget issues, and kept analyzed repeat
+  max/median/average `0.117204s`/`0.060660s`/`0.051750s`, with repeat
+  extraction max `0.065237s`. The full suite passed
+  (`403 passed, 12 subtests passed`).

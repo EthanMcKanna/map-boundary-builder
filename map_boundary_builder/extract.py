@@ -38,6 +38,10 @@ EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS", "1000000")),
 )
+EXTRACTION_TRIMMED_CACHE_MAX_PIXELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS", "3000000")),
+)
 EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CACHE", "").lower() in {
     "1",
     "true",
@@ -520,14 +524,26 @@ def should_use_extraction_cache_key(
 ) -> bool:
     if rgb is None or canonical_rgb is None:
         return False
-    if EXTRACTION_DISK_CACHE_ENABLED:
-        return True
-    if canonical_origin != (0.0, 0.0) or rgb.shape[:2] != canonical_rgb.shape[:2]:
-        return True
-    if EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS <= 0:
+    pixel_limit = extraction_cache_pixel_limit(
+        rgb_shape=rgb.shape[:2],
+        canonical_shape=canonical_rgb.shape[:2],
+        canonical_origin=canonical_origin,
+    )
+    if pixel_limit <= 0:
         return False
-    height, width = rgb.shape[:2]
-    return height * width <= EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS
+    height, width = canonical_rgb.shape[:2]
+    return height * width <= pixel_limit
+
+
+def extraction_cache_pixel_limit(
+    *,
+    rgb_shape: tuple[int, int],
+    canonical_shape: tuple[int, int],
+    canonical_origin: tuple[float, float],
+) -> int:
+    if canonical_origin != (0.0, 0.0) or rgb_shape != canonical_shape:
+        return EXTRACTION_TRIMMED_CACHE_MAX_PIXELS
+    return EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS
 
 
 def canonical_extract_border_color(rgb: np.ndarray) -> np.ndarray:

@@ -284,6 +284,66 @@ class MaskRepairTests(unittest.TestCase):
         np.testing.assert_array_equal(first.mask, second.mask)
         self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))
 
+    def test_large_trimmed_extraction_skips_memory_cache_above_trimmed_limit(self) -> None:
+        base = np.full((80, 100, 3), 255, dtype=np.uint8)
+        base[24:58, 30:74] = (46, 119, 246)
+        bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
+        bordered[4:84, 7:107] = base
+
+        with TemporaryDirectory() as workdir:
+            with (
+                patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)),
+                patch.object(extract_module, "EXTRACTION_DISK_CACHE_ENABLED", False),
+                patch.object(extract_module, "EXTRACTION_TRIMMED_CACHE_MAX_PIXELS", 1),
+            ):
+                _EXTRACTION_MEMORY_CACHE.clear()
+                try:
+                    with patch.object(
+                        extract_module,
+                        "extract_service_area_from_rgb",
+                        wraps=extract_module.extract_service_area_from_rgb,
+                    ) as wrapped:
+                        first = extract_service_area("bordered-a.png", rgb=bordered)
+                        second = extract_service_area("bordered-b.png", rgb=bordered)
+                finally:
+                    _EXTRACTION_MEMORY_CACHE.clear()
+
+        self.assertEqual(wrapped.call_count, 2)
+        self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))
+
+    def test_large_trimmed_downscaled_extraction_uses_scaled_cache(self) -> None:
+        base = np.full((80, 100, 3), 255, dtype=np.uint8)
+        base[24:58, 30:74] = (46, 119, 246)
+        bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
+        bordered[4:84, 7:107] = base
+
+        with TemporaryDirectory() as workdir:
+            with (
+                patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)),
+                patch.object(extract_module, "EXTRACTION_DISK_CACHE_ENABLED", False),
+                patch.object(extract_module, "EXTRACTION_TRIMMED_CACHE_MAX_PIXELS", 1),
+                patch.object(extract_module, "SCALED_EXTRACTION_MEMORY_CACHE_MAX", 4),
+                patch.object(extract_module, "SCALED_EXTRACTION_CACHE_MAX_PIXELS", 10_000),
+            ):
+                _EXTRACTION_MEMORY_CACHE.clear()
+                _SCALED_EXTRACTION_MEMORY_CACHE.clear()
+                try:
+                    first = extract_service_area("bordered-a.png", rgb=bordered, max_dimension=80)
+                    with patch.object(
+                        extract_module,
+                        "extract_service_area_from_rgb",
+                        side_effect=AssertionError("scaled cache hit should avoid extraction"),
+                    ):
+                        second = extract_service_area("bordered-b.png", rgb=bordered, max_dimension=80)
+                finally:
+                    _EXTRACTION_MEMORY_CACHE.clear()
+                    _SCALED_EXTRACTION_MEMORY_CACHE.clear()
+
+        self.assertEqual(first.scaled_cache_status, "miss-stored")
+        self.assertEqual(second.scaled_cache_status, "hit")
+        np.testing.assert_array_equal(first.mask, second.mask)
+        self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))
+
     def test_canonical_extraction_disk_cache_can_be_enabled(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
         base[24:58, 30:74] = (46, 119, 246)
