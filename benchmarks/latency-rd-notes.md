@@ -10456,3 +10456,23 @@ with zero failures in 0.531s.
   avg/min IoU `0.858`/`0.720`. Keep the current production behavior and treat
   detector downscaling as unsafe until there is an OCR-quality guard or
   recovery path.
+- Accepted a refine-first catalog planner for uniquely hinted, large-rotation
+  exact-contour entries. The Las Vegas Zoox catalog entry records an
+  `exact-ordered-contour` strategy and source rotation around `-9.8` degrees;
+  its normal 240px and 400px catalog probes were wasted because those
+  low-resolution extractions did not clear the shape match before the 1400px
+  refine succeeded. The planner now carries `rotation_degrees` and
+  `catalog_match_strategy` from catalog metadata and starts directly at
+  `CATALOG_MISS_REFINE_MAX_DIMENSION` only when a provider/area hint resolves
+  to exactly one current-verified catalog entry whose exact-contour source
+  rotation exceeds the normal catalog rotation window. Focused catalog/runner
+  tests passed `91/91`. The targeted Las Vegas gate
+  `out/las-vegas-refine-first-catalog-gate-20260601/full-report.json` preserved
+  IoU `1.000000` with zero regression issues and reduced active total from the
+  fresh default probe's `0.17s` to `0.03s`. The broad catalog-enabled current
+  suite `out/refine-first-rotated-catalog-gate-20260601/full-report.json`
+  passed `15/15` with exact avg/min IoU `0.996223`/`0.943345`, zero regression
+  issues against `out/current-default-catalog-snapshot-20260601/full-report.json`,
+  and active total `0.67s` versus the fresh baseline's `1.04115s`. This is a
+  catalog-fast-path speed win only; the no-catalog arbitrary OCR path remains
+  unchanged.

@@ -50,6 +50,8 @@ class ServiceAreaCatalogEntry:
     max_confidence: float | None = None
     min_iou: float = CATALOG_MIN_IOU
     use_exact_geometry: bool = False
+    source_rotation_degrees: float | None = None
+    catalog_match_strategy: str | None = None
 
     @property
     def is_active(self) -> bool:
@@ -360,6 +362,8 @@ def load_catalog_entries() -> tuple[ServiceAreaCatalogEntry, ...]:
                 max_confidence=parse_optional_confidence(properties.get("georeference_confidence")),
                 min_iou=parse_catalog_min_iou(properties.get("catalog_min_shape_iou"), use_exact_geometry),
                 use_exact_geometry=use_exact_geometry,
+                source_rotation_degrees=parse_optional_float(properties.get("rotation_degrees")),
+                catalog_match_strategy=parse_optional_text(properties.get("catalog_match_strategy")),
             )
         )
     return tuple(entries)
@@ -393,6 +397,15 @@ def parse_optional_confidence(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return max(0.0, min(0.99, confidence))
+
+
+def parse_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_catalog_status(value: Any) -> str:

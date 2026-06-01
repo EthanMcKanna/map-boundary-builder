@@ -15,6 +15,7 @@ from shapely.ops import transform
 
 from .catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
+    CATALOG_ROTATION_MAX_DEGREES,
     catalog_provider_hint,
     catalog_area_matches_text,
     catalog_match_from_score,
@@ -1798,6 +1799,11 @@ def initial_catalog_extract_max_dimension(
         or CATALOG_RETRY_EXTRACT_MAX_DIMENSION <= CATALOG_EXTRACT_MAX_DIMENSION
     ):
         return CATALOG_EXTRACT_MAX_DIMENSION
+    if area_hinted_current_catalog_should_start_at_refine_dimension(
+        city_input=city_input,
+        filename_hint=filename_hint,
+    ):
+        return CATALOG_MISS_REFINE_MAX_DIMENSION
     if area_hinted_current_catalog_should_start_at_retry_dimension(
         city_input=city_input,
         filename_hint=filename_hint,
@@ -1806,16 +1812,52 @@ def initial_catalog_extract_max_dimension(
     return CATALOG_EXTRACT_MAX_DIMENSION
 
 
+def area_hinted_current_catalog_should_start_at_refine_dimension(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> bool:
+    if CATALOG_MISS_REFINE_MAX_DIMENSION <= CATALOG_RETRY_EXTRACT_MAX_DIMENSION:
+        return False
+    candidates = area_hinted_current_catalog_entries(
+        city_input=city_input,
+        filename_hint=filename_hint,
+    )
+    if len(candidates) != 1:
+        return False
+    entry = candidates[0]
+    if getattr(entry, "catalog_match_strategy", None) != "exact-ordered-contour":
+        return False
+    rotation_degrees = getattr(entry, "source_rotation_degrees", None)
+    if rotation_degrees is None:
+        return False
+    return abs(float(rotation_degrees)) > CATALOG_ROTATION_MAX_DEGREES
+
+
 def area_hinted_current_catalog_should_start_at_retry_dimension(
     *,
     city_input: str | None,
     filename_hint: str | None,
 ) -> bool:
+    candidates = area_hinted_current_catalog_entries(
+        city_input=city_input,
+        filename_hint=filename_hint,
+    )
+    if len(candidates) != 1:
+        return False
+    return catalog_entry_vertex_count(candidates[0]) >= AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES
+
+
+def area_hinted_current_catalog_entries(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> list[Any]:
     hint_texts = [text for text in (city_input, filename_hint) if text and text.strip()]
     if not hint_texts:
-        return False
+        return []
     provider_hint = catalog_provider_hint(" ".join(hint_texts))
-    candidates = [
+    return [
         entry
         for entry in load_catalog_entries()
         if (
@@ -1825,9 +1867,6 @@ def area_hinted_current_catalog_should_start_at_retry_dimension(
             and any(catalog_area_matches_text(getattr(entry, "area", ""), hint) for hint in hint_texts)
         )
     ]
-    if len(candidates) != 1:
-        return False
-    return catalog_entry_vertex_count(candidates[0]) >= AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES
 
 
 def catalog_entry_vertex_count(entry: Any) -> int:

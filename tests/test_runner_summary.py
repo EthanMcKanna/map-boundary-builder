@@ -1783,6 +1783,17 @@ def test_complex_area_hinted_current_catalog_starts_at_retry_dimension(monkeypat
     )
 
 
+def test_rotated_exact_contour_catalog_hint_starts_at_refine_dimension() -> None:
+    assert (
+        runner.initial_catalog_extract_max_dimension(
+            city_input=None,
+            filename_hint="Zoox Las Vegas.png",
+            allow_pre_ocr_catalog=True,
+        )
+        == runner.CATALOG_MISS_REFINE_MAX_DIMENSION
+    )
+
+
 def test_smaller_area_hinted_current_catalog_keeps_tiny_probe(monkeypatch) -> None:
     entry = SimpleNamespace(
         is_active=True,
