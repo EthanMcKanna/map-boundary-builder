@@ -31,6 +31,7 @@ from map_boundary_builder.georeference import (
     georeference_from_labels,
     has_reliable_candidate_cluster,
     infer_city_contexts,
+    is_credible_context_hint_georeference,
     is_noisy_regional_control_query,
     is_noisy_poi_query,
     is_reliable_single_token_context,
@@ -2680,6 +2681,46 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
         self.assertIs(result, fallback_result)
         self.assertEqual(label_fit.call_count, 2)
+
+    def test_context_hint_georeference_rejects_loose_five_control_fit(self) -> None:
+        result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Miami",
+                lon=-80.2,
+                lat=25.8,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=20.2,
+                rotation_radians=0.018,
+                confidence=0.716,
+                source="test",
+            ),
+            control_points=[object(), object(), object(), object(), object()],
+            residual_median_m=1412.3,
+            residual_p90_m=1577.4,
+        )
+
+        self.assertFalse(is_credible_context_hint_georeference(result))
+
+    def test_context_hint_georeference_keeps_tight_multi_control_fit(self) -> None:
+        result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Dallas",
+                lon=-96.8,
+                lat=32.8,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=13.5,
+                rotation_radians=0.0,
+                confidence=0.80,
+                source="test",
+            ),
+            control_points=[object(), object(), object(), object()],
+            residual_median_m=700.0,
+            residual_p90_m=1300.0,
+        )
+
+        self.assertTrue(is_credible_context_hint_georeference(result))
 
     def test_specific_city_fit_keeps_city_after_synthetic_context_failure(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]

@@ -773,10 +773,14 @@ def is_credible_context_hint_georeference(result: GeoreferenceResult | None) -> 
         return False
     if is_decisive_georeference_result(result):
         return True
-    if result.transform.confidence < 0.68:
+    if result.transform.confidence < 0.70:
         return False
     if len(result.control_points) >= 4:
-        return result.residual_median_m <= 2200.0 and result.residual_p90_m <= 3500.0
+        return (
+            result.transform.confidence >= 0.78
+            and result.residual_median_m <= 1500.0
+            and result.residual_p90_m <= 2600.0
+        )
     return (
         len(result.control_points) >= 3
         and result.transform.confidence >= 0.70
