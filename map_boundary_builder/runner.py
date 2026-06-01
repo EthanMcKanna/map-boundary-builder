@@ -121,6 +121,8 @@ PROVIDER_UI_FOCUS_CROP_MAX_X_FRACTION = 0.95
 PROVIDER_UI_FOCUS_CROP_Y_PAD_RATIO = 0.05
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
+LOW_RES_SHAPE_CATALOG_TINY_MAX_IMAGE_DIMENSION = 320
+LOW_RES_SHAPE_CATALOG_TINY_MIN_IOU = 0.925
 LOW_RES_SHAPE_CATALOG_MIN_MARGIN = 0.24
 LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO = 0.92
 LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO = 1.08
@@ -1681,10 +1683,11 @@ def low_resolution_shape_catalog_match(
         return None
     if extraction.confidence < LOW_RES_SHAPE_CATALOG_MIN_EXTRACTION_CONFIDENCE:
         return None
+    min_iou = low_resolution_shape_catalog_min_iou(width, height)
     match = match_service_area_catalog(
         extraction.pixel_geometry,
         style=extraction.style,
-        min_iou=LOW_RES_SHAPE_CATALOG_MIN_IOU,
+        min_iou=min_iou,
         min_margin=LOW_RES_SHAPE_CATALOG_MIN_MARGIN,
         area_hint_texts=[city_input] if city_input is not None else None,
         rotation_min_iou=LOW_RES_SHAPE_CATALOG_ROTATION_MIN_IOU,
@@ -1694,6 +1697,12 @@ def low_resolution_shape_catalog_match(
     if not (LOW_RES_SHAPE_CATALOG_MIN_AREA_RATIO <= match.area_ratio <= LOW_RES_SHAPE_CATALOG_MAX_AREA_RATIO):
         return None
     return match
+
+
+def low_resolution_shape_catalog_min_iou(width: int, height: int) -> float:
+    if max(width, height) <= LOW_RES_SHAPE_CATALOG_TINY_MAX_IMAGE_DIMENSION:
+        return LOW_RES_SHAPE_CATALOG_TINY_MIN_IOU
+    return LOW_RES_SHAPE_CATALOG_MIN_IOU
 
 
 def filename_hinted_avride_light_fill_catalog_match(

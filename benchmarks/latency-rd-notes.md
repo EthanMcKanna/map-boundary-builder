@@ -10676,3 +10676,47 @@ with zero failures in 0.531s.
   next direction is not smaller OCR input by itself; it needs either a
   dependable adaptive fallback signal for low-resolution OCR or a different
   non-OCR georeference shortcut.
+- Rejected adaptive low-resolution OCR as a safe no-catalog speed shortcut.
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1500` was faster at active total
+  `7.415876s`, but its best-fit metadata was not separable enough from good
+  cases to avoid a full-detail fallback: Dallas Waymo dropped from `0.957010`
+  to `0.912399` with confidence `0.948`, 6 controls, p90 residual `612.1m`,
+  and no road match; Phoenix dropped from `0.983820` to `0.755715` with
+  confidence `0.739`, 4 controls, p90 residual `1346.9m`, and no road match.
+  Guarding on bright-blue control counts or residuals would still need full
+  fallback on Phoenix, Miami, Dallas, Orlando, and Nashville, and it would not
+  protect the slight Bay Area Zoox dark-teal loss from applying the global
+  smaller OCR input. Because a safe fallback would pay low-res OCR plus the
+  current full OCR on the risky cases, keep the no-catalog OCR input size at
+  the current default until a stronger equivalence signal exists.
+- Accepted a tiny-image low-res shape threshold for known service-area uploads.
+  The exact issue #5 Nashville input still matched `nashville-waymo` through
+  `catalog-shape-match:low-res-shape` in `0.050212s` at shape IoU/confidence
+  `0.943893` and margin `0.265172`
+  (`out/issue5-current-recheck-20260601/nashville.geojson`). A stress sweep
+  in `out/issue5-lowres-shape-stress-20260601/summary.json` showed every
+  perturbation except the 300px downsample already used the low-res catalog
+  path; the 300px case missed the old `0.94` threshold at shape IoU
+  `0.925684`, fell through to OCR/georeference, and failed after `1.808683s`.
+  The runner now lowers only the low-res shape min-IoU to `0.925` when the
+  upload is tiny (`max(width,height) <= 320`), while keeping the existing
+  extraction-confidence, `0.24` margin, and `0.92`-`1.08` area-ratio guards.
+  The recovered 300px issue variant completed via `catalog-shape-match:low-res-shape`
+  in `0.335472s`, slug `nashville-waymo`, shape IoU/confidence `0.925684`,
+  margin `0.260449`, area ratio `1.018559`, and the current Nashville bbox
+  (`out/issue5-tiny-threshold-acceptance-20260601/resize300.geojson`). A
+  300px current-fixture threshold probe accepted `13` correct catalog matches,
+  `0` wrong matches, and `2` no-matches at `0.925`; the stale/default Waymo
+  Houston, Waymo Miami, and Waymo Bay Area screenshots still produced no
+  low-res catalog match, while current Bay Area Tesla and Zoox SF remained
+  correct active-catalog accepts. Validation stayed clean: the strict catalog
+  gate passed 15/15 with avg/min IoU `0.996223`/`0.943345`, active total
+  `1.676493s`, max fixture duration `0.194021s`, and no regression against
+  the prior catalog report
+  (`out/tiny-lowres-shape-catalog-gate-20260601/full-report.json`); the
+  no-catalog accuracy regression gate passed 15/15 with unchanged avg/min IoU
+  `0.945247`/`0.843889`
+  (`out/tiny-lowres-shape-nocatalog-regression-20260601/full-report.json`).
+  Focused and full tests passed (`tests/test_catalog_match.py`,
+  `tests/test_runner_summary.py`: `92 passed`; full suite: `415 passed, 12
+  subtests passed`), and `compileall` plus `git diff --check` passed.

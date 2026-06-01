@@ -21,7 +21,11 @@ from map_boundary_builder.catalog_match import (
     match_service_area_catalog,
 )
 from map_boundary_builder.extract import ExtractionResult
-from map_boundary_builder.runner import low_resolution_shape_catalog_match
+from map_boundary_builder.runner import (
+    LOW_RES_SHAPE_CATALOG_MIN_IOU,
+    LOW_RES_SHAPE_CATALOG_TINY_MIN_IOU,
+    low_resolution_shape_catalog_match,
+)
 
 
 KNOWN_CURRENT_CHANGED_CATALOG_SLUGS = {
@@ -491,6 +495,29 @@ def test_low_resolution_shape_catalog_match_accepts_downsampled_sparse_shape() -
     assert match.entry.slug == "nashville-waymo"
     assert 0.94 <= match.iou < 0.945
     assert match.margin >= 0.24
+
+
+def test_low_resolution_shape_catalog_match_accepts_tiny_downsample_artifacts() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "nashville-waymo")
+    simplified_reference = entry.mercator_geometry.simplify(750, preserve_topology=True)
+    pixel_geometry = mercator_geometry_to_pixel(simplified_reference)
+    extraction = ExtractionResult(
+        mask=np.zeros((169, 300), dtype=np.uint8),
+        style="bright-blue",
+        pixel_geometry=pixel_geometry,
+        coverage_ratio=0.22,
+        contour_count=1,
+        confidence=1.0,
+    )
+
+    tiny_match = low_resolution_shape_catalog_match(extraction, width=300, height=169, city_input=None)
+    larger_match = low_resolution_shape_catalog_match(extraction, width=360, height=202, city_input=None)
+
+    assert tiny_match is not None
+    assert tiny_match.entry.slug == "nashville-waymo"
+    assert LOW_RES_SHAPE_CATALOG_TINY_MIN_IOU <= tiny_match.iou < LOW_RES_SHAPE_CATALOG_MIN_IOU
+    assert tiny_match.margin >= 0.24
+    assert larger_match is None
 
 
 def test_label_hint_accepts_single_edit_ocr_area_typo() -> None:
