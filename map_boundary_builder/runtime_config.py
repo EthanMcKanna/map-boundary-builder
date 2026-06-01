@@ -129,7 +129,6 @@ def rapidocr_warm_detector_limits() -> list[int]:
     for limit in (
         rapidocr_warm_detector_limit(),
         RAPIDOCR_DET_LIMIT_SIDE_LEN,
-        RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     ):
         if limit > 0 and limit not in limits:
             limits.append(limit)

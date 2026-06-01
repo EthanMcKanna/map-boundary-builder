@@ -10098,3 +10098,16 @@ with zero failures in 0.531s.
   `scaled_cache: miss-stored`; `out/prod-brightblue-det448-second-20260601.json`
   completed in `0.278492s` total with OCR `0.004019s`, extraction `0.236148s`,
   and `scaled_cache: hit`.
+- Pruned RapidOCR warmup after the bright-blue detector split. The previous
+  runtime config reported warm detector limits `[608, 448]`, which caused the
+  warmup pass to initialize an unused default-profile `448` engine before also
+  initializing the real bright-blue `448`/`en-ppocrv5`/`max` engine. The warm
+  detector list now contains only generic detector limits (`[608]`), while
+  `rapidocr_warm_engine_keys()` still includes the actual bright-blue override:
+  `(608, default, default)` and `(448, en-ppocrv5, max)`. Focused API/OCR/
+  warmup tests passed (`179 passed`). The broad current-reference no-catalog
+  gate (`out/warm-engine-prune-currentref-gate-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177`, had zero regression or
+  latency-budget issues, and kept analyzed repeat max/median/average
+  `0.117842s`/`0.061248s`/`0.051198s` with repeat OCR max `0.000142s`. The
+  full suite passed (`405 passed, 12 subtests passed`).

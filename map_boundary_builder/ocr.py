@@ -962,7 +962,8 @@ def warm_rapidocr_runtime() -> bool:
 
 def rapidocr_warm_engine_keys() -> list[tuple[int, str, str]]:
     keys: list[tuple[int, str, str]] = []
-    for detector_limit in rapidocr_warm_detector_limits():
+    generic_detector_limits = rapidocr_warm_detector_limits()
+    for detector_limit in generic_detector_limits:
         key = (
             detector_limit,
             RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
@@ -971,14 +972,16 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str]]:
         if detector_limit > 0 and key not in keys:
             keys.append(key)
     bright_blue_profile = normalized_rapidocr_recognition_profile(RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE)
-    if (
-        RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN > 0
-        and bright_blue_profile != RAPIDOCR_RECOGNITION_PROFILE_DEFAULT
+    bright_blue_detector_type = normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE)
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN > 0 and (
+        bright_blue_profile != RAPIDOCR_RECOGNITION_PROFILE_DEFAULT
+        or bright_blue_detector_type != RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT
+        or RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN not in generic_detector_limits
     ):
         key = (
             RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             bright_blue_profile,
-            normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE),
+            bright_blue_detector_type,
         )
         if key not in keys:
             keys.append(key)

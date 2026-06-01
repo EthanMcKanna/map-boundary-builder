@@ -1301,7 +1301,41 @@ class OcrGroupingTests(unittest.TestCase):
         finally:
             warm_rapidocr_runtime.cache_clear()
 
-        self.assertEqual(calls, [((1600, 1600, 3), False)])
+        self.assertEqual(calls, [((1600, 1600, 3), False), ((1600, 1600, 3), False)])
+
+    def test_rapidocr_warm_engine_keys_skip_unused_default_bright_blue_limit(self) -> None:
+        with (
+            patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
+        ):
+            keys = ocr_module.rapidocr_warm_engine_keys()
+
+        self.assertEqual(
+            keys,
+            [
+                (608, "default", "default"),
+                (448, "en-ppocrv5", "max"),
+            ],
+        )
+
+    def test_rapidocr_warm_engine_keys_include_default_bright_blue_override(self) -> None:
+        with (
+            patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+        ):
+            keys = ocr_module.rapidocr_warm_engine_keys()
+
+        self.assertEqual(
+            keys,
+            [
+                (608, "default", "default"),
+                (448, "default", "max"),
+            ],
+        )
 
     def test_rapidocr_retries_classifier_when_fast_pass_is_sparse(self) -> None:
         fast_engine = FakeRapidOcrEngine({False: []})
