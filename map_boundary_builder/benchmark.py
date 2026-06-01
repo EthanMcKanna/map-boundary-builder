@@ -66,6 +66,8 @@ class BenchmarkScore:
     catalog_slug: str | None = None
     catalog_shape_iou: float | None = None
     catalog_area_ratio: float | None = None
+    road_match_score: float | None = None
+    road_match_elapsed_s: float | None = None
     stage_elapsed_s: dict[str, float] | None = None
     error: str | None = None
     status: str = "active"
@@ -88,6 +90,10 @@ class BenchmarkScore:
             "catalog_slug": self.catalog_slug,
             "catalog_shape_iou": round(self.catalog_shape_iou, 6) if self.catalog_shape_iou is not None else None,
             "catalog_area_ratio": round(self.catalog_area_ratio, 6) if self.catalog_area_ratio is not None else None,
+            "road_match_score": round(self.road_match_score, 6) if self.road_match_score is not None else None,
+            "road_match_elapsed_s": (
+                round(self.road_match_elapsed_s, 6) if self.road_match_elapsed_s is not None else None
+            ),
             "stage_elapsed_s": self.stage_elapsed_s,
             "error": self.error,
             "status": self.status,
@@ -529,6 +535,8 @@ def run_benchmark(
     active_stage_duration = summarize_stage_durations(scored)
     smoke_stage_duration = summarize_stage_durations(smoke_validated)
     evaluated_stage_duration = combine_stage_durations(active_stage_duration, smoke_stage_duration)
+    active_road_match_elapsed = summarize_road_match_elapsed(scored)
+    smoke_road_match_elapsed = summarize_road_match_elapsed(smoke_validated)
     average_iou = float(mean(ious)) if ious else 0.0
     min_seen_iou = float(min(ious)) if ious else 0.0
     passed_count = sum(score.passed for score in scored)
@@ -576,6 +584,9 @@ def run_benchmark(
             "active_stage_duration_s": active_stage_duration,
             "smoked_skipped_stage_duration_s": smoke_stage_duration,
             "evaluated_stage_duration_s": evaluated_stage_duration,
+            "active_road_match_elapsed_s": active_road_match_elapsed,
+            "smoked_skipped_road_match_elapsed_s": smoke_road_match_elapsed,
+            "evaluated_road_match_elapsed_s": round(active_road_match_elapsed + smoke_road_match_elapsed, 6),
             "average_duration_s": round(float(mean(durations)), 6) if durations else None,
             "max_duration_s": round(max(durations), 6) if durations else None,
         },
@@ -876,6 +887,11 @@ def score_full_fixture(
             catalog_slug=summary.get("catalog_slug") or properties.get("catalog_slug"),
             catalog_shape_iou=first_float(summary.get("catalog_shape_iou"), properties.get("catalog_shape_iou")),
             catalog_area_ratio=first_float(summary.get("catalog_area_ratio"), properties.get("catalog_area_ratio")),
+            road_match_score=first_float(summary.get("road_match_score"), properties.get("road_match_score")),
+            road_match_elapsed_s=first_float(
+                summary.get("road_match_elapsed_s"),
+                properties.get("road_match_elapsed_s"),
+            ),
             stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
             status=fixture.status,
             note=fixture.note,
@@ -965,6 +981,14 @@ def score_full_fixture_in_process(
             catalog_area_ratio=first_float(
                 result.summary.get("catalog_area_ratio"),
                 properties.get("catalog_area_ratio"),
+            ),
+            road_match_score=first_float(
+                result.summary.get("road_match_score"),
+                properties.get("road_match_score"),
+            ),
+            road_match_elapsed_s=first_float(
+                result.summary.get("road_match_elapsed_s"),
+                properties.get("road_match_elapsed_s"),
             ),
             stage_elapsed_s=stage_elapsed_seconds(events),
             status=fixture.status,
@@ -1201,6 +1225,16 @@ def summarize_stage_durations(scores: list[BenchmarkScore]) -> dict[str, float]:
                 continue
             totals[stage] = totals.get(stage, 0.0) + parsed_duration
     return {stage: round(total, 6) for stage, total in sorted(totals.items())}
+
+
+def summarize_road_match_elapsed(scores: list[BenchmarkScore]) -> float:
+    total = 0.0
+    for score in scores:
+        parsed_duration = parse_report_duration(score.road_match_elapsed_s)
+        if parsed_duration is None:
+            continue
+        total += parsed_duration
+    return round(total, 6)
 
 
 def combine_stage_durations(*summaries: dict[str, float]) -> dict[str, float]:

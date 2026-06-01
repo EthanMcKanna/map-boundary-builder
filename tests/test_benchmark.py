@@ -73,10 +73,14 @@ def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
         centroid_distance_m=0.0,
         vertices=42,
         style="bright-blue",
+        road_match_score=0.681518,
+        road_match_elapsed_s=0.195375,
         duration_s=1.00049,
     ).as_dict()
 
     assert row["duration_s"] == 1.00049
+    assert row["road_match_score"] == 0.681518
+    assert row["road_match_elapsed_s"] == 0.195375
 
 
 def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path) -> None:
@@ -137,6 +141,8 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "catalog_slug": None,
             "catalog_shape_iou": None,
             "catalog_area_ratio": None,
+            "road_match_score": None,
+            "road_match_elapsed_s": None,
             "stage_elapsed_s": None,
             "error": None,
             "status": "reference_mismatch",
@@ -378,6 +384,8 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
             georeference_source="ocr-georeference:nominatim-label-fit",
             combined_confidence=0.86,
             catalog_slug=None,
+            road_match_score=0.706233,
+            road_match_elapsed_s=0.04,
             stage_elapsed_s={"ocr": 0.08},
             status=fixture.status,
             note=fixture.note,
@@ -413,9 +421,14 @@ def test_smoke_skipped_full_fixtures_runs_without_scoring_stale_reference(
     assert report["summary"]["active_stage_duration_s"] == {}
     assert report["summary"]["smoked_skipped_stage_duration_s"] == {"ocr": 0.08}
     assert report["summary"]["evaluated_stage_duration_s"] == {"ocr": 0.08}
+    assert report["summary"]["active_road_match_elapsed_s"] == 0
+    assert report["summary"]["smoked_skipped_road_match_elapsed_s"] == 0.04
+    assert report["summary"]["evaluated_road_match_elapsed_s"] == 0.04
     assert report["scores"][0]["status"] == "reference_mismatch"
     assert report["scores"][0]["iou"] is None
     assert report["scores"][0]["georeference_source"] == "ocr-georeference:nominatim-label-fit"
+    assert report["scores"][0]["road_match_score"] == 0.706233
+    assert report["scores"][0]["road_match_elapsed_s"] == 0.04
 
 
 def test_catalog_reference_lookup_covers_changed_reference_mismatches() -> None:
@@ -1297,6 +1310,8 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
                 "georeference_source": "ocr-georeference:nominatim-label-fit",
                 "combined_confidence": 0.96,
                 "catalog_slug": None,
+                "road_match_score": 0.681518,
+                "road_match_elapsed_s": 0.195375,
             },
         )
 
@@ -1316,6 +1331,8 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
     assert score.passed is True
     assert score.iou == 1.0
     assert score.georeference_source == "ocr-georeference:nominatim-label-fit"
+    assert score.road_match_score == 0.681518
+    assert score.road_match_elapsed_s == 0.195375
     assert calls == [
         {
             "image": image_path,

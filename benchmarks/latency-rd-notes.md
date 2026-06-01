@@ -9708,3 +9708,19 @@ with zero failures in 0.531s.
   Conclusion: road-refine warm state is real, but the next shippable win still
   needs a broader OCR/extraction latency lever or a less noisy road-feature
   handoff than synthetic warmup.
+- Added benchmark road-refinement observability so future gates expose the
+  road-heavy tail without manual GeoJSON parsing. Full benchmark reports now
+  include per-fixture `road_match_score` / `road_match_elapsed_s` plus active,
+  smoke, and evaluated road-match elapsed totals. Focused benchmark tests
+  passed (`31 passed`). The schema-only strict no-catalog gate
+  (`out/benchmark-road-metrics-strict-iou-20260601/full-report.json`) preserved
+  exact avg/min IoU `0.968082`/`0.942536` against
+  `out/det448-area1500-default-strict-20260531/full-report.json`, passed 8/8
+  active fixtures plus seven smoke checks, and reported active/evaluated
+  road-match totals of `0.018402s` from Phoenix (`score: 0.705669`,
+  `0.009027s`) and Nashville (`score: 0.772836`, `0.009375s`). A same-session
+  runner OCR memory-cache probe was rejected as a default speed change:
+  `out/runner-ocr-cache-enabled-20260601/full-report.json` preserved exact IoU
+  versus `out/runner-ocr-cache-control-20260601/full-report.json`, but slowed
+  evaluated time `9.414741s -> 9.991796s` and evaluated OCR
+  `7.134587s -> 7.950456s`.
