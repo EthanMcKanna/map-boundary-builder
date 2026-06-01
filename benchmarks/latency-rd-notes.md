@@ -9869,3 +9869,26 @@ with zero failures in 0.531s.
   latency checks with no issues, emitted no `repeat_profile` when omitted, and
   measured `6.247394s` evaluated with OCR `4.258746s`, extraction `1.572557s`,
   georeference `0.378683s`, and road match `0.017247s`.
+- Raised the bright-blue RapidOCR detector cap back to `608` after the new
+  repeat-profile gates showed the lower `448` cap was the active warm-path
+  tail rather than a broad win. The active no-catalog repeat profile at the
+  existing default (`out/repeat-profile-active-suite-20260601/full-report.json`)
+  preserved avg/min IoU `0.968082`/`0.942536`, but Phoenix was the slow warm
+  fixture at `0.844419s` total and `0.670714s` OCR. A Phoenix-only probe kept
+  IoU exact and improved the best repeated `608` detector run to
+  `0.604024s` median / `0.627626s` max versus the same-session `448` control
+  at `0.648153s` median / `0.651634s` max. The active-suite `608` profile
+  (`out/repeat-profile-active-det608-20260601/full-report.json`) kept exact
+  avg/min IoU and cut warm max to `0.602776s` with OCR max `0.467594s`. The
+  matched rerun confirmed the direction: control
+  (`out/repeat-profile-active-control-rerun-20260601/full-report.json`)
+  measured `3.597251s` primary evaluated / `0.646832s` repeat max / `0.491100s`
+  repeat OCR max, while `608`
+  (`out/repeat-profile-active-det608-rerun-20260601/full-report.json`)
+  measured `3.194362s` primary evaluated / `0.560007s` repeat max / `0.420123s`
+  repeat OCR max with unchanged IoU. After changing the default, the no-env
+  gate (`out/repeat-profile-active-default608-gate-20260601/full-report.json`)
+  recorded `rapidocr_bright_blue_detector_limit_side_len: 608`, preserved
+  avg/min IoU `0.968082`/`0.942536`, passed the repeat budgets with all eight
+  analyzed samples subsecond, and measured `0.734301s` repeat max with OCR max
+  `0.579245s`.
