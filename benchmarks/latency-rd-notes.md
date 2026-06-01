@@ -9975,4 +9975,13 @@ with zero failures in 0.531s.
   `0.144695s`/`0.064483s`/`0.056881s`; warm stage maxes were OCR `0.000079s`,
   extraction `0.092757s`, georeference `0.050894s`, export `0.000791s`, and
   inspect `0.000258s`. Focused runner/API/benchmark tests passed
-  (`168 passed`).
+  (`168 passed`). Production deployment
+  `dpl_EQQG5kGLsmVgd29JRXP4jgfxwuTW` reported
+  `pipeline-4f01dcc4b59c6cd9` and `MAP_BOUNDARY_RUNNER_OCR_CACHE: "1"`.
+  A cache-busted no-catalog Bay Area request
+  (`out/prod-runner-ocr-memory-first-20260601.json`) missed run-result cache
+  and completed in `2.348738s` with OCR `1.658647s`; the same image with a
+  different `min_confidence` intentionally missed run-result cache again
+  (`out/prod-runner-ocr-memory-second-20260601.json`) but reused OCR in the
+  warm instance, completing in `0.287388s` with OCR `0.010974s` and the same
+  confidence `0.846` / `ocr-georeference:nominatim-label-fit` result.
