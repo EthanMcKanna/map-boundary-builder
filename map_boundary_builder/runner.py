@@ -125,6 +125,10 @@ FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO = max(
     0.0,
     float(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO", "0.35")),
 )
+FOCUS_GEOREF_OCR_MAX_DIMENSION = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION", "550")),
+)
 LOW_RES_SHAPE_CATALOG_MAX_IMAGE_DIMENSION = 520
 LOW_RES_SHAPE_CATALOG_MIN_IOU = 0.94
 LOW_RES_SHAPE_CATALOG_TINY_MAX_IMAGE_DIMENSION = 320
@@ -831,7 +835,7 @@ def build_boundary(
                 percent=43,
                 details={
                     "crop_area_ratio": round(focus_georef_ocr_crop_area_ratio(extraction, rgb=rgb), 4),
-                    "rapidocr_max_dimension": rapidocr_max_dimension_for_extraction_style(extraction.style),
+                    "rapidocr_max_dimension": focus_georef_ocr_max_dimension_for_style(extraction.style),
                 },
             )
             labels = extract_focus_georef_labels_from_rgb(str(image_path), rgb, extraction=extraction)
@@ -1489,6 +1493,9 @@ def extract_focus_georef_labels_from_rgb(
 ) -> list[Any]:
     crop, offset_x, offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
     ocr_kwargs = ocr_kwargs_for_style(extraction.style, cache=runner_ocr_cache_enabled())
+    focus_max_dimension = focus_georef_ocr_max_dimension_for_style(extraction.style)
+    if focus_max_dimension is not None:
+        ocr_kwargs["rapidocr_max_dimension"] = focus_max_dimension
     labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
         return labels
@@ -1532,6 +1539,16 @@ def focus_georef_ocr_enabled(extraction, *, rgb, city_input: str | None) -> bool
         and provider_ui_focus_crop_enabled(extraction)
         and 0.0 < focus_georef_ocr_crop_area_ratio(extraction, rgb=rgb) <= FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO
     )
+
+
+def focus_georef_ocr_max_dimension_for_style(style: str | None) -> int | None:
+    if style not in FOCUS_GEOREF_OCR_STYLES:
+        return rapidocr_max_dimension_for_extraction_style(style)
+    if FOCUS_GEOREF_OCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
+        return rapidocr_max_dimension_for_extraction_style(style)
+    if FOCUS_GEOREF_OCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+        return rapidocr_max_dimension_for_extraction_style(style)
+    return FOCUS_GEOREF_OCR_MAX_DIMENSION
 
 
 def focus_georef_ocr_crop_area_ratio(extraction, *, rgb) -> float:

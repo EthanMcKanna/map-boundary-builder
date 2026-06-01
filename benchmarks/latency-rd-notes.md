@@ -11193,3 +11193,27 @@ with zero failures in 0.531s.
   and the catalog gate preserved avg/min IoU `0.996223`/`0.943345` with no
   regression issues
   (`out/focus-georef-ocr-liveguard2-catalog-20260601/full-report.json`).
+- Added a second-stage cap for the focused dark-teal georeference OCR crop:
+  `MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION` defaults to `550`, while
+  non-focused styles keep the normal extraction-style cap. An Ann Arbor crop
+  sweep on `/Users/ethanmckanna/Downloads/aa mm.avif` kept the same 3-control
+  `city=Ann Arbor` fit and confidence `0.805` from native crop size down
+  through `400px`; `550px` was chosen as the conservative point because it kept
+  strong city/station/campus labels while cutting OCR time in the isolated
+  sweep from about `0.509s` to `0.364s`. The live-network CLI smoke with the
+  focused cap (`out/ann-arbor-focuscap550-20260601.json`) finished in
+  `1.282949s`, with OCR `0.688448s`, georeference `0.280803s`, confidence
+  `0.805`, residuals `563.5m`/`695.6m`, and bbox
+  `[-83.7510465, 42.2636544, -83.7306236, 42.2879051]`; compared with the
+  prior focused-liveguard output, polygon IoU was `0.982433`, area ratio was
+  `0.992084`, and centroid shift was about `0.00003` degrees in each axis.
+  Current-reference fixture gates stayed clean: no-catalog passed 15/15 with
+  avg/min IoU `0.952958`/`0.843889` and no regression issues against
+  `out/focus-georef-ocr-liveguard2-currentref-20260601/full-report.json`
+  (`out/focus-georef-ocr-cap550-currentref-20260601/full-report.json`), and
+  catalog passed 15/15 with avg/min IoU `0.996223`/`0.943345` and no
+  regression issues against
+  `out/focus-georef-ocr-liveguard2-catalog-20260601/full-report.json`
+  (`out/focus-georef-ocr-cap550-catalog-20260601/full-report.json`). Full
+  validation passed after the change (`435 passed, 30 subtests passed`);
+  `compileall` and `git diff --check` also passed.

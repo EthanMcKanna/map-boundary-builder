@@ -287,11 +287,43 @@ def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     assert not runner.focus_georef_ocr_enabled(small_dark_teal, rgb=rgb, city_input="Ann Arbor")
     assert not runner.focus_georef_ocr_enabled(large_dark_teal, rgb=rgb, city_input=None)
     assert not runner.focus_georef_ocr_enabled(gray_fill, rgb=rgb, city_input=None)
+    assert runner.focus_georef_ocr_max_dimension_for_style("dark-teal") == 550
+    assert runner.focus_georef_ocr_max_dimension_for_style("gray-fill") is None
 
 
 def test_provider_ui_crop_ocr_max_dimension_uses_gray_fill_cap() -> None:
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("gray-fill", rapidocr_max_dimension=1200) == 450
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("dark-teal", rapidocr_max_dimension=1200) == 750
+
+
+def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
+    rgb = np.zeros((700, 1000, 3), dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((700, 1000), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(200, 120), (500, 120), (500, 620), (200, 620)]),
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
+        captured["shape"] = prepared_rgb.shape[:2]
+        captured["kwargs"] = kwargs
+        return [OcrLabel("Ann Arbor", x=10, y=20, width=80, height=20, confidence=95)]
+
+    monkeypatch.setattr(runner, "FOCUS_GEOREF_OCR_MAX_DIMENSION", 550)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+
+    labels = runner.extract_focus_georef_labels_from_rgb("map.png", rgb, extraction=extraction)
+
+    assert labels[0].x == 240.0
+    assert labels[0].y == 100.0
+    assert captured == {
+        "shape": (580, 255),
+        "kwargs": {"cache": True, "rapidocr_max_dimension": 550},
+    }
 
 
 def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
