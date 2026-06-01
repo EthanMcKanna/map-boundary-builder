@@ -10353,3 +10353,23 @@ with zero failures in 0.531s.
   repeat extraction max rose to `0.087647s` over the `0.08s` budget and primary
   total rose to `6.035791s`. The bright-blue repair branch is therefore
   bracketed for now; no extraction repair shortcut shipped.
+- Rejected lower-level extraction implementation swaps. A local component-mask
+  microbench over the current fixture masks showed OpenCV's explicit connected
+  component algorithms could beat the default call in isolation: over 20 loops,
+  default took `0.2626s`, BBDT `0.2177s`, and Spaghetti `0.2137s`, all with the
+  same component counts/areas. The full pipeline did not preserve that win:
+  `out/connected-components-bbdt-currentref-probe-20260601/full-report.json`
+  preserved exact avg/min IoU `0.949771`/`0.794177`, but worsened primary
+  total/extraction from the accepted default's `5.336556s`/`1.128181s` to
+  `5.649590s`/`1.216042s`, and repeat extraction max/average moved from
+  `0.066131s`/`0.039261s` to `0.066418s`/`0.039845s`. The Spaghetti probe
+  (`out/connected-components-spaghetti-currentref-probe-20260601/full-report.json`)
+  also preserved exact IoU, but worsened primary total/extraction to
+  `5.788812s`/`1.199800s` and repeat extraction max/average to
+  `0.066601s`/`0.039765s`. A contour approximation swap from
+  `CHAIN_APPROX_SIMPLE` to `CHAIN_APPROX_TC89_KCOS` was rejected harder:
+  `out/contour-tc89-currentref-probe-20260601/full-report.json` failed the
+  zero-drop gate with 9 regression issues, including Las Vegas Zoox
+  `1.000000 -> 0.990623` and compared average IoU
+  `0.949771 -> 0.949188`. Keep OpenCV's default component labeling and contour
+  extraction path until a broader rewrite proves speed without geometry drift.
