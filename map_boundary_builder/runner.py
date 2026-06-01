@@ -231,6 +231,22 @@ def emit_progress(
     progress(event)
 
 
+def extraction_progress_details(extraction: Any) -> dict[str, Any]:
+    details = {
+        "style": extraction.style,
+        "coverage_ratio": round(extraction.coverage_ratio, 6),
+        "contour_count": extraction.contour_count,
+        "confidence": extraction.confidence,
+    }
+    scaled_cache_status = getattr(extraction, "scaled_cache_status", None)
+    if scaled_cache_status is not None:
+        details["scaled_cache"] = scaled_cache_status
+        scaled_cache_shape = getattr(extraction, "scaled_cache_shape", None)
+        if scaled_cache_shape is not None:
+            details["scaled_cache_shape"] = list(scaled_cache_shape)
+    return details
+
+
 def build_boundary(
     image_path: str | Path,
     city: str | None,
@@ -428,12 +444,7 @@ def build_boundary(
             stage="extract",
             message="Pixel polygon extracted",
             percent=36,
-            details={
-                "style": extraction.style,
-                "coverage_ratio": round(extraction.coverage_ratio, 6),
-                "contour_count": extraction.contour_count,
-                "confidence": extraction.confidence,
-            },
+            details=extraction_progress_details(extraction),
         )
 
         catalog_style_can_match = catalog_style_supported(extraction.style)
@@ -713,12 +724,7 @@ def build_boundary(
                 stage="extract",
                 message="Pixel polygon refined",
                 percent=40,
-                details={
-                    "style": extraction.style,
-                    "coverage_ratio": round(extraction.coverage_ratio, 6),
-                    "contour_count": extraction.contour_count,
-                    "confidence": extraction.confidence,
-                },
+                details=extraction_progress_details(extraction),
             )
             if allow_pre_ocr_catalog and catalog_style_supported(extraction.style):
                 catalog_match, catalog_match_source = hinted_catalog_shape_match(

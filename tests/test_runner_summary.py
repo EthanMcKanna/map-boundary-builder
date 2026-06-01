@@ -66,6 +66,29 @@ def mercator_geometry_to_pixel(geometry):
     return transform(to_pixel, geometry)
 
 
+def test_extraction_progress_details_include_scaled_cache_telemetry() -> None:
+    mask = np.ones((2, 3), dtype=bool)
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (3, 0), (3, 2), (0, 0)]),
+        coverage_ratio=float(mask.mean()),
+        contour_count=1,
+        confidence=0.98,
+        scaled_cache_status="hit",
+        scaled_cache_shape=(400, 400),
+    )
+
+    assert runner.extraction_progress_details(extraction) == {
+        "style": "bright-blue",
+        "coverage_ratio": 1.0,
+        "contour_count": 1,
+        "confidence": 0.98,
+        "scaled_cache": "hit",
+        "scaled_cache_shape": [400, 400],
+    }
+
+
 def test_summary_exposes_catalog_match_metadata() -> None:
     data = base_feature_collection(
         {

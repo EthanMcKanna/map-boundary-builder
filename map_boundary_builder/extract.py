@@ -62,6 +62,8 @@ class ExtractionResult:
     coverage_ratio: float
     contour_count: int
     confidence: float
+    scaled_cache_status: str | None = None
+    scaled_cache_shape: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -196,14 +198,26 @@ def extract_service_area(
             interpolation=cv2.INTER_AREA,
         )
         scaled = extract_service_area_from_rgb(scaled_rgb, simplify_px=simplify_px * scale)
+        scaled_cache_status: str | None = None
         if scaled_cache_key is not None:
-            remember_scaled_extraction_cache(
-                scaled_cache_key,
-                scaled,
-                source_shape=rgb.shape[:2],
-                scale=scale,
+            scaled_cache_status = (
+                "miss-stored"
+                if remember_scaled_extraction_cache(
+                    scaled_cache_key,
+                    scaled,
+                    source_shape=rgb.shape[:2],
+                    scale=scale,
+                )
+                else "miss-skipped"
             )
-        result = rescale_extraction_result(scaled, width=width, height=height, scale=scale)
+        result = rescale_extraction_result(
+            scaled,
+            width=width,
+            height=height,
+            scale=scale,
+            scaled_cache_status=scaled_cache_status,
+            scaled_cache_shape=scaled.mask.shape if scaled_cache_status is not None else None,
+        )
     else:
         result = extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
     if canonical_key is not None:
@@ -257,6 +271,8 @@ def rescale_extraction_result(
     width: int,
     height: int,
     scale: float,
+    scaled_cache_status: str | None = None,
+    scaled_cache_shape: tuple[int, int] | None = None,
 ) -> ExtractionResult:
     mask = cv2.resize(
         result.mask.astype(np.uint8),
@@ -273,6 +289,8 @@ def rescale_extraction_result(
         coverage_ratio=coverage_ratio,
         contour_count=result.contour_count,
         confidence=confidence,
+        scaled_cache_status=scaled_cache_status or result.scaled_cache_status,
+        scaled_cache_shape=scaled_cache_shape or result.scaled_cache_shape,
     )
 
 
@@ -332,6 +350,8 @@ def read_scaled_extraction_cache(
         width=output_width,
         height=output_height,
         scale=cached.scale,
+        scaled_cache_status="hit",
+        scaled_cache_shape=cached.result.mask.shape,
     )
 
 
@@ -341,11 +361,11 @@ def remember_scaled_extraction_cache(
     *,
     source_shape: tuple[int, int],
     scale: float,
-) -> None:
+) -> bool:
     if SCALED_EXTRACTION_MEMORY_CACHE_MAX <= 0:
-        return
+        return False
     if SCALED_EXTRACTION_CACHE_MAX_PIXELS <= 0 or result.mask.size > SCALED_EXTRACTION_CACHE_MAX_PIXELS:
-        return
+        return False
     _SCALED_EXTRACTION_MEMORY_CACHE[cache_key] = ScaledExtractionCacheEntry(
         result=result,
         source_shape=source_shape,
@@ -354,6 +374,7 @@ def remember_scaled_extraction_cache(
     _SCALED_EXTRACTION_MEMORY_CACHE.move_to_end(cache_key)
     while len(_SCALED_EXTRACTION_MEMORY_CACHE) > SCALED_EXTRACTION_MEMORY_CACHE_MAX:
         _SCALED_EXTRACTION_MEMORY_CACHE.popitem(last=False)
+    return True
 
 
 def read_extraction_cache(

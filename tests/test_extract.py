@@ -249,6 +249,10 @@ class MaskRepairTests(unittest.TestCase):
                     _EXTRACTION_MEMORY_CACHE.clear()
                     _SCALED_EXTRACTION_MEMORY_CACHE.clear()
 
+        self.assertEqual(first.scaled_cache_status, "miss-stored")
+        self.assertEqual(first.scaled_cache_shape, (32, 40))
+        self.assertEqual(second.scaled_cache_status, "hit")
+        self.assertEqual(second.scaled_cache_shape, (32, 40))
         self.assertEqual(second.mask.shape, base.shape[:2])
         np.testing.assert_array_equal(first.mask, second.mask)
         self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))

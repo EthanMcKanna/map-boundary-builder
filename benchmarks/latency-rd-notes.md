@@ -10005,3 +10005,22 @@ with zero failures in 0.531s.
   tighter repeat max/median/average `0.117401s`/`0.060354s`/`0.050954s`; repeat
   extraction max dropped to `0.065332s` under an explicit `extract=0.08s`
   repeat-stage budget.
+- Production deployment `dpl_8JA7pVEVyzxK1PdfZuY512XwvVU5` reported
+  `pipeline-b1115a1837528074` with
+  `MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX: "24"` and
+  `MAP_BOUNDARY_SCALED_EXTRACTION_CACHE_MAX_PIXELS: "3000000"`. A paired
+  no-catalog Bay Area smoke intentionally forced run-result misses with
+  different `min_confidence` values; both stayed warm/subsecond
+  (`out/prod-scaled-extraction-first-20260601.json`: `0.334264s` total,
+  extraction `0.283127s`; `out/prod-scaled-extraction-second-20260601.json`:
+  `0.311688s` total, extraction `0.250271s`) with the same confidence `0.846`
+  and `ocr-georeference:nominatim-label-fit` result. Because production timing
+  alone could not prove whether the bounded scaled cache hit, scaled extraction
+  results now carry `scaled_cache`/`scaled_cache_shape` telemetry into the
+  existing extraction progress event. The telemetry-only broad gate
+  (`out/scaled-extraction-telemetry-currentref-gate-20260601/full-report.json`)
+  passed 15/15 current-reference no-catalog fixtures, preserved exact avg/min
+  IoU `0.949771`/`0.794177`, had zero regression or latency-budget issues, and
+  kept analyzed repeat max/median duration `0.118087s`/`0.061573s` with repeat
+  extraction max `0.069335s`. Focused tests passed (`184 passed`) and the full
+  suite passed (`401 passed, 12 subtests passed`).
