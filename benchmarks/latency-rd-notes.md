@@ -10180,3 +10180,18 @@ with zero failures in 0.531s.
   latency-budget issues, analyzed repeat max/median/average
   `0.118099s`/`0.060943s`/`0.051495s`, and the full suite passed
   (`407 passed, 12 subtests passed`).
+- Production deployment `dpl_6BrQ6Xw3qVKmQRpHKBUnNt1oupdw` reported
+  `pipeline-ed7dec8edcbc4266`, `rapidocr_warm_sample_max_dimension: 608`,
+  warm engine keys `[[608, default, default], [448, en-ppocrv5, max]]`, and
+  bright-blue detector limit `448`/`max`. The live health warm probe returned
+  warm status `ok`, `warm_total_s: 1.990196`, and `rapidocr_s: 1.559439`,
+  improving on the prior cold production health sample's `4.162466s` warm
+  total while preserving the intended engine set. A Bay Area Waymo forced-miss
+  pair through `https://mapboundary.app` preserved confidence `0.846`, 13
+  controls, and `ocr-georeference:nominatim-label-fit`: first request
+  `out/prod-warm-sample608-first-20260601.json` completed in `2.387441s`
+  total with OCR `1.622420s`, extraction `0.527765s`, and
+  `scaled_cache: miss-stored`; second request
+  `out/prod-warm-sample608-second-20260601.json` completed in `0.293446s`
+  total with OCR `0.000196s`, extraction `0.254081s`, and
+  `scaled_cache: hit`.
