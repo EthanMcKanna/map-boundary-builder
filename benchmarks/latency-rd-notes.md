@@ -10286,3 +10286,15 @@ with zero failures in 0.531s.
   engine keys `[[608, default, default], [320, en-ppocrv5, max]]`, active OCR
   `3.865222s`, and repeat max/median/average
   `0.118838s`/`0.062499s`/`0.051935s`.
+- Production deployment `dpl_GsdFb3dCM1d7bkGqhYyD2h6Gfppk` is live at
+  `mapboundary.app` with `pipeline-8e3f120a7269b29d`. The production health
+  warm check (`out/prod-bright-blue-det320-health-20260601.json`) returned
+  `ok: true`, bright-blue detector limit `320`, warm engine keys
+  `[[608, default, default], [320, en-ppocrv5, max]]`, warm status `ok`,
+  `warm_total_s: 2.014447`, and `rapidocr_s: 1.592399`. A one-pixel
+  cache-busted Bay Area Waymo production miss
+  (`out/prod-bright-blue-det320-bayarea-run-20260601.json`) completed with the
+  same confidence `0.846`, 13 controls, and
+  `ocr-georeference:nominatim-label-fit`; the run reported
+  `total_before_send_s: 2.322007`, generation `2.311212s`, OCR `1.594586s`,
+  extraction `0.485165s`, and georeference `0.124332s`.
