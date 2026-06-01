@@ -11261,3 +11261,36 @@ with zero failures in 0.531s.
   and improved the prior production cap smoke from `3.342466s` to `2.716547s`
   before send, with OCR down from `1.949213s` to `1.540037s`
   (`out/prod-focusdet416-min500-ann-arbor-upload-20260601.json`).
+- Profiled the remaining no-catalog tail after the focused Ann Arbor wins. A
+  5-run repeat profile of Dallas Waymo, Phoenix Waymo, and Bay Area Zoox showed
+  exact warm repeats are already comfortably subsecond once the runner OCR
+  memory cache is populated: 12 analyzed repeat samples all passed, median
+  duration `0.100032s`, max `0.168616s`, median OCR `0.000142s`, and min/avg
+  IoU `0.957010`/`0.977628`
+  (`out/repeat-slowest-current-20260601/full-report.json`). The first pass is
+  still dominated by novel-screen OCR, so the next sweep focused on the
+  bright-blue RapidOCR detector and text-area knobs rather than extraction or
+  georeference.
+- Rejected the faster bright-blue OCR input-size and text-area candidates under
+  strict current-reference regression rules. `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION`
+  at `1400` and `1200` sped the two-image Dallas/Phoenix probe but dropped
+  Phoenix to IoU `0.853339` and `0.844642`; `1000` kept both fixtures passing
+  but still reduced Phoenix from `0.983820` to `0.974537`. Raising
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` to `2000` or `2500` also sped the probe
+  but nudged Dallas below the current report (`0.947100`/`0.953633` vs
+  `0.957010`). Those variants remain useful signals, but not safe defaults.
+- Accepted a narrower bright-blue RapidOCR detector cap after the full
+  15-fixture gates showed no geometry regression. The code default for
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN` is now `256` instead
+  of `320`, with warm engine keys updated to
+  `[[608, default, default], [256, en-ppocrv5, max]]`. The no-catalog strict
+  gate passed 15/15 with avg/min IoU `0.952958`/`0.843889`, no regression
+  issues against `out/focus-georef-ocr-det416-min500-final-currentref-20260601/full-report.json`,
+  total duration `8.888976s`, OCR `6.726195s`, and max fixture duration
+  `1.117577s` (`out/bright-blue-det256-default-currentref-20260601/full-report.json`).
+  The catalog gate also passed 15/15 with avg/min IoU `0.996223`/`0.943345`,
+  total duration `0.973471s`, and max fixture duration `0.113060s`
+  (`out/bright-blue-det256-default-catalog-20260601/full-report.json`). The
+  largest stable first-pass improvement was Phoenix Waymo, which moved from
+  `1.013685s`/`0.828255s` OCR to `0.959628s`/`0.776578s` OCR with identical
+  IoU; Dallas was noisy in the full rerun but preserved IoU exactly.
