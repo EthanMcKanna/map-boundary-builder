@@ -10824,3 +10824,26 @@ with zero failures in 0.531s.
   (`out/road-feature-future-catalog-gate-20260601/full-report.json`) also
   passed 15/15 with exact avg/min IoU `0.996223`/`0.943345`, zero regression
   issues, and active total `1.171s`.
+- Production deployment proof for lazy road-feature future reuse: commit
+  `da3a772` deployed with Vercel CLI `54.6.1` as
+  `dpl_HvNQmFtnTAbLhzukb2iTZ6PXnk3y`, aliased to
+  `https://mapboundary.app`. Health reported
+  `pipeline-96afe431c7511892`, PP-OCRv5 bright-blue assets available, runner
+  OCR cache enabled, `MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES: "1"`, and warm
+  `status: ok` in `1.885467s`
+  (`out/prod-road-feature-future-health-20260601.json`). A fresh Phoenix
+  no-catalog production miss after health warm preserved the same geometry path
+  but still hit cold OCR/extraction on its instance: `build_boundary_s:
+  3.655235`, OCR `2.512475s`, extraction `0.585142s`, georeference
+  `0.455941s`, and `road_match_elapsed_s: 0.432149`
+  (`out/prod-road-feature-future-phoenix-first-20260601.json`). A second
+  forced run-result miss using the same pixels under a different filename
+  reused OCR/scaled extraction and completed subsecond:
+  `build_boundary_s: 0.792976`, `total_before_send_s: 0.805476`, OCR
+  `0.003972s`, extraction `0.300911s`, georeference `0.484363s`,
+  `road_match_elapsed_s: 0.472681`, `scaled_cache: hit`, confidence `0.886`,
+  and source `ocr-georeference:nominatim-label-fit+osm-road-refine`
+  (`out/prod-road-feature-future-phoenix-second-20260601.json`). That improves
+  the immediately prior same-shape warm forced-miss sample from `0.913581s`
+  total / `0.553586s` road match to `0.805476s` total / `0.472681s` road
+  match without changing output geometry.
