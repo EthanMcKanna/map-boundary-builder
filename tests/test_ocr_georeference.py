@@ -2526,6 +2526,10 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         cache_bust_queries = filename_context_queries(
             "avride-dallas-pipeline-version-1780067151-e527924-ui.png"
         )
+        artifact_queries = filename_context_queries("baseline-currentref-strict-gate.png")
+        concatenated_area_queries = filename_context_queries(
+            "upload-bayarea-tail-prune-68bd278.png"
+        )
 
         self.assertIn("Dallas", queries)
         self.assertNotIn("Avride Dallas", queries)
@@ -2533,6 +2537,8 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         self.assertNotIn("Dallas Png", queries)
         self.assertNotIn("Variant Png", queries)
         self.assertEqual(cache_bust_queries, ["Dallas"])
+        self.assertEqual(artifact_queries, [])
+        self.assertEqual(concatenated_area_queries, ["Bay Area"])
 
     def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
         dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")

@@ -9929,3 +9929,22 @@ with zero failures in 0.531s.
   `0.584251s`/`0.404134s`/`0.332152s`, and warm stage maxes OCR `0.502316s`,
   extraction `0.160922s`, georeference `0.021531s`, export `0.002747s`, and
   inspect `0.001046s`.
+- Tightened filename hint normalization for run-cache and no-city georeference
+  context probes. Concatenated market names such as `bayarea`, `losangeles`,
+  `sanfrancisco`, `sanantonio`, and `lasvegas` now canonicalize to their
+  spaced place names, while benchmark/cache-bust terms such as `tail`,
+  `prune`, `currentref`, `strict`, `gate`, `baseline`, `probe`, and `smoke`
+  are ignored as context/cache noise. The stress check now maps
+  `upload-bayarea-tail-prune-68bd278.png` to cache hint `png:bay area` and
+  georeference query/context `Bay Area`/`San Francisco Bay Area`, while
+  `baseline-currentref-strict-gate.png` produces no filename context. Targeted
+  API/georeference tests passed (`175 passed`). The broad current-reference
+  no-catalog repeat gate
+  (`out/filename-hint-normalize-currentref-repeat-gate-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177` versus
+  `out/tail-prune-currentref-repeat-gate-20260601/full-report.json`, passed
+  15/15 fixtures with zero regression or latency-budget issues, and kept all
+  15 analyzed repeat samples subsecond with max/median/average duration
+  `0.583163s`/`0.359846s`/`0.292985s`. Warm stage maxes were OCR `0.429390s`,
+  extraction `0.137160s`, georeference `0.019544s`, export `0.002162s`, and
+  inspect `0.000266s`.

@@ -319,17 +319,24 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(filename_hint_cache_value("uploaded-map-variant.avif"), "avif:")
         self.assertEqual(filename_hint_cache_value("uploaded-map-variant.bmp"), "bmp:")
         self.assertEqual(filename_hint_cache_value("uploaded-map.png"), "png:")
+        self.assertEqual(filename_hint_cache_value("baseline-currentref-strict-gate.png"), "png:")
         self.assertEqual(
             filename_hint_cache_value("dallas-map-repeat-1780146013-1.webp"),
             "webp:dallas",
+        )
+        self.assertEqual(
+            filename_hint_cache_value("upload-bayarea-tail-prune-68bd278.png"),
+            "png:bay area",
         )
 
     def test_run_cache_filename_hint_preserves_provider_and_multiword_area(self) -> None:
         waymo = BoundaryBuildOptions(filename_hint="Waymo Bay Area screenshot-1780067151.png")
         tesla = BoundaryBuildOptions(filename_hint="Tesla Bay Area screenshot-1780067151.png")
+        concatenated = BoundaryBuildOptions(filename_hint="Waymo-BayArea-smoke.png")
 
         self.assertEqual(filename_hint_cache_value(waymo.filename_hint), "png:waymo bay area")
         self.assertEqual(filename_hint_cache_value(tesla.filename_hint), "png:tesla bay area")
+        self.assertEqual(filename_hint_cache_value(concatenated.filename_hint), "png:waymo bay area")
         self.assertNotEqual(
             run_result_cache_key(b"image-a", None, waymo),
             run_result_cache_key(b"image-a", None, tesla),

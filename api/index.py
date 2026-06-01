@@ -107,19 +107,29 @@ FILENAME_HINT_CACHE_NOISE_TOKENS = {
     "app",
     "avif",
     "after",
+    "baseline",
     "boundary",
     "boundaries",
     "bmp",
     "bust",
     "cache",
     "capture",
+    "candidate",
+    "cold",
+    "control",
     "copy",
     "coverage",
     "current",
+    "currentref",
+    "debug",
+    "default",
+    "det",
     "final",
     "frame",
+    "gate",
     "geojson",
     "gif",
+    "health",
     "hint",
     "image",
     "img",
@@ -129,19 +139,27 @@ FILENAME_HINT_CACHE_NOISE_TOKENS = {
     "map",
     "maps",
     "neutral",
+    "ocr",
     "operating",
     "pipeline",
     "png",
+    "probe",
     "prod",
     "production",
+    "profile",
     "proof",
+    "prune",
     "repeat",
+    "rerun",
     "roadskip",
     "run",
     "screenshot",
     "service",
     "small",
     "snap",
+    "smoke",
+    "strict",
+    "tail",
     "tif",
     "tiff",
     "ui",
@@ -149,8 +167,16 @@ FILENAME_HINT_CACHE_NOISE_TOKENS = {
     "uploaded",
     "variant",
     "version",
+    "warm",
     "web",
     "webp",
+}
+FILENAME_HINT_CACHE_TOKEN_ALIASES = {
+    "bayarea": "bay area",
+    "lasvegas": "las vegas",
+    "losangeles": "los angeles",
+    "sanantonio": "san antonio",
+    "sanfrancisco": "san francisco",
 }
 FILENAME_HINT_CACHE_ALLOWED_PHRASES = {
     ("bay", "area"),
@@ -970,7 +996,7 @@ def filename_hint_cache_value(filename_hint: object) -> str:
     path = Path(filename)
     extension = path.suffix.lower().lstrip(".")
     raw_tokens = [
-        token
+        FILENAME_HINT_CACHE_TOKEN_ALIASES.get(token, token)
         for token in re.split(r"[^a-z0-9]+", path.stem.lower())
         if len(token) >= 2 and not any(char.isdigit() for char in token)
     ]
