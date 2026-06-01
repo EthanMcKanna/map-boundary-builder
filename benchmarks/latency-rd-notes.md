@@ -10625,3 +10625,28 @@ with zero failures in 0.531s.
   path executed. Evidence files:
   `out/prod-tesla-bayarea-fallback-health-20260601.json` and
   `out/prod-tesla-bayarea-fallback-pixel-smoke-20260601.json`.
+- Rejected the next OCR-threshold and scaled-cache probes after the Tesla Bay
+  Area fallback. The fresh production-shaped no-debug no-catalog baseline
+  `out/current-nocatalog-nodebug-postfallback-20260601/full-report.json`
+  preserved accuracy at avg/min IoU `0.945247`/`0.843889`, and every primary
+  fixture stayed under 1s, but the total gate failed at `8.628184s` versus the
+  `7.0s` target and the repeat extraction tail missed by `0.0022s`
+  (`0.102200s` max versus `0.100000s`). Raising
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` was not viable: `2000` regressed Dallas
+  Waymo IoU by `0.009910`, `1750` preserved IoU but inflated active total to
+  `13.94s`, and `1600` preserved IoU but was still slower at `8.98s`. A full
+  rescaled-result scaled-cache prototype cut isolated exact-hit extraction
+  medians by roughly 7-8ms on slow Waymo screenshots, but it did not survive
+  the current-reference gates: `out/scaled-full-cache-nodebug-probe-20260601/full-report.json`
+  kept IoU stable but had active total `12.5083s`, and
+  `out/scaled-full-cache-nodebug-gate-20260601/full-report.json` failed the
+  1s primary and repeat-extract gates with Dallas `1.359518s`, Houston
+  `1.027325s`, Phoenix `1.000327s`, and repeat extract max `0.102860s`.
+  Bright-blue detector sweeps also stayed as research only: limit `288`
+  preserved IoU but did not show a clear total-speed win
+  (`out/brightblue-det288-nodebug-probe-20260601/full-report.json`, active
+  total `9.386205s`), while limit `256` preserved IoU in
+  `out/brightblue-det256-nodebug-probe-20260601/full-report.json` but still
+  left Phoenix at `1.03s` and active total `9.24s`. Keep the current OCR
+  thresholds, detector limit, and scaled-cache contract until a broader cold
+  OCR reduction clears the strict current-reference latency gates.
