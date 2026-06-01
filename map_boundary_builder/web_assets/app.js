@@ -205,6 +205,7 @@ const CLIPBOARD_IMAGE_EXTENSIONS = new Map([
 const MAX_HISTORY_ENTRIES = 14;
 const MAX_HISTORY_BYTES = 4_400_000;
 const MAX_HISTORY_TITLE_LENGTH = 80;
+const GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS = 1200;
 const COPY_BUTTON_IDLE_HTML = copyButton.innerHTML;
 const systemThemeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 const iconAssets = {
@@ -380,7 +381,7 @@ form.addEventListener("submit", async (event) => {
 
   resetRun();
   setRunButtonState("running");
-  cancelPendingGenerationRuntimePrewarm();
+  scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true });
   startEstimatedProgress();
 
   let catalogProbeAbortController = null;
@@ -456,6 +457,7 @@ form.addEventListener("submit", async (event) => {
       step: "prepare",
       note: "Sending screenshot to the builder.",
     });
+    await waitForGenerationRuntimePrewarm({ timeoutMs: GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS });
     const { response, payload } = await postRunUpload(formData, uploadFile);
     if (!response.ok) {
       if (isFailedRunPayload(payload)) {
@@ -780,7 +782,8 @@ function setSelectedFile(file) {
 }
 
 function scheduleGenerationRuntimePrewarm(options = {}) {
-  if (generationRuntimePrewarm || isRunButtonRunning()) return;
+  const allowDuringRun = Boolean(options.allowDuringRun);
+  if (generationRuntimePrewarm || (!allowDuringRun && isRunButtonRunning())) return;
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   if (connection?.saveData) return;
 
@@ -797,7 +800,7 @@ function scheduleGenerationRuntimePrewarm(options = {}) {
     if (scheduleToken !== generationRuntimePrewarmScheduleToken) return;
     generationRuntimePrewarmIdleCallbackId = null;
     generationRuntimePrewarmTimeoutId = null;
-    if (isRunButtonRunning()) {
+    if (!allowDuringRun && isRunButtonRunning()) {
       generationRuntimePrewarmScheduled = false;
       return;
     }
@@ -837,6 +840,20 @@ function scheduleGenerationRuntimePrewarm(options = {}) {
     const delayMs = options.eager ? 0 : 400;
     generationRuntimePrewarmTimeoutId = window.setTimeout(start, delayMs);
   }
+}
+
+function waitForGenerationRuntimePrewarm(options = {}) {
+  if (!generationRuntimePrewarm) return Promise.resolve(null);
+  const timeoutMs = Math.max(0, Number(options.timeoutMs) || 0);
+  if (timeoutMs <= 0) {
+    return generationRuntimePrewarm.catch(() => null);
+  }
+  return Promise.race([
+    generationRuntimePrewarm.catch(() => null),
+    new Promise((resolve) => {
+      window.setTimeout(() => resolve(null), timeoutMs);
+    }),
+  ]);
 }
 
 function clearScheduledGenerationRuntimePrewarm() {

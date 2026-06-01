@@ -1199,7 +1199,15 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         startup_schedule = app_js.index(b"scheduleGenerationRuntimePrewarm();")
         select_schedule = app_js.index(b"scheduleGenerationRuntimePrewarm({ eager: true });")
+        submit_schedule = app_js.index(
+            b"scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true });"
+        )
         function_start = app_js.index(b"function scheduleGenerationRuntimePrewarm(options = {}) {")
+        allow_during_run = app_js.index(b"const allowDuringRun = Boolean(options.allowDuringRun);", function_start)
+        running_guard = app_js.index(
+            b"if (generationRuntimePrewarm || (!allowDuringRun && isRunButtonRunning())) return;",
+            allow_during_run,
+        )
         scheduled_guard = app_js.index(b"if (generationRuntimePrewarmScheduled) {", function_start)
         eager_guard = app_js.index(b"if (!options.eager) return;", scheduled_guard)
         clear_pending = app_js.index(b"clearScheduledGenerationRuntimePrewarm();", eager_guard)
@@ -1208,13 +1216,45 @@ class ApiRunCacheTests(unittest.TestCase):
             function_start,
         )
         eager_delay = app_js.index(b"const delayMs = options.eager ? 0 : 400;", idle_schedule)
+        running_start_guard = app_js.index(
+            b"if (!allowDuringRun && isRunButtonRunning()) {",
+            running_guard,
+        )
 
         self.assertLess(startup_schedule, select_schedule)
+        self.assertLess(startup_schedule, submit_schedule)
+        self.assertLess(submit_schedule, select_schedule)
         self.assertLess(function_start, scheduled_guard)
+        self.assertLess(function_start, allow_during_run)
+        self.assertLess(allow_during_run, running_guard)
         self.assertLess(scheduled_guard, eager_guard)
         self.assertLess(eager_guard, clear_pending)
         self.assertLess(clear_pending, idle_schedule)
         self.assertLess(idle_schedule, eager_delay)
+        self.assertLess(running_guard, running_start_guard)
+
+    def test_frontend_waits_briefly_for_runtime_prewarm_before_upload(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        wait_constant = app_js.index(b"const GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS = 1200;")
+        submit_schedule = app_js.index(
+            b"scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true });"
+        )
+        upload_status = app_js.index(b"setStatus(\"Uploading image\", 8, \"running\"", submit_schedule)
+        wait_before_upload = app_js.index(
+            b"await waitForGenerationRuntimePrewarm({ timeoutMs: GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS });",
+            upload_status,
+        )
+        upload_call = app_js.index(b"const { response, payload } = await postRunUpload(formData, uploadFile);")
+        wait_function = app_js.index(b"function waitForGenerationRuntimePrewarm(options = {}) {")
+        promise_race = app_js.index(b"return Promise.race([", wait_function)
+
+        self.assertLess(wait_constant, submit_schedule)
+        self.assertLess(submit_schedule, upload_status)
+        self.assertLess(upload_status, wait_before_upload)
+        self.assertLess(wait_before_upload, upload_call)
+        self.assertLess(wait_function, promise_race)
 
     def test_frontend_cancels_stale_scheduled_generation_prewarm_callbacks(self) -> None:
         app_js, mime = web_asset_response("app.js")

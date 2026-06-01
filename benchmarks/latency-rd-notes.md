@@ -10536,3 +10536,19 @@ with zero failures in 0.531s.
   versus `0.060820s`, max `0.144778s` versus `0.147255s`). Keep the default
   road-match sampling/cache policy until a more selective road-refine shortcut
   can preserve Nashville and avoid broad primary latency noise.
+- Accepted a frontend warmup-preservation fix for first interactive uploads.
+  Production already had `vercel.json` cron warming `/api/cron/warm-generation-v2`
+  every minute and `CRON_SECRET` present in Production, but a fresh Dallas
+  no-catalog cache miss still took `2.055739s` with `1.370577s` OCR and
+  `0.551411s` extraction
+  (`out/prod-cronwarm-nocatalog-dallas-compact-20260601.json`). A second
+  same-pixel metadata-only miss returned in `0.272196s` with `0.013722s` OCR
+  and scaled extraction cache hit
+  (`out/prod-cronwarm-nocatalog-dallas-second-compact-20260601.json`), proving
+  the per-instance warm/cache path is effective once reached. Inspection found
+  the browser scheduled `/api/health?warm=ocr` on image selection, but submit
+  immediately canceled or suppressed the warmup because the run button was
+  already in the running state. The frontend now lets the warmup run during
+  preparation and waits up to `1200ms` just before upload, so quick first
+  uploads get a bounded chance to hit the same warm path without changing
+  catalog/cache semantics.
