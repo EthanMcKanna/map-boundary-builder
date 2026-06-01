@@ -10476,3 +10476,18 @@ with zero failures in 0.531s.
   and active total `0.67s` versus the fresh baseline's `1.04115s`. This is a
   catalog-fast-path speed win only; the no-catalog arbitrary OCR path remains
   unchanged.
+- Production proof for the refine-first rotated catalog planner: commit
+  `3b30a80` deployed with Vercel CLI `54.6.1` as
+  `dpl_AvhUpmzEZnd4VqDLTMoUH8U3m2zw`, aliased to `https://mapboundary.app`.
+  Health reported `pipeline-d25a9f7b9d5cfc34`, warm status `ok`, and the
+  expected catalog/OCR generation settings. A cache-miss multipart POST of
+  `Zoox Las Vegas deployed-3b30a80.png` returned HTTP `201`, status
+  `complete`, city Las Vegas, source `catalog-shape-match`, catalog
+  `las-vegas-zoox`, shape IoU `0.999999`, margin `0.463493`, area ratio `1.0`,
+  rotation `-9.799237775281323` degrees, confidence `0.767`, and
+  `build_boundary_s: 0.59409` / `total_before_send_s: 0.600826`. The event
+  trace went directly from one extraction to `Matched known service-area shape`
+  with no retry/refine progress events, confirming the hosted planner skipped
+  the failed low-resolution probe chain. The health and compact smoke responses
+  were saved at `out/prod-refine-first-health-20260601.json` and
+  `out/prod-refine-first-las-vegas-compact-20260601.json`.
