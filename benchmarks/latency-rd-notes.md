@@ -9947,4 +9947,12 @@ with zero failures in 0.531s.
   15 analyzed repeat samples subsecond with max/median/average duration
   `0.583163s`/`0.359846s`/`0.292985s`. Warm stage maxes were OCR `0.429390s`,
   extraction `0.137160s`, georeference `0.019544s`, export `0.002162s`, and
-  inspect `0.000266s`.
+  inspect `0.000266s`. Production deployment
+  `dpl_GwzXrKQrLMxfNANb1BYv6ZxYQXRW` reported
+  `pipeline-7a0e781e9cd49dc4`; a cache-busted no-catalog Bay Area upload
+  (`out/prod-filename-hint-normalize-first-20260601.json`) completed with
+  `cache_hit: miss`, confidence `0.846`, and `build_boundary_s: 2.403690`,
+  while the same image under a differently noisy normalized filename
+  (`out/prod-filename-hint-normalize-second-20260601.json`) returned the same
+  `ocr-georeference:nominatim-label-fit` result from `cache_hit: raw` in
+  `0.004182s`.
