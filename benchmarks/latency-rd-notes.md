@@ -9826,3 +9826,25 @@ with zero failures in 0.531s.
   and improved the same broad measured total to `8.193882s` evaluated with OCR
   `5.875746s`, extraction `1.844005s`, georeference `0.439579s`, and road match
   `0.018159s`.
+- Added opt-in repeat-profile budget gates so warm-path sub-second claims can
+  be enforced directly by the benchmark CLI. New latency-budget flags cover
+  analyzed repeat samples: `--max-repeat-profile-duration-s`,
+  `--max-repeat-profile-median-duration-s`,
+  `--min-repeat-profile-pass-ratio`, and
+  `--min-repeat-profile-subsecond-ratio`. The checker now fails explicitly when
+  repeat-profile budgets are requested without a generated `repeat_profile` or
+  when required repeat-profile metrics are incomplete. Focused benchmark tests
+  passed (`42 passed`), `compileall` and
+  `git diff --check` passed, and full pytest passed
+  (`397 passed, 12 subtests passed`). The real sub-second gate
+  (`out/repeat-profile-budget-gate-20260601/full-report.json`) passed on
+  no-catalog, neutral-filename, network-blocked Phoenix/Nashville with primary
+  avg/min IoU `0.985051`/`0.983820`; after one warmup repeat per fixture, all
+  four analyzed samples passed and stayed under `1.0s`, with max duration
+  `0.686691s`, median `0.561858s`, pass ratio `1.0`, and sub-second ratio
+  `1.0`. The default-off strict broad gate
+  (`out/repeat-profile-budget-default-off-strict-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.968082`/`0.942536`, passed regression and
+  latency checks with no issues, emitted no `repeat_profile` when omitted, and
+  measured `5.920002s` evaluated with OCR `4.052240s`, extraction `1.480497s`,
+  georeference `0.356616s`, and road match `0.017862s`.

@@ -278,6 +278,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of repeat-profile samples per fixture to exclude from aggregate repeat statistics.",
     )
     parser.add_argument(
+        "--max-repeat-profile-duration-s",
+        type=float,
+        default=None,
+        help="Optional maximum analyzed repeat-profile sample duration budget.",
+    )
+    parser.add_argument(
+        "--max-repeat-profile-median-duration-s",
+        type=float,
+        default=None,
+        help="Optional maximum analyzed repeat-profile median duration budget.",
+    )
+    parser.add_argument(
+        "--min-repeat-profile-pass-ratio",
+        type=float,
+        default=None,
+        help="Optional minimum pass ratio across analyzed repeat-profile samples.",
+    )
+    parser.add_argument(
+        "--min-repeat-profile-subsecond-ratio",
+        type=float,
+        default=None,
+        help="Optional minimum ratio of analyzed repeat-profile samples under one second.",
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -480,6 +504,10 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_evaluated_duration_s is not None
         or bool(max_evaluated_stage_duration_s)
         or args.max_evaluated_road_match_s is not None
+        or args.max_repeat_profile_duration_s is not None
+        or args.max_repeat_profile_median_duration_s is not None
+        or args.min_repeat_profile_pass_ratio is not None
+        or args.min_repeat_profile_subsecond_ratio is not None
     ):
         latency_budget_check = check_report_latency_budgets(
             report,
@@ -488,6 +516,10 @@ def main(argv: list[str] | None = None) -> int:
             max_evaluated_duration_s=args.max_evaluated_duration_s,
             max_evaluated_stage_duration_s=max_evaluated_stage_duration_s,
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
+            max_repeat_profile_duration_s=args.max_repeat_profile_duration_s,
+            max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
+            min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
+            min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
         )
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
@@ -1855,6 +1887,10 @@ def check_report_latency_budgets(
     max_evaluated_duration_s: float | None = None,
     max_evaluated_stage_duration_s: dict[str, float] | None = None,
     max_evaluated_road_match_s: float | None = None,
+    max_repeat_profile_duration_s: float | None = None,
+    max_repeat_profile_median_duration_s: float | None = None,
+    min_repeat_profile_pass_ratio: float | None = None,
+    min_repeat_profile_subsecond_ratio: float | None = None,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
@@ -1871,11 +1907,46 @@ def check_report_latency_budgets(
         if max_evaluated_road_match_s is None
         else max(0.0, float(max_evaluated_road_match_s))
     )
+    repeat_profile_duration_budget = (
+        None
+        if max_repeat_profile_duration_s is None
+        else max(0.0, float(max_repeat_profile_duration_s))
+    )
+    repeat_profile_median_duration_budget = (
+        None
+        if max_repeat_profile_median_duration_s is None
+        else max(0.0, float(max_repeat_profile_median_duration_s))
+    )
+    repeat_profile_pass_ratio_budget = (
+        None
+        if min_repeat_profile_pass_ratio is None
+        else min(1.0, max(0.0, float(min_repeat_profile_pass_ratio)))
+    )
+    repeat_profile_subsecond_ratio_budget = (
+        None
+        if min_repeat_profile_subsecond_ratio is None
+        else min(1.0, max(0.0, float(min_repeat_profile_subsecond_ratio)))
+    )
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = report_evaluated_duration(report)
     evaluated_stage_durations = report_summary_stage_durations(report, "evaluated_stage_duration_s")
     evaluated_road_match = report_evaluated_road_match_elapsed(report)
+    repeat_profile_summary = report_repeat_profile_summary(report)
+    repeat_profile_analyzed_samples = repeat_profile_analyzed_sample_count(repeat_profile_summary)
+    repeat_profile_max_duration = report_repeat_profile_duration(repeat_profile_summary, "max_duration_s")
+    repeat_profile_median_duration = report_repeat_profile_duration(
+        repeat_profile_summary,
+        "median_duration_s",
+    )
+    repeat_profile_pass_ratio = report_repeat_profile_sample_ratio(
+        repeat_profile_summary,
+        "passed_samples",
+    )
+    repeat_profile_subsecond_ratio = report_repeat_profile_sample_ratio(
+        repeat_profile_summary,
+        "subsecond_samples",
+    )
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
         for row in report.get("scores", []):
@@ -1944,6 +2015,94 @@ def check_report_latency_budgets(
                     "excess_s": round(evaluated_road_match - evaluated_road_match_budget, 6),
                 }
             )
+    repeat_profile_budget_requested = any(
+        budget is not None
+        for budget in (
+            repeat_profile_duration_budget,
+            repeat_profile_median_duration_budget,
+            repeat_profile_pass_ratio_budget,
+            repeat_profile_subsecond_ratio_budget,
+        )
+    )
+    if repeat_profile_budget_requested and repeat_profile_summary is None:
+        issues.append({"kind": "repeat_profile_missing"})
+    elif repeat_profile_budget_requested and repeat_profile_analyzed_samples <= 0:
+        issues.append({"kind": "repeat_profile_analyzed_samples_missing"})
+    has_repeat_profile_samples = repeat_profile_summary is not None and repeat_profile_analyzed_samples > 0
+    if repeat_profile_duration_budget is not None and has_repeat_profile_samples:
+        if repeat_profile_max_duration is None:
+            issues.append(
+                {
+                    "kind": "repeat_profile_duration_missing",
+                    "max_repeat_profile_duration_s": repeat_profile_duration_budget,
+                }
+            )
+        elif repeat_profile_max_duration > repeat_profile_duration_budget:
+            issues.append(
+                {
+                    "kind": "repeat_profile_duration_budget_exceeded",
+                    "repeat_profile_max_duration_s": round(repeat_profile_max_duration, 6),
+                    "max_repeat_profile_duration_s": repeat_profile_duration_budget,
+                    "excess_s": round(repeat_profile_max_duration - repeat_profile_duration_budget, 6),
+                }
+            )
+    if repeat_profile_median_duration_budget is not None and has_repeat_profile_samples:
+        if repeat_profile_median_duration is None:
+            issues.append(
+                {
+                    "kind": "repeat_profile_median_duration_missing",
+                    "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
+                }
+            )
+        elif repeat_profile_median_duration > repeat_profile_median_duration_budget:
+            issues.append(
+                {
+                    "kind": "repeat_profile_median_duration_budget_exceeded",
+                    "repeat_profile_median_duration_s": round(repeat_profile_median_duration, 6),
+                    "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
+                    "excess_s": round(
+                        repeat_profile_median_duration - repeat_profile_median_duration_budget,
+                        6,
+                    ),
+                }
+            )
+    if repeat_profile_pass_ratio_budget is not None and has_repeat_profile_samples:
+        if repeat_profile_pass_ratio is None:
+            issues.append(
+                {
+                    "kind": "repeat_profile_pass_ratio_missing",
+                    "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
+                }
+            )
+        elif repeat_profile_pass_ratio < repeat_profile_pass_ratio_budget:
+            issues.append(
+                {
+                    "kind": "repeat_profile_pass_ratio_below_min",
+                    "repeat_profile_pass_ratio": round(repeat_profile_pass_ratio, 6),
+                    "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
+                    "shortfall": round(repeat_profile_pass_ratio_budget - repeat_profile_pass_ratio, 6),
+                }
+            )
+    if repeat_profile_subsecond_ratio_budget is not None and has_repeat_profile_samples:
+        if repeat_profile_subsecond_ratio is None:
+            issues.append(
+                {
+                    "kind": "repeat_profile_subsecond_ratio_missing",
+                    "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
+                }
+            )
+        elif repeat_profile_subsecond_ratio < repeat_profile_subsecond_ratio_budget:
+            issues.append(
+                {
+                    "kind": "repeat_profile_subsecond_ratio_below_min",
+                    "repeat_profile_subsecond_ratio": round(repeat_profile_subsecond_ratio, 6),
+                    "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
+                    "shortfall": round(
+                        repeat_profile_subsecond_ratio_budget - repeat_profile_subsecond_ratio,
+                        6,
+                    ),
+                }
+            )
     return {
         "passed": not issues,
         "max_duration_s": duration_budget,
@@ -1951,6 +2110,10 @@ def check_report_latency_budgets(
         "max_evaluated_duration_s": evaluated_budget,
         "max_evaluated_stage_duration_s": evaluated_stage_budgets,
         "max_evaluated_road_match_s": evaluated_road_match_budget,
+        "max_repeat_profile_duration_s": repeat_profile_duration_budget,
+        "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
+        "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
+        "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
@@ -1958,8 +2121,65 @@ def check_report_latency_budgets(
         "evaluated_road_match_elapsed_s": (
             round(evaluated_road_match, 6) if evaluated_road_match is not None else None
         ),
+        "repeat_profile_analyzed_samples": repeat_profile_analyzed_samples,
+        "repeat_profile_max_duration_s": (
+            round(repeat_profile_max_duration, 6)
+            if repeat_profile_max_duration is not None
+            else None
+        ),
+        "repeat_profile_median_duration_s": (
+            round(repeat_profile_median_duration, 6)
+            if repeat_profile_median_duration is not None
+            else None
+        ),
+        "repeat_profile_pass_ratio": (
+            round(repeat_profile_pass_ratio, 6)
+            if repeat_profile_pass_ratio is not None
+            else None
+        ),
+        "repeat_profile_subsecond_ratio": (
+            round(repeat_profile_subsecond_ratio, 6)
+            if repeat_profile_subsecond_ratio is not None
+            else None
+        ),
         "issues": issues,
     }
+
+
+def report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, Any] | None:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return None
+    summary = repeat_profile.get("summary")
+    return summary if isinstance(summary, dict) else None
+
+
+def repeat_profile_analyzed_sample_count(summary: dict[str, Any] | None) -> int:
+    if summary is None:
+        return 0
+    value = summary.get("analyzed_samples")
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def report_repeat_profile_duration(summary: dict[str, Any] | None, key: str) -> float | None:
+    if summary is None:
+        return None
+    return parse_report_duration(summary.get(key))
+
+
+def report_repeat_profile_sample_ratio(summary: dict[str, Any] | None, key: str) -> float | None:
+    analyzed_samples = repeat_profile_analyzed_sample_count(summary)
+    if summary is None or analyzed_samples <= 0:
+        return None
+    value = summary.get(key)
+    try:
+        count = max(0, int(value))
+    except (TypeError, ValueError):
+        return None
+    return min(1.0, count / analyzed_samples)
 
 
 def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:

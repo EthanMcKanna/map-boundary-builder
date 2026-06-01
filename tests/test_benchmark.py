@@ -1438,6 +1438,144 @@ def test_report_latency_budget_check_flags_road_match_excess() -> None:
     ]
 
 
+def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [{"slug": "nashville-waymo", "status": "active", "duration_s": 0.7}],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "passed_samples": 4,
+                "subsecond_samples": 3,
+                "max_duration_s": 0.98,
+                "median_duration_s": 0.7,
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_repeat_profile_duration_s=1.0,
+        max_repeat_profile_median_duration_s=0.8,
+        min_repeat_profile_pass_ratio=1.0,
+        min_repeat_profile_subsecond_ratio=0.75,
+    )
+
+    assert check["passed"] is True
+    assert check["repeat_profile_analyzed_samples"] == 4
+    assert check["repeat_profile_max_duration_s"] == 0.98
+    assert check["repeat_profile_median_duration_s"] == 0.7
+    assert check["repeat_profile_pass_ratio"] == 1.0
+    assert check["repeat_profile_subsecond_ratio"] == 0.75
+    assert check["issues"] == []
+
+
+def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [{"slug": "nashville-waymo", "status": "active", "duration_s": 0.7}],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "passed_samples": 3,
+                "subsecond_samples": 2,
+                "max_duration_s": 1.2,
+                "median_duration_s": 0.9,
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_repeat_profile_duration_s=1.0,
+        max_repeat_profile_median_duration_s=0.8,
+        min_repeat_profile_pass_ratio=1.0,
+        min_repeat_profile_subsecond_ratio=0.75,
+    )
+
+    assert check["passed"] is False
+    assert check["repeat_profile_pass_ratio"] == 0.75
+    assert check["repeat_profile_subsecond_ratio"] == 0.5
+    assert check["issues"] == [
+        {
+            "kind": "repeat_profile_duration_budget_exceeded",
+            "repeat_profile_max_duration_s": 1.2,
+            "max_repeat_profile_duration_s": 1.0,
+            "excess_s": 0.2,
+        },
+        {
+            "kind": "repeat_profile_median_duration_budget_exceeded",
+            "repeat_profile_median_duration_s": 0.9,
+            "max_repeat_profile_median_duration_s": 0.8,
+            "excess_s": 0.1,
+        },
+        {
+            "kind": "repeat_profile_pass_ratio_below_min",
+            "repeat_profile_pass_ratio": 0.75,
+            "min_repeat_profile_pass_ratio": 1.0,
+            "shortfall": 0.25,
+        },
+        {
+            "kind": "repeat_profile_subsecond_ratio_below_min",
+            "repeat_profile_subsecond_ratio": 0.5,
+            "min_repeat_profile_subsecond_ratio": 0.75,
+            "shortfall": 0.25,
+        },
+    ]
+
+
+def test_report_latency_budget_check_flags_missing_repeat_profile() -> None:
+    check = check_report_latency_budgets(
+        {"summary": {"total_duration_s": 2.5}, "scores": []},
+        max_repeat_profile_duration_s=1.0,
+    )
+
+    assert check["passed"] is False
+    assert check["repeat_profile_analyzed_samples"] == 0
+    assert check["repeat_profile_max_duration_s"] is None
+    assert check["issues"] == [{"kind": "repeat_profile_missing"}]
+
+
+def test_report_latency_budget_check_flags_incomplete_repeat_profile_metrics() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 2,
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_repeat_profile_duration_s=1.0,
+        max_repeat_profile_median_duration_s=0.8,
+        min_repeat_profile_pass_ratio=1.0,
+        min_repeat_profile_subsecond_ratio=0.75,
+    )
+
+    assert check["passed"] is False
+    assert check["issues"] == [
+        {
+            "kind": "repeat_profile_duration_missing",
+            "max_repeat_profile_duration_s": 1.0,
+        },
+        {
+            "kind": "repeat_profile_median_duration_missing",
+            "max_repeat_profile_median_duration_s": 0.8,
+        },
+        {
+            "kind": "repeat_profile_pass_ratio_missing",
+            "min_repeat_profile_pass_ratio": 1.0,
+        },
+        {
+            "kind": "repeat_profile_subsecond_ratio_missing",
+            "min_repeat_profile_subsecond_ratio": 0.75,
+        },
+    ]
+
+
 def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, monkeypatch) -> None:
     image_path = tmp_path / "Waymo Phoenix.png"
     reference_path = tmp_path / "phoenix-waymo.json"
