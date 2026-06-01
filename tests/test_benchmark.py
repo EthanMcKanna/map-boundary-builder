@@ -78,6 +78,45 @@ def test_parse_stage_duration_budgets_rejects_missing_separator() -> None:
         raise AssertionError("Expected invalid stage budget to raise ValueError")
 
 
+def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    monkeypatch.setattr(benchmark_module, "get_pipeline_version", lambda: "pipeline-test")
+    monkeypatch.setattr(
+        benchmark_module,
+        "ocr_runtime_config",
+        lambda: {"rapidocr_max_dimension": 1600},
+    )
+    monkeypatch.delenv("MAP_BOUNDARY_BLOCK_NETWORK", raising=False)
+    monkeypatch.setenv("MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES", "0")
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="extraction",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=tmp_path / "fixtures.json",
+        block_network=True,
+    )
+
+    runtime_config = report["runtime_config"]
+    generation_env = runtime_config["generation_env"]
+    assert runtime_config["pipeline_version"] == "pipeline-test"
+    assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1600}
+    assert generation_env["MAP_BOUNDARY_BLOCK_NETWORK"] == "1"
+    assert generation_env["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"] == "0"
+    assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
+
+
 def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
     row = BenchmarkScore(
         slug="phoenix-waymo",

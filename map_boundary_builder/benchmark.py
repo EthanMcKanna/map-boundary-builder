@@ -18,6 +18,8 @@ from shapely.ops import transform
 from .extract import extract_service_area
 from .georef_transform import lonlat_to_mercator
 from .network_policy import NETWORK_BLOCK_ENV
+from .pipeline_version import PIPELINE_VERSION_ENV, get_pipeline_version
+from .runtime_config import ocr_runtime_config
 
 DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons")
 DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
@@ -26,6 +28,37 @@ DEFAULT_FIXTURE_CONFIG = Path("benchmarks/service-area-fixtures.json")
 DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_IOU = 0.70
 DEFAULT_SCORED_CATALOG_EVIDENCE_MIN_AREA_RATIO = 0.85
 DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO = 1.15
+BENCHMARK_GENERATION_ENV_DEFAULTS = {
+    "MAP_BOUNDARY_BLOCK_NETWORK": "",
+    "MAP_BOUNDARY_CACHE_DIR": ".cache/map-boundary-builder",
+    "MAP_BOUNDARY_CATALOG_EXTRACT_MAX_DIMENSION": "240",
+    "MAP_BOUNDARY_CATALOG_MISS_REFINE_MAX_DIMENSION": "",
+    "MAP_BOUNDARY_CATALOG_RETRY_EXTRACT_MAX_DIMENSION": "400",
+    "MAP_BOUNDARY_EARLY_OCR_STYLE_MAX_DIMENSION": "800",
+    "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK": "",
+    "MAP_BOUNDARY_EXTRACT_MAX_DIMENSION": "0",
+    "MAP_BOUNDARY_EXTRACTION_DISK_CACHE": "",
+    "MAP_BOUNDARY_EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS": "1000000",
+    "MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1600",
+    "MAP_BOUNDARY_GEOCODE_BATCH_SIZE": "12",
+    "MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD": "3",
+    "MAP_BOUNDARY_GEOCODE_WORKERS": "6",
+    "MAP_BOUNDARY_NOMINATIM_TIMEOUT_SECONDS": "4.0",
+    "MAP_BOUNDARY_OCR_DISK_CACHE": "",
+    "MAP_BOUNDARY_PLACE_BEFORE_LIVE_TIMEOUT_SECONDS": "1.0",
+    "MAP_BOUNDARY_PLACE_FAST_PATH_TIMEOUT_SECONDS": "0.08",
+    "MAP_BOUNDARY_PROVIDER_UI_CROP_OCR_MAX_DIMENSION": "750",
+    "MAP_BOUNDARY_PROVIDER_UI_FOCUS_CROP": "1",
+    "MAP_BOUNDARY_PROVIDER_UI_GRAY_FILL_CROP_OCR_MAX_DIMENSION": "450",
+    "MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES": "1",
+    "MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS": "4000",
+    "MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS": "1000000",
+    "MAP_BOUNDARY_ROAD_REFINE_COARSE_FEATURE_SCALE": "4",
+    "MAP_BOUNDARY_ROAD_REFINE_FINE_FEATURE_SCALE": "2",
+    "MAP_BOUNDARY_ROAD_REFINE_FULL_FALLBACK_MIN_SCORE": "0.60",
+    "MAP_BOUNDARY_RUNNER_OCR_CACHE": "",
+    PIPELINE_VERSION_ENV: "",
+}
 
 IMAGE_SUFFIXES = {".avif", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 AREA_ALIASES = {
@@ -567,6 +600,7 @@ def run_benchmark(
                 )
             else:
                 scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
+        runtime_config = benchmark_runtime_config()
 
     scored = [score for score in scores if score.status == "active"]
     skipped = [score for score in scores if score.status != "active"]
@@ -609,6 +643,7 @@ def run_benchmark(
             "require_smoked_catalog_miss": require_smoked_catalog_miss,
             "block_network": block_network,
         },
+        "runtime_config": runtime_config,
         "summary": {
             "passed": passed,
             "fixtures": len(scores),
@@ -636,6 +671,21 @@ def run_benchmark(
         },
         "inventory": inventory,
         "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
+    }
+
+
+def benchmark_runtime_config() -> dict[str, Any]:
+    return {
+        "pipeline_version": get_pipeline_version(),
+        "ocr": ocr_runtime_config(),
+        "generation_env": benchmark_generation_env_config(),
+    }
+
+
+def benchmark_generation_env_config() -> dict[str, str]:
+    return {
+        name: os.environ.get(name, default)
+        for name, default in sorted(BENCHMARK_GENERATION_ENV_DEFAULTS.items())
     }
 
 

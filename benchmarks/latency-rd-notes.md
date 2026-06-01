@@ -9788,3 +9788,19 @@ with zero failures in 0.531s.
   exact avg/min IoU `0.968082`/`0.942536`, evaluated total `10.175503s`,
   evaluated OCR `7.174502s`, evaluated road match `0.023849s`, and no
   regression or latency-budget issues.
+- Added benchmark runtime snapshots so broad and targeted reports are
+  self-describing when comparing speed probes across shells, env toggles, and
+  pipeline hashes. Each report now records top-level `runtime_config` with
+  `pipeline_version`, the effective `ocr_runtime_config()`, and selected
+  `MAP_BOUNDARY_*` generation env values captured while benchmark-scoped
+  network blocking is active. Focused benchmark coverage passed (`37 passed`),
+  `compileall` and `git diff --check` passed, and full pytest passed
+  (`392 passed, 12 subtests passed`). The strict no-catalog blocked-network
+  validation (`out/benchmark-runtime-config-strict-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.968082`/`0.942536`, passed latency checks with
+  no issues, and recorded `runtime_config.pipeline_version` as
+  `pipeline-adb5779857a5505d`, `MAP_BOUNDARY_BLOCK_NETWORK=1`,
+  `MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES=1`, bright-blue detector limit `448`,
+  and effective recognition profile `en-ppocrv5`. Runtime stayed within the
+  accepted broad gate at `11.816173s` evaluated, OCR `8.905564s`, extraction
+  `2.298832s`, georeference `0.555791s`, and road match `0.023421s`.
