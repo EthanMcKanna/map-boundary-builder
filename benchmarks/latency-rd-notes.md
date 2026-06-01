@@ -10566,3 +10566,23 @@ with zero failures in 0.531s.
   response remained OK on `pipeline-d25a9f7b9d5cfc34`. Evidence files:
   `out/prod-no-wait-prewarm-appjs-check-20260601.json` and
   `out/prod-no-wait-prewarm-health-20260601.json`.
+- Rejected a no-debug scaled-extraction mask-rescale skip. The hypothesis was
+  that API/benchmark runs without overlays could keep the scaled cache mask and
+  only rescale the pixel geometry, avoiding full-size mask upsampling on warm
+  cache paths. Focused extraction and runner tests passed while the prototype
+  was present (`18` extraction tests and `64` runner-summary tests), and both
+  strict current-reference probes preserved exact avg/min IoU
+  `0.949771`/`0.794177` across all 15 fixtures. Latency regressed badly enough
+  to revert the code: `out/no-debug-mask-rescale-skip-currentref-probe-20260601/full-report.json`
+  failed with active total `10.245826s`, active extraction `1.612550s`, export
+  `2.224023s`, repeat average `0.207668s`, and repeat extraction max
+  `0.102596s` versus the accepted baseline
+  `out/bright-blue-det320-default-currentref-gate-20260601/full-report.json`
+  at active total `5.336556s`, active extraction `1.128181s`, export
+  `0.008216s`, repeat average `0.051935s`, and repeat extraction max
+  `0.066131s`. The rerun
+  `out/no-debug-mask-rescale-skip-rerun-currentref-20260601/full-report.json`
+  repeated the failure with active total `11.472724s` and multiple >1s Waymo
+  fixtures. Keep full-size mask rescaling in the extraction contract unless a
+  future design can prove lower export/repeat cost as well as identical
+  geometry.
