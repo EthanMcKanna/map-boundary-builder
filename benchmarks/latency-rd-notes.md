@@ -10088,3 +10088,13 @@ with zero failures in 0.531s.
   `0.051886s` with repeat OCR max `0.000184s`. Focused runtime/OCR/runner/API
   tests passed (`280 passed`) and the full suite passed
   (`403 passed, 12 subtests passed`).
+- Production deployment `dpl_EpnfNUojoXVQjW4ATYG5Wukicxv6` reported
+  `pipeline-22a6464e5ab0c163`, bright-blue detector limit `448`, detector type
+  `max`, warm detector limits `[608, 448]`, and runner OCR cache enabled. A
+  clean Bay Area Waymo forced-miss pair preserved the same confidence/result as
+  the previous production proof while improving live timings:
+  `out/prod-brightblue-det448-first-20260601.json` completed in `2.207084s`
+  total with OCR `1.517578s`, extraction `0.455395s`, and
+  `scaled_cache: miss-stored`; `out/prod-brightblue-det448-second-20260601.json`
+  completed in `0.278492s` total with OCR `0.004019s`, extraction `0.236148s`,
+  and `scaled_cache: hit`.
