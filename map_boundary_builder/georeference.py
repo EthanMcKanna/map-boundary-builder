@@ -584,6 +584,7 @@ def georeference_from_labels(
                 best is None
                 or score > best[0]
                 or should_prefer_named_context_result(city_context, result, score, best)
+                or should_prefer_specific_context_over_sparse_region(city_context, result, best)
             ):
                 best = (score, result, city_context)
             if is_decisive_georeference_result(result):
@@ -612,6 +613,25 @@ def should_prefer_named_context_result(
     if result.residual_p90_m > max(best_result.residual_p90_m * 1.35, best_result.residual_p90_m + 500.0):
         return False
     return len(result.control_points) >= len(best_result.control_points)
+
+
+def should_prefer_specific_context_over_sparse_region(
+    context: CityContext,
+    result: GeoreferenceResult,
+    best: tuple[float, GeoreferenceResult, CityContext],
+) -> bool:
+    _, best_result, best_context = best
+    if best_context.center.place_type.lower() != "region":
+        return False
+    if context.center.place_type.lower() == "region":
+        return False
+    if len(best_result.control_points) > 2 or len(result.control_points) < 3:
+        return False
+    if result.transform.confidence < best_result.transform.confidence - 0.04:
+        return False
+    if result.residual_median_m > 1500.0 or result.residual_p90_m > 2200.0:
+        return False
+    return context_covers_context(best_context, context)
 
 
 def anchor_labels_to_marker_dots(
@@ -1193,7 +1213,7 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
         return direct_contexts
     if should_use_direct_city_contexts(direct_contexts) and is_decisive_direct_context(direct_contexts[0]):
-        return direct_contexts
+        return direct_contexts_with_region_anchor_fallbacks(direct_contexts)
 
     candidates = geocoded_label_candidates(inference_labels)
     if should_use_direct_city_contexts(direct_contexts):
@@ -1280,6 +1300,34 @@ def expanded_contexts_from_label_cluster(
     if synthetic is not None:
         contexts.insert(0, synthetic)
     return contexts
+
+
+def direct_contexts_with_region_anchor_fallbacks(contexts: list[CityContext]) -> list[CityContext]:
+    if not contexts:
+        return []
+    top = contexts[0]
+    if top.center.place_type.lower() != "region":
+        return contexts
+    fallbacks: list[CityContext] = []
+    for component in top.center.display_name.split(",")[1:4]:
+        component = clean_query_text(component)
+        if not is_context_component(component):
+            continue
+        for result in geocode_cached_only(component, limit=2):
+            if result.bbox is None or result.place_type.lower() not in ADMIN_CONTEXT_TYPES:
+                continue
+            fallback = CityContext(
+                query=result.display_name.split(",", 1)[0].strip(),
+                center=result,
+                inferred=True,
+                evidence=top.evidence,
+            )
+            if context_covers_context(top, fallback):
+                fallbacks.append(fallback)
+                break
+        if fallbacks:
+            break
+    return dedupe_city_contexts([*contexts, *fallbacks])
 
 
 def label_cluster_extends_beyond_context(

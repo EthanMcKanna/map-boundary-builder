@@ -23,6 +23,7 @@ from map_boundary_builder.georeference import (
     control_spread,
     direct_city_contexts_from_labels,
     detect_label_marker_dots,
+    direct_contexts_with_region_anchor_fallbacks,
     filename_city_contexts,
     filename_context_queries,
     fit_similarity,
@@ -41,6 +42,7 @@ from map_boundary_builder.georeference import (
     prune_single_noisy_similarity_control,
     residual_median_p90,
     should_try_road_refinement,
+    should_prefer_specific_context_over_sparse_region,
     single_tokens_supported_by_fuller_labels,
     sparse_high_residual_fit_without_road_evidence,
     sparse_rotated_fit_without_road_evidence,
@@ -1922,6 +1924,137 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(contexts[0].query, "San Francisco Bay Area")
         self.assertEqual(contexts[0].evidence, ("Bay Area CA",))
         self.assertEqual(calls, ["Bay Area"])
+
+    def test_broad_region_context_adds_cached_anchor_city_fallback(self) -> None:
+        bay_area = CityContext(
+            query="San Francisco Bay Area",
+            center=GeocodeResult(
+                label="Bay Area",
+                lon=-122.35,
+                lat=37.78,
+                display_name="San Francisco Bay Area, San Francisco, California, United States",
+                bbox=(-123.35, 36.78, -121.35, 38.78),
+                importance=0.63,
+                place_type="region",
+            ),
+            inferred=True,
+            evidence=("Bay Area CA",),
+        )
+
+        def fake_cached(query: str, *, limit: int = 3, country_codes: str = "us"):
+            if query == "San Francisco":
+                return [
+                    GeocodeResult(
+                        label=query,
+                        lon=-122.4194,
+                        lat=37.7749,
+                        display_name="San Francisco, California, United States",
+                        bbox=(-122.52, 37.70, -122.35, 37.84),
+                        importance=0.72,
+                        place_type="city",
+                    )
+                ]
+            return []
+
+        with patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_cached):
+            contexts = direct_contexts_with_region_anchor_fallbacks([bay_area])
+
+        self.assertEqual([context.query for context in contexts], ["San Francisco Bay Area", "San Francisco"])
+        self.assertEqual(contexts[1].evidence, ("Bay Area CA",))
+
+    def test_specific_context_can_beat_sparse_region_fit(self) -> None:
+        bay_area = CityContext(
+            query="San Francisco Bay Area",
+            center=GeocodeResult(
+                label="Bay Area",
+                lon=-122.35,
+                lat=37.78,
+                display_name="San Francisco Bay Area, San Francisco, California, United States",
+                bbox=(-123.35, 36.78, -121.35, 38.78),
+                importance=0.63,
+                place_type="region",
+            ),
+            inferred=True,
+            evidence=("Bay Area CA",),
+        )
+        san_francisco = CityContext(
+            query="San Francisco",
+            center=GeocodeResult(
+                label="San Francisco",
+                lon=-122.4194,
+                lat=37.7749,
+                display_name="San Francisco, California, United States",
+                bbox=(-122.52, 37.70, -122.35, 37.84),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+            evidence=("Bay Area CA",),
+        )
+        sparse_region = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="San Francisco Bay Area",
+                lon=-122.35,
+                lat=37.78,
+                origin_x_ratio=0.5,
+                origin_y_ratio=0.5,
+                meters_per_pixel=260.0,
+                rotation_radians=0.0,
+                confidence=0.735,
+                source="ocr-georeference:nominatim-label-fit",
+            ),
+            control_points=[
+                ControlPoint(
+                    OcrLabel("Redwood City", 0, 0, 10, 10, 98),
+                    GeocodeResult("Redwood City", -122.23, 37.49, "Redwood City, California", None, 0.5),
+                ),
+                ControlPoint(
+                    OcrLabel("San Jose", 10, 10, 10, 10, 98),
+                    GeocodeResult("San Jose", -121.89, 37.34, "San Jose, California", None, 0.5),
+                ),
+            ],
+            residual_median_m=0.0,
+            residual_p90_m=0.0,
+            road_match=None,
+        )
+        specific = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="San Francisco",
+                lon=-122.42,
+                lat=37.77,
+                origin_x_ratio=0.5,
+                origin_y_ratio=0.5,
+                meters_per_pixel=260.0,
+                rotation_radians=0.03,
+                confidence=0.752,
+                source="ocr-georeference:nominatim-label-fit",
+            ),
+            control_points=[
+                ControlPoint(
+                    OcrLabel("Redwood City", 0, 0, 10, 10, 98),
+                    GeocodeResult("Redwood City", -122.23, 37.49, "Redwood City, California", None, 0.5),
+                ),
+                ControlPoint(
+                    OcrLabel("San Jose", 10, 10, 10, 10, 98),
+                    GeocodeResult("San Jose", -121.89, 37.34, "San Jose, California", None, 0.5),
+                ),
+                ControlPoint(
+                    OcrLabel("Daly City", 20, 20, 10, 10, 98),
+                    GeocodeResult("Daly City", -122.47, 37.69, "Daly City, California", None, 0.5),
+                ),
+            ],
+            residual_median_m=708.0,
+            residual_p90_m=808.0,
+            road_match=None,
+        )
+
+        self.assertTrue(
+            should_prefer_specific_context_over_sparse_region(
+                san_francisco,
+                specific,
+                (0.9, sparse_region, bay_area),
+            )
+        )
 
     def test_broad_region_control_filter_skips_merged_ocr_labels(self) -> None:
         bay_area = GeocodeResult(

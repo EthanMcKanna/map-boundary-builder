@@ -10921,3 +10921,29 @@ with zero failures in 0.531s.
   tracked as existing evidence rather than a seed regression. Focused bundled
   seed coverage passed, `compileall` and `git diff --check` passed, and full
   pytest passed (`419 passed, 18 subtests passed`).
+- Accepted a conservative broad-region anchor fallback for generic/image-only
+  Bay Area screenshots. The production-available Miami seed work exposed an
+  existing neutral-filename Bay Area Tesla weakness: with no filename hint, the
+  image-only path trusted the OCR label `Bay Area CA` as a broad direct region
+  and chose a sparse 2-control `San Francisco Bay Area` fit (IoU `0.794177`,
+  confidence `0.735`). The new logic keeps the broad region context, but when a
+  cached anchor city is present in the region display name it also tries that
+  more specific context; the chooser lets a covered 3+ control specific result
+  beat a sparse 2-control region if confidence and residuals remain healthy.
+  The focused neutral target
+  (`out/region-anchor-bayarea-neutral-rerun-20260601/full-report.json`) moved
+  `bay-area-tesla` to the 3-control `San Francisco` fit, IoU `0.843889`,
+  confidence `0.752`, residual median/p90 `708.3m`/`808.3m`. The broader
+  Bay Area neutral no-catalog gate
+  (`out/region-anchor-bayarea-neutral-gate-20260601/full-report.json`) passed
+  all three Bay Area fixtures with avg/min IoU `0.913869`/`0.843889`, preserving
+  Waymo `0.905665` and Zoox `0.992054`. The normal filename-aware no-catalog
+  regression gate (`out/region-anchor-currentref-gate-20260601/full-report.json`)
+  stayed exact against
+  `out/context-hint-runner-currentref-gate-20260601/full-report.json`: 15/15,
+  avg/min IoU `0.952958`/`0.843889`, zero regression issues. The default
+  catalog gate (`out/region-anchor-catalog-gate-20260601/full-report.json`)
+  also preserved exact avg/min IoU `0.996223`/`0.943345` with zero regression
+  issues. Focused georeference tests passed (`119 passed`), `compileall` and
+  `git diff --check` passed, and full pytest passed (`421 passed, 18 subtests
+  passed`).
