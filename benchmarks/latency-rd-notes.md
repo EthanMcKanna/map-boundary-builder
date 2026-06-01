@@ -11294,3 +11294,17 @@ with zero failures in 0.531s.
   largest stable first-pass improvement was Phoenix Waymo, which moved from
   `1.013685s`/`0.828255s` OCR to `0.959628s`/`0.776578s` OCR with identical
   IoU; Dallas was noisy in the full rerun but preserved IoU exactly.
+- Deployed the bright-blue detector default change to production as
+  `dpl_HqvJPiWy8B61yNmSRQUXDR2NhEN3`, aliased to `https://mapboundary.app`.
+  Production `/api/health` reports pipeline `pipeline-9df47e474af4206b`,
+  `rapidocr_bright_blue_detector_limit_side_len: 256`, and warm engine keys
+  `[[608, default, default], [256, en-ppocrv5, max]]`; `/api/health?warm=ocr`
+  returned `ok` with `rapidocr_inference_warmed: true` and total warm time
+  `0.010205s`. A fresh no-catalog Dallas upload using a neutral filename was a
+  cache miss, returned `city=Dallas`, confidence `0.946`, six controls, and the
+  expected OCR label set in `3.041293s` before send with stage timings
+  `inspect=0.036723s`, `extract=0.778860s`, `ocr=1.915033s`,
+  `georeference=0.015883s`, and `export=0.001116s`
+  (`out/prod-det256-dallas-upload-20260601.json`). The production smoke confirms
+  the new runtime config is live; serverless first-pass OCR on full-size Dallas
+  remains the largest tail target.
