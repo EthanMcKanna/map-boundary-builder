@@ -10401,3 +10401,16 @@ with zero failures in 0.531s.
   the changed matcher and repeated the known Miami OCR/georeference variance
   lower than the saved no-catalog baseline (`0.966714 -> 0.851050`) while still
   passing all 15 fixtures against normal accuracy thresholds.
+- Production deployment proof for the low-resolution catalog-rotation rescue:
+  commit `d2d2fcc` deployed as `dpl_3rXeUExSX89pa2GxVWVqoQvh97c5`, aliased to
+  `https://mapboundary.app`, with health reporting
+  `pipeline-acff82b329ba0089`, warm status `ok`, `warm_total_s: 1.812031`,
+  and bright-blue detector limit `320`. A live neutral-filename cache-miss POST
+  of `issue5-rotate-+2.png` returned HTTP `201`, status `complete`, city
+  Nashville, source `catalog-shape-match:low-res-shape`, catalog
+  `nashville-waymo`, shape IoU `0.947694`, margin `0.290227`, area ratio
+  `1.000259`, rotation `-2.0` degrees, confidence `0.947694`,
+  `build_boundary_s: 0.491933`, and `total_before_send_s: 0.496406`. The
+  health and smoke responses were saved at
+  `out/prod-lowres-rotation-health-20260601.json` and
+  `out/prod-lowres-rotation-plus2-20260601.json`.
