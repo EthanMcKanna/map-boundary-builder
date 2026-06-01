@@ -9985,3 +9985,23 @@ with zero failures in 0.531s.
   (`out/prod-runner-ocr-memory-second-20260601.json`) but reused OCR in the
   warm instance, completing in `0.287388s` with OCR `0.010974s` and the same
   confidence `0.846` / `ocr-georeference:nominatim-label-fit` result.
+- Added a bounded scaled-extraction memory cache for large screenshots that are
+  processed through `max_dimension` downscaling. The existing full extraction
+  cache intentionally skips untrimmed images above 1M pixels to avoid retaining
+  large full-size masks; the new cache stores only the downscaled working
+  `ExtractionResult` (default max 24 entries, 3M mask pixels per entry) and
+  rescales it per request. A targeted regression test proves a large untrimmed
+  downscaled image hits this cache without re-running extraction, while
+  `cache=False` and the existing full-size/trimmed cache behavior remain
+  unchanged. Focused extraction/API/benchmark tests passed (`122 passed`). The
+  same-code disabled control
+  (`out/scaled-extraction-cache-disabled-control-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177` and measured analyzed
+  repeat max/median/average `0.148561s`/`0.064106s`/`0.057361s`, with repeat
+  extraction max `0.095529s`. The enabled gate
+  (`out/scaled-extraction-cache-currentref-gate-20260601/full-report.json`)
+  also passed 15/15 current-reference no-catalog fixtures with exact avg/min
+  IoU `0.949771`/`0.794177`, zero regression or latency-budget issues, and a
+  tighter repeat max/median/average `0.117401s`/`0.060354s`/`0.050954s`; repeat
+  extraction max dropped to `0.065332s` under an explicit `extract=0.08s`
+  repeat-stage budget.

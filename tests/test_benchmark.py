@@ -115,6 +115,7 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     assert generation_env["MAP_BOUNDARY_BLOCK_NETWORK"] == "1"
     assert generation_env["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"] == "0"
     assert generation_env["MAP_BOUNDARY_RUNNER_OCR_CACHE"] == "1"
+    assert generation_env["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"] == "24"
     assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
 
 

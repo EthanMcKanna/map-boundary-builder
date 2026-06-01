@@ -9,6 +9,7 @@ import cv2
 import map_boundary_builder.extract as extract_module
 from map_boundary_builder.extract import (
     _EXTRACTION_MEMORY_CACHE,
+    _SCALED_EXTRACTION_MEMORY_CACHE,
     extract_service_area,
     extraction_cache_dependency_signature,
     classify_style,
@@ -216,6 +217,40 @@ class MaskRepairTests(unittest.TestCase):
                     _EXTRACTION_MEMORY_CACHE.clear()
 
         self.assertEqual(wrapped.call_count, 2)
+        self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))
+
+    def test_scaled_extraction_cache_reuses_large_downscaled_result(self) -> None:
+        base = np.full((80, 100, 3), 255, dtype=np.uint8)
+        base[24:58, 30:74] = (46, 119, 246)
+        base[0, :2] = (240, 240, 240)
+        base[-1, :2] = (240, 240, 240)
+        base[:2, 0] = (240, 240, 240)
+        base[:2, -1] = (240, 240, 240)
+
+        with TemporaryDirectory() as workdir:
+            with (
+                patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)),
+                patch.object(extract_module, "EXTRACTION_DISK_CACHE_ENABLED", False),
+                patch.object(extract_module, "EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS", 1),
+                patch.object(extract_module, "SCALED_EXTRACTION_MEMORY_CACHE_MAX", 4),
+                patch.object(extract_module, "SCALED_EXTRACTION_CACHE_MAX_PIXELS", 10_000),
+            ):
+                _EXTRACTION_MEMORY_CACHE.clear()
+                _SCALED_EXTRACTION_MEMORY_CACHE.clear()
+                try:
+                    first = extract_service_area("first.png", rgb=base, max_dimension=40)
+                    with patch.object(
+                        extract_module,
+                        "extract_service_area_from_rgb",
+                        side_effect=AssertionError("scaled cache hit should avoid extraction"),
+                    ):
+                        second = extract_service_area("second.png", rgb=base, max_dimension=40)
+                finally:
+                    _EXTRACTION_MEMORY_CACHE.clear()
+                    _SCALED_EXTRACTION_MEMORY_CACHE.clear()
+
+        self.assertEqual(second.mask.shape, base.shape[:2])
+        np.testing.assert_array_equal(first.mask, second.mask)
         self.assertTrue(first.pixel_geometry.equals_exact(second.pixel_geometry, 0.0))
 
     def test_trimmed_extraction_uses_memory_cache_above_untrimmed_limit(self) -> None:

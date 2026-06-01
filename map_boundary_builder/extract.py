@@ -26,6 +26,14 @@ EXTRACTION_CACHE_VERSION = "extraction-v1"
 EXTRACTION_BORDER_COLOR_TOLERANCE = 6
 EXTRACTION_BORDER_ROW_MATCH_RATIO = 0.995
 EXTRACTION_MEMORY_CACHE_MAX = 24
+SCALED_EXTRACTION_MEMORY_CACHE_MAX = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX", "24")),
+)
+SCALED_EXTRACTION_CACHE_MAX_PIXELS = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_SCALED_EXTRACTION_CACHE_MAX_PIXELS", "3000000")),
+)
 EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_EXTRACTION_UNTRIMMED_CACHE_MAX_PIXELS", "1000000")),
@@ -54,6 +62,16 @@ class ExtractionResult:
     coverage_ratio: float
     contour_count: int
     confidence: float
+
+
+@dataclass(frozen=True)
+class ScaledExtractionCacheEntry:
+    result: ExtractionResult
+    source_shape: tuple[int, int]
+    scale: float
+
+
+_SCALED_EXTRACTION_MEMORY_CACHE: OrderedDict[str, ScaledExtractionCacheEntry] = OrderedDict()
 
 
 def load_rgb(path: str | Path) -> np.ndarray:
@@ -155,12 +173,36 @@ def extract_service_area(
     scale = extraction_scale_factor(rgb, max_dimension)
     if scale < 1.0:
         height, width = rgb.shape[:2]
+        scaled_cache_key = (
+            scaled_extraction_cache_key(
+                rgb,
+                simplify_px=simplify_px,
+                max_dimension=max_dimension,
+            )
+            if cache
+            else None
+        )
+        if scaled_cache_key is not None:
+            scaled_cached = read_scaled_extraction_cache(
+                scaled_cache_key,
+                output_shape=rgb.shape[:2],
+                scale=scale,
+            )
+            if scaled_cached is not None:
+                return scaled_cached
         scaled_rgb = cv2.resize(
             rgb,
             (max(1, round(width * scale)), max(1, round(height * scale))),
             interpolation=cv2.INTER_AREA,
         )
         scaled = extract_service_area_from_rgb(scaled_rgb, simplify_px=simplify_px * scale)
+        if scaled_cache_key is not None:
+            remember_scaled_extraction_cache(
+                scaled_cache_key,
+                scaled,
+                source_shape=rgb.shape[:2],
+                scale=scale,
+            )
         result = rescale_extraction_result(scaled, width=width, height=height, scale=scale)
     else:
         result = extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
@@ -255,6 +297,63 @@ def extraction_visual_cache_key(
         f"{digest.hexdigest()}"
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def scaled_extraction_cache_key(
+    rgb: np.ndarray | None,
+    *,
+    simplify_px: float,
+    max_dimension: int,
+) -> str | None:
+    if rgb is None or SCALED_EXTRACTION_MEMORY_CACHE_MAX <= 0:
+        return None
+    return extraction_visual_cache_key(
+        rgb,
+        simplify_px=simplify_px,
+        max_dimension=max_dimension,
+    )
+
+
+def read_scaled_extraction_cache(
+    cache_key: str,
+    *,
+    output_shape: tuple[int, int],
+    scale: float,
+) -> ExtractionResult | None:
+    cached = _SCALED_EXTRACTION_MEMORY_CACHE.get(cache_key)
+    if cached is None:
+        return None
+    _SCALED_EXTRACTION_MEMORY_CACHE.move_to_end(cache_key)
+    if cached.source_shape != output_shape or abs(cached.scale - scale) > 1e-12:
+        return None
+    output_height, output_width = output_shape
+    return rescale_extraction_result(
+        cached.result,
+        width=output_width,
+        height=output_height,
+        scale=cached.scale,
+    )
+
+
+def remember_scaled_extraction_cache(
+    cache_key: str,
+    result: ExtractionResult,
+    *,
+    source_shape: tuple[int, int],
+    scale: float,
+) -> None:
+    if SCALED_EXTRACTION_MEMORY_CACHE_MAX <= 0:
+        return
+    if SCALED_EXTRACTION_CACHE_MAX_PIXELS <= 0 or result.mask.size > SCALED_EXTRACTION_CACHE_MAX_PIXELS:
+        return
+    _SCALED_EXTRACTION_MEMORY_CACHE[cache_key] = ScaledExtractionCacheEntry(
+        result=result,
+        source_shape=source_shape,
+        scale=scale,
+    )
+    _SCALED_EXTRACTION_MEMORY_CACHE.move_to_end(cache_key)
+    while len(_SCALED_EXTRACTION_MEMORY_CACHE) > SCALED_EXTRACTION_MEMORY_CACHE_MAX:
+        _SCALED_EXTRACTION_MEMORY_CACHE.popitem(last=False)
 
 
 def read_extraction_cache(
