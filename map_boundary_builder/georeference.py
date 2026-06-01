@@ -303,6 +303,12 @@ FILENAME_CONTEXT_ALLOWED_PHRASES = {
     ("los", "angeles"),
     ("san", "francisco"),
 }
+FILENAME_CONTEXT_FALLBACK_PHRASES = {
+    ("bay", "area"): (("san", "francisco"),),
+}
+FILENAME_CONTEXT_FALLBACK_PROVIDER_TOKENS = {
+    ("bay", "area"): {"tesla"},
+}
 NON_CONTEXT_COMPONENTS = {
     "alabama",
     "alaska",
@@ -1147,6 +1153,9 @@ def filename_context_queries(filename_hint: str | None) -> list[str]:
             parts = tuple(tokens[index : index + size])
             if parts in FILENAME_CONTEXT_ALLOWED_PHRASES:
                 add_query(parts)
+                if seen_tokens & FILENAME_CONTEXT_FALLBACK_PROVIDER_TOKENS.get(parts, set()):
+                    for fallback_parts in FILENAME_CONTEXT_FALLBACK_PHRASES.get(parts, ()):
+                        add_query(fallback_parts)
                 continue
             if any(part in FILENAME_CONTEXT_STOP_TOKENS for part in parts):
                 continue
@@ -1160,6 +1169,12 @@ def filename_context_queries(filename_hint: str | None) -> list[str]:
         if len(token) < 5:
             continue
         add_query((token,))
+    if (
+        "bay area" in seen_queries
+        and seen_tokens & FILENAME_CONTEXT_FALLBACK_PROVIDER_TOKENS[("bay", "area")]
+    ):
+        for fallback_parts in FILENAME_CONTEXT_FALLBACK_PHRASES[("bay", "area")]:
+            add_query(fallback_parts)
     return queries[:8]
 
 

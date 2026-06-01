@@ -2594,6 +2594,7 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         concatenated_area_queries = filename_context_queries(
             "upload-bayarea-tail-prune-68bd278.png"
         )
+        tesla_area_queries = filename_context_queries("Tesla Bay Area screenshot.png")
 
         self.assertIn("Dallas", queries)
         self.assertNotIn("Avride Dallas", queries)
@@ -2603,15 +2604,21 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         self.assertEqual(cache_bust_queries, ["Dallas"])
         self.assertEqual(artifact_queries, [])
         self.assertEqual(concatenated_area_queries, ["Bay Area"])
+        self.assertEqual(tesla_area_queries, ["Bay Area", "San Francisco"])
 
     def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
         dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")
         bay_area_contexts = filename_city_contexts("Waymo Bay Area screenshot.png")
+        tesla_area_contexts = filename_city_contexts("Tesla Bay Area screenshot.png")
 
         self.assertTrue(dallas_contexts)
         self.assertEqual(dallas_contexts[0].query, "Dallas")
         self.assertTrue(bay_area_contexts)
         self.assertEqual(bay_area_contexts[0].query, "San Francisco Bay Area")
+        self.assertEqual(len(bay_area_contexts), 1)
+        self.assertTrue(tesla_area_contexts)
+        self.assertEqual(tesla_area_contexts[0].query, "San Francisco Bay Area")
+        self.assertEqual(tesla_area_contexts[1].query, "San Francisco")
 
     def test_context_hint_fast_path_skips_expensive_context_inference(self) -> None:
         labels = [OcrLabel("Belmont", x=10, y=10, width=80, height=24, confidence=96)]

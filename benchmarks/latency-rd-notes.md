@@ -10586,3 +10586,25 @@ with zero failures in 0.531s.
   fixtures. Keep full-size mask rescaling in the extraction contract unless a
   future design can prove lower export/repeat cost as well as identical
   geometry.
+- Accepted a scoped Tesla Bay Area filename-context fallback for sparse
+  gray-fill regional fits. Diagnostics showed full-resolution Bay Area Tesla
+  OCR had enough labels for a three-control San Francisco context, but a bare
+  Bay Area filename only queued the broad San Francisco Bay Area region and
+  kept the two-control fit at `0.794177` IoU. The fallback now adds
+  `San Francisco` only when a filename contains both Tesla and Bay Area, leaving
+  generic/Waymo Bay Area hints on the previous single broad-region context.
+  Target probes improved Bay Area Tesla to `0.843889`/`0.843889` IoU with
+  confidence `0.752`, three controls, and centroid error `2665.6m`, while Bay
+  Area Waymo stayed at `0.905665` with 13 controls. Two stricter cold-primary
+  broad probes (`out/bayarea-filename-fallback-currentref-20260601/` and
+  `out/bayarea-filename-fallback-rerun-currentref-20260601/`) confirmed the
+  accuracy gain but were rejected as cold latency gates because unrelated OCR
+  fixtures exceeded the 1s/8s budgets. The accepted evidence gate
+  `out/tesla-bayarea-fallback-warm-accuracy-gate-20260601/full-report.json`
+  passed 15/15 current-reference no-catalog fixtures against
+  `out/current-nocatalog-repeat-profile-20260601/full-report.json` with zero
+  IoU regressions, avg/min IoU `0.945247`/`0.843889`, and all 15 analyzed warm
+  repeats subsecond: max/median/average `0.386911s`/`0.279079s`/`0.217631s`,
+  repeat extraction max `0.090822s`, and repeat OCR max `0.003682s`. Focused
+  georeference tests passed (`115 passed`), and `compileall` plus
+  `git diff --check` passed.
