@@ -10066,3 +10066,25 @@ with zero failures in 0.531s.
   second forced miss (`out/prod-trimmed-cache-bound-second-20260601.json`)
   reported `scaled_cache: hit`, the same confidence/result, and completed in
   `0.301261s` total with extraction `0.236790s` and OCR `0.011425s`.
+- Probed OCR-side cold-path speedups after the cache work made warm repeats
+  reliably subsecond. Lowering the whole RapidOCR input size is not safe:
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200`
+  (`out/rapidocr-max1200-currentref-probe-20260601/full-report.json`) dropped
+  compared-fixture average IoU from `0.949771` to `0.925018` with 9 regression
+  issues; `1400` failed Nashville and dropped average IoU to `0.924290`; even
+  `1500` still produced 5 zero-tolerance regression issues. Switching
+  bright-blue recognition to the default profile also failed with Bay Area and
+  Orlando drops and no speed win. The safe lever was the bright-blue detector
+  limit: env probes at `512`, `448`, and `384` all preserved exact avg/min IoU
+  `0.949771`/`0.794177`, and `448` was fastest in the sweep
+  (`out/rapidocr-brightblue-det448-currentref-probe-20260601/full-report.json`)
+  with active OCR `3.513432s` and active total `4.930422s`. Made `448` the new
+  default. The no-env strict current-reference gate
+  (`out/brightblue-det448-default-currentref-gate-20260601/full-report.json`)
+  passed 15/15 fixtures, preserved exact avg/min IoU, had zero regression or
+  latency-budget issues, and improved comparable active total from `6.087248s`
+  to `5.548188s` while cutting active OCR from `4.451390s` to `4.127565s`.
+  Warm repeats stayed stable: max/median/average `0.118022s`/`0.060806s`/
+  `0.051886s` with repeat OCR max `0.000184s`. Focused runtime/OCR/runner/API
+  tests passed (`280 passed`) and the full suite passed
+  (`403 passed, 12 subtests passed`).
