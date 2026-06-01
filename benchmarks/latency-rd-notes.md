@@ -9768,3 +9768,23 @@ with zero failures in 0.531s.
   evaluated stage totals under budgets: OCR `13.144680s` under `15s`,
   extraction `2.917684s` under `4s`, georeference `0.776873s` under `1.2s`,
   export `0.025535s` under `0.1s`, and inspect `0.013264s` under `0.1s`.
+- Road-feature precompute contention probe: disabling the bright-blue
+  background road-feature precompute was tested because that work races OCR and
+  is only used if later OSM road refinement fires. A monkeypatched strict run
+  with precompute disabled (`out/no-road-precompute-strict-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.968082`/`0.942536` and passed the same stage
+  and road gates at `12.460060s` evaluated / `9.317411s` evaluated OCR, but
+  the matched default control
+  (`out/road-precompute-control-strict-20260601/full-report.json`) was faster
+  at `10.571912s` evaluated / `7.829736s` evaluated OCR with road match only
+  `0.024068s`. No default changed. To make future A/Bs safer than monkeypatch
+  probes, the runtime now exposes `MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES`
+  (default `1`) and includes it in `generation_env` / run-result cache keys.
+  The env-off target check
+  (`out/precompute-env-off-target-20260601/full-report.json`) preserved
+  Phoenix/Nashville IoU at `0.985051` avg / `0.983820` min with road match
+  `0.156781s`, and the default strict gate after adding the switch
+  (`out/precompute-default-strict-gate-20260601/full-report.json`) passed with
+  exact avg/min IoU `0.968082`/`0.942536`, evaluated total `10.175503s`,
+  evaluated OCR `7.174502s`, evaluated road match `0.023849s`, and no
+  regression or latency-budget issues.

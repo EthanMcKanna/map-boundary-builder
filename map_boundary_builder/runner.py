@@ -169,6 +169,7 @@ AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES = 150
 FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO = 0.85
 FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO = 1.15
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
+ROAD_FEATURE_PRECOMPUTE_ENV = "MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
 EARLY_OCR_STYLE_MAX_DIMENSION = max(
     0,
@@ -1269,7 +1270,14 @@ def should_try_label_hinted_catalog(width: int, height: int, labels: list[Any]) 
 
 
 def should_precompute_road_features(style: str, width: int, height: int) -> bool:
-    return style == "bright-blue" and max(width, height) >= 1000
+    return road_feature_precompute_enabled() and style == "bright-blue" and max(width, height) >= 1000
+
+
+def road_feature_precompute_enabled() -> bool:
+    value = os.environ.get(ROAD_FEATURE_PRECOMPUTE_ENV)
+    if value is None:
+        return True
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def ready_future_result(future: Future[Any] | None) -> Any | None:

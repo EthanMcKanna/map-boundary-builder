@@ -323,6 +323,22 @@ def test_runner_ocr_cache_can_be_enabled_for_disk_or_override(monkeypatch) -> No
     assert runner.runner_ocr_cache_enabled() is True
 
 
+def test_road_feature_precompute_default_and_env_override(monkeypatch) -> None:
+    monkeypatch.delenv("MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES", raising=False)
+    assert runner.road_feature_precompute_enabled() is True
+    assert runner.should_precompute_road_features("bright-blue", 1000, 800) is True
+    assert runner.should_precompute_road_features("gray-fill", 1000, 800) is False
+    assert runner.should_precompute_road_features("bright-blue", 999, 800) is False
+
+    monkeypatch.setenv("MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES", "0")
+    assert runner.road_feature_precompute_enabled() is False
+    assert runner.should_precompute_road_features("bright-blue", 1000, 800) is False
+
+    monkeypatch.setenv("MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES", "true")
+    assert runner.road_feature_precompute_enabled() is True
+    assert runner.should_precompute_road_features("bright-blue", 1000, 800) is True
+
+
 def test_classify_style_for_ocr_uses_bounded_sample(monkeypatch) -> None:
     rgb = np.zeros((1600, 3200, 3), dtype=np.uint8)
     calls: list[tuple[int, ...]] = []

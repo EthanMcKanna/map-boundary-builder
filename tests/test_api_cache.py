@@ -953,6 +953,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["fast_text_ocr_fallback_confidence"], 0.70)
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION"], "1600")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_GEOCODE_WORKERS"], "6")
+        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"], "1")
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
         self.assertIn("cv2", cold["runtime_dependencies"])
         self.assertIn("rapidocr-onnxruntime", cold["runtime_dependencies"])
