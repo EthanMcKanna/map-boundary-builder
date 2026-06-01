@@ -10215,3 +10215,16 @@ with zero failures in 0.531s.
   preserved exact avg/min IoU `0.949771`/`0.794177` with zero regression or
   latency-budget issues. All 15 analyzed repeat samples stayed subsecond with
   max/median/average `0.120488s`/`0.065364s`/`0.053866s`.
+- Production deployment `dpl_CSZYreyGuMUUAzkDupEw93MHdgBh` reported
+  `pipeline-6fcabf2409d53692`, warm status `ok`, `warm_total_s: 2.036668`,
+  `rapidocr_warm_sample_max_dimension: 608`, and the expected warm engine keys
+  `[[608, default, default], [448, en-ppocrv5, max]]`. The production
+  threshold-compatibility pair against Bay Area Waymo proved the new cache
+  namespace end-to-end: `out/prod-success-compatible-first-20260601.json`
+  missed cache and completed in `2.386760s` before send with OCR `1.605206s`,
+  extraction `0.537447s`, confidence `0.846`, 13 controls, and
+  `ocr-georeference:nominatim-label-fit`; then
+  `out/prod-success-compatible-second-20260601.json` changed only
+  `min_confidence`, returned `cache_hit: raw-compatible`, backfilled the exact
+  raw key in `0.000653s`, and completed in `0.005100s` before send with the
+  same confidence/source/control points and no generation stage.
