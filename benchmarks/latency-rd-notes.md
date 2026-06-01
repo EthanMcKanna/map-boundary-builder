@@ -10720,3 +10720,17 @@ with zero failures in 0.531s.
   Focused and full tests passed (`tests/test_catalog_match.py`,
   `tests/test_runner_summary.py`: `92 passed`; full suite: `415 passed, 12
   subtests passed`), and `compileall` plus `git diff --check` passed.
+- Production deployment proof for the tiny low-res shape threshold: commit
+  `f226124` deployed with Vercel CLI `54.6.1` as
+  `dpl_3sghT6E3f56mcHUwsfunrLynHF3H`, aliased to
+  `https://mapboundary.app`. Health reported
+  `pipeline-87fdaa29a30bafed`, PP-OCRv5 bright-blue assets available, runner
+  OCR cache enabled, and warm `status: ok` in `2.081068s`
+  (`out/prod-tiny-lowres-threshold-health-20260601.json`). A cache-busted
+  300px Nashville issue #5 variant uploaded with `include_overlay=0` and
+  `normalized_cache_lookup=0` returned HTTP success on a production miss:
+  `build_boundary_s: 0.028353`, `total_before_send_s: 0.032213`, source
+  `catalog-shape-match:low-res-shape`, slug `nashville-waymo`, shape IoU
+  `0.926621`, margin `0.258297`, area ratio `1.035651`, and bbox
+  `[-86.8461084, 36.1089989, -86.6904545, 36.242681]`
+  (`out/prod-tiny-lowres-threshold-resize300-smoke-20260601.json`).
