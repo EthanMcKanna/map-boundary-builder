@@ -11253,3 +11253,11 @@ with zero failures in 0.531s.
   regression issues against
   `out/focus-georef-ocr-cap550-catalog-20260601/full-report.json`
   (`out/focus-georef-ocr-det416-min500-final-catalog-20260601/full-report.json`).
+  Production deployment `dpl_N4wjhWCK5CJPti8tzpsDwe9tQ6dF` exposed pipeline
+  `pipeline-2423b1ccf10010f6` and the focused env knobs in `/api/health`. A
+  fresh Ann Arbor production upload was a cache miss, showed focused OCR details
+  `rapidocr_max_dimension=550`, `rapidocr_detector_limit_side_len=416`, and
+  `rapidocr_min_text_area=500`, preserved the local 3-control bbox/confidence,
+  and improved the prior production cap smoke from `3.342466s` to `2.716547s`
+  before send, with OCR down from `1.949213s` to `1.540037s`
+  (`out/prod-focusdet416-min500-ann-arbor-upload-20260601.json`).
