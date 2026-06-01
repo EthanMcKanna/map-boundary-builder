@@ -10414,3 +10414,25 @@ with zero failures in 0.531s.
   health and smoke responses were saved at
   `out/prod-lowres-rotation-health-20260601.json` and
   `out/prod-lowres-rotation-plus2-20260601.json`.
+- Rejected a Miami no-catalog OCR/georeference rescue that relaxed stacked-label
+  overlap and let the cached geocoder collect five controls before yielding to
+  OSM place controls. Fresh diagnostics confirmed the current bright-blue OCR
+  words contain `Miami` over `Gardens`, `Biscayne` over `Gardens`, and
+  `Coeonut` over `Grove`; the existing `-8px` stacked-label overlap floor just
+  misses the first two, while a `-12px` prototype emits `Miami Gardens` and
+  `Biscayne Gardens`. Pairing that with a non-merge geocode stop of five
+  controls improved the fresh current Miami no-catalog score from the repeated
+  `0.851050` fit to `0.950473` with confidence `0.902`, five controls,
+  residual median/p90 `365.421m`/`1259.917m`, and active total `0.734s`
+  (`out/stacked5-miami-currentref-probe-20260601/full-report.json`). The broad
+  current-reference gate preserved latency budgets and had no drops versus the
+  fresh post-rotation no-catalog audit
+  (`out/lowres-rotation-floor092-currentref-gate-20260601/full-report.json`),
+  improving only Miami by `+0.099423` IoU and average IoU
+  `0.942060 -> 0.948689`. It still failed the stricter saved bright-blue
+  baseline (`out/bright-blue-det320-default-currentref-gate-20260601/full-report.json`)
+  because that earlier report had a higher cached/evidence Miami fit:
+  `0.966714 -> 0.950473`, dropping compared average IoU
+  `0.949771 -> 0.948689`. The code/test prototype was therefore reverted and
+  not deployed; keep the evidence as a lead for a future fix that can match or
+  beat the older eight-control Miami fit without weakening regression policy.
