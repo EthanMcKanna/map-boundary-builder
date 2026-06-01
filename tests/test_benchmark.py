@@ -117,6 +117,83 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
 
 
+def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    config_path = tmp_path / "fixtures.json"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "phoenix-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Phoenix.png").write_bytes(b"not an image")
+    durations = iter([2.0, 1.2, 0.8])
+    calls = []
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        calls.append((fixture.slug, kwargs["execution"], kwargs["score_reference"]))
+        duration = next(durations)
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=0.99,
+            area_ratio=1.0,
+            centroid_distance_m=0.0,
+            vertices=42,
+            style="bright-blue",
+            duration_s=duration,
+            georeference_source="ocr-georeference:nominatim-label-fit",
+            combined_confidence=0.86,
+            catalog_slug=None,
+            road_match_score=0.7,
+            road_match_elapsed_s=0.05,
+            stage_elapsed_s={"ocr": duration / 2},
+            status=fixture.status,
+            note=fixture.note,
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=config_path,
+        execution="in-process",
+        repeat_profile_runs=2,
+        repeat_profile_warmups=1,
+    )
+
+    assert calls == [
+        ("phoenix-waymo", "in-process", True),
+        ("phoenix-waymo", "in-process", True),
+        ("phoenix-waymo", "in-process", True),
+    ]
+    assert report["summary"]["total_duration_s"] == 2.0
+    assert report["thresholds"]["repeat_profile_runs"] == 2
+    assert report["thresholds"]["repeat_profile_warmups"] == 1
+    repeat_profile = report["repeat_profile"]
+    assert repeat_profile["runs_per_fixture"] == 2
+    assert repeat_profile["warmup_runs_per_fixture"] == 1
+    assert repeat_profile["summary"]["samples"] == 2
+    assert repeat_profile["summary"]["analyzed_samples"] == 1
+    assert repeat_profile["summary"]["passed_samples"] == 1
+    assert repeat_profile["summary"]["subsecond_samples"] == 1
+    assert repeat_profile["summary"]["subsecond_fixture_min_duration_count"] == 1
+    assert repeat_profile["summary"]["min_duration_s"] == 0.8
+    assert repeat_profile["fixtures"]["phoenix-waymo"]["min_iou"] == 0.99
+    assert repeat_profile["samples"][0]["warmup"] is True
+    assert repeat_profile["samples"][1]["repeat_index"] == 2
+
+
 def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
     row = BenchmarkScore(
         slug="phoenix-waymo",

@@ -9804,3 +9804,25 @@ with zero failures in 0.531s.
   and effective recognition profile `en-ppocrv5`. Runtime stayed within the
   accepted broad gate at `11.816173s` evaluated, OCR `8.905564s`, extraction
   `2.298832s`, georeference `0.555791s`, and road match `0.023421s`.
+- Added a default-off repeat profiler to the benchmark harness so warm
+  production-instance latency can be measured reproducibly instead of through
+  ad hoc repeated shell snippets. `--repeat-profile-runs N` now works only with
+  `--mode full --execution in-process` and records observational
+  `repeat_profile` samples plus per-fixture/overall analyzed stats; normal
+  score gates still use the primary pass. `--repeat-profile-warmups N` excludes
+  early repeat samples from the aggregate warm-path statistics. Focused
+  benchmark coverage passed (`38 passed`), `compileall` and `git diff --check`
+  passed, and full pytest passed (`393 passed, 12 subtests passed`). A targeted
+  no-catalog, neutral-filename, network-blocked Phoenix/Nashville profile
+  (`out/repeat-profile-phoenix-nashville-20260601/full-report.json`) passed
+  with primary avg/min IoU `0.985051`/`0.983820`; after one warmup repeat per
+  fixture, all four analyzed repeat samples were sub-second with min/median/max
+  durations `0.393957s`/`0.609385s`/`0.796590s`, zero failed samples, min repeat
+  IoU `0.983820`, Nashville analyzed repeats `0.393957s` and `0.456065s`, and
+  Phoenix analyzed repeats `0.762705s` and `0.796590s`. The default-off strict
+  broad gate (`out/repeat-profile-default-off-strict-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.968082`/`0.942536`, passed regression and
+  latency checks with no issues, recorded no `repeat_profile` key when omitted,
+  and improved the same broad measured total to `8.193882s` evaluated with OCR
+  `5.875746s`, extraction `1.844005s`, georeference `0.439579s`, and road match
+  `0.018159s`.

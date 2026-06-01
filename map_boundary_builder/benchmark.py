@@ -9,7 +9,7 @@ import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from statistics import mean
+from statistics import mean, median
 from typing import Any
 
 from shapely.geometry import MultiPolygon, Polygon, shape
@@ -263,6 +263,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Block live geocoder/Overpass fallbacks during full benchmark generation.",
     )
     parser.add_argument(
+        "--repeat-profile-runs",
+        type=int,
+        default=0,
+        help=(
+            "For --mode full with --execution in-process, rerun each evaluated fixture this many "
+            "additional times and record warm-instance latency samples without changing score gates."
+        ),
+    )
+    parser.add_argument(
+        "--repeat-profile-warmups",
+        type=int,
+        default=0,
+        help="Number of repeat-profile samples per fixture to exclude from aggregate repeat statistics.",
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -395,6 +410,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     except ValueError as exc:
         parser.error(str(exc))
+    if args.repeat_profile_runs < 0:
+        parser.error("--repeat-profile-runs must be non-negative")
+    if args.repeat_profile_warmups < 0:
+        parser.error("--repeat-profile-warmups must be non-negative")
+    if args.repeat_profile_runs and args.mode != "full":
+        parser.error("--repeat-profile-runs requires --mode full")
+    if args.repeat_profile_runs and args.execution != "in-process":
+        parser.error("--repeat-profile-runs requires --execution in-process")
     report = run_benchmark(
         polygon_dir=args.polygon_dir,
         image_dir=args.image_dir,
@@ -422,6 +445,8 @@ def main(argv: list[str] | None = None) -> int:
         max_scored_catalog_area_ratio=args.max_scored_catalog_area_ratio,
         require_smoked_catalog_miss=args.require_smoked_catalog_miss,
         block_network=args.block_network,
+        repeat_profile_runs=args.repeat_profile_runs,
+        repeat_profile_warmups=args.repeat_profile_warmups,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -502,7 +527,17 @@ def run_benchmark(
     max_scored_catalog_area_ratio: float = DEFAULT_SCORED_CATALOG_EVIDENCE_MAX_AREA_RATIO,
     require_smoked_catalog_miss: bool = False,
     block_network: bool = False,
+    repeat_profile_runs: int = 0,
+    repeat_profile_warmups: int = 0,
 ) -> dict[str, Any]:
+    if repeat_profile_runs < 0:
+        raise ValueError("repeat_profile_runs must be non-negative")
+    if repeat_profile_warmups < 0:
+        raise ValueError("repeat_profile_warmups must be non-negative")
+    if repeat_profile_runs and mode != "full":
+        raise ValueError("repeat_profile_runs requires mode='full'")
+    if repeat_profile_runs and execution != "in-process":
+        raise ValueError("repeat_profile_runs requires execution='in-process'")
     require_scored_catalog_evidence = bool(
         require_scored_catalog_evidence or score_skipped_catalog_references
     )
@@ -516,6 +551,7 @@ def run_benchmark(
         inventory["filtered_from"] = before_count
         inventory["only_filters"] = filters
     scores: list[BenchmarkScore] = []
+    repeat_targets: list[dict[str, Any]] = []
     with benchmark_network_policy(block_network):
         for fixture in fixtures:
             if fixture.status != "active":
@@ -553,6 +589,13 @@ def run_benchmark(
                             max_area_ratio=max_scored_catalog_area_ratio,
                         )
                     scores.append(score)
+                    repeat_targets.append(
+                        {
+                            "fixture": score_fixture,
+                            "score_reference": True,
+                            "reference_geometry": catalog_reference,
+                        }
+                    )
                 elif mode == "full" and smoke_skipped:
                     score = score_full_fixture(
                         fixture,
@@ -578,6 +621,13 @@ def run_benchmark(
                             ),
                         )
                     scores.append(score)
+                    repeat_targets.append(
+                        {
+                            "fixture": fixture,
+                            "score_reference": False,
+                            "reference_geometry": None,
+                        }
+                    )
                 else:
                     scores.append(skipped_fixture_score(fixture, mode=mode))
                 continue
@@ -598,8 +648,34 @@ def run_benchmark(
                         score_reference=True,
                     )
                 )
+                repeat_targets.append(
+                    {
+                        "fixture": fixture,
+                        "score_reference": True,
+                        "reference_geometry": None,
+                    }
+                )
             else:
                 scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
+        repeat_profile = (
+            build_repeat_profile(
+                repeat_targets,
+                runs_per_fixture=repeat_profile_runs,
+                warmup_runs_per_fixture=repeat_profile_warmups,
+                out_dir=out_dir,
+                min_iou=min_iou,
+                timeout_seconds=timeout_seconds,
+                city_overrides=city_overrides,
+                no_catalog=no_catalog,
+                catalog_probe_missed=catalog_probe_missed,
+                catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                neutral_filename_hint=neutral_filename_hint,
+                execution=execution,
+                debug_artifacts=debug_artifacts,
+            )
+            if repeat_profile_runs
+            else None
+        )
         runtime_config = benchmark_runtime_config()
 
     scored = [score for score in scores if score.status == "active"]
@@ -623,7 +699,7 @@ def run_benchmark(
     active_passed = bool(scored) and failed_count == 0 and average_iou >= mean_iou
     smoke_only_passed = not scored and bool(smoke_validated) and smoke_failed_count == 0
     passed = (active_passed or smoke_only_passed) and smoke_failed_count == 0
-    return {
+    report = {
         "mode": mode,
         "thresholds": {
             "min_iou": min_iou,
@@ -642,6 +718,8 @@ def run_benchmark(
             "max_scored_catalog_area_ratio": max(0.0, float(max_scored_catalog_area_ratio)),
             "require_smoked_catalog_miss": require_smoked_catalog_miss,
             "block_network": block_network,
+            "repeat_profile_runs": repeat_profile_runs,
+            "repeat_profile_warmups": repeat_profile_warmups,
         },
         "runtime_config": runtime_config,
         "summary": {
@@ -671,6 +749,165 @@ def run_benchmark(
         },
         "inventory": inventory,
         "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
+    }
+    if repeat_profile is not None:
+        report["repeat_profile"] = repeat_profile
+    return report
+
+
+def build_repeat_profile(
+    targets: list[dict[str, Any]],
+    *,
+    runs_per_fixture: int,
+    warmup_runs_per_fixture: int,
+    out_dir: Path,
+    min_iou: float,
+    timeout_seconds: int,
+    city_overrides: bool,
+    no_catalog: bool,
+    catalog_probe_missed: bool,
+    catalog_probe_miss_low_iou: bool,
+    neutral_filename_hint: bool,
+    execution: str,
+    debug_artifacts: bool,
+) -> dict[str, Any]:
+    samples: list[dict[str, Any]] = []
+    for target in targets:
+        fixture = target["fixture"]
+        for repeat_index in range(1, runs_per_fixture + 1):
+            score = score_full_fixture(
+                fixture,
+                out_dir=out_dir,
+                min_iou=min_iou,
+                timeout_seconds=timeout_seconds,
+                city_overrides=city_overrides,
+                no_catalog=no_catalog,
+                catalog_probe_missed=catalog_probe_missed,
+                catalog_probe_miss_low_iou=catalog_probe_miss_low_iou,
+                neutral_filename_hint=neutral_filename_hint,
+                execution=execution,
+                debug_artifacts=debug_artifacts,
+                score_reference=bool(target["score_reference"]),
+                reference_geometry=target.get("reference_geometry"),
+            ).as_dict()
+            score = {
+                "repeat_index": repeat_index,
+                "warmup": repeat_index <= warmup_runs_per_fixture,
+                **score,
+            }
+            samples.append(score)
+    return summarize_repeat_profile_samples(
+        samples,
+        runs_per_fixture=runs_per_fixture,
+        warmup_runs_per_fixture=warmup_runs_per_fixture,
+    )
+
+
+def summarize_repeat_profile_samples(
+    samples: list[dict[str, Any]],
+    *,
+    runs_per_fixture: int,
+    warmup_runs_per_fixture: int,
+) -> dict[str, Any]:
+    fixture_samples: dict[str, list[dict[str, Any]]] = {}
+    for sample in samples:
+        slug = str(sample.get("slug") or "")
+        if not slug:
+            continue
+        fixture_samples.setdefault(slug, []).append(sample)
+    fixture_summaries = {
+        slug: summarize_repeat_profile_sample_group(slug_samples)
+        for slug, slug_samples in sorted(fixture_samples.items())
+    }
+    analyzed_samples = repeat_profile_analyzed_samples(samples)
+    subsecond_fixture_count = sum(
+        1
+        for fixture_summary in fixture_summaries.values()
+        if parse_report_duration(fixture_summary.get("min_duration_s")) is not None
+        and float(fixture_summary["min_duration_s"]) < 1.0
+    )
+    return {
+        "runs_per_fixture": runs_per_fixture,
+        "warmup_runs_per_fixture": warmup_runs_per_fixture,
+        "summary": {
+            "fixtures": len(fixture_summaries),
+            "samples": len(samples),
+            "analyzed_samples": len(analyzed_samples),
+            "passed_samples": count_passed_samples(analyzed_samples),
+            "failed_samples": len(analyzed_samples) - count_passed_samples(analyzed_samples),
+            "subsecond_samples": count_subsecond_samples(analyzed_samples),
+            "subsecond_fixture_min_duration_count": subsecond_fixture_count,
+            **repeat_profile_duration_stats(analyzed_samples),
+            **repeat_profile_iou_stats(analyzed_samples),
+        },
+        "fixtures": fixture_summaries,
+        "samples": samples,
+    }
+
+
+def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    analyzed_samples = repeat_profile_analyzed_samples(samples)
+    return {
+        "samples": len(samples),
+        "analyzed_samples": len(analyzed_samples),
+        "passed_samples": count_passed_samples(analyzed_samples),
+        "failed_samples": len(analyzed_samples) - count_passed_samples(analyzed_samples),
+        "subsecond_samples": count_subsecond_samples(analyzed_samples),
+        **repeat_profile_duration_stats(analyzed_samples),
+        **repeat_profile_iou_stats(analyzed_samples),
+    }
+
+
+def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [sample for sample in samples if not sample.get("warmup")]
+
+
+def count_passed_samples(samples: list[dict[str, Any]]) -> int:
+    return sum(sample.get("passed") is True for sample in samples)
+
+
+def count_subsecond_samples(samples: list[dict[str, Any]]) -> int:
+    return sum(
+        duration is not None and duration < 1.0
+        for duration in (parse_report_duration(sample.get("duration_s")) for sample in samples)
+    )
+
+
+def repeat_profile_duration_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
+    durations = [
+        duration
+        for duration in (parse_report_duration(sample.get("duration_s")) for sample in samples)
+        if duration is not None
+    ]
+    if not durations:
+        return {
+            "min_duration_s": None,
+            "median_duration_s": None,
+            "average_duration_s": None,
+            "max_duration_s": None,
+        }
+    return {
+        "min_duration_s": round(min(durations), 6),
+        "median_duration_s": round(float(median(durations)), 6),
+        "average_duration_s": round(float(mean(durations)), 6),
+        "max_duration_s": round(max(durations), 6),
+    }
+
+
+def repeat_profile_iou_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
+    ious = [
+        iou
+        for iou in (parse_report_duration(sample.get("iou")) for sample in samples)
+        if iou is not None
+    ]
+    if not ious:
+        return {
+            "min_iou": None,
+            "average_iou": None,
+        }
+    return {
+        "min_iou": round(min(ious), 6),
+        "average_iou": round(float(mean(ious)), 6),
     }
 
 
