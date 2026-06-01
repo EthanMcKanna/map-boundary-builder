@@ -303,14 +303,14 @@ def test_sparse_low_res_label_catalog_match_rejects_larger_map_crops() -> None:
     assert runner.sparse_low_res_label_catalog_match(extraction, labels, width=420, height=236) is None
 
 
-def test_runner_ocr_cache_defaults_off_without_disk_cache(monkeypatch) -> None:
+def test_runner_ocr_cache_defaults_on_without_disk_cache(monkeypatch) -> None:
     monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
     monkeypatch.delenv("MAP_BOUNDARY_OCR_DISK_CACHE", raising=False)
 
-    assert runner.runner_ocr_cache_enabled() is False
+    assert runner.runner_ocr_cache_enabled() is True
 
 
-def test_runner_ocr_cache_can_be_enabled_for_disk_or_override(monkeypatch) -> None:
+def test_runner_ocr_cache_can_be_disabled_or_enabled_by_override(monkeypatch) -> None:
     monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
     monkeypatch.setenv("MAP_BOUNDARY_OCR_DISK_CACHE", "1")
     assert runner.runner_ocr_cache_enabled() is True
@@ -664,7 +664,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
-            "cache": False,
+            "cache": True,
         }
     ]
 
@@ -737,7 +737,7 @@ def test_catalog_probe_miss_label_shape_shortcut_uses_one_low_detail_ocr(tmp_pat
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
-            "cache": False,
+            "cache": True,
         }
     ]
 
@@ -2175,7 +2175,7 @@ def test_purple_fill_catalog_miss_uses_smaller_ocr_dimension(tmp_path, monkeypat
 
     build_boundary(image_path, None, output_path)
 
-    assert ocr_kwargs == [{"rapidocr_max_dimension": 800, "cache": False}]
+    assert ocr_kwargs == [{"rapidocr_max_dimension": 800, "cache": True}]
 
 
 def test_unsupported_style_catalog_miss_skips_catalog_retry(tmp_path, monkeypatch) -> None:
@@ -2304,6 +2304,6 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
-            "cache": False,
+            "cache": True,
         }
     ]

@@ -9956,3 +9956,23 @@ with zero failures in 0.531s.
   (`out/prod-filename-hint-normalize-second-20260601.json`) returned the same
   `ocr-georeference:nominatim-label-fit` result from `cache_hit: raw` in
   `0.004182s`.
+- Probed enabling the runner OCR cache by default as a warm-instance speed
+  lever. The OCR layer already keeps a bounded memory cache and disk caching
+  remains off unless `MAP_BOUNDARY_OCR_DISK_CACHE=1`; this change only flips
+  the runner's default from `cache=False` to `cache=True`, with
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=0` still available for cold-path profiling.
+  The env-only prototype
+  (`out/runner-ocr-memory-cache-probe-20260601/full-report.json`) preserved
+  exact avg/min IoU `0.949771`/`0.794177` and cut analyzed repeat max/median
+  from the prior no-cache gate's `0.583163s`/`0.359846s` to
+  `0.150030s`/`0.066324s`; repeat OCR max dropped from `0.429390s` to
+  `0.000098s`. After making the default explicit, the no-env broad gate
+  (`out/runner-ocr-memory-cache-default-gate-20260601/full-report.json`)
+  passed 15/15 current-reference no-catalog fixtures, preserved exact avg/min
+  IoU `0.949771`/`0.794177`, had zero regression or latency-budget issues, and
+  recorded `MAP_BOUNDARY_RUNNER_OCR_CACHE: "1"`. All 15 analyzed repeat samples
+  stayed subsecond with max/median/average duration
+  `0.144695s`/`0.064483s`/`0.056881s`; warm stage maxes were OCR `0.000079s`,
+  extraction `0.092757s`, georeference `0.050894s`, export `0.000791s`, and
+  inspect `0.000258s`. Focused runner/API/benchmark tests passed
+  (`168 passed`).

@@ -1515,12 +1515,7 @@ def runner_ocr_cache_enabled() -> bool:
     value = os.environ.get(RUNNER_OCR_CACHE_ENV)
     if value is not None:
         return value.strip().lower() in {"1", "true", "yes", "on"}
-    return os.environ.get("MAP_BOUNDARY_OCR_DISK_CACHE", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return True
 
 
 def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
