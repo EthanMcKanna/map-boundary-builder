@@ -10608,3 +10608,20 @@ with zero failures in 0.531s.
   repeat extraction max `0.090822s`, and repeat OCR max `0.003682s`. Focused
   georeference tests passed (`115 passed`), and `compileall` plus
   `git diff --check` passed.
+- Production deployment proof for the scoped Tesla Bay Area fallback: commit
+  `f5b068b` deployed with Vercel CLI `54.6.1` as
+  `dpl_57KgqcE3DF19uraieEk27LKZbgCZ`, aliased to `https://mapboundary.app`.
+  Health reported `pipeline-2201bd4085da21e1`, PP-OCRv5 assets available,
+  effective bright-blue recognizer `en-ppocrv5`, runner OCR cache enabled, and
+  warm `status: ok` in `1.910948s`. A live no-catalog Tesla Bay Area
+  one-pixel cache-miss upload with `include_overlay=0`,
+  `normalized_cache_lookup=0`, and filename `Tesla Bay Area f5b068b-pixel.png`
+  returned HTTP `201`, `cache_hit: miss`, city `San Francisco`, source
+  `ocr-georeference:nominatim-label-fit`, confidence `0.752`, three controls,
+  bbox `[-122.6569225, 37.1641342, -121.6917363, 37.8987853]`, and
+  `build_boundary_s: 0.051240` / `total_before_send_s: 0.056177` on the warm
+  instance. The event trace showed filename context candidates
+  `San Francisco Bay Area` then `San Francisco`, proving the hosted fallback
+  path executed. Evidence files:
+  `out/prod-tesla-bayarea-fallback-health-20260601.json` and
+  `out/prod-tesla-bayarea-fallback-pixel-smoke-20260601.json`.
