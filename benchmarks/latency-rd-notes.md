@@ -10148,3 +10148,13 @@ with zero failures in 0.531s.
   latency-budget issues. Analyzed repeat samples stayed subsecond with
   max/median/average `0.119288s`/`0.061330s`/`0.052519s`, repeat OCR max
   `0.000099s`, and the full suite passed (`406 passed, 12 subtests passed`).
+- Production deployment `dpl_Ho4gydR2MSh4T3jugf4SbJuH5W8S` reported
+  `pipeline-8808e0bd37158b9e`, warm detector limits `[608]`, warm engine keys
+  `[[608, default, default], [448, en-ppocrv5, max]]`, bright-blue detector
+  limit `448`/`max`, and health warm status `ok`. A clean Bay Area Waymo
+  forced-miss pair preserved the same confidence/result as the previous
+  production proof: `out/prod-warm-engine-keys-first-20260601.json` completed
+  in `2.888139s` total with OCR `1.675757s`, extraction `0.465063s`, and
+  `scaled_cache: miss-stored`; `out/prod-warm-engine-keys-second-20260601.json`
+  completed in `0.287470s` total with OCR `0.010054s`, extraction `0.236189s`,
+  and `scaled_cache: hit`.
