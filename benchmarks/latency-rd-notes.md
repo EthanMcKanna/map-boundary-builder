@@ -11216,4 +11216,11 @@ with zero failures in 0.531s.
   `out/focus-georef-ocr-liveguard2-catalog-20260601/full-report.json`
   (`out/focus-georef-ocr-cap550-catalog-20260601/full-report.json`). Full
   validation passed after the change (`435 passed, 30 subtests passed`);
-  `compileall` and `git diff --check` also passed.
+  `compileall` and `git diff --check` also passed. Production deployment
+  `dpl_Gh23cXkpriqz1tfmtZXvUrVuTXdP` exposed the new pipeline
+  `pipeline-f39e52432d985cbd`; a fresh Ann Arbor upload was a cache miss,
+  showed the focused OCR detail `rapidocr_max_dimension=550`, kept the same
+  bbox/confidence/control fit as local cap validation, and finished in
+  `3.342466s` before send with stage timings `extract=0.526345s`,
+  `ocr=1.949213s`, `georeference=0.232265s`, and `export=0.305557s`
+  (`out/prod-focuscap550-ann-arbor-upload-20260601.json`).
