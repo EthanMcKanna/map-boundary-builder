@@ -72,7 +72,7 @@ from map_boundary_builder.ocr import (
     warm_rapidocr_runtime,
     write_ocr_cache,
 )
-from map_boundary_builder.runner import fit_georeference, rank_road_context_queries
+from map_boundary_builder.runner import fit_georeference, is_fast_context_hint_georeference, rank_road_context_queries
 
 
 class FakeRapidOcrEngine:
@@ -2627,7 +2627,7 @@ class GeoreferenceFallbackTests(unittest.TestCase):
 
         with (
             patch("map_boundary_builder.runner.georeference_from_labels", return_value=hinted_result) as label_fit,
-            patch("map_boundary_builder.runner.is_credible_context_hint_georeference", return_value=True),
+            patch("map_boundary_builder.runner.is_fast_context_hint_georeference", return_value=True),
             patch("map_boundary_builder.runner.road_contexts_from_labels") as road_contexts,
         ):
             result = fit_georeference(
@@ -2660,7 +2660,7 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 "map_boundary_builder.runner.georeference_from_labels",
                 side_effect=[weak_result, fallback_result],
             ) as label_fit,
-            patch("map_boundary_builder.runner.is_credible_context_hint_georeference", return_value=False),
+            patch("map_boundary_builder.runner.is_fast_context_hint_georeference", return_value=False),
             patch("map_boundary_builder.runner.road_contexts_from_labels", return_value=[]),
         ):
             result = fit_georeference(
@@ -2701,6 +2701,7 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         )
 
         self.assertFalse(is_credible_context_hint_georeference(result))
+        self.assertFalse(is_fast_context_hint_georeference(result))
 
     def test_context_hint_georeference_keeps_tight_multi_control_fit(self) -> None:
         result = GeoreferenceResult(
@@ -2721,6 +2722,7 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         )
 
         self.assertTrue(is_credible_context_hint_georeference(result))
+        self.assertTrue(is_fast_context_hint_georeference(result))
 
     def test_specific_city_fit_keeps_city_after_synthetic_context_failure(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]

@@ -10872,24 +10872,24 @@ with zero failures in 0.531s.
   first (5 controls, confidence `0.716`, residual median/p90
   `1412.3m`/`1577.4m`) and blocking the broader inferred Miami context that
   produces the older high-water transform. Tightening
-  `is_credible_context_hint_georeference()` for non-decisive multi-control
-  fits makes weak filename results fall through to normal context inference
-  while still accepting decisive or tight hinted fits. A direct no-catalog
-  smoke of `/Users/ethanmckanna/Downloads/miami.png` now reaches the broad
-  8-control transform with confidence `0.890`, residual median/p90
-  `273.1m`/`898.2m`, and the exact older high-water IoU `0.966714` instead of
-  the current `0.851050` fit. The full current-reference no-catalog gate
-  (`out/context-hint-tight-currentref-gate-20260601/full-report.json`) had no
-  IoU regressions against
+  `is_credible_context_hint_georeference()` and mirroring that stricter gate at
+  the runner entrypoint for non-decisive multi-control fits makes weak filename
+  results fall through to normal context inference while still accepting
+  decisive or tight hinted fits. A direct no-catalog smoke of
+  `/Users/ethanmckanna/Downloads/miami.png` now reaches the broad 8-control
+  transform with confidence `0.890`, residual median/p90 `273.1m`/`898.2m`, and
+  the exact older high-water IoU `0.966714` instead of the current `0.851050`
+  fit. The final full current-reference no-catalog gate
+  (`out/context-hint-runner-currentref-gate-20260601/full-report.json`) passed
+  15/15, had no IoU regressions against
   `out/road-feature-future-currentref-gate-20260601/full-report.json`, improved
   average IoU from `0.945247` to `0.952957`, restored Miami by `+0.115664`, and
-  kept all analyzed warm repeats subsecond with repeat average `0.075824s` and
-  max `0.163411s`. The cold all-fixture run remained OCR-bound and still missed
-  the strict 8s aggregate budget in the same band as the accepted baseline
-  (`9.388388s` vs `9.366860s`), so this is a reliability/accuracy acceptance,
-  not a cold-speed win. The default catalog gate
-  (`out/context-hint-tight-catalog-gate-20260601/full-report.json`) stayed clean:
-  15/15 fixtures, avg/min IoU `0.996223`/`0.943345`, zero regression issues, and
-  active total `1.08s`. Focused context-hint tests passed (`5 passed`), the
-  broader georeference/runner tests passed (`181 passed`), `compileall` passed,
-  and `git diff --check` passed.
+  kept all analyzed warm repeats subsecond. The cold all-fixture run remains
+  OCR-bound in the same band as the accepted baseline (`9.41s` vs `9.37s`), so
+  this is a reliability/accuracy acceptance, not a cold-speed win. The final
+  default catalog gate
+  (`out/context-hint-runner-catalog-gate-20260601/full-report.json`) stayed
+  clean: 15/15 fixtures, avg/min IoU `0.996223`/`0.943345`, zero regression
+  issues, and active total `1.24s`. Focused context-hint tests passed, the
+  broader georeference/runner tests passed, `compileall` passed, `git diff
+  --check` passed, and full pytest passed (`418 passed`).

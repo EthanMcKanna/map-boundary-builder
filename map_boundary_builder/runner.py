@@ -52,6 +52,7 @@ from .georeference import (
     georeference_from_labels,
     infer_city_contexts,
     is_credible_context_hint_georeference,
+    is_decisive_georeference_result,
     low_res_two_control_regional_fit_without_road_evidence,
     sparse_high_residual_fit_without_road_evidence,
 )
@@ -2662,7 +2663,7 @@ def fit_georeference(
                 allow_road_refinement=should_allow_label_fit_road_refinement(style),
                 allow_sparse_regional_fit=sparse_regional_fit,
             )
-            if is_credible_context_hint_georeference(georef):
+            if is_fast_context_hint_georeference(georef):
                 return georef
 
     road_contexts = road_contexts_from_labels(city_input, labels)
@@ -2720,6 +2721,22 @@ def fit_georeference(
             progress=progress,
         )
     return georef
+
+
+def is_fast_context_hint_georeference(result) -> bool:
+    if result is None:
+        return False
+    if is_decisive_georeference_result(result):
+        return True
+    if not is_credible_context_hint_georeference(result):
+        return False
+    if len(result.control_points) >= 4:
+        return (
+            result.transform.confidence >= 0.78
+            and result.residual_median_m <= 1500.0
+            and result.residual_p90_m <= 2600.0
+        )
+    return True
 
 
 def should_anchor_marker_dots(style: str) -> bool:
