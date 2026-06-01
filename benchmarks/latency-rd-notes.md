@@ -10298,3 +10298,18 @@ with zero failures in 0.531s.
   `ocr-georeference:nominatim-label-fit`; the run reported
   `total_before_send_s: 2.322007`, generation `2.311212s`, OCR `1.594586s`,
   extraction `0.485165s`, and georeference `0.124332s`.
+- Rejected a top-level near-visual run-result cache for low-bit screenshot
+  variants. The existing lower-layer OCR/extraction caches already make a
+  one-pixel Bay Area Waymo variant cheap: current-code control
+  (`out/near-run-cache-final-control-20260601.json`) generated the first
+  no-catalog request in `2.402381s` before send, then served the low-bit
+  variant through normal generation in `0.124844s` with OCR `0.001152s`,
+  extraction `0.110823s`, confidence `0.846`, 13 controls, and the same
+  `ocr-georeference:nominatim-label-fit` source. A prototype 5-bit decoded
+  image hash could return the variant from the run-result cache
+  (`out/near-run-cache-optin-20260601.json`) in `0.076735s`, but the lookup
+  itself cost `0.075028s` and first-miss opt-in paid `0.081680s` before
+  generation. Defaulting it would slow fresh no-catalog misses, and opt-in
+  saved only about `0.05s` over the existing lower-layer cache path, so the
+  code was reverted and only the evidence was kept. Focused API cache tests
+  still passed after revert (`67 passed`).
