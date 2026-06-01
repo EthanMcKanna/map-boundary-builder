@@ -10334,3 +10334,22 @@ with zero failures in 0.531s.
   `0.070333s`/`0.057457s`/`0.041684s`. Because the only observed win was a
   narrow low-bit variant case and the benchmarked default path worsened, the
   code/test prototype was reverted and only the evidence was kept.
+- Rejected three bright-blue extraction-repair shortcuts. Skipping the initial
+  small-component removal before the bright-blue-specific repair pass reduced
+  analyzed repeat extraction slightly, but the broad current-reference gate
+  (`out/bright-blue-skip-initial-components-probe-20260601/full-report.json`)
+  failed the zero-drop regression gate: Bay Area Waymo moved from `0.905665`
+  to `0.905597` IoU and compared average IoU dropped by `0.000005`; primary
+  total also worsened from the accepted default's `5.336556s` to `5.698550s`.
+  Skipping `remove_exterior_repair_bleeds` outright preserved exact avg/min IoU
+  in `out/bright-blue-skip-bleed-removal-probe-20260601/full-report.json`, but
+  it removed a safety guard and did not improve the warm profile: repeat
+  max/median/average moved from `0.118838s`/`0.062499s`/`0.051935s` to
+  `0.120841s`/`0.062868s`/`0.052219s`, and repeat extraction max worsened from
+  `0.066131s` to `0.067177s`. A narrower early return inside the bleed guard
+  for outside-added area below the removal threshold also preserved exact IoU,
+  but failed the strict repeat-stage budget
+  (`out/bright-blue-bleed-fastskip-currentref-gate-20260601/full-report.json`):
+  repeat extraction max rose to `0.087647s` over the `0.08s` budget and primary
+  total rose to `6.035791s`. The bright-blue repair branch is therefore
+  bracketed for now; no extraction repair shortcut shipped.
