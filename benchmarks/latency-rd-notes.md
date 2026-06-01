@@ -9681,3 +9681,30 @@ with zero failures in 0.531s.
   `out/prod-det448-area1500-health-20260531.json` and
   `out/prod-det448-area1500-health-warm-20260531.json`; the smoke response was
   saved under `out/prod-det448-area1500-smoke-20260531/`.
+- Re-profiled the Nashville no-catalog road-refine tail after the OCR default
+  deploy and did not find a safe code change. A fresh-cache local first run
+  (`out/nashville-cold-road-cache-20260601/full-report.json`) preserved
+  Nashville IoU/source/confidence but spent `26.654365s` total because RapidOCR
+  initialization dominated OCR (`18.122312s`) and extraction (`6.376027s`);
+  its road match was `1.929979s`. The immediate repeat with the same cache root
+  (`out/nashville-hot-road-cache-20260601/full-report.json`) preserved identical
+  output and dropped to `1.802850s` total, with road match `0.293284s`.
+  Running inside one already-prewarmed Python process gave the more useful
+  production-instance shape: `out/nashville-prewarmed-road-cache-20260601/`
+  recorded Nashville at `1.531364s`, then `0.770625s`, then `0.701017s`, with
+  the same `0.986282` IoU and road score `0.772836`; road match fell from
+  `0.617779s` to `0.253801s`/`0.281920s`. A synthetic OpenCV/road-feature
+  warmup prototype was rejected because it did not reliably improve the first
+  request: the control run in `out/roadwarm-probe-20260601/current/summary.json`
+  took `1.139995s` with road match `0.287216s`, while the road-warmed variant
+  in `out/roadwarm-probe-20260601/roadwarm/summary.json` hit a noisy
+  `18.316893s` outlier with OCR `13.599872s` and road match `3.448818s`.
+  Production cache-busted no-catalog repeats with neutral filename `upload.png`
+  and slight `min_confidence` cache-key changes confirmed the same caution:
+  `out/prod-repeat-road-profile-20260601/` stayed on
+  `pipeline-18efd6dd9073624d`, preserved bbox/source/confidence, and road match
+  improved `0.427277s -> 0.287769s`, but whole-run time varied
+  `2.530855s -> 4.401387s` because extraction/OCR rose on the second sample.
+  Conclusion: road-refine warm state is real, but the next shippable win still
+  needs a broader OCR/extraction latency lever or a less noisy road-feature
+  handoff than synthetic warmup.
