@@ -10024,3 +10024,16 @@ with zero failures in 0.531s.
   kept analyzed repeat max/median duration `0.118087s`/`0.061573s` with repeat
   extraction max `0.069335s`. Focused tests passed (`184 passed`) and the full
   suite passed (`401 passed, 12 subtests passed`).
+- Deployed the scaled-cache telemetry follow-up as
+  `dpl_AfGpVG4aBLJRLeAgkxi7df8d1G3y` / `pipeline-91654d7e9d4909fd`; health
+  confirmed the same scaled-cache env defaults and runner OCR cache. A
+  scaled-cache-specific production probe used an edge-noised Bay Area upload
+  whose border prevents the older canonical extraction cache from handling the
+  repeat. The first forced run-result miss
+  (`out/prod-scaled-cache-probe-first-20260601.json`) reported
+  `scaled_cache: miss-stored`, shape `[1600, 1600]`, and completed in
+  `1.806072s` total with extraction `0.339200s` and OCR `1.374964s`; the
+  second forced miss (`out/prod-scaled-cache-probe-second-20260601.json`)
+  reported `scaled_cache: hit`, the same shape and confidence/result, and
+  completed in `0.240379s` total with extraction `0.190510s` and OCR
+  `0.010811s`.
