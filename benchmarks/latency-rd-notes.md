@@ -10111,3 +10111,15 @@ with zero failures in 0.531s.
   latency-budget issues, and kept analyzed repeat max/median/average
   `0.117842s`/`0.061248s`/`0.051198s` with repeat OCR max `0.000142s`. The
   full suite passed (`405 passed, 12 subtests passed`).
+- Production deployment `dpl_F7QDVTPn6z5x4BjPWzu2JrCDjJJR` reported
+  `pipeline-da1f16786adaea09`, bright-blue detector limit `448`, detector type
+  `max`, generic warm detector limits `[608]`, and runner OCR cache enabled.
+  The live health warm call returned `ok` in `0.003722s`, confirming the unused
+  default-profile `448` warm engine was removed without losing the actual
+  bright-blue override. A clean Bay Area Waymo forced-miss pair preserved the
+  same confidence/result as the previous production proof:
+  `out/prod-warm-engine-prune-first-20260601.json` completed in `2.345538s`
+  total with OCR `1.649896s`, extraction `0.460302s`, and
+  `scaled_cache: miss-stored`; `out/prod-warm-engine-prune-second-20260601.json`
+  completed in `0.282705s` total with OCR `0.000195s`, extraction `0.236966s`,
+  and `scaled_cache: hit`.
