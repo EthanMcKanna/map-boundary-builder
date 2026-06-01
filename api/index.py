@@ -1018,7 +1018,7 @@ def run_result_success_cache_key(image_bytes: bytes, city: str | None, options: 
         normalized_image_sha256(image_bytes),
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1032,7 +1032,7 @@ def raw_run_result_success_cache_key(image_bytes: bytes, city: str | None, optio
         hashlib.sha256(image_bytes).hexdigest(),
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1052,7 +1052,7 @@ def png_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None
         visual_hash,
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1072,7 +1072,7 @@ def jpeg_commentless_run_result_success_cache_key(image_bytes: bytes, city: str 
         visual_hash,
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1092,7 +1092,7 @@ def jpeg_visual_run_result_success_cache_key(image_bytes: bytes, city: str | Non
         visual_hash,
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1112,7 +1112,7 @@ def webp_visual_run_result_success_cache_key(image_bytes: bytes, city: str | Non
         visual_hash,
         city,
         options,
-        min_confidence_compatible=True,
+        threshold_compatible=True,
     )
 
 
@@ -1122,7 +1122,7 @@ def run_result_cache_key_for_hash(
     city: str | None,
     options: Any,
     *,
-    min_confidence_compatible: bool = False,
+    threshold_compatible: bool = False,
 ) -> str:
     parts = {
         "version": RUN_RESULT_CACHE_VERSION,
@@ -1132,11 +1132,15 @@ def run_result_cache_key_for_hash(
         "city": city or "",
         "simplify_px": round(float(options.simplify_px), 4),
         "min_confidence": (
-            "success-compatible"
-            if min_confidence_compatible
+            "success-threshold-compatible"
+            if threshold_compatible
             else round(float(options.min_confidence), 4)
         ),
-        "min_control_points": int(options.min_control_points),
+        "min_control_points": (
+            "success-threshold-compatible"
+            if threshold_compatible
+            else int(options.min_control_points)
+        ),
         "include_overlay": bool(getattr(options, "include_overlay", True)),
         "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
         "overlay_format": getattr(options, "overlay_format", "png"),
@@ -1164,7 +1168,7 @@ def run_result_cache_key_pair_for_hash(
             image_hash,
             city,
             options,
-            min_confidence_compatible=True,
+            threshold_compatible=True,
         ),
     )
 

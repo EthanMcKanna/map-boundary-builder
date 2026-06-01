@@ -282,7 +282,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_allow_catalog)
         self.assertNotEqual(base, changed_overlay_mode)
 
-    def test_success_run_cache_key_ignores_only_min_confidence(self) -> None:
+    def test_success_run_cache_key_ignores_acceptance_thresholds(self) -> None:
         low_threshold = BoundaryBuildOptions(min_confidence=0.55)
         high_threshold = BoundaryBuildOptions(min_confidence=0.80)
         more_controls = BoundaryBuildOptions(min_confidence=0.80, min_control_points=4)
@@ -299,7 +299,7 @@ class ApiRunCacheTests(unittest.TestCase):
             run_result_success_cache_key(b"image-a", None, low_threshold),
             run_result_success_cache_key(b"image-a", None, high_threshold),
         )
-        self.assertNotEqual(
+        self.assertEqual(
             raw_run_result_success_cache_key(b"image-a", None, high_threshold),
             raw_run_result_success_cache_key(b"image-a", None, more_controls),
         )
@@ -859,7 +859,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
         self.assertEqual(payload["profile"]["cache_hit"], "raw")
 
-    def test_create_run_uses_success_cache_when_min_confidence_still_passes(self) -> None:
+    def test_create_run_uses_success_cache_when_thresholds_still_pass(self) -> None:
         image_bytes = b"image-bytes"
         filename = "Phoenix.png"
         with TemporaryDirectory() as workdir, patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)):
@@ -895,7 +895,7 @@ class ApiRunCacheTests(unittest.TestCase):
             )
             request = api_index.handler.__new__(api_index.handler)
             request.parse_upload_request = lambda: (
-                {"min_confidence": "0.8"},
+                {"min_confidence": "0.8", "min_control_points": "4"},
                 {"image": (filename, image_bytes)},
                 "multipart",
             )

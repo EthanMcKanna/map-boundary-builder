@@ -10228,3 +10228,23 @@ with zero failures in 0.531s.
   `min_confidence`, returned `cache_hit: raw-compatible`, backfilled the exact
   raw key in `0.000653s`, and completed in `0.005100s` before send with the
   same confidence/source/control points and no generation stage.
+- Extended the success-compatible API cache namespace from `min_confidence`
+  tweaks to both acceptance thresholds: `min_confidence` and
+  `min_control_points`. The compatible key still stores only successful
+  complete payloads, and fallback reuse still requires the cached
+  `combined_confidence` and `control_points` to satisfy the new request, so
+  stricter threshold requests cannot reuse an inadequate result. An in-process
+  Bay Area Waymo API smoke
+  (`out/threshold-compatible-cache-smoke-20260601.json`) generated the first
+  request at `min_confidence=0.575` / `min_control_points=3` in `1.160005s`
+  before send, then served a second request at `min_confidence=0.576` /
+  `min_control_points=4` with `cache_hit: raw-compatible` in `0.001159s`,
+  preserving confidence `0.846`, 13 controls, and
+  `ocr-georeference:nominatim-label-fit`. Focused API/pipeline tests passed
+  (`74 passed`), the full suite passed (`410 passed, 12 subtests passed`),
+  `compileall` and `git diff --check` passed, and the broad current-reference
+  no-catalog gate
+  (`out/threshold-compatible-cache-currentref-gate-20260601/full-report.json`)
+  preserved exact avg/min IoU `0.949771`/`0.794177` with zero regression or
+  latency-budget issues. All 15 analyzed repeat samples stayed subsecond with
+  max/median/average `0.118512s`/`0.062702s`/`0.052388s`.
