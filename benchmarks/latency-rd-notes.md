@@ -10548,7 +10548,10 @@ with zero failures in 0.531s.
   the per-instance warm/cache path is effective once reached. Inspection found
   the browser scheduled `/api/health?warm=ocr` on image selection, but submit
   immediately canceled or suppressed the warmup because the run button was
-  already in the running state. The frontend now lets the warmup run during
-  preparation and waits up to `1200ms` just before upload, so quick first
-  uploads get a bounded chance to hit the same warm path without changing
-  catalog/cache semantics.
+  already in the running state. A post-deploy manual health warm followed by a
+  fresh Dallas upload still hit a cold OCR instance (`2.009886s` total,
+  `1.341539s` OCR in `out/prod-prewarm-preserve-dallas-compact-20260601.json`),
+  so an artificial upload wait is not justified. The frontend now preserves or
+  starts the warmup during preparation without delaying upload, giving quick
+  first uploads a chance to reuse a warm instance when Vercel routes that way
+  while avoiding a guaranteed wait when it does not.

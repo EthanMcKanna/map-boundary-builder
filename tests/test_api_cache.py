@@ -1233,28 +1233,20 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(idle_schedule, eager_delay)
         self.assertLess(running_guard, running_start_guard)
 
-    def test_frontend_waits_briefly_for_runtime_prewarm_before_upload(self) -> None:
+    def test_frontend_keeps_runtime_prewarm_during_upload_preparation(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
-        wait_constant = app_js.index(b"const GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS = 1200;")
         submit_schedule = app_js.index(
             b"scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true });"
         )
         upload_status = app_js.index(b"setStatus(\"Uploading image\", 8, \"running\"", submit_schedule)
-        wait_before_upload = app_js.index(
-            b"await waitForGenerationRuntimePrewarm({ timeoutMs: GENERATION_RUNTIME_PREWARM_UPLOAD_WAIT_MS });",
-            upload_status,
-        )
         upload_call = app_js.index(b"const { response, payload } = await postRunUpload(formData, uploadFile);")
-        wait_function = app_js.index(b"function waitForGenerationRuntimePrewarm(options = {}) {")
-        promise_race = app_js.index(b"return Promise.race([", wait_function)
 
-        self.assertLess(wait_constant, submit_schedule)
         self.assertLess(submit_schedule, upload_status)
-        self.assertLess(upload_status, wait_before_upload)
-        self.assertLess(wait_before_upload, upload_call)
-        self.assertLess(wait_function, promise_race)
+        self.assertLess(upload_status, upload_call)
+        self.assertNotIn(b"cancelPendingGenerationRuntimePrewarm();\n  startEstimatedProgress();", app_js)
+        self.assertNotIn(b"waitForGenerationRuntimePrewarm", app_js)
 
     def test_frontend_cancels_stale_scheduled_generation_prewarm_callbacks(self) -> None:
         app_js, mime = web_asset_response("app.js")
