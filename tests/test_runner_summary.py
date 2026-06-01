@@ -545,6 +545,74 @@ def test_sparse_ocr_georeference_rejects_high_p90_without_road_evidence() -> Non
     assert runner.sparse_ocr_georeference_lacks_support(road_supported, width=311, height=292) is False
 
 
+def test_sparse_ocr_georeference_rejects_three_point_drift_without_road_evidence() -> None:
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Las Vegas",
+            lon=-115.32,
+            lat=36.19,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=58.2,
+            rotation_radians=0.05,
+            confidence=0.574,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object(), object()],
+        residual_median_m=1996.7,
+        residual_p90_m=2024.0,
+    )
+
+    assert runner.sparse_ocr_georeference_lacks_support(georef, width=734, height=1596) is True
+
+    road_supported = GeoreferenceResult(
+        transform=georef.transform,
+        control_points=georef.control_points,
+        residual_median_m=georef.residual_median_m,
+        residual_p90_m=georef.residual_p90_m,
+        road_match=object(),
+    )
+    assert runner.sparse_ocr_georeference_lacks_support(road_supported, width=734, height=1596) is False
+
+
+def test_sparse_ocr_georeference_rejects_low_confidence_three_point_fit() -> None:
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Las Vegas",
+            lon=-115.16,
+            lat=36.09,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=13.9,
+            rotation_radians=0.19,
+            confidence=0.72,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[object(), object(), object()],
+        residual_median_m=419.7,
+        residual_p90_m=594.6,
+    )
+    assert runner.sparse_ocr_georeference_lacks_support(georef, width=1206, height=2622) is True
+
+    supported = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city=georef.transform.city,
+            lon=georef.transform.lon,
+            lat=georef.transform.lat,
+            origin_x_ratio=georef.transform.origin_x_ratio,
+            origin_y_ratio=georef.transform.origin_y_ratio,
+            meters_per_pixel=georef.transform.meters_per_pixel,
+            rotation_radians=georef.transform.rotation_radians,
+            confidence=0.752,
+            source=georef.transform.source,
+        ),
+        control_points=georef.control_points,
+        residual_median_m=georef.residual_median_m,
+        residual_p90_m=georef.residual_p90_m,
+    )
+    assert runner.sparse_ocr_georeference_lacks_support(supported, width=1206, height=2622) is False
+
+
 def test_build_boundary_fails_closed_for_sparse_unsupported_georeference(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "tiny-bay-area.png"
     output_path = tmp_path / "boundary.geojson"

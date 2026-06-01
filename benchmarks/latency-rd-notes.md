@@ -11021,3 +11021,84 @@ with zero failures in 0.531s.
   geocoder/georeference tests passed (`132 passed, 18 subtests passed`),
   `compileall`, seed JSON validation, `git diff --check`, and full pytest
   passed (`423 passed, 18 subtests passed`).
+- Rejected bright-blue focus-crop OCR for the no-catalog Waymo path. An
+  isolated OCR probe suggested `provider_ui_focus_ocr_crop` could cut Dallas
+  OCR (`~1.11s` full-frame versus `~0.38s` focused crop) while preserving the
+  same nominal label-fit source, but runtime benchmarks did not hold up once
+  OCR scheduling and regression gates were included. A first runtime prototype
+  that deferred all no-catalog bright-blue OCR until extraction could choose a
+  crop sped Houston (`0.863024s` -> `0.618555s`, IoU `0.898272` -> `0.933358`)
+  but regressed Dallas (`1.120158s` -> `1.448131s`) and slightly dropped Dallas
+  IoU (`0.957010` -> `0.956866`) in
+  `out/bright-blue-focus-crop-probe-20260601/full-report.json`. Narrowing the
+  trigger to slightly tall regions (`h/w` `1.12`-`1.25`) and adding a 320px
+  precheck preserved exact IoU in the five-fixture target probe and improved
+  total time slightly (`4.649234s` disabled-control total ->
+  `4.645018s` candidate in
+  `out/bright-blue-focus-precheck-disabled-control-20260601/full-report.json`
+  and `out/bright-blue-focus-precheck-probe-20260601/full-report.json`), but
+  the strict active gate rejected it for real duration regressions:
+  Los Angeles `0.927s` -> `0.986s`, Orlando `0.644s` -> `0.720s`, Phoenix
+  `1.052s` -> `1.440s`, and total active time `9.910s` -> `9.984s`
+  (`out/bright-blue-focus-precheck-gate-20260601/full-report.json`). Do not
+  promote focused bright-blue OCR unless a future design keeps early full-frame
+  OCR overlap for ineligible maps and proves no per-fixture duration regression.
+- Rejected road-feature precompute and extraction-cap shortcuts as default
+  latency wins. Disabling `MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES` preserved
+  exact IoU against
+  `out/street-header-seeded-currentref-final-20260601/full-report.json`, but
+  active total increased from `9.910466s` to `10.947609s`, with OCR total
+  `7.404765s` -> `8.026484s` and georeference total `0.395733s` ->
+  `0.559228s` (`out/road-precompute-disabled-probe-20260601/full-report.json`).
+  The road-feature thread appears to help more than it contends, especially for
+  Phoenix/Nashville road-refined fits, so leave precompute enabled. Lowering
+  `MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION` also failed: 1500px was faster
+  (`9.910466s` -> `8.84s`) but dropped exact IoU on Bay Area Zoox, Dallas,
+  Miami, Nashville, Phoenix, and San Antonio
+  (`out/extract-1500-probe-20260601/full-report.json`); 1400px and 1200px
+  likewise caused geometry drops (`out/extract-1400-probe-20260601/full-report.json`,
+  `out/extract-1200-probe-20260601/full-report.json`). A narrower prototype
+  that used 1500px extraction only for no-catalog gray/light-fill styles passed
+  exact IoU and improved against the older baseline
+  (`out/fast-fill-extract-cap-gate-20260601/full-report.json`), but the
+  same-session disabled control was faster overall (`9.649588s` candidate vs
+  `9.181058s` disabled) and Austin gray-fill regressed from `0.374981s` to
+  `0.658727s` (`out/fast-fill-extract-cap-disabled-control-20260601/full-report.json`).
+  Do not change extraction caps without a per-style verifier and same-session
+  timing win.
+- Accepted a sparse three-control fail-closed guard after real Zoox mobile
+  stress uploads exposed arbitrary no-catalog misgeoreferences that were
+  confidence-plausible but geometrically wrong. The compact mobile screenshot
+  `/Users/ethanmckanna/Downloads/IMG_0071.PNG` previously returned a no-catalog
+  GeoJSON in `1.332460s` with only 3 controls, confidence `0.574`, p90 residual
+  `2024.0m`, bbox `[-115.4314031,35.8610496,-115.1090802,36.0583333]`, and
+  IoU `0.023596` against the current `las-vegas-zoox` catalog geometry
+  (`out/stress-uploads-20260601/zoox-las-vegas-mobile-nocatalog.geojson`). The
+  taller sibling `/Users/ethanmckanna/Downloads/IMG_0226.PNG` showed the same
+  broader risk even with lower residuals: it returned confidence `0.72`, 3
+  controls, p90 residual `594.6m`, and IoU `0.0` against the current Las Vegas
+  Zoox catalog geometry
+  (`out/stress-uploads-20260601/zoox-las-vegas-mobile-tall-nocatalog-guard.geojson`).
+  The runner/georeference guard now rejects no-road-support OCR fits with
+  3-or-fewer controls when p90 residual exceeds `1500m`, and also rejects
+  3-or-fewer-control OCR fits with no road evidence when confidence remains
+  below `0.75`. This preserves the accepted Bay Area Tesla edge at confidence
+  `0.752` while failing closed on both Zoox mobile stress uploads:
+  `out/stress-uploads-20260601/zoox-las-vegas-mobile-nocatalog-guard2-summary.json`
+  and
+  `out/stress-uploads-20260601/zoox-las-vegas-mobile-tall-nocatalog-guard2-summary.json`
+  both exit with the sparse OCR reliability error instead of emitting GeoJSON.
+  A fresh Avride Dallas arbitrary upload remains healthy and is now recorded as
+  a stress positive: `/Users/ethanmckanna/Downloads/avride dallas.png` scored
+  IoU `0.991544` against `dallas-avride` with 5 controls and confidence `0.902`
+  in `1.695633s`
+  (`out/stress-uploads-20260601/avride-dallas-nocatalog.geojson`). Validation
+  stayed clean: focused runner tests passed (`66 passed`), OCR/georeference
+  tests passed (`121 passed`), the strict no-catalog current-reference gate
+  passed 15/15 with zero IoU regression against
+  `out/street-header-seeded-currentref-final-20260601/full-report.json`, avg/min
+  IoU `0.952958`/`0.843889`, and active total `9.16s`
+  (`out/sparse-three-control-guard-currentref-20260601/full-report.json`), and
+  the default catalog gate passed 15/15 with avg/min IoU `0.996223`/`0.943345`
+  and active total `0.95s`
+  (`out/sparse-three-control-guard-catalog-20260601/full-report.json`).

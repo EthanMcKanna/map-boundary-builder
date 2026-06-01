@@ -941,6 +941,8 @@ def sparse_high_residual_fit_without_road_evidence(
 ) -> bool:
     if road_match is not None:
         return False
+    if inlier_count <= 3:
+        return residual_p90_m > 1500.0
     if inlier_count > 4:
         return False
     return residual_p90_m > 3500.0
