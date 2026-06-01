@@ -10650,3 +10650,29 @@ with zero failures in 0.531s.
   left Phoenix at `1.03s` and active total `9.24s`. Keep the current OCR
   thresholds, detector limit, and scaled-cache contract until a broader cold
   OCR reduction clears the strict current-reference latency gates.
+- Rejected the next georeference-OCR crop/resolution/batch probes. A direct
+  crop experiment around the extracted polygon on the six slow Waymo fixtures
+  (`out/georef-ocr-crop-probe-20260601/subset-report.json`) showed why a simple
+  crop is not enough: large Waymo service polygons already span most of the
+  2400px screenshot, so crop ratios `0.5` through `1.5` usually still produced
+  near-full-frame OCR with average OCR times around `0.66s`-`0.72s` in the
+  standalone probe. Lowering `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION` did expose a
+  real speed/accuracy cliff: `1500` cut the active total to `7.415876s` but
+  failed regression checks with Dallas Waymo `0.957010 -> 0.912399`, Phoenix
+  `0.983820 -> 0.755715`, and avg IoU `0.945247 -> 0.933082`
+  (`out/rapidocr-max1500-nodebug-probe-20260601/full-report.json`). `1550`
+  was also unsafe (`out/rapidocr-max1550-nodebug-probe-20260601/full-report.json`):
+  active total `8.145398s`, but Bay Area Waymo dropped to `0.793238`, Orlando
+  dropped to `0.930210`, and avg IoU fell to `0.935120`. More aggressive
+  `1400`/`1200` probes had larger accuracy losses, especially Phoenix and
+  Nashville/Houston. Tightening the fast-text rescue filter was similarly not
+  viable: `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_AREA=1200` dropped Phoenix to
+  `0.851108`, while `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_ASPECT=3.5`
+  regressed Los Angeles, Orlando, and Phoenix. Batch-size changes are not a
+  useful lever either: `RAPIDOCR_REC_BATCH_NUM=48` /
+  `RAPIDOCR_CLS_BATCH_NUM=48` preserved IoU but worsened the isolated gate to
+  active total `9.854256s` and left Phoenix and Bay Area Zoox over 1s
+  (`out/rapidocr-batch48-nodebug-gate-20260601/full-report.json`). The best
+  next direction is not smaller OCR input by itself; it needs either a
+  dependable adaptive fallback signal for low-resolution OCR or a different
+  non-OCR georeference shortcut.
