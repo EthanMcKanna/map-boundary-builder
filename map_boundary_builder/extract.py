@@ -745,7 +745,61 @@ def green_service_fill_mask(
     if ys.min() <= h * 0.05 or ys.max() >= h * 0.90:
         return None
 
-    return labels == largest_label
+    saturated_component = labels == largest_label
+    muted_component = muted_green_fill_component(rgb, hue, sat, val, saturated_component)
+    if muted_component is not None:
+        return muted_component
+    return saturated_component
+
+
+def muted_green_fill_component(
+    rgb: np.ndarray,
+    hue: np.ndarray,
+    sat: np.ndarray,
+    val: np.ndarray,
+    saturated_component: np.ndarray,
+) -> np.ndarray | None:
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    muted_green = (
+        (hue >= 45)
+        & (hue <= 95)
+        & (sat >= 18)
+        & (sat <= 130)
+        & (val >= 105)
+        & (val <= 245)
+        & (g.astype(np.int16) > r.astype(np.int16) + 8)
+        & (g.astype(np.int16) > b.astype(np.int16) - 18)
+    )
+    labels, count, stats = connected_components(muted_green)
+    if count == 0:
+        return None
+
+    saturated_area = int(saturated_component.sum())
+    if saturated_area <= 0:
+        return None
+    h, w = muted_green.shape
+    min_area = max(4000.0, muted_green.size * 0.025, saturated_area * 1.35)
+    best_mask: np.ndarray | None = None
+    best_area = 0
+    for label in range(1, count + 1):
+        left, top, component_w, component_h, area = stats[label]
+        area = int(area)
+        if area < min_area:
+            continue
+        if component_h < h * 0.15 or component_w < w * 0.15:
+            continue
+        if int(top) <= h * 0.05 or int(top + component_h - 1) >= h * 0.90:
+            continue
+        if int(left) <= w * 0.02 or int(left + component_w - 1) >= w * 0.98:
+            continue
+        component = labels == label
+        overlap = int(np.logical_and(component, saturated_component).sum())
+        if overlap < max(500, saturated_area * 0.80):
+            continue
+        if area > best_area:
+            best_area = area
+            best_mask = component
+    return best_mask
 
 
 def gray_fill_service_mask(rgb: np.ndarray) -> np.ndarray:

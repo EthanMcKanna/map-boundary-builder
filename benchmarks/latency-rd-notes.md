@@ -11102,3 +11102,33 @@ with zero failures in 0.531s.
   the default catalog gate passed 15/15 with avg/min IoU `0.996223`/`0.943345`
   and active total `0.95s`
   (`out/sparse-three-control-guard-catalog-20260601/full-report.json`).
+- Accepted a muted-green fill expansion for May Mobility-style map exports
+  after the arbitrary Ann Arbor AVIF
+  `/Users/ethanmckanna/Downloads/aa mm.avif` exposed a real extraction miss.
+  The previous `dark-teal` path selected the saturated green label/road/dot
+  artifacts inside the pale service polygon instead of the pale fill, yielding
+  coverage `0.046406` and a visibly carved-up overlay in
+  `out/avif-stress-20260601/aa-mm-default-debug/aa-mm-default.overlay.png`.
+  Pixel probes showed the saturated seed was `83537` px while a muted green
+  component covered `203173` px, contained `95.4%` of the saturated seed, and
+  stayed away from the image edges. The runtime extractor now uses that muted
+  component only when it is larger, central, and overlaps at least `80%` of the
+  original saturated seed. The real AVIF now extracts the full pale polygon
+  (`coverage_ratio` `0.090967`, one contour) with a clean overlay at
+  `out/avif-stress-20260601/aa-mm-muted-green-debug/aa-mm-muted-green.overlay.png`;
+  no-debug generation took `4.975686s`, with extraction `0.431974s`, OCR
+  `1.271481s`, and georeference still the slow stage at `3.252540s`
+  (`out/avif-stress-20260601/aa-mm-muted-green-nodebug.geojson`). A temporary
+  detached `9a340ed` rerun proved the old strict current-reference report had
+  stale Miami/San Antonio no-catalog scores under today's OCR/georeference
+  behavior: the prior commit now produces avg IoU `0.952215` in
+  `out/prev-currentenv-currentref15-20260601/full-report.json`. Against that
+  same-session prior-commit baseline, the patched no-catalog current-reference
+  gate passed 15/15 with avg/min IoU `0.952215`/`0.843889` and no regression
+  issues (`out/muted-green-currentref15-freshbase-20260601/full-report.json`).
+  The catalog current-reference gate preserved exact avg/min IoU
+  `0.996223`/`0.943345` with no regression issues against
+  `out/sparse-three-control-guard-catalog-20260601/full-report.json`
+  (`out/muted-green-catalog15-20260601/full-report.json`). Focused
+  extraction/catalog/runner tests passed (`112 passed`), and the full suite
+  passed (`426 passed, 18 subtests passed`).

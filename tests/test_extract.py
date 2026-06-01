@@ -13,6 +13,7 @@ from map_boundary_builder.extract import (
     extract_service_area,
     extraction_cache_dependency_signature,
     classify_style,
+    green_service_fill_mask,
     keep_main_components,
     repair_mask,
     remove_small_components,
@@ -105,6 +106,38 @@ class MaskRepairTests(unittest.TestCase):
             ),
         ):
             self.assertEqual(classify_style(rgb), "gray-fill")
+
+    def test_green_service_fill_expands_muted_may_style_area(self) -> None:
+        rgb = np.full((260, 220, 3), 255, dtype=np.uint8)
+        service_area = np.array(
+            [[88, 22], [145, 44], [172, 128], [148, 224], [86, 206], [55, 126]],
+            dtype=np.int32,
+        )
+        cv2.fillPoly(rgb, [service_area], (193, 219, 195))
+
+        ink_color = (104, 179, 116)
+        cv2.line(rgb, (88, 40), (104, 202), ink_color, 17)
+        cv2.line(rgb, (65, 126), (160, 126), ink_color, 15)
+        cv2.line(rgb, (116, 58), (153, 178), ink_color, 15)
+
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+        hue, sat, val = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+        saturated_seed = (
+            (hue >= 55)
+            & (hue <= 90)
+            & (sat >= 45)
+            & (val >= 80)
+            & (rgb[:, :, 1].astype(np.int16) > rgb[:, :, 0].astype(np.int16) + 25)
+        )
+
+        mask = green_service_fill_mask(rgb, hue, sat, val)
+
+        self.assertIsNotNone(mask)
+        assert mask is not None
+        self.assertGreater(mask.sum(), saturated_seed.sum() * 1.9)
+        self.assertTrue(mask[44, 118])
+        self.assertTrue(mask[204, 92])
+        self.assertFalse(mask[18, 88])
 
     def test_downscaled_extraction_returns_original_coordinate_space(self) -> None:
         rgb = np.full((240, 240, 3), 255, dtype=np.uint8)
