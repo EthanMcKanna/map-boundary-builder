@@ -10734,3 +10734,33 @@ with zero failures in 0.531s.
   `0.926621`, margin `0.258297`, area ratio `1.035651`, and bbox
   `[-86.8461084, 36.1089989, -86.6904545, 36.242681]`
   (`out/prod-tiny-lowres-threshold-resize300-smoke-20260601.json`).
+- Rejected the next fast-text OCR recall and recognizer-profile probes. The
+  remaining no-catalog bottleneck is still OCR: the current post-fallback
+  no-debug baseline spends `6.415248s` of its `8.628184s` active total in OCR,
+  although every individual primary fixture remains under 1s and warm repeats
+  stay subsecond (`out/current-nocatalog-nodebug-postfallback-20260601/full-report.json`).
+  Lowering `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA` from `1500` to `1200` was
+  tempting because it improved current-reference Houston/Bay Area Waymo fits,
+  but the clean run failed the zero-drop gate by moving San Antonio Waymo from
+  `0.960578` to `0.944136`
+  (`out/fasttext-min1200-clean-nocatalog-currentref-20260601/full-report.json`).
+  Disabling the fast-text area filter improved the same changed-market shapes
+  but failed both accuracy and speed constraints: Austin Tesla dropped
+  `0.977460 -> 0.973925`, San Antonio stayed at the same `0.944136`
+  regression, active total rose to `9.60s`, and Phoenix/Los Angeles exceeded
+  1s (`out/fasttext-disabled-nocatalog-currentref-20260601/full-report.json`).
+  Raising `MAP_BOUNDARY_FAST_TEXT_OCR_FALLBACK_CONFIDENCE` to `0.9` paid a
+  second OCR pass for many fixtures and still regressed Austin Tesla; active
+  total rose to `16.81s`, with Miami, Los Angeles, Orlando, Phoenix,
+  Nashville, Houston, and Bay Area Waymo all above 1s
+  (`out/fasttext-fallback-conf090-nocatalog-currentref-20260601/full-report.json`).
+  The recognition-profile branch was not safe either: forcing English
+  PP-OCRv5 for all styles shaved OCR time to `6.025314s` but dropped Bay Area
+  Tesla from `0.843889` to `0.794177`, slightly dropped Bay Area Zoox, and
+  failed Las Vegas Zoox scoring
+  (`out/en-ppocrv5-allstyles-nocatalog-probe-20260601/full-report.json`);
+  reverting bright-blue to the default recognizer kept total near baseline at
+  `8.56s` but regressed Orlando Waymo from `0.960371` to `0.931476`
+  (`out/brightblue-rec-default-nocatalog-currentref-20260601/full-report.json`).
+  Keep the current fast-text area, fallback confidence, and bright-blue
+  English recognizer defaults.
