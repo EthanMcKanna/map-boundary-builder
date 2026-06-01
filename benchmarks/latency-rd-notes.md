@@ -11172,3 +11172,24 @@ with zero failures in 0.531s.
   catalog gate preserved avg/min IoU `0.996223`/`0.943345` with no regression
   issues against `out/muted-green-catalog15-20260601/full-report.json`
   (`out/focus-georef-ocr-catalog-20260601/full-report.json`).
+- Production smoke of the first focused-OCR deployment exposed a live-geocode
+  reliability bug before the change was allowed to stand as-is. The deployed
+  upload accepted the Ann Arbor AVIF but took `8.700752s`, spent `5.248710s`
+  in georeference, and returned a shifted 4-control bbox
+  `[-83.7531703, 42.2600059, -83.7359081, 42.2886678]` with rotation
+  `-6.918398`. The fix is a narrow focused-crop-only opt-in for stopping after
+  a cached 3-control fit when the cached controls already form a credible
+  similarity transform. A broader first attempt was rejected because the
+  no-catalog gate caught Nashville dropping to IoU `0.437102` by accepting an
+  ordinary bright-blue 3-control fit too early. After narrowing the guard, the
+  Ann Arbor live-network CLI smoke
+  (`out/ann-arbor-focus-liveguard2-20260601.json`) stayed on the focused path,
+  kept 3 controls, restored the stable bbox
+  `[-83.7511045, 42.2635423, -83.7306813, 42.2879432]`, and cut georeference
+  to `0.305136s` in a `2.030517s` run. Focused runner/OCR-georeference tests
+  passed (`193 passed`), the no-catalog current-reference gate passed 15/15
+  with avg/min IoU `0.952958`/`0.843889` and no regression issues
+  (`out/focus-georef-ocr-liveguard2-currentref-20260601/full-report.json`),
+  and the catalog gate preserved avg/min IoU `0.996223`/`0.943345` with no
+  regression issues
+  (`out/focus-georef-ocr-liveguard2-catalog-20260601/full-report.json`).

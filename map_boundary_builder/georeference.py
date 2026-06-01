@@ -572,6 +572,7 @@ def georeference_from_labels(
     anchor_marker_dots: bool = True,
     allow_road_refinement: bool = True,
     allow_sparse_regional_fit: bool = False,
+    allow_credible_cached_fit: bool = False,
 ) -> GeoreferenceResult | None:
     control_labels = labels
     if label_y_min is not None:
@@ -604,6 +605,7 @@ def georeference_from_labels(
                     allow_road_refinement=allow_road_refinement,
                     allow_sparse_regional_fit=allow_sparse_regional_fit,
                     expand_street_controls=True,
+                    allow_credible_cached_fit=False,
                 )
                 if result is None:
                     continue
@@ -629,6 +631,7 @@ def georeference_from_labels(
             road_feature_distance=road_feature_distance,
             allow_road_refinement=allow_road_refinement,
             allow_sparse_regional_fit=allow_sparse_regional_fit,
+            allow_credible_cached_fit=allow_credible_cached_fit,
         )
         if result is not None:
             if city is None and city_context.query == "Inferred map area":
@@ -660,6 +663,7 @@ def georeference_from_labels(
                     allow_road_refinement=allow_road_refinement,
                     allow_sparse_regional_fit=allow_sparse_regional_fit,
                     expand_street_controls=True,
+                    allow_credible_cached_fit=False,
                 )
                 if result is None:
                     continue
@@ -984,6 +988,7 @@ def georeference_from_label_context(
     allow_road_refinement: bool = True,
     allow_sparse_regional_fit: bool = False,
     expand_street_controls: bool = False,
+    allow_credible_cached_fit: bool = False,
 ) -> GeoreferenceResult | None:
     if expand_street_controls:
         allow_road_refinement = False
@@ -995,6 +1000,7 @@ def georeference_from_label_context(
         max_geocoded_labels=MAX_SPARSE_GEOCODED_LABELS if allow_two_control_fit else MAX_GEOCODED_LABELS,
         merge_control_sources=allow_two_control_fit,
         expand_street_controls=expand_street_controls,
+        allow_credible_cached_fit=allow_credible_cached_fit,
     )
     required_available_controls = 2 if allow_two_control_fit else min_control_points
     if len(controls) >= required_available_controls:
@@ -2739,6 +2745,7 @@ def build_control_points(
     max_geocoded_labels: int = MAX_GEOCODED_LABELS,
     merge_control_sources: bool = False,
     expand_street_controls: bool = False,
+    allow_credible_cached_fit: bool = False,
 ) -> list[ControlPoint]:
     # The geocoded and OSM-place paths are independent lookups; overlap them, and
     # accept a fast OSM-place fit only when it is already decisive.
@@ -2777,6 +2784,14 @@ def build_control_points(
             allow_network=False,
             normalize_road_tokens=expand_street_controls,
         )
+        if (
+            allow_credible_cached_fit
+            and not merge_control_sources
+            and not expand_street_controls
+            and has_credible_control_fit(geocoded_controls)
+        ):
+            place_future.cancel()
+            return geocoded_controls
         if expand_street_controls:
             place_future.cancel()
             return geocoded_controls
@@ -2959,6 +2974,19 @@ def has_decisive_control_fit(controls: list[ControlPoint]) -> bool:
         return False
     median, p90 = residual_median_p90(residual_values)
     return median <= 1200.0 and p90 <= 3000.0
+
+
+def has_credible_control_fit(controls: list[ControlPoint]) -> bool:
+    if len(controls) < 3:
+        return False
+    fit = robust_similarity_fit(controls)
+    if fit is None:
+        return False
+    _scale, rotation, _tx, _ty, inliers, residuals = fit
+    if len(inliers) < 3 or abs(rotation) > 0.35:
+        return False
+    median, p90 = residual_median_p90([residuals[index] for index in inliers])
+    return median <= 1300.0 and p90 <= 1600.0
 
 
 def is_geocodeable_control_query(tokens: set[str], city_tokens: set[str]) -> bool:

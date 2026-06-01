@@ -30,6 +30,7 @@ from map_boundary_builder.georeference import (
     geocode_many,
     geocode_contexts,
     georeference_from_labels,
+    has_credible_control_fit,
     has_reliable_candidate_cluster,
     infer_city_contexts,
     is_credible_context_hint_georeference,
@@ -1641,6 +1642,46 @@ class OcrGroupingTests(unittest.TestCase):
 
 
 class PlaceCandidateTests(unittest.TestCase):
+    def _ann_arbor_cached_controls(self) -> list[ControlPoint]:
+        return [
+            ControlPoint(
+                label=OcrLabel("Ann Arbor", x=797.65, y=436.19, width=90, height=22, confidence=95),
+                geocode=GeocodeResult(
+                    label="Ann Arbor",
+                    lon=-83.7484616,
+                    lat=42.2813722,
+                    display_name="Ann Arbor, Washtenaw, Michigan, United States",
+                    bbox=(-83.799572, 42.222668, -83.675807, 42.3238941),
+                    importance=0.72,
+                    place_type="city",
+                ),
+            ),
+            ControlPoint(
+                label=OcrLabel("Amtrak Station", x=691.65, y=341.85, width=128, height=24, confidence=98),
+                geocode=GeocodeResult(
+                    label="Amtrak Station, Ann Arbor",
+                    lon=-83.743186,
+                    lat=42.2877905,
+                    display_name="Ann Arbor Amtrak Station, Ann Arbor, Washtenaw, Michigan, United States",
+                    bbox=(-83.743371, 42.2876707, -83.7430011, 42.2879104),
+                    importance=0.45,
+                    place_type="train_station",
+                ),
+            ),
+            ControlPoint(
+                label=OcrLabel("Michigan Union", x=713.38, y=692.71, width=130, height=24, confidence=98),
+                geocode=GeocodeResult(
+                    label="Michigan Union, Ann Arbor",
+                    lon=-83.7415127,
+                    lat=42.2751698,
+                    display_name="Michigan Union, Ann Arbor, Washtenaw, Michigan, United States",
+                    bbox=(-83.7420307, 42.2748045, -83.7410674, 42.2755425),
+                    importance=0.42,
+                    place_type="community_centre",
+                ),
+            ),
+        ]
+
     def test_geocode_many_preserves_request_order_and_dedupes(self) -> None:
         calls: list[tuple[str, int, str]] = []
 
@@ -2209,6 +2250,70 @@ class PlaceCandidateTests(unittest.TestCase):
         contexts = rank_city_contexts_for_georeferencing([region, city])
 
         self.assertEqual(contexts[0].query, "Ann Arbor")
+
+    def test_cached_ann_arbor_controls_are_credible_without_live_expansion(self) -> None:
+        controls = self._ann_arbor_cached_controls()
+
+        self.assertTrue(has_credible_control_fit(controls))
+        self.assertFalse(has_credible_control_fit(controls[:2]))
+
+    def test_cached_control_fit_early_return_requires_focus_opt_in(self) -> None:
+        center = GeocodeResult(
+            label="Ann Arbor",
+            lon=-83.7484616,
+            lat=42.2813722,
+            display_name="Ann Arbor, Washtenaw, Michigan, United States",
+            bbox=(-83.799572, 42.222668, -83.675807, 42.3238941),
+            importance=0.72,
+            place_type="city",
+        )
+        labels = [control.label for control in self._ann_arbor_cached_controls()]
+        cached_controls = self._ann_arbor_cached_controls()
+        live_control = ControlPoint(
+            label=OcrLabel("Kerrytown", x=830.0, y=270.0, width=84, height=22, confidence=94),
+            geocode=GeocodeResult(
+                label="Kerrytown, Ann Arbor",
+                lon=-83.746731,
+                lat=42.283824,
+                display_name="Kerrytown, Ann Arbor, Washtenaw, Michigan, United States",
+                bbox=(-83.748, 42.282, -83.745, 42.285),
+                importance=0.34,
+                place_type="neighbourhood",
+            ),
+        )
+        geocode_network_modes: list[bool] = []
+
+        def fake_geocoded_controls(*_args, allow_network: bool = True, **_kwargs):
+            geocode_network_modes.append(allow_network)
+            return cached_controls if not allow_network else [*cached_controls, live_control]
+
+        with (
+            patch("map_boundary_builder.georeference.PLACE_FAST_PATH_TIMEOUT_SECONDS", 0.0),
+            patch("map_boundary_builder.georeference.PLACE_BEFORE_LIVE_TIMEOUT_SECONDS", 0.0),
+            patch("map_boundary_builder.georeference.build_osm_place_control_points", return_value=[]),
+            patch("map_boundary_builder.georeference.build_geocoded_control_points", side_effect=fake_geocoded_controls),
+        ):
+            default_controls = build_control_points(labels, "Ann Arbor", center)
+
+        self.assertEqual(default_controls, [*cached_controls, live_control])
+        self.assertEqual(geocode_network_modes, [False, True])
+
+        geocode_network_modes.clear()
+        with (
+            patch("map_boundary_builder.georeference.PLACE_FAST_PATH_TIMEOUT_SECONDS", 0.0),
+            patch("map_boundary_builder.georeference.PLACE_BEFORE_LIVE_TIMEOUT_SECONDS", 0.0),
+            patch("map_boundary_builder.georeference.build_osm_place_control_points", return_value=[]),
+            patch("map_boundary_builder.georeference.build_geocoded_control_points", side_effect=fake_geocoded_controls),
+        ):
+            focused_controls = build_control_points(
+                labels,
+                "Ann Arbor",
+                center,
+                allow_credible_cached_fit=True,
+            )
+
+        self.assertEqual(focused_controls, cached_controls)
+        self.assertEqual(geocode_network_modes, [False])
 
     def test_cached_label_cluster_skips_live_direct_context_lookup(self) -> None:
         labels = [

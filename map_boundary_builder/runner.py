@@ -1181,6 +1181,7 @@ def build_boundary(
         road_feature_distance=road_feature_distance,
         anchor_marker_dots=should_anchor_marker_dots(extraction.style),
         style=extraction.style,
+        allow_credible_cached_fit=labels_from_focus_georef_ocr,
         progress=progress,
     )
     if should_fallback_focus_georef_ocr(labels_from_focus_georef_ocr, georef):
@@ -1218,6 +1219,7 @@ def build_boundary(
             road_feature_distance=road_feature_distance,
             anchor_marker_dots=should_anchor_marker_dots(extraction.style),
             style=extraction.style,
+            allow_credible_cached_fit=False,
             progress=progress,
         )
     if should_fallback_fast_text_ocr(
@@ -1261,6 +1263,7 @@ def build_boundary(
             road_feature_distance=road_feature_distance,
             anchor_marker_dots=should_anchor_marker_dots(extraction.style),
             style=extraction.style,
+            allow_credible_cached_fit=False,
             progress=progress,
         )
     if georef is None:
@@ -2779,6 +2782,7 @@ def fit_georeference(
     road_feature_distance: Any | None = None,
     anchor_marker_dots: bool = True,
     style: str | None = None,
+    allow_credible_cached_fit: bool = False,
     progress: ProgressCallback | None = None,
 ):
     sparse_regional_fit = should_allow_sparse_regional_georef_fit(style, width, height)
@@ -2811,6 +2815,7 @@ def fit_georeference(
                 anchor_marker_dots=anchor_marker_dots,
                 allow_road_refinement=should_allow_label_fit_road_refinement(style),
                 allow_sparse_regional_fit=sparse_regional_fit,
+                allow_credible_cached_fit=allow_credible_cached_fit,
             )
             if is_fast_context_hint_georeference(georef):
                 return georef
@@ -2842,6 +2847,7 @@ def fit_georeference(
             min_control_points=min_control_points,
             road_feature_distance=road_feature_distance,
             allow_road_refinement=should_allow_label_fit_road_refinement(style),
+            allow_credible_cached_fit=allow_credible_cached_fit,
         )
 
     if georef is None:
@@ -2859,6 +2865,7 @@ def fit_georeference(
             anchor_marker_dots=anchor_marker_dots,
             allow_road_refinement=should_allow_label_fit_road_refinement(style),
             allow_sparse_regional_fit=sparse_regional_fit,
+            allow_credible_cached_fit=allow_credible_cached_fit,
         )
 
     if georef is None and road_context_candidates and road_network_context_fallback_enabled():
@@ -2937,6 +2944,7 @@ def georeference_from_ranked_label_contexts(
     min_control_points: int,
     road_feature_distance: Any | None = None,
     allow_road_refinement: bool = True,
+    allow_credible_cached_fit: bool = False,
 ):
     best = None
     best_score = -1.0
@@ -2951,6 +2959,7 @@ def georeference_from_ranked_label_contexts(
             min_control_points=min_control_points,
             road_feature_distance=road_feature_distance,
             allow_road_refinement=allow_road_refinement,
+            allow_credible_cached_fit=allow_credible_cached_fit,
         )
         if result is None:
             continue
