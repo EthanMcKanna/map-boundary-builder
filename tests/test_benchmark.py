@@ -13,6 +13,7 @@ from map_boundary_builder.benchmark import (
     compare_report_regressions,
     discover_fixtures,
     load_fixture_config,
+    parse_stage_duration_budgets,
     parse_image_name,
     run_benchmark,
     score_full_fixture_in_process,
@@ -60,6 +61,21 @@ def test_parse_image_name_supports_avride_provider() -> None:
     assert provider == "avride"
     assert area_slug == "dallas"
     assert area_name == "Dallas"
+
+
+def test_parse_stage_duration_budgets_accepts_repeated_and_comma_values() -> None:
+    budgets = parse_stage_duration_budgets(["ocr=4.0, extract=1.5", "georeference=0.75"])
+
+    assert budgets == {"extract": 1.5, "georeference": 0.75, "ocr": 4.0}
+
+
+def test_parse_stage_duration_budgets_rejects_missing_separator() -> None:
+    try:
+        parse_stage_duration_budgets(["ocr:4.0"])
+    except ValueError as exc:
+        assert "STAGE=SECONDS" in str(exc)
+    else:
+        raise AssertionError("Expected invalid stage budget to raise ValueError")
 
 
 def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
@@ -1234,6 +1250,50 @@ def test_report_latency_budget_check_computes_evaluated_duration_when_missing() 
             "max_evaluated_duration_s": 3.0,
             "excess_s": 0.3,
         }
+    ]
+
+
+def test_report_latency_budget_check_flags_evaluated_stage_excess_and_missing() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 2.5,
+            "evaluated_stage_duration_s": {
+                "extract": 0.8,
+                "ocr": 3.25,
+            },
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "duration_s": 0.7}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_stage_duration_s={
+            "extract": 1.0,
+            "georeference": 0.5,
+            "ocr": 3.0,
+        },
+    )
+
+    assert check["passed"] is False
+    assert check["max_evaluated_stage_duration_s"] == {
+        "extract": 1.0,
+        "georeference": 0.5,
+        "ocr": 3.0,
+    }
+    assert check["evaluated_stage_duration_s"] == {"extract": 0.8, "ocr": 3.25}
+    assert check["issues"] == [
+        {
+            "stage": "georeference",
+            "kind": "evaluated_stage_duration_missing",
+            "max_evaluated_stage_duration_s": 0.5,
+        },
+        {
+            "stage": "ocr",
+            "kind": "evaluated_stage_duration_budget_exceeded",
+            "evaluated_stage_duration_s": 3.25,
+            "max_evaluated_stage_duration_s": 3.0,
+            "excess_s": 0.25,
+        },
     ]
 
 

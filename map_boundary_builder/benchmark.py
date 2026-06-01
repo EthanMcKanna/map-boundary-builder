@@ -301,6 +301,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allowed absolute per-stage active plus smoke-checked duration increase before ratio checks fail.",
     )
     parser.add_argument(
+        "--max-evaluated-stage-duration-s",
+        action="append",
+        default=[],
+        metavar="STAGE=SECONDS",
+        help=(
+            "Optional absolute evaluated stage-duration budget. "
+            "Repeat or comma-separate entries such as ocr=4.0,extract=2.0."
+        ),
+    )
+    parser.add_argument(
         "--max-evaluated-road-match-increase-ratio",
         type=float,
         default=None,
@@ -344,7 +354,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        max_evaluated_stage_duration_s = parse_stage_duration_budgets(
+            args.max_evaluated_stage_duration_s
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     report = run_benchmark(
         polygon_dir=args.polygon_dir,
         image_dir=args.image_dir,
@@ -403,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         args.max_duration_s is not None
         or args.max_total_duration_s is not None
         or args.max_evaluated_duration_s is not None
+        or bool(max_evaluated_stage_duration_s)
         or args.max_evaluated_road_match_s is not None
     ):
         latency_budget_check = check_report_latency_budgets(
@@ -410,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
             max_duration_s=args.max_duration_s,
             max_total_duration_s=args.max_total_duration_s,
             max_evaluated_duration_s=args.max_evaluated_duration_s,
+            max_evaluated_stage_duration_s=max_evaluated_stage_duration_s,
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
         )
         report["latency_budget_check"] = latency_budget_check
@@ -736,6 +755,27 @@ def normalize_only_filters(raw_filters: list[str]) -> list[str]:
     for raw in raw_filters:
         filters.extend(value.strip().lower() for value in raw.split(",") if value.strip())
     return filters
+
+
+def parse_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"Stage budget must use STAGE=SECONDS: {entry}")
+            stage, raw_value = entry.split("=", 1)
+            stage = stage.strip().lower()
+            if not stage:
+                raise ValueError(f"Stage budget is missing a stage name: {entry}")
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"Stage budget seconds must be numeric: {entry}") from exc
+            budgets[stage] = max(0.0, value)
+    return dict(sorted(budgets.items()))
 
 
 def fixture_matches_filters(fixture: BenchmarkFixture, filters: list[str]) -> bool:
@@ -1526,6 +1566,7 @@ def check_report_latency_budgets(
     max_duration_s: float | None = None,
     max_total_duration_s: float | None = None,
     max_evaluated_duration_s: float | None = None,
+    max_evaluated_stage_duration_s: dict[str, float] | None = None,
     max_evaluated_road_match_s: float | None = None,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
@@ -1533,6 +1574,11 @@ def check_report_latency_budgets(
     evaluated_budget = (
         None if max_evaluated_duration_s is None else max(0.0, float(max_evaluated_duration_s))
     )
+    evaluated_stage_budgets = {
+        stage: max(0.0, float(duration))
+        for stage, duration in (max_evaluated_stage_duration_s or {}).items()
+        if stage
+    }
     evaluated_road_match_budget = (
         None
         if max_evaluated_road_match_s is None
@@ -1541,6 +1587,7 @@ def check_report_latency_budgets(
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = report_evaluated_duration(report)
+    evaluated_stage_durations = report_summary_stage_durations(report, "evaluated_stage_duration_s")
     evaluated_road_match = report_evaluated_road_match_elapsed(report)
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
@@ -1579,6 +1626,27 @@ def check_report_latency_budgets(
                     "excess_s": round(evaluated_duration - evaluated_budget, 6),
                 }
             )
+    for stage, stage_budget in sorted(evaluated_stage_budgets.items()):
+        stage_duration = evaluated_stage_durations.get(stage)
+        if stage_duration is None:
+            issues.append(
+                {
+                    "stage": stage,
+                    "kind": "evaluated_stage_duration_missing",
+                    "max_evaluated_stage_duration_s": stage_budget,
+                }
+            )
+            continue
+        if stage_duration > stage_budget:
+            issues.append(
+                {
+                    "stage": stage,
+                    "kind": "evaluated_stage_duration_budget_exceeded",
+                    "evaluated_stage_duration_s": round(stage_duration, 6),
+                    "max_evaluated_stage_duration_s": stage_budget,
+                    "excess_s": round(stage_duration - stage_budget, 6),
+                }
+            )
     if evaluated_road_match_budget is not None:
         if evaluated_road_match is not None and evaluated_road_match > evaluated_road_match_budget:
             issues.append(
@@ -1594,10 +1662,12 @@ def check_report_latency_budgets(
         "max_duration_s": duration_budget,
         "max_total_duration_s": total_budget,
         "max_evaluated_duration_s": evaluated_budget,
+        "max_evaluated_stage_duration_s": evaluated_stage_budgets,
         "max_evaluated_road_match_s": evaluated_road_match_budget,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
+        "evaluated_stage_duration_s": evaluated_stage_durations,
         "evaluated_road_match_elapsed_s": (
             round(evaluated_road_match, 6) if evaluated_road_match is not None else None
         ),

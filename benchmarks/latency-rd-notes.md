@@ -9744,3 +9744,27 @@ with zero failures in 0.531s.
   checks with no issues, and reported evaluated road-match elapsed
   `0.018412s` against a `1.0s` budget: Phoenix stayed at score `0.705669`,
   `0.009030s`, and Nashville stayed at score `0.772836`, `0.009382s`.
+- Rejected another bright-blue detector-limit speed lane and added absolute
+  evaluated-stage latency budgets to keep future OCR/extraction probes honest.
+  A focused Phoenix/Nashville detector sweep looked superficially promising:
+  `out/bright-blue-det384-target-20260601/full-report.json` preserved exact
+  target IoU and cut target total to `2.114659s` versus the same-session
+  current target profile's `2.898101s`. The broad strict gate rejected that
+  signal: `out/bright-blue-det384-strict-20260601/full-report.json` preserved
+  exact avg/min IoU `0.968082`/`0.942536`, but inflated evaluated time to
+  `14.790120s` and evaluated OCR to `11.537545s` versus the current
+  `out/benchmark-road-match-gates-relaxed-20260601/full-report.json` at
+  `9.204945s` evaluated and `6.758067s` evaluated OCR. A 400px detector cap
+  was also slower on the broad gate (`10.407633s` evaluated,
+  `7.269017s` evaluated OCR), and a detector-limit-type probe on the
+  target pair made both `max` and `min` runs much slower. No detector default
+  changed. The benchmark harness now accepts repeated or comma-separated
+  `--max-evaluated-stage-duration-s STAGE=SECONDS` budgets. Focused benchmark
+  tests cover budget parsing, missing stage metrics, and stage excesses
+  (`36 passed`), and the real strict run
+  `out/evaluated-stage-budget-gates-accepted-20260601/full-report.json`
+  passed with exact avg/min IoU `0.968082`/`0.942536`, zero regression or
+  latency-budget issues, evaluated road match `0.033142s`, and explicit
+  evaluated stage totals under budgets: OCR `13.144680s` under `15s`,
+  extraction `2.917684s` under `4s`, georeference `0.776873s` under `1.2s`,
+  export `0.025535s` under `0.1s`, and inspect `0.013264s` under `0.1s`.
