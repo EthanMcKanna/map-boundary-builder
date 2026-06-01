@@ -206,6 +206,31 @@ class GeocoderSeedTests(unittest.TestCase):
             (-80.2085683, 25.9004315, -80.1308922, 25.9571715),
         )
 
+    def test_bundled_miami_expansion_label_seeds_serve_without_network(self) -> None:
+        expected_names = {
+            "West Miami": "West Miami",
+            "Miami Beach": "Miami Beach",
+            "Little Havana": "Little Havana",
+            "South Miami": "South Miami",
+            "Miami Shores": "Miami Shores",
+            "Brickell": "Brickell",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                for query, expected_name in expected_names.items():
+                    with self.subTest(query=query):
+                        results = geocoder.geocode(query, limit=2)
+                        self.assertTrue(results)
+                        self.assertEqual(results[0].display_name.split(",", 1)[0], expected_name)
+                        self.assertIn("Miami", results[0].display_name)
+
     def test_bundled_miami_noise_misses_avoid_network(self) -> None:
         queries = [
             "North Miami Beach, Miami",

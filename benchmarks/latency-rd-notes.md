@@ -10893,3 +10893,31 @@ with zero failures in 0.531s.
   issues, and active total `1.24s`. Focused context-hint tests passed, the
   broader georeference/runner tests passed, `compileall` passed, `git diff
   --check` passed, and full pytest passed (`418 passed`).
+- Production disproved the first Miami filename-hint fix as a standalone
+  production repair. Both forced deployments reached the expected new pipeline
+  hashes, but a fresh production no-catalog `miami.png` upload still returned
+  the old narrow 5-control Miami fit (`0.716` confidence) because production
+  only had the packaged geocoder seeds, not the broader local Nominatim cache
+  entries that made the local normal-inference path choose the high-water
+  transform. Reproducing the production cache state from `HEAD` with
+  `MAP_BOUNDARY_CACHE_DIR="$(mktemp -d)"` and `--block-network` scored Miami at
+  IoU `0.851050`, confidence `0.716`, and active duration `10.126570s`
+  (`out/head-prodlike-miami-20260601/full-report.json`). Adding six packaged
+  Nominatim seed responses for visible Miami-area labels (`West Miami`, `Miami
+  Beach`, `Little Havana`, `South Miami`, `Miami Shores`, and `Brickell`)
+  fixes that production-available path without changing georeference logic:
+  the same fresh-cache no-network Miami gate now scores IoU `0.955577`,
+  confidence `0.850`, centroid distance `252.6m`, and active duration
+  `6.603217s` (`out/context-seed-only-prodlike-miami-20260601/full-report.json`).
+  A broader 3-member inferred-context expansion prototype was tested but
+  rejected as unnecessary once these seeds were present. The default catalog
+  gate preserved exact avg/min IoU `0.996223`/`0.943345` and had zero regression
+  issues against `out/road-feature-future-catalog-gate-20260601`
+  (`out/context-seed-catalog-gate-rerun-20260601/full-report.json`), though
+  cold catalog latency was cache-state noisy and not used as a speed claim.
+  The fresh no-catalog all-fixture gate against the older report also exposed a
+  cache-state Bay Area broad-direct issue (`0.794177` for `bay-area-tesla`),
+  but the same result reproduced from an unmodified `HEAD` worktree, so it is
+  tracked as existing evidence rather than a seed regression. Focused bundled
+  seed coverage passed, `compileall` and `git diff --check` passed, and full
+  pytest passed (`419 passed, 18 subtests passed`).

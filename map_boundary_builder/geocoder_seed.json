@@ -8109,7 +8109,208 @@
     "702923cf9bf0b5c623ab2642": [],
     "4c7d6b0e24139f2f957ea736": [],
     "599c2908ef440ba26630cba4": [],
-    "aeb1ca5616b14972ba6e532c": []
+    "aeb1ca5616b14972ba6e532c": [],
+    "11bd66bb56477b5214aaf975": [
+      {
+        "addresstype": "village",
+        "boundingbox": [
+          "25.7480166",
+          "25.7635026",
+          "-80.3039424",
+          "-80.2875093"
+        ],
+        "category": "boundary",
+        "display_name": "West Miami, Miami-Dade County, Florida, United States",
+        "importance": 0.4622255058623587,
+        "lat": "25.7560176",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.2956847",
+        "name": "West Miami",
+        "osm_id": 1216862,
+        "osm_type": "relation",
+        "place_id": 305099282,
+        "place_rank": 16,
+        "type": "administrative"
+      }
+    ],
+    "3915c62d6e69b60ae40877eb": [
+      {
+        "addresstype": "city",
+        "boundingbox": [
+          "25.7476770",
+          "25.8728377",
+          "-80.1699989",
+          "-80.1101920"
+        ],
+        "category": "boundary",
+        "display_name": "Miami Beach, Miami-Dade County, Florida, United States",
+        "importance": 0.5915607698372403,
+        "lat": "25.7929198",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.1353006",
+        "name": "Miami Beach",
+        "osm_id": 118856,
+        "osm_type": "relation",
+        "place_id": 301940514,
+        "place_rank": 16,
+        "type": "administrative"
+      },
+      {
+        "addresstype": "hamlet",
+        "boundingbox": [
+          "39.0145573",
+          "39.0545573",
+          "-74.9568400",
+          "-74.9168400"
+        ],
+        "category": "place",
+        "display_name": "Miami Beach, Villas, Lower Township, Cape May County, New Jersey, 08251, United States",
+        "importance": 0.311877314681546,
+        "lat": "39.0345573",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-74.9368400",
+        "name": "Miami Beach",
+        "osm_id": 158814760,
+        "osm_type": "node",
+        "place_id": 345608615,
+        "place_rank": 20,
+        "type": "hamlet"
+      }
+    ],
+    "acb1f5e788b23f70ec81a3fe": [
+      {
+        "addresstype": "neighbourhood",
+        "boundingbox": [
+          "25.7581503",
+          "25.7781503",
+          "-80.2434686",
+          "-80.2234686"
+        ],
+        "category": "place",
+        "display_name": "Little Havana, Miami, Miami-Dade County, Florida, 33135, United States",
+        "importance": 0.4080375579827476,
+        "lat": "25.7681503",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.2334686",
+        "name": "Little Havana",
+        "osm_id": 154125642,
+        "osm_type": "node",
+        "place_id": 305538340,
+        "place_rank": 24,
+        "type": "neighbourhood"
+      }
+    ],
+    "c00965f4fdef5ea9572df9f7": [
+      {
+        "addresstype": "suburb",
+        "boundingbox": [
+          "25.6893730",
+          "25.7340346",
+          "-80.3068434",
+          "-80.2848749"
+        ],
+        "category": "boundary",
+        "display_name": "South Miami, Miami-Dade County, Florida, 33143, United States",
+        "importance": 0.4605703192961712,
+        "lat": "25.7076017",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.2933846",
+        "name": "South Miami",
+        "osm_id": 118861,
+        "osm_type": "relation",
+        "place_id": 305756426,
+        "place_rank": 16,
+        "type": "administrative"
+      }
+    ],
+    "e746927ad58b2c8211341bab": [
+      {
+        "addresstype": "village",
+        "boundingbox": [
+          "25.8550776",
+          "25.8808410",
+          "-80.2063630",
+          "-80.1454700"
+        ],
+        "category": "boundary",
+        "display_name": "Miami Shores, Miami-Dade County, Florida, 33153, United States",
+        "importance": 0.47405302451743875,
+        "lat": "25.8631515",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.1928253",
+        "name": "Miami Shores",
+        "osm_id": 1217301,
+        "osm_type": "relation",
+        "place_id": 305277927,
+        "place_rank": 16,
+        "type": "administrative"
+      },
+      {
+        "addresstype": "hamlet",
+        "boundingbox": [
+          "41.2645420",
+          "41.3045420",
+          "-72.2975805",
+          "-72.2575805"
+        ],
+        "category": "place",
+        "display_name": "Miami Shores, Sound View, Old Lyme, Lower Connecticut River Valley Planning Region, Connecticut, 06376, United States",
+        "importance": 0.1333863195239185,
+        "lat": "41.2845420",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-72.2775805",
+        "name": "Miami Shores",
+        "osm_id": 158869971,
+        "osm_type": "node",
+        "place_id": 356068555,
+        "place_rank": 20,
+        "type": "hamlet"
+      },
+      {
+        "addresstype": "hamlet",
+        "boundingbox": [
+          "39.6731146",
+          "39.7131146",
+          "-84.2602187",
+          "-84.2202187"
+        ],
+        "category": "place",
+        "display_name": "Miami Shores, Moraine, Montgomery County, Ohio, 45439, United States",
+        "importance": 0.13338149919890133,
+        "lat": "39.6931146",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-84.2402187",
+        "name": "Miami Shores",
+        "osm_id": 154188955,
+        "osm_type": "node",
+        "place_id": 339115133,
+        "place_rank": 20,
+        "type": "hamlet"
+      }
+    ],
+    "ed646b7ea695f76890fb0355": [
+      {
+        "addresstype": "neighbourhood",
+        "boundingbox": [
+          "25.7514744",
+          "25.7714744",
+          "-80.2028833",
+          "-80.1828833"
+        ],
+        "category": "place",
+        "display_name": "Brickell, Miami, Miami-Dade County, Florida, 33131, United States",
+        "importance": 0.42012812644844244,
+        "lat": "25.7614744",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-80.1928833",
+        "name": "Brickell",
+        "osm_id": 13764971423,
+        "osm_type": "node",
+        "place_id": 435814646,
+        "place_rank": 24,
+        "type": "neighbourhood"
+      }
+    ]
   },
   "photon": {
     "1ebcfe977872544c1ab5ded5": {
