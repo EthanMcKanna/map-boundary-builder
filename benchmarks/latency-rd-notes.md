@@ -10248,3 +10248,18 @@ with zero failures in 0.531s.
   preserved exact avg/min IoU `0.949771`/`0.794177` with zero regression or
   latency-budget issues. All 15 analyzed repeat samples stayed subsecond with
   max/median/average `0.118512s`/`0.062702s`/`0.052388s`.
+- Production deployment `dpl_G7sTMhth4C1o7cU4DwtUQKohrpme` is live at
+  `mapboundary.app` with `pipeline-61ee57a9722f2712`. The production health
+  warm check (`out/prod-threshold-compatible-health-20260601.json`) returned
+  `ok: true`, warm status `ok`, `warm_total_s: 1.819129`, and
+  `rapidocr_s: 1.450043`. The Bay Area Waymo threshold-compatible pair proved
+  the deployed cache path with both acceptance thresholds changed:
+  `out/prod-threshold-compatible-first-20260601.json` missed cache and
+  completed in `2.295423s` before send with generation `2.285451s`,
+  confidence `0.846`, 13 controls, and
+  `ocr-georeference:nominatim-label-fit`; then
+  `out/prod-threshold-compatible-second-20260601.json` raised
+  `min_confidence` from `0.575` to `0.576` and `min_control_points` from `3`
+  to `4`, returned `cache_hit: raw-compatible`, backfilled the exact raw key
+  in `0.000595s`, and completed in `0.004528s` before send with the same
+  confidence/source/control points and no generation stage.
