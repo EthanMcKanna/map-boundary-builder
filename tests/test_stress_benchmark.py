@@ -879,6 +879,8 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": None,
                 "bbox": None,
+                "geojson_geometry_hash": None,
+                "geojson_coordinate_count": None,
                 "combined_confidence": None,
                 "georeference_confidence": None,
                 "ocr_label_count": None,
@@ -1060,6 +1062,101 @@ def test_repeat_profile_flags_confidence_signature_drift() -> None:
         0.721,
         0.879444,
     ]
+
+
+def test_repeat_profile_flags_geojson_geometry_signature_drift() -> None:
+    samples = [
+        {
+            "slug": "drifty-geometry",
+            "repeat_index": 1,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.42,
+            "city": "San Francisco",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 16,
+            "bbox": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+            "geojson_geometry_hash": "stable-shape-a",
+            "geojson_coordinate_count": 42,
+            "combined_confidence": 0.953,
+            "georeference_confidence": 0.953,
+            "ocr_label_count": 21,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["San Francisco"],
+        },
+        {
+            "slug": "drifty-geometry",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.43,
+            "city": "San Francisco",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 16,
+            "bbox": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+            "geojson_geometry_hash": "stable-shape-b",
+            "geojson_coordinate_count": 42,
+            "combined_confidence": 0.953,
+            "georeference_confidence": 0.953,
+            "ocr_label_count": 21,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["San Francisco"],
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=2,
+        warmup_runs_per_case=0,
+    )
+
+    stability = repeat_profile["cases"]["drifty-geometry"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert sorted(signature["geojson_geometry_hash"] for signature in stability["signatures"]) == [
+        "stable-shape-a",
+        "stable-shape-b",
+    ]
+
+
+def test_geojson_geometry_summary_hashes_rounded_geometry(tmp_path) -> None:
+    geojson = tmp_path / "shape.geojson"
+    geojson.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"ignored": "metadata"},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [-122.44112641, 37.74780981],
+                                    [-122.39054771, 37.80585541],
+                                    [-122.44112641, 37.74780981],
+                                ]
+                            ],
+                        },
+                    }
+                ],
+            }
+        )
+    )
+
+    summary = stress_module.geojson_geometry_summary(geojson)
+    geojson.write_text(geojson.read_text().replace("metadata", "changed metadata"))
+    summary_after_metadata_change = stress_module.geojson_geometry_summary(geojson)
+
+    assert summary["geojson_coordinate_count"] == 3
+    assert isinstance(summary["geojson_geometry_hash"], str)
+    assert len(summary["geojson_geometry_hash"]) == 16
+    assert summary_after_metadata_change == summary
 
 
 def test_repeat_profile_signature_drift_cases_reads_summary() -> None:

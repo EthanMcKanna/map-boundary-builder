@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from contextlib import contextmanager
+import hashlib
 import json
 import math
 import os
@@ -401,6 +402,7 @@ def run_stress_case(
     )
     row["runner_ocr_cache"] = runner_ocr_cache
     row["extraction_cache"] = extraction_cache
+    attach_geojson_geometry_summary(row, output_path)
     row["expectation_issues"] = check_expectations(row, expect)
     row["expectation_passed"] = not row["expectation_issues"]
     return row
@@ -506,6 +508,7 @@ def run_stress_case_in_process(
     row["timeout_seconds"] = timeout_seconds
     row["runner_ocr_cache"] = runner_ocr_cache
     row["extraction_cache"] = extraction_cache
+    attach_geojson_geometry_summary(row, output_path)
     row["expectation_issues"] = check_expectations(row, expect)
     row["expectation_passed"] = not row["expectation_issues"]
     return row
@@ -650,6 +653,8 @@ def row_from_process(
             "georeference_confidence": summary.get("georeference_confidence"),
             "control_points": summary.get("control_points"),
             "bbox": summary.get("bbox"),
+            "geojson_geometry_hash": None,
+            "geojson_coordinate_count": None,
             "image_width": first_present_number(
                 summary.get("image_width"),
                 complete_details.get("image_width"),
@@ -689,6 +694,113 @@ def row_from_process(
         }
     )
     return row
+
+
+def attach_geojson_geometry_summary(row: dict[str, Any], output_path: Path) -> None:
+    row.update(geojson_geometry_summary(output_path))
+
+
+def geojson_geometry_summary(output_path: Path) -> dict[str, Any]:
+    empty = {"geojson_geometry_hash": None, "geojson_coordinate_count": None}
+    if not output_path.exists():
+        return empty
+    try:
+        data = json.loads(output_path.read_text())
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return empty
+    geometries = geojson_geometries(data)
+    if not geometries:
+        return empty
+    normalized = [normalize_geojson_geometry(geometry) for geometry in geometries]
+    normalized = [geometry for geometry in normalized if geometry is not None]
+    if not normalized:
+        return empty
+    encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return {
+        "geojson_geometry_hash": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
+        "geojson_coordinate_count": sum(geojson_coordinate_count(geometry) for geometry in normalized),
+    }
+
+
+def geojson_geometries(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, dict):
+        return []
+    value_type = value.get("type")
+    if value_type == "FeatureCollection":
+        features = value.get("features")
+        if not isinstance(features, list):
+            return []
+        geometries: list[dict[str, Any]] = []
+        for feature in features:
+            if not isinstance(feature, dict):
+                continue
+            geometries.extend(geojson_geometries(feature))
+        return geometries
+    if value_type == "Feature":
+        geometry = value.get("geometry")
+        return [geometry] if isinstance(geometry, dict) else []
+    if value_type == "GeometryCollection":
+        geometries = value.get("geometries")
+        if not isinstance(geometries, list):
+            return []
+        return [geometry for geometry in geometries if isinstance(geometry, dict)]
+    return [value] if isinstance(value.get("coordinates"), list) else []
+
+
+def normalize_geojson_geometry(geometry: dict[str, Any]) -> dict[str, Any] | None:
+    geometry_type = geometry.get("type")
+    if not isinstance(geometry_type, str):
+        return None
+    if geometry_type == "GeometryCollection":
+        geometries = geometry.get("geometries")
+        if not isinstance(geometries, list):
+            return None
+        normalized_geometries = [
+            normalized
+            for item in geometries
+            if isinstance(item, dict)
+            for normalized in [normalize_geojson_geometry(item)]
+            if normalized is not None
+        ]
+        return {"type": geometry_type, "geometries": normalized_geometries}
+    coordinates = normalize_geojson_coordinates(geometry.get("coordinates"))
+    if coordinates is None:
+        return None
+    return {"type": geometry_type, "coordinates": coordinates}
+
+
+def normalize_geojson_coordinates(value: Any) -> Any:
+    if is_geojson_position(value):
+        return [round(float(coordinate), 6) for coordinate in value]
+    if isinstance(value, list):
+        normalized = [normalize_geojson_coordinates(item) for item in value]
+        if any(item is None for item in normalized):
+            return None
+        return normalized
+    return None
+
+
+def is_geojson_position(value: Any) -> bool:
+    if not isinstance(value, list) or len(value) < 2:
+        return False
+    return all(isinstance(coordinate, (int, float)) and not isinstance(coordinate, bool) for coordinate in value)
+
+
+def geojson_coordinate_count(geometry: dict[str, Any]) -> int:
+    if geometry.get("type") == "GeometryCollection":
+        geometries = geometry.get("geometries")
+        if not isinstance(geometries, list):
+            return 0
+        return sum(geojson_coordinate_count(item) for item in geometries if isinstance(item, dict))
+    return geojson_coordinate_count_from_coordinates(geometry.get("coordinates"))
+
+
+def geojson_coordinate_count_from_coordinates(value: Any) -> int:
+    if is_geojson_position(value):
+        return 1
+    if isinstance(value, list):
+        return sum(geojson_coordinate_count_from_coordinates(item) for item in value)
+    return 0
 
 
 def event_profile_events(event_profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1154,6 +1266,8 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "source": sample.get("source"),
         "control_points": sample.get("control_points"),
         "bbox": repeat_profile_bbox_signature(sample.get("bbox")),
+        "geojson_geometry_hash": sample.get("geojson_geometry_hash"),
+        "geojson_coordinate_count": sample.get("geojson_coordinate_count"),
         "combined_confidence": repeat_profile_confidence_signature(sample.get("combined_confidence")),
         "georeference_confidence": repeat_profile_confidence_signature(sample.get("georeference_confidence")),
         "ocr_label_count": sample.get("ocr_label_count"),

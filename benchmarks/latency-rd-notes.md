@@ -13523,3 +13523,24 @@ with zero failures in 0.531s.
   primary max `0.818809s`, repeat median `0.353s`, repeat p95 `0.566s`,
   repeat max `0.682s`, RapidOCR engine total p95 `0.503s`, detector p95
   `0.257s`, and recognizer p95 `0.229s`.
+- Added normalized GeoJSON geometry hashes and coordinate counts to stress rows
+  and repeat-profile output signatures. This closes the next validation gap:
+  a future speed probe can no longer preserve bbox/city/source/confidence/label
+  metadata while silently changing the exported polygon shape. Geometry
+  signatures are based only on exported GeoJSON geometries with coordinates
+  rounded to six decimals, so property metadata changes do not affect the hash.
+  Focused validation: the stress benchmark test module passed `43` tests,
+  including synthetic geometry-drift and metadata-ignored hash tests,
+  `PYTHONPATH=. .venv/bin/python -m compileall -q map_boundary_builder tests`
+  passed, `git diff --check` passed, and the full suite passed `533` tests
+  plus `30` subtests. The primary actual-code gate
+  `out/geometry-signature-primary-actual-20260602/stress-summary.json` passed
+  `16/16` expectations with statuses `{"complete":14,"failed":2}`, primary max
+  `0.856202s`, and populated geometry hashes for all `14` completed rows. The
+  full actual-code hard gate
+  `out/geometry-signature-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, `48/48` analyzed repeat expectations,
+  geometry-inclusive stable signatures for all `16` cases, `48/48` subsecond
+  repeats, primary max `0.776044s`, repeat median `0.372s`, repeat p95
+  `0.535s`, repeat max `0.588s`, RapidOCR engine total p95 `0.462s`, detector
+  p95 `0.259s`, and recognizer p95 `0.230s`.
