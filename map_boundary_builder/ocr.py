@@ -213,6 +213,54 @@ def sanitize_rapidocr_profile(profile: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
+def rapidocr_box_area_profile(prefix: str, boxes: list[np.ndarray]) -> dict[str, int | float]:
+    areas = [rapidocr_box_area(box) for box in boxes]
+    if not areas:
+        return {
+            f"{prefix}_box_area_min": None,
+            f"{prefix}_box_area_p25": None,
+            f"{prefix}_box_area_p50": None,
+            f"{prefix}_box_area_p75": None,
+            f"{prefix}_box_area_p90": None,
+            f"{prefix}_box_area_max": None,
+            f"{prefix}_box_area_lt_500_count": 0,
+            f"{prefix}_box_area_lt_900_count": 0,
+            f"{prefix}_box_area_lt_1300_count": 0,
+            f"{prefix}_box_area_lt_1500_count": 0,
+        }
+    return {
+        f"{prefix}_box_area_min": round(min(areas), 3),
+        f"{prefix}_box_area_p25": round(percentile_linear(areas, 25), 3),
+        f"{prefix}_box_area_p50": round(percentile_linear(areas, 50), 3),
+        f"{prefix}_box_area_p75": round(percentile_linear(areas, 75), 3),
+        f"{prefix}_box_area_p90": round(percentile_linear(areas, 90), 3),
+        f"{prefix}_box_area_max": round(max(areas), 3),
+        f"{prefix}_box_area_lt_500_count": count_values_below(areas, 500.0),
+        f"{prefix}_box_area_lt_900_count": count_values_below(areas, 900.0),
+        f"{prefix}_box_area_lt_1300_count": count_values_below(areas, 1300.0),
+        f"{prefix}_box_area_lt_1500_count": count_values_below(areas, 1500.0),
+    }
+
+
+def percentile_linear(values: list[float], percentile: float) -> float:
+    if not values:
+        raise ValueError("values must not be empty")
+    if percentile <= 0:
+        return min(values)
+    if percentile >= 100:
+        return max(values)
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * (percentile / 100.0)
+    lower_index = int(position)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    fraction = position - lower_index
+    return ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
+
+
+def count_values_below(values: list[float], threshold: float) -> int:
+    return sum(value < threshold for value in values)
+
+
 def extract_ocr_labels(
     image_path: str | Path,
     *,
@@ -1161,6 +1209,8 @@ def run_rapidocr_profiled_items(
     ]
     profile["raw_box_count"] = len(raw_boxes)
     profile["selected_box_count"] = len(selected)
+    profile.update(rapidocr_box_area_profile("raw", raw_boxes))
+    profile.update(rapidocr_box_area_profile("selected", selected))
     if not selected:
         profile.update(
             {

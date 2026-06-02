@@ -12803,3 +12803,34 @@ with zero failures in 0.531s.
   boxes and recognizer time around `0.43s`. Keep the next OCR-tail experiment
   focused on Zoox tall recognition volume/semantics rather than another broad
   backend swap. No deploy is needed.
+- Added OCR detector-box area attribution to RapidOCR engine profiles and the
+  stress slow-sample summary so future recognition-volume cutoffs are grounded
+  in actual selected-box distributions, not just raw box counts. Profiled OCR
+  calls now report raw/selected box area min/p25/p50/p75/p90/max plus counts
+  below 500/900/1300/1500 px^2; stress slow-sample JSON and CLI output surface
+  the selected median area and below-1300 count next to recognizer timing. This
+  is diagnostic-only and does not change OCR selection, labels, georeferencing,
+  cache keys, or runtime behavior. Focused validation passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_ocr_georeference.py
+  tests/test_stress_benchmark.py -q` (`163 passed`) and `py_compile` passed
+  for the edited OCR/stress/test files; full validation passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` (`515 passed, 30 subtests
+  passed`), and `git diff --check` passed. A real dark-teal/Zoox-tail smoke,
+  `out/stress-ocr-box-area-smoke-20260602/stress-summary.json`, passed `2/2`
+  primary expectations, `4/4` analyzed repeat expectations, `4/4` subsecond
+  analyzed repeats, stable signatures, and the total/OCR-engine p95 budgets
+  with repeat p95 `0.869s`, max `0.875s`, recognizer p95 `0.606s`, and
+  RapidOCR total p95 `0.763s`. The new area evidence showed
+  `zoox-las-vegas-mobile-tall` still selects 51 boxes with selected area
+  min/p25/p50/p75/p90/max `374/1638/2829/4491/7290/19140` px^2 and only
+  10 boxes below 1300 px², while `grand-rapids-may-mobility` selects 34 boxes
+  with selected area min/p25/p50/p75/p90/max `390/1080/1889/2421/3434/33232`
+  px^2 and 11 boxes below 1300 px^2. A runtime monkeypatch that applied a
+  dark-teal `rapidocr_min_text_area=1300` candidate
+  (`out/darkteal-minarea1300-candidate-20260602/stress-summary.json`) is
+  rejected: expectations stayed `2/2` primary and `2/2` analyzed repeats, but
+  Grand Rapids needed a full-detail retry, primary latency rose to `1.658s`,
+  only `1/2` analyzed repeats stayed subsecond, and repeat p95 failed the
+  `1.05s` budget at `1.244s`. Do not add a dark-teal area filter unless a
+  future selector avoids Grand Rapids retries and proves the full dark-teal
+  stress subset under the repeat/signature/p95 gates. No deploy is needed.

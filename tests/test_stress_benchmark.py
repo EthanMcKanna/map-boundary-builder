@@ -1440,6 +1440,8 @@ def test_repeat_profile_slowest_samples_summarizes_actionable_context() -> None:
                 "total_s": 0.72,
                 "selected_box_count": 37,
                 "useful_label_count": 18,
+                "selected_box_area_p50": 1180.0,
+                "selected_box_area_lt_1300_count": 21,
             },
         },
     ]
@@ -1464,12 +1466,14 @@ def test_repeat_profile_slowest_samples_summarizes_actionable_context() -> None:
                 "calls": 1,
                 "selected_box_count": 37,
                 "useful_label_count": 18,
+                "selected_box_area_p50": 1180.0,
+                "selected_box_area_lt_1300_count": 21,
             },
         }
     ]
     assert (
         stress_module.repeat_profile_slow_sample_text(slowest[0])
-        == "slow#2=0.910s ocr=0.740s rec=0.450s ocr_total=0.720s"
+        == "slow#2=0.910s ocr=0.740s rec=0.450s ocr_total=0.720s sel_area_p50=1180 sel_lt1300=21"
     )
 
 

@@ -67,6 +67,7 @@ from map_boundary_builder.ocr import (
     ocr_near_visual_cache_key,
     ocr_visual_cache_key,
     rapidocr_box_area,
+    rapidocr_box_area_profile,
     rapidocr_detector_limit_for_input,
     rapidocr_input_array,
     rapidocr_input_image,
@@ -972,6 +973,22 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertEqual(rapidocr_box_area(box), 2000.0)
 
+    def test_rapidocr_box_area_profile_summarizes_cutoff_candidates(self) -> None:
+        small = np.array([[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]], dtype=np.float32)
+        medium = np.array([[0.0, 0.0], [40.0, 0.0], [40.0, 20.0], [0.0, 20.0]], dtype=np.float32)
+        large = np.array([[0.0, 0.0], [80.0, 0.0], [80.0, 20.0], [0.0, 20.0]], dtype=np.float32)
+
+        profile = rapidocr_box_area_profile("selected", [small, medium, large])
+
+        self.assertEqual(profile["selected_box_area_min"], 400.0)
+        self.assertEqual(profile["selected_box_area_p50"], 800.0)
+        self.assertEqual(profile["selected_box_area_p90"], 1440.0)
+        self.assertEqual(profile["selected_box_area_max"], 1600.0)
+        self.assertEqual(profile["selected_box_area_lt_500_count"], 1)
+        self.assertEqual(profile["selected_box_area_lt_900_count"], 2)
+        self.assertEqual(profile["selected_box_area_lt_1300_count"], 2)
+        self.assertEqual(profile["selected_box_area_lt_1500_count"], 2)
+
     def test_rapidocr_min_text_area_filters_boxes_before_recognition(self) -> None:
         small_box = np.array(
             [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]],
@@ -991,12 +1008,23 @@ class OcrGroupingTests(unittest.TestCase):
             ),
             patch.object(ocr_module, "rapidocr_engine", return_value=engine),
             patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
+            ocr_module.collect_rapidocr_profiles() as profiles,
         ):
             labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_min_text_area=1200)
 
         self.assertEqual(len(engine.selected_boxes), 1)
         self.assertTrue(np.array_equal(engine.selected_boxes[0], large_box))
         self.assertEqual([label.text for label in labels], ["Austin"])
+        self.assertEqual(len(profiles), 1)
+        profile = profiles[0]
+        self.assertEqual(profile["raw_box_count"], 2)
+        self.assertEqual(profile["selected_box_count"], 1)
+        self.assertEqual(profile["raw_box_area_min"], 400.0)
+        self.assertEqual(profile["raw_box_area_p50"], 1400.0)
+        self.assertEqual(profile["raw_box_area_lt_900_count"], 1)
+        self.assertEqual(profile["selected_box_area_min"], 2400.0)
+        self.assertEqual(profile["selected_box_area_p50"], 2400.0)
+        self.assertEqual(profile["selected_box_area_lt_1500_count"], 0)
 
     def test_rapidocr_min_text_area_rescues_medium_horizontal_boxes(self) -> None:
         medium_horizontal_box = np.array(

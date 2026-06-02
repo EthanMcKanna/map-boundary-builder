@@ -27,6 +27,28 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
+OCR_ENGINE_BOX_AREA_KEYS = (
+    "raw_box_area_min",
+    "raw_box_area_p25",
+    "raw_box_area_p50",
+    "raw_box_area_p75",
+    "raw_box_area_p90",
+    "raw_box_area_max",
+    "raw_box_area_lt_500_count",
+    "raw_box_area_lt_900_count",
+    "raw_box_area_lt_1300_count",
+    "raw_box_area_lt_1500_count",
+    "selected_box_area_min",
+    "selected_box_area_p25",
+    "selected_box_area_p50",
+    "selected_box_area_p75",
+    "selected_box_area_p90",
+    "selected_box_area_max",
+    "selected_box_area_lt_500_count",
+    "selected_box_area_lt_900_count",
+    "selected_box_area_lt_1300_count",
+    "selected_box_area_lt_1500_count",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -888,6 +910,7 @@ def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) 
         "result_count",
         "label_count",
         "useful_label_count",
+        *OCR_ENGINE_BOX_AREA_KEYS,
     ):
         value = call.get(key)
         if value is not None:
@@ -1133,7 +1156,27 @@ def slowest_sample_ocr_engine_summary(sample: dict[str, Any]) -> dict[str, Any]:
         value = ocr_engine_profile.get(key)
         if isinstance(value, int):
             summary[key] = value
+    detail_profile = slowest_ocr_engine_detail_profile(ocr_engine_profile)
+    for key in OCR_ENGINE_BOX_AREA_KEYS:
+        value = ocr_engine_profile.get(key)
+        if value is None and detail_profile is not None:
+            value = detail_profile.get(key)
+        if isinstance(value, int):
+            summary[key] = value
+        elif isinstance(value, float):
+            summary[key] = round(value, 6)
     return summary
+
+
+def slowest_ocr_engine_detail_profile(profile: dict[str, Any]) -> dict[str, Any] | None:
+    calls = profile.get("calls_detail")
+    call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+    if not call_profiles:
+        return None
+    return max(
+        call_profiles,
+        key=lambda call: parse_nonnegative_float(call.get("total_s")) or 0.0,
+    )
 
 
 def repeat_profile_signature_drift_cases(report: dict[str, Any]) -> list[str]:
@@ -1695,6 +1738,12 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
             parts.append(f"rec={rec_elapsed_s:.3f}s")
         if total_elapsed_s is not None:
             parts.append(f"ocr_total={total_elapsed_s:.3f}s")
+        selected_area_p50 = parse_nonnegative_float(ocr_engine.get("selected_box_area_p50"))
+        selected_lt_1300 = ocr_engine.get("selected_box_area_lt_1300_count")
+        if selected_area_p50 is not None:
+            parts.append(f"sel_area_p50={selected_area_p50:.0f}")
+        if isinstance(selected_lt_1300, int):
+            parts.append(f"sel_lt1300={selected_lt_1300}")
         if parts:
             ocr_text = " " + " ".join(parts)
     return f"{slug}{repeat_text}={elapsed_text}{stage_text}{ocr_text}"
