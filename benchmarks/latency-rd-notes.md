@@ -14662,3 +14662,22 @@ with zero failures in 0.531s.
   tests/test_stress_benchmark.py -q` (`145 passed`), compileall over
   `map_boundary_builder`, `api`, and `tests`, `git diff --check`, and the full
   suite (`591 passed`, `30` subtests).
+  Production deploy proof: commit `4561fb9` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_GAwNPm1KosLDXXym3aRkgGZ26kAH`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-f36497b37036c819` with expected dependency
+  versions. A neutral-filename live upload of `IMG_9930.PNG` returned HTTP
+  `422` with the exact `non-map app UI` error, categories
+  `["account","import","privacy","stats","sync"]`,
+  `build_stage_elapsed_s.georeference=0.000009`, and
+  `build_boundary_s=0.110177` on the warmed instance. A neutral-filename live
+  upload of `IMG_0010.PNG` returned HTTP `422` with the exact `ride-route UI`
+  error, route metric `Ride is 3 min away`,
+  `build_stage_elapsed_s.georeference=0.000009`, and
+  `build_boundary_s=0.108441` on the warmed instance. A neutral-filename Dallas
+  no-catalog positive smoke with `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg`
+  returned HTTP `201`, city `Dallas`, source
+  `ocr-georeference:nominatim-label-fit`, confidence `0.825`, bbox
+  `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
+  `build_boundary_s=0.138441`.
