@@ -70,6 +70,12 @@ def test_parse_image_name_supports_avride_provider() -> None:
     assert area_name == "Dallas"
 
 
+def test_parser_accepts_disable_ocr_cache() -> None:
+    args = benchmark_module.build_parser().parse_args(["--disable-ocr-cache"])
+
+    assert args.disable_ocr_cache is True
+
+
 def test_parse_stage_duration_budgets_accepts_repeated_and_comma_values() -> None:
     budgets = parse_stage_duration_budgets(["ocr=4.0, extract=1.5", "georeference=0.75"])
 
@@ -288,6 +294,7 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
         only_filters=[],
         fixture_config=tmp_path / "fixtures.json",
         block_network=True,
+        runner_ocr_cache=False,
     )
 
     runtime_config = report["runtime_config"]
@@ -296,10 +303,11 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1600}
     assert generation_env["MAP_BOUNDARY_BLOCK_NETWORK"] == "1"
     assert generation_env["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"] == "0"
-    assert generation_env["MAP_BOUNDARY_RUNNER_OCR_CACHE"] == "1"
+    assert generation_env["MAP_BOUNDARY_RUNNER_OCR_CACHE"] == "0"
     assert generation_env["MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS"] == "3000000"
     assert generation_env["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"] == "24"
     assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
+    assert os.environ.get("MAP_BOUNDARY_RUNNER_OCR_CACHE") is None
 
 
 def test_run_benchmark_summary_includes_georeference_source_counts(
@@ -396,6 +404,7 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
     calls = []
 
     def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
+        assert os.environ["MAP_BOUNDARY_RUNNER_OCR_CACHE"] == "0"
         calls.append((fixture.slug, kwargs["execution"], kwargs["score_reference"]))
         duration = next(durations)
         selected_box_count = int(duration * 10)
@@ -453,6 +462,7 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
         execution="in-process",
         repeat_profile_runs=2,
         repeat_profile_warmups=1,
+        runner_ocr_cache=False,
     )
 
     assert calls == [
@@ -556,6 +566,7 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
     ] == 8
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
+    assert os.environ.get("MAP_BOUNDARY_RUNNER_OCR_CACHE") is None
 
 
 def test_repeat_profile_flags_output_signature_drift() -> None:

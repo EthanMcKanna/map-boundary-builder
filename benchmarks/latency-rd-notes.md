@@ -13845,3 +13845,16 @@ with zero failures in 0.531s.
   `0.723560s`, repeat OCR `total_s` p95 `0.416903s`, and repeat
   `selected_box_count` p95 `7` under the budgets (`total_s=1.0`,
   `selected_box_count=20`).
+- Added a regular benchmark `--disable-ocr-cache` flag so repeat OCR p95
+  budgets can force fresh OCR work without manually exporting
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=0`. The flag is scoped to the benchmark run,
+  restores the caller environment, and records `runner_ocr_cache=false` plus
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=0` in the report runtime config. Focused
+  validation passed `PYTHONPATH=. .venv/bin/uv run --with pytest python -m
+  pytest tests/test_benchmark.py -q` (`81` tests) plus compileall for the
+  touched files. Live validation with the new flag passed at
+  `out/repeat-ocr-budget-smoke-dallas-flag-nocache-20260602/full-report.json`:
+  Dallas no-catalog active IoU `0.955`, latency budget passed, repeat p95
+  duration `0.608555s`, repeat OCR `total_s` p95 `0.299727s`, and repeat
+  `selected_box_count` p95 `7` under budgets (`total_s=1.0`,
+  `selected_box_count=20`).

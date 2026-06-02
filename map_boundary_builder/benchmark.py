@@ -382,6 +382,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--disable-ocr-cache",
+        action="store_true",
+        help=(
+            "Disable the runner OCR cache while scoring fixtures, useful when repeat-profile "
+            "OCR engine budgets need fresh OCR work instead of cache hits."
+        ),
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -639,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
         profile_ocr_engine=args.profile_ocr_engine,
+        runner_ocr_cache=not args.disable_ocr_cache,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -757,6 +766,7 @@ def run_benchmark(
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
     profile_ocr_engine: bool = False,
+    runner_ocr_cache: bool = True,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
         raise ValueError("repeat_profile_runs must be non-negative")
@@ -780,7 +790,7 @@ def run_benchmark(
         inventory["only_filters"] = filters
     scores: list[BenchmarkScore] = []
     repeat_targets: list[dict[str, Any]] = []
-    with benchmark_network_policy(block_network):
+    with benchmark_runtime_policy(block_network=block_network, runner_ocr_cache=runner_ocr_cache):
         for fixture in fixtures:
             if fixture.status != "active":
                 catalog_reference = (
@@ -962,6 +972,7 @@ def run_benchmark(
             "repeat_profile_runs": repeat_profile_runs,
             "repeat_profile_warmups": repeat_profile_warmups,
             "profile_ocr_engine": profile_ocr_engine,
+            "runner_ocr_cache": runner_ocr_cache,
         },
         "runtime_config": runtime_config,
         "summary": {
@@ -1608,6 +1619,30 @@ def benchmark_network_policy(block_network: bool):
             os.environ.pop(NETWORK_BLOCK_ENV, None)
         else:
             os.environ[NETWORK_BLOCK_ENV] = previous
+
+
+@contextmanager
+def benchmark_runtime_policy(*, block_network: bool, runner_ocr_cache: bool):
+    with benchmark_network_policy(block_network), benchmark_runner_ocr_cache_policy(runner_ocr_cache):
+        yield
+
+
+@contextmanager
+def benchmark_runner_ocr_cache_policy(runner_ocr_cache: bool):
+    if runner_ocr_cache:
+        yield
+        return
+    from .runner import RUNNER_OCR_CACHE_ENV
+
+    previous = os.environ.get(RUNNER_OCR_CACHE_ENV)
+    os.environ[RUNNER_OCR_CACHE_ENV] = "0"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(RUNNER_OCR_CACHE_ENV, None)
+        else:
+            os.environ[RUNNER_OCR_CACHE_ENV] = previous
 
 
 def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:
