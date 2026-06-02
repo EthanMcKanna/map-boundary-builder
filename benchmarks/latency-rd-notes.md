@@ -11474,3 +11474,25 @@ with zero failures in 0.531s.
   (`comparison_scope=filtered_candidate`, one compared fixture, 14 omitted
   baseline fixtures, IoU `0.983820`, total duration `1.813240s`, OCR
   `1.020657s`).
+- Rejected lowering the bright-blue RapidOCR detector cap below the accepted
+  `256` default. A first `--only waymo` probe at `224` showed the new filtered
+  regression harness was working correctly: because the command skipped stale
+  Waymo fixtures that the accepted baseline scored via
+  `--score-skipped-catalog-references`, it failed with selected
+  `missing_candidate_score` issues rather than hidden omissions. Rerunning with
+  scored current references preserved all nine Waymo IoUs at detector caps
+  `224`, `208`, and `192`, but none produced a clean latency win. The current
+  `256` control was noisy and missed the 1s budget on Dallas (`1.150553s`,
+  `4.942548s` OCR total;
+  `out/brightblue-det256-waymo-control-20260602/full-report.json`). Cap `224`
+  had slightly lower total OCR (`4.765934s`) but worsened Dallas to
+  `1.196659s`
+  (`out/brightblue-det224-waymo-scoredref-probe-20260602/full-report.json`);
+  cap `192` lowered Dallas to `1.071967s` but made Houston `1.046334s` and OCR
+  total `5.165083s`
+  (`out/brightblue-det192-waymo-scoredref-probe-20260602/full-report.json`);
+  cap `208` was worse overall at `8.683879s` total with Dallas `1.566481s` and
+  Phoenix `1.248202s`
+  (`out/brightblue-det208-waymo-scoredref-probe-20260602/full-report.json`).
+  Accuracy stability is encouraging, but the lower detector cap is not a
+  reliable default speedup.
