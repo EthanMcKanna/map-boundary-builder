@@ -11424,3 +11424,40 @@ with zero failures in 0.531s.
   fixture budget. The code was reverted; a useful future version needs a
   pre-georeference label-set or city-label-loss detector, not just residual,
   confidence, or road-score checks after a potentially wrong fit.
+- Compared bright-blue OCR label sets at the accepted 1600px path and the
+  rejected 1500px path. The differences explain why post-georeference guards
+  are late: Phoenix lost many high-confidence place labels (`Biltmore`,
+  `Biltmore Fashion Park`, `Mesa`, `Scottsdale Scottsdale`, `Snedigar`, etc.)
+  and gained different Tempe/Talking Stick labels; Miami replaced useful
+  context like `Little Havana Miami` with `Miami Gardens`; Dallas only swapped
+  the word order around `Bishop Arts District`; and Nashville's high-confidence
+  text set was nearly unchanged even though its strict IoU still moved. A
+  generic low-res detector probably needs either a cheap independent label
+  stability signal or a very narrow provider/market allowlist; residuals and
+  confidence alone do not see the failure early enough.
+- Swept the fast-text minimum text-box area while keeping the accepted 1600px
+  OCR scale. On the 9 bright-blue active fixtures, `1650` preserved compared
+  IoUs but was not a win: total `6.590564s` / OCR `4.870055s` versus the
+  selected baseline `6.828745s` / OCR `5.002627s`, with Dallas becoming the
+  max tail at `1.055867s`
+  (`out/fasttext-area1650-brightblue-probe-20260601/full-report.json`).
+  `1680` also preserved IoU but made the max worse (`1.170701s`;
+  `out/fasttext-area1680-brightblue-probe-20260601/full-report.json`). At
+  `1700`, `1725`, `1750`, `1850`, and `1950`, Miami collapsed from `0.966714`
+  IoU to `0.851050` despite faster tails
+  (`out/fasttext-area1700-brightblue-probe-20260601/full-report.json`,
+  `out/fasttext-area1725-brightblue-probe-20260601/full-report.json`,
+  `out/fasttext-area1750-brightblue-probe-20260601/full-report.json`,
+  `out/fasttext-area1850-brightblue-probe-20260601/full-report.json`,
+  `out/fasttext-area1950-brightblue-probe-20260601/full-report.json`). Keep
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA=1500`; the safe margin before Miami
+  breaks is too narrow and noisy to ship.
+- Ran a current-default repeat-profile stability check on the four first-pass
+  bright-blue tail fixtures: Dallas, Phoenix, Houston, and Los Angeles
+  (`out/recbatch12-tail-repeat-profile-20260601/full-report.json`). The initial
+  no-catalog pass preserved IoU with max fixture duration `0.946841s`; after
+  one warmup repeat per fixture, all 12 analyzed samples passed, all 12 were
+  subsecond, the repeat max was `0.172864s`, median `0.109653s`, and max OCR
+  stage was only `0.000811s` because in-process OCR labels were already cached.
+  This proves exact warm repeats are comfortably subsecond; it does not reduce
+  the uncached first-pass OCR tail.
