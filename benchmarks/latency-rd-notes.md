@@ -12931,3 +12931,32 @@ with zero failures in 0.531s.
   `ocr-georeference:nominatim-label-fit`, `3` controls, confidence `0.805`,
   the expected focused `19` labels, `cache_hit=miss`, `build_boundary_s:
   1.028490`, and `total_before_send_s: 1.032551`.
+- Current stress-gate rerun after the focused sparse fast-fail deployment
+  confirms the local warm in-process no-cache path is stable enough that the
+  next R&D target should stay narrow. The full 16-case hard gate
+  `out/stress-full-current-subsecond-gate-rerun-20260602/stress-summary.json`
+  used in-process execution, disabled OCR/extraction caches,
+  `--repeat-profile-runs 3`, `--repeat-profile-warmups 1`,
+  `--fail-on-unexpected`, `--fail-on-repeat-signature-drift`,
+  `--max-total-elapsed-s 1.0`, and
+  `--max-repeat-profile-p95-duration-s 1.05`. It passed `16/16` primary
+  expectations, `32/32` analyzed repeat expectations, stable signatures for
+  all `16` cases, `32/32` subsecond analyzed repeats, primary max
+  `0.892963s`, repeat p95 `0.647694s`, repeat max `0.685386s`, and zero
+  full-detail OCR retries. Slow repeats were still OCR dominated, led by
+  Grand Rapids (`0.685s` and `0.640s`) and Los Angeles (`0.657s` and
+  `0.622s`).
+- A focused profiled rerun over the current slowest cases,
+  `out/stress-slow4-current-profile-rerun-20260602/stress-summary.json`,
+  covered Grand Rapids, Los Angeles, Bay Area, and Miami with OCR-engine
+  profiling plus total/OCR-engine p95 budgets. It passed `4/4` primary
+  expectations, `8/8` analyzed repeat expectations, stable signatures,
+  `8/8` subsecond repeats, repeat p95 `0.634674s`, OCR-engine recognizer p95
+  `0.414676s`, and OCR-engine total p95 `0.589693s`. The slowest engine row
+  remains Grand Rapids recognition (`34` selected boxes, selected area p50
+  `1889` px^2, `11` selected boxes below `1300` px^2, recognizer max
+  `0.418857s`), while Bay Area is no longer the steady-state tail
+  (`19` selected boxes, detector max `0.241826s`, recognizer around
+  `0.157s`). No runtime change or deploy is justified from this checkpoint;
+  future speed work should focus on a Grand Rapids-safe semantic or
+  label-quality selector rather than broad bright-blue detector changes.
