@@ -14208,3 +14208,28 @@ with zero failures in 0.531s.
   visible (`label_confidence_p50=99.929`, `p90=99.988`, zero labels below
   80/90). This ships as a reliability/evidence improvement for future speed
   experiments without changing the generation path when profiling is off.
+- Validated the new confidence telemetry as a hard guardrail on the full
+  real-screenshot stress set and surfaced the signal in console output. The
+  full16 run
+  `out/confidence-guard-full16-20260602/stress-summary.json` used production
+  prewarm, OCR-engine profiling, disabled OCR/extraction caches,
+  `--repeat-profile-runs 3`, `--repeat-profile-warmups 1`,
+  `--fail-on-repeat-signature-drift`, total/repeat/OCR/prewarm budgets, and
+  the new confidence count budgets:
+  `--max-ocr-engine-count label_confidence_lt_70_count=0,label_confidence_lt_80_count=0`
+  plus matching repeat p95 count budgets. It passed with `16/16` primary
+  expectations, statuses `{"complete":14,"failed":2}`, `32/32` analyzed repeat
+  expectations, all repeat samples subsecond, primary max `0.751447s`, repeat
+  p95 `0.573s`, repeat max `0.620s`, OCR engine repeat p95 `0.486s`, and no
+  labels below 70/80 confidence in primary or repeat profiles. The same run
+  showed labels below 90 are present but bounded (`primary total=4`, repeat
+  `p95=1.45`, max `2`), so future speed probes should guard below 70/80 by
+  default and treat below-90 counts as diagnostic unless a fixture-specific
+  threshold is justified. Follow-up formatter patch makes those metrics visible
+  without manual JSON inspection: slowest repeat samples now print
+  `conf_p50`/`conf_lt80`, and repeat OCR count summaries print
+  `conf_lt50`/`conf_lt70`/`conf_lt80`/`conf_lt90`. Validation after the patch:
+  `tests/test_stress_benchmark.py` passed `62` tests; full suite passed
+  `582` tests plus `30` subtests; `compileall` and `git diff --check` were
+  clean; replaying `print_stress_table` against the full16 report printed
+  `conf_lt80=p95 0.0 max 0.0` and `conf_lt90=p95 1.4 max 2.0`.

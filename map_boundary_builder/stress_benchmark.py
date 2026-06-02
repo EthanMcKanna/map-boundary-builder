@@ -82,6 +82,22 @@ OCR_ENGINE_COUNT_METRIC_KEYS = (
     *tuple(key for key in OCR_ENGINE_BOX_AREA_KEYS if key.endswith("_count")),
     *tuple(key for key in OCR_ENGINE_CONFIDENCE_KEYS if key.endswith("_count")),
 )
+OCR_ENGINE_COUNT_DISPLAY_KEYS = (
+    "raw_box_count",
+    "selected_box_count",
+    "result_count",
+    "label_count",
+    "label_confidence_lt_50_count",
+    "label_confidence_lt_70_count",
+    "label_confidence_lt_80_count",
+    "label_confidence_lt_90_count",
+)
+OCR_ENGINE_COUNT_DISPLAY_LABELS = {
+    "label_confidence_lt_50_count": "conf_lt50",
+    "label_confidence_lt_70_count": "conf_lt70",
+    "label_confidence_lt_80_count": "conf_lt80",
+    "label_confidence_lt_90_count": "conf_lt90",
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2619,14 +2635,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
                     print(f"repeat ocr engine: {stage_text}")
             ocr_engine_counts = repeat_summary.get("ocr_engine_count_metric")
             if isinstance(ocr_engine_counts, dict) and ocr_engine_counts:
-                count_text = ", ".join(
-                    f"{key}=p95 {stats['p95_count']:.1f} max {stats['max_count']:.1f}"
-                    for key, stats in ocr_engine_counts.items()
-                    if key in {"raw_box_count", "selected_box_count", "result_count", "label_count"}
-                    and isinstance(stats, dict)
-                    and isinstance(stats.get("p95_count"), (int, float))
-                    and isinstance(stats.get("max_count"), (int, float))
-                )
+                count_text = repeat_profile_ocr_engine_count_metric_text(ocr_engine_counts)
                 if count_text:
                     print(f"repeat ocr engine counts: {count_text}")
     for row in report["rows"]:
@@ -2671,9 +2680,30 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
             parts.append(f"sel_area_p50={selected_area_p50:.0f}")
         if isinstance(selected_lt_1300, int):
             parts.append(f"sel_lt1300={selected_lt_1300}")
+        confidence_p50 = parse_nonnegative_float(ocr_engine.get("label_confidence_p50"))
+        confidence_lt_80 = ocr_engine.get("label_confidence_lt_80_count")
+        if confidence_p50 is not None:
+            parts.append(f"conf_p50={confidence_p50:.1f}")
+        if isinstance(confidence_lt_80, int):
+            parts.append(f"conf_lt80={confidence_lt_80}")
         if parts:
             ocr_text = " " + " ".join(parts)
     return f"{slug}{repeat_text}={elapsed_text}{stage_text}{ocr_text}"
+
+
+def repeat_profile_ocr_engine_count_metric_text(ocr_engine_counts: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in OCR_ENGINE_COUNT_DISPLAY_KEYS:
+        stats = ocr_engine_counts.get(key)
+        if not isinstance(stats, dict):
+            continue
+        p95_count = stats.get("p95_count")
+        max_count = stats.get("max_count")
+        if not isinstance(p95_count, (int, float)) or not isinstance(max_count, (int, float)):
+            continue
+        label = OCR_ENGINE_COUNT_DISPLAY_LABELS.get(key, key)
+        parts.append(f"{label}=p95 {p95_count:.1f} max {max_count:.1f}")
+    return ", ".join(parts)
 
 
 def parse_summary(stdout: str | bytes | None) -> tuple[dict[str, Any], str | None]:

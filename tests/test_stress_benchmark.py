@@ -105,6 +105,80 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["ocr_full_detail_retry"] is False
 
 
+def test_repeat_profile_ocr_engine_count_metric_text_includes_confidence_counts() -> None:
+    text = stress_module.repeat_profile_ocr_engine_count_metric_text(
+        {
+            "label_count": {"p95_count": 12.0, "max_count": 14.0},
+            "label_confidence_lt_70_count": {"p95_count": 0.0, "max_count": 0.0},
+            "label_confidence_lt_80_count": {"p95_count": 1.5, "max_count": 2.0},
+            "unused_metric": {"p95_count": 99.0, "max_count": 100.0},
+        }
+    )
+
+    assert text == (
+        "label_count=p95 12.0 max 14.0, "
+        "conf_lt70=p95 0.0 max 0.0, "
+        "conf_lt80=p95 1.5 max 2.0"
+    )
+
+
+def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
+    report = {
+        "summary": {
+            "total": 1,
+            "expectation_passed": 1,
+            "statuses": {"complete": 1},
+            "max_total_elapsed_s": 0.5,
+        },
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 1,
+                "expectation_passed_samples": 1,
+                "subsecond_samples": 1,
+                "median_total_elapsed_s": 0.5,
+                "p95_total_elapsed_s": 0.5,
+                "max_total_elapsed_s": 0.5,
+                "slowest_samples": [
+                    {
+                        "slug": "kept",
+                        "repeat_index": 2,
+                        "total_elapsed_s": 0.5,
+                        "ocr_engine": {
+                            "rec_elapsed_s": 0.12,
+                            "total_s": 0.3,
+                            "label_confidence_p50": 88.25,
+                            "label_confidence_lt_80_count": 1,
+                        },
+                    }
+                ],
+                "ocr_engine_count_metric": {
+                    "label_count": {"p95_count": 12.0, "max_count": 14.0},
+                    "label_confidence_lt_70_count": {"p95_count": 0.0, "max_count": 0.0},
+                    "label_confidence_lt_80_count": {"p95_count": 1.0, "max_count": 2.0},
+                },
+            }
+        },
+        "rows": [
+            {
+                "slug": "kept",
+                "observed_status": "complete",
+                "expectation_passed": True,
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": 4,
+                "total_elapsed_s": 0.5,
+            }
+        ],
+    }
+
+    stress_module.print_stress_table(report)
+
+    output = capsys.readouterr().out
+    assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
+    assert "repeat ocr engine counts: label_count=p95 12.0 max 14.0" in output
+    assert "conf_lt70=p95 0.0 max 0.0" in output
+    assert "conf_lt80=p95 1.0 max 2.0" in output
+
+
 def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")
