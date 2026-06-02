@@ -12548,3 +12548,23 @@ with zero failures in 0.531s.
   same top labels across both analyzed repeats, while Zoox tall consistently
   failed closed with the same sparse-OCR error, `ocr_label_count=62`, and the
   same top labels.
+- Rejected increasing the dark-teal-only RapidOCR recognition batch beyond the
+  accepted `16`. A same-subset no-cache control at the current default,
+  `out/stress-darkteal-recbatch16-stability-20260602/stress-summary.json`,
+  preserved `5/5` primary expectations and `15/15` analyzed repeat
+  expectations, kept all `15/15` repeats subsecond, and reported stable
+  signatures for all five dark-teal cases with repeat p95 `0.836592s`. Raising
+  the dark-teal batch to `24`
+  (`out/stress-darkteal-recbatch24-stability-20260602/stress-summary.json`)
+  and `32`
+  (`out/stress-darkteal-recbatch32-stability-20260602/stress-summary.json`)
+  kept signatures stable and all expectations correct, but regressed the fresh
+  OCR repeat budget: `24` produced only `13/15` subsecond repeats with p95
+  `1.252029s`, and `32` produced only `12/15` subsecond repeats with p95
+  `1.228591s`. Intermediate values were correctness failures: `18`
+  (`out/stress-darkteal-recbatch18-stability-20260602/stress-summary.json`)
+  and `20`
+  (`out/stress-darkteal-recbatch20-stability-20260602/stress-summary.json`)
+  each made Grand Rapids fail as sparse OCR in the primary row and all three
+  analyzed repeats, scoring only `12/15` analyzed repeat expectations despite
+  stable signatures. Keep `RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=16`.
