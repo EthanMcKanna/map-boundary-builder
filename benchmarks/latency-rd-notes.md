@@ -15432,3 +15432,27 @@ with zero failures in 0.531s.
   `out/svg-label-layer-full32-hard-20260602/stress-summary.json` showed zero
   changes for status, source, city, bbox, geometry hash, coordinate count, or
   control count; Miami improved from `0.865167s` to `0.558249s`.
+- Added a new no-catalog real-world positive stress fixture for
+  `/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png`, a
+  distinct 2400x2400 bright-blue Waymo screenshot not covered by the existing
+  Dallas Tesla/Avride rows. The full benchmark candidate at
+  `out/candidate-waymo-dallas-benchmark-rerun-20260602/full-report.json`
+  scored IoU `0.954771`, area ratio `0.982509`, centroid distance `192.5m`,
+  active total `0.579728s`, source `ocr-georeference:nominatim-label-fit`,
+  Dallas city, six controls, confidence `0.966`, and bbox
+  `[-96.8760366, 32.7327533, -96.729695, 32.8659004]`. A stricter temporary
+  stress gate at
+  `out/candidate-waymo-dallas-stress-20260602/stress-summary.json` passed with
+  primary `0.539637s`, repeat p95 `0.417s`, repeat max `0.417s`, stable
+  output signature, OCR engine p95 `0.341s`, seven selected boxes, and zero
+  labels below 80 confidence. After adding the row to the tracked manifest,
+  focused validation at
+  `out/waymo-dallas-tracked-focused-20260602/stress-summary.json` passed with
+  primary `0.661181s` and repeat p95 `0.434s`. The expanded hard gate at
+  `out/waymo-dallas-full33-hard-20260602/stress-summary.json` passed `33/33`
+  expected rows, statuses `{"complete":22,"failed":11}`, primary max
+  `0.788569s`, repeat `33/33` subsecond, repeat p95 `0.593688s`, repeat max
+  `0.659112s`, and no repeat signature drift. Comparing all 32 common rows
+  against `out/road-skip-full32-hard-20260602/stress-summary.json` showed zero
+  changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, or control count.
