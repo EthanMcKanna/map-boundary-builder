@@ -12715,3 +12715,25 @@ with zero failures in 0.531s.
   analyzed repeats subsecond, reported stable repeat signatures, and passed
   the new OCR-engine p95 budgets with repeat recognizer p95 `0.585s` and
   RapidOCR total p95 `0.749s`.
+- Added a stress repeat-profile total p95 gate to match the benchmark
+  harness's repeat p95 budgeting. The new
+  `--max-repeat-profile-p95-duration-s` option is diagnostic-only and leaves
+  generation behavior untouched, but it lets arbitrary-screenshot stress runs
+  reject noisy tail-shape regressions without requiring the caller to promote a
+  single-sample max into the only latency contract. Focused validation passed
+  with `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py
+  -q` (`30 passed`) and `py_compile` passed for the edited stress harness and
+  tests; full validation passed with `PYTHONPATH=. .venv/bin/python -m pytest
+  -q` (`513 passed, 30 subtests passed`), and `git diff --check` passed. A real
+  dark-teal tail smoke,
+  `out/stress-repeat-total-p95-gate-smoke-20260602/stress-summary.json`, used
+  `grand-rapids-may-mobility` plus expected fail-closed
+  `zoox-las-vegas-mobile-tall`, in-process execution, OCR/extraction caches
+  disabled, OCR-engine profiling, `--repeat-profile-runs 3`,
+  `--repeat-profile-warmups 1`, `--fail-on-unexpected`,
+  `--fail-on-repeat-signature-drift`, `--max-total-elapsed-s 1.5`,
+  `--max-repeat-profile-p95-duration-s 1.05`, and OCR-engine p95 budgets
+  `rec_elapsed_s=0.9,total_s=1.2`. It passed `2/2` primary expectations,
+  `4/4` analyzed repeat expectations, `4/4` subsecond repeats, stable
+  signatures, total repeat p95 `0.855098s`, recognizer p95 `0.587147s`, and
+  RapidOCR total p95 `0.745907s`, with no latency-budget violations.
