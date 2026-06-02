@@ -13118,4 +13118,25 @@ with zero failures in 0.531s.
   max `0.636310s`, with zero unexpected rows. The full-gate p95 is effectively
   flat versus the previous `0.565971s` checkpoint because the remaining repeat
   tail is now Tesla/LA bright-blue/gray OCR noise, but the target dark-teal
-  path improves without cross-style regressions.
+  path improves without cross-style regressions. Production deployment proof:
+  commit `fe3cdde` was built with Vercel CLI `54.3.0` using
+  `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_9WJEpH6Z755EHzcY2cXixpqcr9xf`, aliased to
+  `https://mapboundary.app`. Public `/api/health?warm=ocr`
+  (`out/prod-footer-filter-health-20260602.json`) returned `ok: true`,
+  pipeline `pipeline-d714ae987cf02cf8`, warm `status: ok`, warm total
+  `2.563996s`, RapidOCR warm `2.125601s`, and `cv2 4.10.0`. A cache-busted
+  original Grand Rapids no-catalog POST with `include_overlay=0` and
+  `normalized_cache_lookup=0`
+  (`out/prod-footer-filter-grand-rapids-20260602.json`) returned HTTP `201`,
+  `cache_hit: miss`, city `Grand Rapids`, source
+  `ocr-georeference:nominatim-label-fit`, `5` controls, `18` labels, the
+  expected bbox, `build_boundary_s: 1.502052`, `total_before_send_s:
+  1.509421`, and stage timings `extract=0.238591s`, `ocr=1.052420s`,
+  `georeference=0.117329s`. A one-pixel cache-busted PNG variant
+  (`out/prod-footer-filter-grand-rapids-pixelbust-20260602.json`) forced
+  another run-cache miss on the warm instance and preserved the same
+  city/source/controls/bbox with `build_boundary_s: 0.227487`,
+  `total_before_send_s: 0.236900`, `18` labels, and stages
+  `extract=0.087380s`, `ocr=0.017301s`, `georeference=0.093521s`.
