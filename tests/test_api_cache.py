@@ -1197,6 +1197,29 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertIn(b'name="normalized_cache_lookup" value="0"', html)
 
+    def test_frontend_enables_server_normalized_cache_lookup_for_avif_only(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        form_data = app_js.index(b"const formData = new FormData(form);")
+        image_set = app_js.index(b'formData.set("image", uploadFile, uploadFile.name);', form_data)
+        avif_opt_in = app_js.index(
+            b'if (shouldUseServerNormalizedCacheLookup(uploadFile)) {',
+            image_set,
+        )
+        cache_lookup = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
+        probe_override = app_js.index(b'probeData.set("normalized_cache_lookup", "0");')
+        handoff_override = app_js.index(b'fastData.set("normalized_cache_lookup", "0");')
+        avif_helper = app_js.index(b"function isAvifFile(file) {")
+        normalized_helper = app_js.index(b"function shouldUseServerNormalizedCacheLookup(file) {")
+
+        self.assertLess(image_set, avif_opt_in)
+        self.assertLess(avif_opt_in, cache_lookup)
+        self.assertLess(cache_lookup, probe_override)
+        self.assertLess(probe_override, handoff_override)
+        self.assertIn(b'type === "image/avif" || /\\.avif$/i.test(file?.name || "")', app_js[avif_helper:normalized_helper])
+        self.assertIn(b"return isAvifFile(file);", app_js[normalized_helper:normalized_helper + 120])
+
     def test_frontend_eagerly_reschedules_generation_prewarm_after_image_selection(self) -> None:
         app_js, mime = web_asset_response("app.js")
 

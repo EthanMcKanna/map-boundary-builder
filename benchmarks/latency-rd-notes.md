@@ -11520,3 +11520,26 @@ with zero failures in 0.531s.
   are market-specific and the wrong fits can still have plausible confidence.
   Do not ship this without an independent pre-georeference label-stability
   guard or a much broader fixture-backed provider/market strategy.
+- Accepted a narrow AVIF frontend cache lookup improvement. The hosted form
+  still defaults `normalized_cache_lookup` to `0` for ordinary fresh uploads,
+  and catalog-probe / fast-catalog-handoff requests still force it off, but the
+  full upload now sets `normalized_cache_lookup=1` for AVIF files only. The
+  measured stress case used the arbitrary May Mobility AVIF
+  `/Users/ethanmckanna/Downloads/aa mm.avif` plus a metadata/container-only
+  variant with an appended ISO BMFF `free` box. Pillow decoded both to the same
+  `1696x1365` RGB pixels (`normalized_equal=true`,
+  `transposed_rgba_equal=true`) while the raw bytes differed. With the same
+  filename and normalized lookup disabled, the variant missed the raw server
+  cache and rebuilt in `0.799026s` before send after the source miss
+  (`out/avif-normalized-cache-probe-20260602/api-avif-normalized-cache-same-filename-results.json`).
+  With normalized lookup enabled, the source miss paid a small decoded-pixel
+  lookup cost (`0.065810s`) and finished in `0.849881s`; the byte-variant then
+  hit the normalized run-result cache in `0.075552s`, skipped generation, and
+  preserved the `Ann Arbor` 3-control fit, confidence `0.805`, and
+  `ocr-georeference:nominatim-label-fit` source. This is intentionally AVIF
+  scoped: prior PNG production evidence showed normalized lookup can add
+  roughly `0.36s` to cache misses, while this AVIF stress case had a much
+  smaller miss tax and no existing server-side AVIF visual-hash tier. Focused
+  validation passed with `15` selected API/frontend cache tests, `node --check`
+  on `app.js`, full `tests/test_api_cache.py` (`69 passed`), and
+  `git diff --check`; the full suite also passed (`439 passed`).

@@ -388,6 +388,9 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    if (shouldUseServerNormalizedCacheLookup(uploadFile)) {
+      formData.set("normalized_cache_lookup", "1");
+    }
     catalogProbeAbortController = typeof AbortController !== "undefined" ? new AbortController() : null;
     const catalogProbePromise = tryCatalogProbe(uploadFile, formData, {
       signal: catalogProbeAbortController?.signal,
@@ -1470,8 +1473,17 @@ function isTiffFile(file) {
   return type === "image/tiff" || type === "image/x-tiff" || /\.tiff?$/i.test(file?.name || "");
 }
 
+function isAvifFile(file) {
+  const type = String(file?.type || "").toLowerCase();
+  return type === "image/avif" || /\.avif$/i.test(file?.name || "");
+}
+
 function requiresJsonUpload(file) {
   return isTiffFile(file);
+}
+
+function shouldUseServerNormalizedCacheLookup(file) {
+  return isAvifFile(file);
 }
 
 function fileBaseName(filename) {
