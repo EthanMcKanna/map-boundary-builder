@@ -14614,3 +14614,18 @@ with zero failures in 0.531s.
   (`143 passed`), compileall over `map_boundary_builder`, `api`, and `tests`
   passed, `git diff --check` was clean, and the full suite passed `589` tests
   plus `30` subtests.
+  Production deploy proof: commit `7388deb` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_5Fn2xEUPds1TtnHYxZUtTbHejpMi`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-a37e328f4a3c5b90`. Live uploads of
+  `IMG_0065.PNG` and `IMG_0066.PNG` to `/api/runs` both returned HTTP `422`
+  with the exact `ride-route UI` error and
+  `build_stage_elapsed_s.georeference=0.000011`. `IMG_0065.PNG` reported route
+  metrics `20minwalk`, `20minwalk to Pickup`, and `Rideis21minaway` with
+  `build_boundary_s=2.967683`; `IMG_0066.PNG` reported `Rideis22minaway`,
+  `22minwalk`, and `22minwalk to Pickup` with `build_boundary_s=1.504621`.
+  A live Dallas no-catalog positive smoke still returned HTTP `201`, city
+  `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
+  expected bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
+  `build_boundary_s=1.306910`.
