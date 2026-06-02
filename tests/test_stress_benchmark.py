@@ -29,9 +29,31 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
                     "georeference_confidence": 0.88,
                     "control_points": 5,
                     "bbox": [-97, 32, -96, 33],
+                    "pipeline_version": "pipeline-test",
                     "event_profile": {
                         "total_elapsed_s": 0.612345,
                         "stage_elapsed_s": {"ocr": 0.4},
+                        "events": [
+                            {
+                                "stage": "extract",
+                                "message": "Extracting service-area pixels",
+                                "details": {"width": 1200, "height": 900},
+                            },
+                            {
+                                "stage": "extract",
+                                "message": "Pixel polygon extracted",
+                                "details": {
+                                    "style": "purple-fill",
+                                    "coverage_ratio": 0.123456,
+                                    "contour_count": 2,
+                                },
+                            },
+                            {
+                                "stage": "ocr",
+                                "message": "Map labels read",
+                                "details": {"label_count": 8, "top_labels": ["Dallas", "Deep Ellum"]},
+                            },
+                        ],
                     },
                 }
             ),
@@ -62,6 +84,14 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
     assert row["total_elapsed_s"] == 0.612345
     assert row["stages"] == {"ocr": 0.4}
+    assert row["pipeline_version"] == "pipeline-test"
+    assert row["image_width"] == 1200
+    assert row["image_height"] == 900
+    assert row["coverage_ratio"] == 0.123456
+    assert row["contour_count"] == 2
+    assert row["ocr_label_count"] == 8
+    assert row["ocr_top_labels"] == ["Dallas", "Deep Ellum"]
+    assert row["ocr_label_event"] == "Map labels read"
 
 
 def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
@@ -121,6 +151,30 @@ def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> 
                     "event_profile": {
                         "total_elapsed_s": 1.2,
                         "stage_elapsed_s": {"ocr": 0.9},
+                        "events": [
+                            {
+                                "stage": "extract",
+                                "message": "Extracting service-area pixels",
+                                "details": {"width": 734, "height": 1596},
+                            },
+                            {
+                                "stage": "extract",
+                                "message": "Pixel polygon extracted",
+                                "details": {
+                                    "style": "dark-teal",
+                                    "coverage_ratio": 0.152668,
+                                    "contour_count": 1,
+                                },
+                            },
+                            {
+                                "stage": "ocr",
+                                "message": "Map labels read",
+                                "details": {
+                                    "label_count": 2,
+                                    "top_labels": ["Zoox", "Las Vegas"],
+                                },
+                            },
+                        ],
                     },
                 }
             ),
@@ -144,6 +198,12 @@ def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> 
     assert row["observed_status"] == "failed"
     assert row["expectation_passed"] is True
     assert row["error"].endswith("sparse OCR labels.")
+    assert row["style"] == "dark-teal"
+    assert row["image_width"] == 734
+    assert row["image_height"] == 1596
+    assert row["coverage_ratio"] == 0.152668
+    assert row["ocr_label_count"] == 2
+    assert row["ocr_top_labels"] == ["Zoox", "Las Vegas"]
 
 
 def test_run_stress_case_reports_missing_without_subprocess(tmp_path, monkeypatch) -> None:

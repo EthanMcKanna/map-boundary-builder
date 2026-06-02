@@ -11900,3 +11900,22 @@ with zero failures in 0.531s.
   used as a speed claim for this change. Focused runner tests passed (`7
   passed`), stress-runner tests passed (`7 passed`), `py_compile` passed, and
   `git diff --check` passed.
+- Accepted richer real-screenshot stress evidence so future arbitrary-upload
+  speed probes are easier to diagnose without rerunning images. CLI
+  `--print-summary` now includes the local `pipeline_version`, and the stress
+  report lifts extraction/label evidence from profiled events into each row:
+  image dimensions, extraction style, coverage ratio, contour count, OCR label
+  count, top OCR labels, and the label event name. This is especially useful
+  for expected fail-closed rows, which previously lost the extraction/OCR
+  fingerprint behind a generic failure. A two-case real smoke
+  `out/stress-evidence-fields-smoke-20260602/stress-summary.json` passed 2/2
+  and showed the Zoox mobile expected failure as `dark-teal`, `734x1596`,
+  coverage `0.152668`, and 22 OCR labels. The full stress rerun
+  `out/real-screenshot-stress-evidence-fields-20260602/stress-summary.json`
+  passed `12/12` expectations with the same pipeline hash
+  `pipeline-042ddedd0fb2db16`, statuses `{complete: 10, failed: 2}`, max
+  internal `1.148643s`, stage totals `ocr=6.818319s`, `extract=2.730944s`,
+  `georeference=0.368161s`, and the OCR tail correctly attributed to
+  `zoox-las-vegas-mobile-tall` (`0.929847s`, 62 OCR labels). Focused
+  stress-runner tests passed (`7 passed`) and `py_compile` passed before the
+  broader regression suite.

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .extract import DEFAULT_SIMPLIFY_PX
+from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, build_boundary
 
 
@@ -89,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.print_summary:
             summary = dict(result.summary)
+            summary["pipeline_version"] = get_pipeline_version()
             if args.profile_events:
                 summary["event_profile"] = {
                     "total_elapsed_s": round(time.perf_counter() - started, 6),
@@ -102,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             summary: dict[str, Any] = {
                 "status": "failed",
                 "error": str(exc),
+                "pipeline_version": get_pipeline_version(),
             }
             if args.profile_events:
                 summary["event_profile"] = {

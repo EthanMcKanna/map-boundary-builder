@@ -222,19 +222,44 @@ def row_from_process(
 ) -> dict[str, Any]:
     observed_status = observed_status_from_process(completed.returncode, summary)
     event_profile = summary.get("event_profile") if isinstance(summary.get("event_profile"), dict) else {}
+    events = event_profile_events(event_profile)
+    extraction_details = latest_event_details(events, stage="extract", required_key="style")
+    extract_start_details = latest_event_details(events, stage="extract", required_key="width")
+    complete_details = latest_event_details(events, stage="complete")
+    ocr_details, ocr_label_event = latest_ocr_label_details(events)
     row = base_row(case, expected_status=expected_status, observed_status=observed_status)
     row.update(
         {
             "returncode": completed.returncode,
             "wall_s": wall_s,
+            "pipeline_version": summary.get("pipeline_version"),
             "city": summary.get("city"),
-            "style": summary.get("style"),
+            "style": summary.get("style") or extraction_details.get("style") or complete_details.get("style"),
             "source": summary.get("georeference_source"),
             "catalog_slug": summary.get("catalog_slug"),
             "combined_confidence": summary.get("combined_confidence"),
             "georeference_confidence": summary.get("georeference_confidence"),
             "control_points": summary.get("control_points"),
             "bbox": summary.get("bbox"),
+            "image_width": first_present_number(
+                summary.get("image_width"),
+                complete_details.get("image_width"),
+                extract_start_details.get("width"),
+            ),
+            "image_height": first_present_number(
+                summary.get("image_height"),
+                complete_details.get("image_height"),
+                extract_start_details.get("height"),
+            ),
+            "coverage_ratio": first_present_number(
+                summary.get("coverage_ratio"),
+                extraction_details.get("coverage_ratio"),
+                complete_details.get("coverage_ratio"),
+            ),
+            "contour_count": first_present_number(extraction_details.get("contour_count")),
+            "ocr_label_count": first_present_number(ocr_details.get("label_count")),
+            "ocr_top_labels": ocr_details.get("top_labels") if isinstance(ocr_details.get("top_labels"), list) else None,
+            "ocr_label_event": ocr_label_event,
             "total_elapsed_s": event_profile.get("total_elapsed_s"),
             "stages": event_profile.get("stage_elapsed_s") if isinstance(event_profile.get("stage_elapsed_s"), dict) else {},
             "error": summary.get("error"),
@@ -244,6 +269,52 @@ def row_from_process(
         }
     )
     return row
+
+
+def event_profile_events(event_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    events = event_profile.get("events")
+    if not isinstance(events, list):
+        return []
+    return [event for event in events if isinstance(event, dict)]
+
+
+def latest_event_details(
+    events: list[dict[str, Any]],
+    *,
+    stage: str | None = None,
+    required_key: str | None = None,
+) -> dict[str, Any]:
+    for event in reversed(events):
+        if stage is not None and event.get("stage") != stage:
+            continue
+        details = event.get("details")
+        if not isinstance(details, dict):
+            continue
+        if required_key is not None and required_key not in details:
+            continue
+        return details
+    return {}
+
+
+def latest_ocr_label_details(events: list[dict[str, Any]]) -> tuple[dict[str, Any], str | None]:
+    for event in reversed(events):
+        if event.get("stage") != "ocr":
+            continue
+        details = event.get("details")
+        if not isinstance(details, dict) or "label_count" not in details:
+            continue
+        message = event.get("message")
+        return details, message if isinstance(message, str) else None
+    return {}, None
+
+
+def first_present_number(*values: Any) -> int | float | None:
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            return value
+    return None
 
 
 def base_row(case: dict[str, Any], *, expected_status: str, observed_status: str) -> dict[str, Any]:
