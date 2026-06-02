@@ -3018,6 +3018,46 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     smoke_sources_text = format_source_counts(summary.get("smoked_skipped_georeference_sources"))
     if smoke_sources_text:
         print(f"smoked skipped sources: {smoke_sources_text}")
+    active_stage_max_text = format_stage_max_rows(summary.get("active_stage_max_rows"))
+    if active_stage_max_text:
+        print(f"active stage max: {active_stage_max_text}")
+    if summary.get("smoked_skipped_fixtures"):
+        smoke_stage_max_text = format_stage_max_rows(summary.get("smoked_skipped_stage_max_rows"))
+        if smoke_stage_max_text:
+            print(f"smoked skipped stage max: {smoke_stage_max_text}")
+        evaluated_stage_max_text = format_stage_max_rows(summary.get("evaluated_stage_max_rows"))
+        if evaluated_stage_max_text:
+            print(f"evaluated stage max: {evaluated_stage_max_text}")
+    active_ocr_events_text = format_source_counts(summary.get("active_ocr_label_event_counts"))
+    if active_ocr_events_text:
+        print(f"active OCR events: {active_ocr_events_text}")
+    active_retry_text = format_retry_rows(
+        summary.get("active_ocr_full_detail_retry_rows"),
+        summary.get("active_ocr_full_detail_retry_count"),
+    )
+    if active_retry_text:
+        print(f"active OCR full-detail retries: {active_retry_text}")
+    if summary.get("smoked_skipped_fixtures"):
+        smoke_ocr_events_text = format_source_counts(
+            summary.get("smoked_skipped_ocr_label_event_counts")
+        )
+        if smoke_ocr_events_text:
+            print(f"smoked skipped OCR events: {smoke_ocr_events_text}")
+        smoke_retry_text = format_retry_rows(
+            summary.get("smoked_skipped_ocr_full_detail_retry_rows"),
+            summary.get("smoked_skipped_ocr_full_detail_retry_count"),
+        )
+        if smoke_retry_text:
+            print(f"smoked skipped OCR full-detail retries: {smoke_retry_text}")
+        evaluated_ocr_events_text = format_source_counts(summary.get("evaluated_ocr_label_event_counts"))
+        if evaluated_ocr_events_text:
+            print(f"evaluated OCR events: {evaluated_ocr_events_text}")
+        evaluated_retry_text = format_retry_rows(
+            summary.get("evaluated_ocr_full_detail_retry_rows"),
+            summary.get("evaluated_ocr_full_detail_retry_count"),
+        )
+        if evaluated_retry_text:
+            print(f"evaluated OCR full-detail retries: {evaluated_retry_text}")
     print("")
     print(f"{'status':6s} {'iou':>6s} {'time':>7s} {'area':>6s} {'verts':>6s} {'style':12s} {'source':38s} slug")
     for row in report["scores"]:
@@ -3203,6 +3243,56 @@ def format_source_counts(value: Any) -> str:
             continue
         parts.append(f"{source}={parsed_count}")
     return ", ".join(parts)
+
+
+def format_stage_max_rows(value: Any, *, limit: int = 5) -> str:
+    if not isinstance(value, dict) or not value:
+        return ""
+    rows: list[tuple[float, str, str]] = []
+    for stage, raw_row in value.items():
+        if not isinstance(stage, str) or not isinstance(raw_row, dict):
+            continue
+        duration = parse_report_duration(raw_row.get("duration_s"))
+        slug = raw_row.get("slug")
+        if duration is None or not isinstance(slug, str) or not slug:
+            continue
+        rows.append((duration, stage, slug))
+    rows.sort(key=lambda row: (-row[0], row[1], row[2]))
+    parts = [
+        f"{stage}={format_duration(duration)}@{slug}"
+        for duration, stage, slug in rows[:limit]
+    ]
+    if len(rows) > limit:
+        parts.append(f"+{len(rows) - limit} more")
+    return ", ".join(parts)
+
+
+def format_retry_rows(
+    rows_value: Any,
+    count_value: Any = None,
+    *,
+    limit: int = 5,
+) -> str:
+    rows = (
+        [row for row in rows_value if isinstance(row, str) and row]
+        if isinstance(rows_value, list)
+        else []
+    )
+    try:
+        count = int(count_value)
+    except (TypeError, ValueError):
+        count = len(rows) if isinstance(rows_value, list) else None
+    if count is None:
+        return ""
+    if count <= 0:
+        return "0"
+    if not rows:
+        return str(count)
+    shown = ", ".join(rows[:limit])
+    remaining = max(0, count - len(rows[:limit]))
+    if remaining:
+        shown = f"{shown}, +{remaining} more"
+    return f"{count} ({shown})"
 
 
 if __name__ == "__main__":

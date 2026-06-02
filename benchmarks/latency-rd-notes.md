@@ -12018,3 +12018,16 @@ with zero failures in 0.531s.
   `active_stage_max_rows` and `evaluated_stage_max_rows` attributing inspect,
   extract, OCR, georeference, and export tails to `phoenix-waymo`; the same
   summary still surfaced `active_ocr_full_detail_retry_rows=["phoenix-waymo"]`.
+- Accepted CLI printing for the new fixture-benchmark tail summaries so stage
+  max rows, OCR label event counts, and full-detail retry counts are visible in
+  the terminal output during sweeps instead of requiring a manual `jq` pass
+  after every run. Focused benchmark tests passed (`69 passed`), and the cleaned
+  real no-catalog benchmark
+  `out/current-benchmark-stage-tail-cli-clean-20260602/full-report.json` passed
+  `8/8` scored fixtures with seven `reference_mismatch` skips, avg IoU `0.968`,
+  min IoU `0.943`, active total `4.742222s`, active stage totals
+  `ocr=3.489636s`, `extract=1.060139s`, `georeference=0.168517s`,
+  `inspect=0.008315s`, and `export=0.007922s`. The new CLI tail line surfaced
+  `ocr=0.67s@phoenix-waymo`, `extract=0.22s@dallas-waymo`, and
+  `georeference=0.08s@los-angeles-waymo`; OCR events were
+  `{"Map labels read": 8}` with `active_ocr_full_detail_retry_count=0`.

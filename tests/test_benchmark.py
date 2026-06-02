@@ -2436,6 +2436,96 @@ def test_print_table_reports_georeference_source_requirement_failure(
     ) in output
 
 
+def test_print_table_reports_stage_and_ocr_tail_summaries(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    report = {
+        "mode": "full",
+        "summary": {
+            "passed": True,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 1,
+            "smoked_skipped_fixtures": 1,
+            "failed_smoked_skipped_fixtures": 0,
+            "average_iou": 0.95,
+            "min_iou": 0.95,
+            "total_duration_s": 0.95,
+            "smoked_skipped_duration_s": 1.2,
+            "evaluated_duration_s": 2.15,
+            "active_stage_max_rows": {
+                "extract": {"slug": "dallas-waymo", "duration_s": 0.282593},
+                "ocr": {"slug": "phoenix-waymo", "duration_s": 0.690724},
+            },
+            "smoked_skipped_stage_max_rows": {
+                "ocr": {"slug": "bay-area-waymo", "duration_s": 1.2},
+            },
+            "evaluated_stage_max_rows": {
+                "extract": {"slug": "dallas-waymo", "duration_s": 0.282593},
+                "ocr": {"slug": "bay-area-waymo", "duration_s": 1.2},
+            },
+            "active_ocr_label_event_counts": {
+                "Full-detail map labels read": 1,
+                "Map labels read": 3,
+            },
+            "active_ocr_full_detail_retry_count": 1,
+            "active_ocr_full_detail_retry_rows": ["phoenix-waymo"],
+            "smoked_skipped_ocr_label_event_counts": {"Map labels read": 1},
+            "smoked_skipped_ocr_full_detail_retry_count": 0,
+            "smoked_skipped_ocr_full_detail_retry_rows": [],
+            "evaluated_ocr_label_event_counts": {
+                "Full-detail map labels read": 1,
+                "Map labels read": 4,
+            },
+            "evaluated_ocr_full_detail_retry_count": 1,
+            "evaluated_ocr_full_detail_retry_rows": ["phoenix-waymo"],
+        },
+        "scores": [
+            {
+                "slug": "phoenix-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.95,
+                "area_ratio": 1.0,
+                "duration_s": 0.95,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": None,
+            },
+            {
+                "slug": "bay-area-waymo",
+                "status": "reference_mismatch",
+                "passed": True,
+                "iou": None,
+                "area_ratio": None,
+                "duration_s": 1.2,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": "data debt",
+            },
+        ],
+        "inventory": {"references_without_images": []},
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "active stage max: ocr=0.69s@phoenix-waymo, extract=0.28s@dallas-waymo" in output
+    assert "smoked skipped stage max: ocr=1.20s@bay-area-waymo" in output
+    assert "evaluated stage max: ocr=1.20s@bay-area-waymo, extract=0.28s@dallas-waymo" in output
+    assert "active OCR events: Full-detail map labels read=1, Map labels read=3" in output
+    assert "active OCR full-detail retries: 1 (phoenix-waymo)" in output
+    assert "smoked skipped OCR events: Map labels read=1" in output
+    assert "smoked skipped OCR full-detail retries: 0" in output
+    assert "evaluated OCR events: Full-detail map labels read=1, Map labels read=4" in output
+    assert "evaluated OCR full-detail retries: 1 (phoenix-waymo)" in output
+
+
 def test_print_table_warns_when_ocr_engine_profiling_affects_durations(
     capsys,
     tmp_path: Path,
