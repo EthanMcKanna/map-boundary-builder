@@ -2297,6 +2297,46 @@ def test_print_table_reports_georeference_source_requirement_failure(
     ) in output
 
 
+def test_print_table_warns_when_ocr_engine_profiling_affects_durations(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    report = {
+        "mode": "full",
+        "thresholds": {"profile_ocr_engine": True},
+        "summary": {
+            "passed": True,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 0,
+            "average_iou": 0.96,
+            "min_iou": 0.96,
+            "total_duration_s": 1.1,
+        },
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.96,
+                "area_ratio": 1.0,
+                "duration_s": 1.1,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": None,
+            }
+        ],
+        "inventory": {"references_without_images": []},
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "OCR engine profiling is enabled; fixture durations include profiling overhead" in output
+
+
 def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     report = {
         "summary": {"total_duration_s": 2.5},

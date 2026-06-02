@@ -2927,6 +2927,8 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
         f"{duration_text}"
     )
     print(f"report: {report_path}")
+    if report.get("thresholds", {}).get("profile_ocr_engine"):
+        print("note: OCR engine profiling is enabled; fixture durations include profiling overhead")
     active_sources_text = format_source_counts(summary.get("active_georeference_sources"))
     if active_sources_text:
         print(f"active sources: {active_sources_text}")

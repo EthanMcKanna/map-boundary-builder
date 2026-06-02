@@ -11761,3 +11761,21 @@ with zero failures in 0.531s.
   `0` issues for both latency and source requirements under the same
   sub-second budgets. Focused benchmark tests passed (`65 passed`), and the
   full suite passed (`463 passed`).
+- Re-applied the new source gate to the arbitrary no-catalog path and separated
+  attribution profiling from production-shaped latency proof. The profiled run
+  `out/nocatalog-source-profile-20260602/full-report.json` passed `8/8` active
+  fixtures with only the expected OCR sources
+  (`ocr-georeference:nominatim-label-fit=6` and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine=2`), avg/min IoU
+  `0.967842`/`0.942536`, active total `5.463995s`, OCR `4.090125s`, and OCR
+  internals of `2.770559s` detector plus `1.257166s` recognition across `235`
+  raw boxes and `137` selected boxes. The same source-gated command without
+  `--profile-ocr-engine` is the actual latency evidence:
+  `out/nocatalog-source-subsecond-20260602/full-report.json` passed the
+  per-fixture `1.0s` budget with max `0.971830s`, active total `5.222658s`,
+  avg/min IoU `0.967842`/`0.942536`, and `0` latency/source issues. The slowest
+  unprofiled fixtures were Dallas Waymo at `0.971830s`, Los Angeles Waymo at
+  `0.928827s`, and Phoenix Waymo at `0.870700s`; profiling pushed Dallas and
+  Los Angeles over one second, so compact benchmark output now warns that OCR
+  engine profiling makes fixture durations attribution-only rather than the
+  production-shaped latency proof.
