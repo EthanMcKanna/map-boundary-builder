@@ -728,6 +728,11 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     monkeypatch.setattr(stress_module, "get_pipeline_version", lambda: "pipeline-test")
     monkeypatch.setattr(
         stress_module,
+        "pipeline_version_dependency_versions",
+        lambda: [("rapidocr-onnxruntime", "1.4.4"), ("onnxruntime", "1.26.0")],
+    )
+    monkeypatch.setattr(
+        stress_module,
         "ocr_runtime_config",
         lambda: {"rapidocr_max_dimension": 1600},
     )
@@ -779,6 +784,10 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
     assert saved["runtime_config"]["pipeline_version"] == "pipeline-test"
+    assert saved["runtime_config"]["runtime_dependencies"] == {
+        "rapidocr-onnxruntime": "1.4.4",
+        "onnxruntime": "1.26.0",
+    }
     assert saved["runtime_config"]["ocr"] == {"rapidocr_max_dimension": 1600}
     assert saved["runtime_config"]["generation_env"][RUNNER_OCR_CACHE_ENV] == "1"
     assert saved["runtime_config"]["generation_env"][EXTRACTION_CACHE_ENV] == "1"
@@ -802,6 +811,11 @@ def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monk
         )
     )
     monkeypatch.setattr(stress_module, "get_pipeline_version", lambda: "pipeline-test")
+    monkeypatch.setattr(
+        stress_module,
+        "pipeline_version_dependency_versions",
+        lambda: [("rapidocr-onnxruntime", "1.4.4"), ("onnxruntime", "1.26.0")],
+    )
     monkeypatch.setattr(
         stress_module,
         "ocr_runtime_config",
@@ -849,6 +863,10 @@ def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monk
     runtime_config = saved["runtime_config"]
     assert report["runtime_config"] == runtime_config
     assert runtime_config["pipeline_version"] == "pipeline-test"
+    assert runtime_config["runtime_dependencies"] == {
+        "rapidocr-onnxruntime": "1.4.4",
+        "onnxruntime": "1.26.0",
+    }
     assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1400}
     assert runtime_config["generation_env"][RUNNER_OCR_CACHE_ENV] == "0"
     assert runtime_config["generation_env"][EXTRACTION_CACHE_ENV] == "0"

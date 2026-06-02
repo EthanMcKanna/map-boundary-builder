@@ -372,6 +372,11 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(benchmark_module, "get_pipeline_version", lambda: "pipeline-test")
     monkeypatch.setattr(
         benchmark_module,
+        "pipeline_version_dependency_versions",
+        lambda: [("rapidocr-onnxruntime", "1.4.4"), ("onnxruntime", "1.26.0")],
+    )
+    monkeypatch.setattr(
+        benchmark_module,
         "ocr_runtime_config",
         lambda: {"rapidocr_max_dimension": 1600},
     )
@@ -396,6 +401,10 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     runtime_config = report["runtime_config"]
     generation_env = runtime_config["generation_env"]
     assert runtime_config["pipeline_version"] == "pipeline-test"
+    assert runtime_config["runtime_dependencies"] == {
+        "rapidocr-onnxruntime": "1.4.4",
+        "onnxruntime": "1.26.0",
+    }
     assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1600}
     assert generation_env["MAP_BOUNDARY_BLOCK_NETWORK"] == "1"
     assert generation_env["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"] == "0"

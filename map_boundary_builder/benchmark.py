@@ -20,7 +20,7 @@ from shapely.ops import transform
 from .extract import extract_service_area
 from .georef_transform import lonlat_to_mercator
 from .network_policy import NETWORK_BLOCK_ENV
-from .pipeline_version import get_pipeline_version
+from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from .runtime_config import generation_env_config, ocr_runtime_config
 from .runtime_warmup import prewarm_generation_runtime
 
@@ -1382,6 +1382,7 @@ def duration_percentile(values: list[float], percentile: float) -> float:
 def benchmark_runtime_config() -> dict[str, Any]:
     return {
         "pipeline_version": get_pipeline_version(),
+        "runtime_dependencies": dict(pipeline_version_dependency_versions()),
         "ocr": ocr_runtime_config(),
         "generation_env": benchmark_generation_env_config(),
     }

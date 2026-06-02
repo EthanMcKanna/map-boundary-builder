@@ -14522,3 +14522,23 @@ with zero failures in 0.531s.
   `MAP_BOUNDARY_RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION=1400`; the
   smaller warm samples trade away source-SVG steady-state latency for only a
   noisy prewarm reduction.
+- Added runtime dependency versions to saved stress and benchmark
+  `runtime_config` reports so future R&D artifacts carry the package context
+  that can materially affect OCR latency and reproducibility. The API health
+  payload already exposed this information, but local benchmark/stress reports
+  previously required a separate `pip index` or health check to recover it.
+  The new `runtime_dependencies` field is report-only and does not enter the
+  production run-result cache key. Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_benchmark.py
+  tests/test_stress_benchmark.py -q` (`152 passed`), compileall over
+  `map_boundary_builder`, `api`, and the touched test modules passed, and
+  `git diff --check` was clean. A real stress smoke
+  `out/runtime-deps-stress-smoke-20260602/stress-summary.json` passed the
+  Tesla Dallas JPEG case in `0.644s` and saved dependency versions including
+  `rapidocr-onnxruntime=1.4.4`, `onnxruntime=1.26.0`,
+  `opencv-python-headless=4.10.0.84`, and `cv2=4.10.0`. A real extraction
+  benchmark smoke
+  `out/runtime-deps-benchmark-smoke-20260602/extraction-report.json` passed
+  Dallas Tesla with IoU `0.984721` and saved the same dependency map. This is
+  a reliability/evidence improvement only; no runtime generation path changed
+  and no deploy is needed.

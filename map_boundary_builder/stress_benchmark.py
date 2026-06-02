@@ -22,7 +22,7 @@ from .ocr import (
     summarize_rapidocr_profile_events,
     summarize_rapidocr_profile_summaries,
 )
-from .pipeline_version import get_pipeline_version
+from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from .runner import BoundaryBuildOptions, RUNNER_OCR_CACHE_ENV, build_boundary
 from .runtime_warmup import prewarm_generation_runtime
 from .runtime_config import generation_env_config, ocr_runtime_config
@@ -482,6 +482,7 @@ def stress_runtime_config(*, runner_ocr_cache: bool, extraction_cache: bool) -> 
     with temporary_cache_env(runner_ocr_cache=runner_ocr_cache, extraction_cache=extraction_cache):
         return {
             "pipeline_version": get_pipeline_version(),
+            "runtime_dependencies": dict(pipeline_version_dependency_versions()),
             "ocr": ocr_runtime_config(),
             "generation_env": generation_env_config(),
         }
