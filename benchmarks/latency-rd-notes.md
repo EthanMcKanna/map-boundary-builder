@@ -11648,3 +11648,22 @@ with zero failures in 0.531s.
   OCR max-side trimming below the current `1600` as closed unless a future
   design has a pre-georeference equivalence verifier or a style/market-specific
   trigger with same-session speed proof.
+- Profiled current RapidOCR internals on the active no-catalog fixtures to
+  avoid guessing at the next latency lever. The scratch profile mirrors the
+  current style-specific OCR settings, native-array path, bright-blue detector
+  cap, PP-OCRv5 recognizer, and fast-text box filtering, then records detector
+  and recognizer elapsed times per fixture
+  (`out/rapidocr-internals-profile-20260602/rapidocr-internals.json`). Across
+  the `8` active fixtures, direct RapidOCR work totaled `3.912675s`: input
+  preparation / image load / preprocessing / crop overhead was only `0.061805s`
+  combined, while detector time was `2.654456s` and recognition was
+  `1.196415s`. Dallas Waymo is detector-heavy (`0.634449s` detector,
+  `0.087558s` recognition for only `9` selected boxes); Phoenix and Los Angeles
+  spend more in recognition (`0.360815s` and `0.272934s`) after selecting
+  `44` and `33` boxes. This confirms the current long pole is real OCR model
+  inference, not temp-file I/O, OpenCV resize/preprocess, crop extraction, or
+  Python label conversion. The viable future speed lanes need a different
+  detector/recognizer backend, a stronger partial-OCR equivalence verifier, or
+  a very narrow market/style trigger; simple lower detector caps, recognition
+  caps/batches, global max-side trims, and native-array I/O cleanups have all
+  already been ruled out or accepted where safe.
