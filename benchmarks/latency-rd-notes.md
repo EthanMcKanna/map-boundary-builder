@@ -11461,3 +11461,16 @@ with zero failures in 0.531s.
   stage was only `0.000811s` because in-process OCR labels were already cached.
   This proves exact warm repeats are comfortably subsecond; it does not reduce
   the uncached first-pass OCR tail.
+- Tightened the regression harness for focused `--only` probes. Candidate
+  reports that declare `inventory.only_filters` now compare only fixtures that
+  are actually present in the filtered run, while selected fixtures that fail
+  to produce IoU still raise `missing_candidate_score`; unfiltered full reports
+  retain the strict missing-score behavior. This removes false failures from
+  one-market R&D probes without weakening full gates. Coverage: the
+  regression-check pytest slice passed (`11 passed`) and the full benchmark
+  test file passed (`47 passed`). A real Phoenix-only no-catalog repro against
+  the full accepted baseline passed with zero regression issues:
+  `out/filtered-regression-scope-repro-20260601/full-report.json`
+  (`comparison_scope=filtered_candidate`, one compared fixture, 14 omitted
+  baseline fixtures, IoU `0.983820`, total duration `1.813240s`, OCR
+  `1.020657s`).

@@ -1089,6 +1089,92 @@ def test_report_regression_check_ignores_newly_scored_fixture_in_mean() -> None:
     assert check["issues"] == []
 
 
+def test_report_regression_check_skips_unselected_filtered_fixtures() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.96},
+        "scores": [
+            {"slug": "nashville-waymo", "status": "active", "iou": 0.986282},
+            {"slug": "phoenix-waymo", "status": "active", "iou": 0.98332},
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.98332},
+        "inventory": {"filtered_from": 15, "only_filters": ["phoenix"]},
+        "scores": [
+            {"slug": "phoenix-waymo", "status": "active", "iou": 0.98332},
+        ],
+    }
+
+    check = compare_report_regressions(candidate, baseline, max_mean_iou_drop=0.0)
+
+    assert check["passed"] is True
+    assert check["comparison_scope"] == "filtered_candidate"
+    assert check["candidate_only_filters"] == ["phoenix"]
+    assert check["compared_fixtures"] == 1
+    assert check["compared_iou_fixtures"] == 1
+    assert check["omitted_baseline_fixtures"] == 1
+    assert check["omitted_baseline_slugs"] == ["nashville-waymo"]
+    assert check["baseline_average_iou"] == 0.98332
+    assert check["candidate_average_iou"] == 0.98332
+    assert check["issues"] == []
+
+
+def test_report_regression_check_flags_selected_filtered_fixture_without_iou() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.98},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332}],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.0},
+        "inventory": {"filtered_from": 15, "only_filters": ["phoenix"]},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": None}],
+    }
+
+    check = compare_report_regressions(candidate, baseline)
+
+    assert check["passed"] is False
+    assert check["comparison_scope"] == "filtered_candidate"
+    assert check["compared_fixtures"] == 1
+    assert check["compared_iou_fixtures"] == 0
+    assert check["omitted_baseline_fixtures"] == 0
+    assert check["issues"] == [
+        {
+            "slug": "phoenix-waymo",
+            "kind": "missing_candidate_score",
+            "baseline_iou": 0.98332,
+        }
+    ]
+
+
+def test_report_regression_check_flags_unfiltered_missing_candidate_score() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.96},
+        "scores": [
+            {"slug": "nashville-waymo", "status": "active", "iou": 0.986282},
+            {"slug": "phoenix-waymo", "status": "active", "iou": 0.98332},
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.98332},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "iou": 0.98332}],
+    }
+
+    check = compare_report_regressions(candidate, baseline)
+
+    assert check["passed"] is False
+    assert check["comparison_scope"] == "full_candidate"
+    assert check["compared_fixtures"] == 2
+    assert check["compared_iou_fixtures"] == 1
+    assert check["omitted_baseline_fixtures"] == 0
+    assert check["issues"] == [
+        {
+            "slug": "nashville-waymo",
+            "kind": "missing_candidate_score",
+            "baseline_iou": 0.986282,
+        }
+    ]
+
+
 def test_report_regression_check_can_flag_duration_increase() -> None:
     baseline = {
         "summary": {"average_iou": 0.95, "total_duration_s": 4.0},

@@ -1720,6 +1720,8 @@ def compare_report_regressions(
 ) -> dict[str, Any]:
     candidate_scores = active_iou_scores_by_slug(report)
     baseline_scores = active_iou_scores_by_slug(baseline_report)
+    candidate_only_filters = report_only_filters(report)
+    candidate_report_slugs = report_score_slugs(report) if candidate_only_filters else set()
     issues: list[dict[str, Any]] = []
     tolerance = max(0.0, float(max_iou_drop))
     duration_tolerance = (
@@ -1729,9 +1731,13 @@ def compare_report_regressions(
     )
     duration_tolerance_s = max(0.0, float(max_duration_increase_s))
     compared_iou_pairs: list[tuple[float, float]] = []
+    omitted_baseline_slugs: list[str] = []
     for slug, baseline_score in sorted(baseline_scores.items()):
         candidate_score = candidate_scores.get(slug)
         if candidate_score is None:
+            if candidate_only_filters and slug not in candidate_report_slugs:
+                omitted_baseline_slugs.append(slug)
+                continue
             issues.append(
                 {
                     "slug": slug,
@@ -1772,6 +1778,7 @@ def compare_report_regressions(
                         }
                     )
 
+    compared_baseline_fixtures = len(baseline_scores) - len(omitted_baseline_slugs)
     baseline_mean = (
         mean(pair[0] for pair in compared_iou_pairs) if compared_iou_pairs else 0.0
     )
@@ -1919,8 +1926,12 @@ def compare_report_regressions(
         "max_evaluated_stage_duration_increase_s": evaluated_stage_duration_tolerance_s,
         "max_evaluated_road_match_increase_ratio": evaluated_road_match_tolerance,
         "max_evaluated_road_match_increase_s": evaluated_road_match_tolerance_s,
-        "compared_fixtures": len(baseline_scores),
+        "comparison_scope": "filtered_candidate" if candidate_only_filters else "full_candidate",
+        "candidate_only_filters": candidate_only_filters,
+        "compared_fixtures": compared_baseline_fixtures,
         "compared_iou_fixtures": len(compared_iou_pairs),
+        "omitted_baseline_fixtures": len(omitted_baseline_slugs),
+        "omitted_baseline_slugs": omitted_baseline_slugs,
         "compared_evaluated_stage_durations": compared_evaluated_stage_durations,
         "baseline_average_iou": round(baseline_mean, 6),
         "candidate_average_iou": round(candidate_mean, 6),
@@ -2293,6 +2304,27 @@ def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any
         if isinstance(slug, str) and slug:
             scores[slug] = row
     return scores
+
+
+def report_score_slugs(report: dict[str, Any]) -> set[str]:
+    slugs: set[str] = set()
+    for row in report.get("scores", []):
+        if not isinstance(row, dict):
+            continue
+        slug = row.get("slug")
+        if isinstance(slug, str) and slug:
+            slugs.add(slug)
+    return slugs
+
+
+def report_only_filters(report: dict[str, Any]) -> list[str]:
+    inventory = report.get("inventory", {})
+    if not isinstance(inventory, dict):
+        return []
+    only_filters = inventory.get("only_filters", [])
+    if not isinstance(only_filters, list):
+        return []
+    return [value for value in only_filters if isinstance(value, str) and value]
 
 
 def parse_report_duration(value: Any) -> float | None:
