@@ -14785,3 +14785,40 @@ with zero failures in 0.531s.
   confidence `0.825`, bbox
   `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=0.071902`.
+- Added a focused fail-fast for non-service thematic/statistical maps after
+  probing `/Users/ethanmckanna/Downloads/climate vulnerability index.jpg`, a
+  Reuters world risk map that is visually map-like but not a local
+  service-area boundary. Current no-catalog handling failed correctly only
+  after a full-image OCR pass: `out/thematic-current-nocatalog-20260602/`
+  spent `2.417984s` total with `2.180948s` in OCR, `46` selected OCR boxes,
+  and top labels like `Guangzhou`, `Kinshasa`, and `REUTERS`; the normal
+  catalog-enabled path `out/thematic-current-normal-20260602/` took
+  `2.674641s`, first reading focused labels `Khartoum` and
+  `nge Vulnerability Index`, then retrying full-detail OCR to `123` event
+  labels. The accepted guard treats high-confidence labels containing
+  `vulnerability index` or `climate change vulnerability` as thematic-map
+  evidence and rejects before georeference/full-detail retry with the specific
+  `thematic map` error. For the no-catalog path, small dark-teal images
+  (`max(width,height) <= 900`, `width/height <= 1.65`) now defer
+  pre-extraction full OCR so the existing focused OCR crop can supply this
+  evidence first; non-thematic small dark-teal maps still fall through to the
+  full-detail OCR fallback. Patched probes
+  `out/thematic-patched-nocatalog-20260602/` and
+  `out/thematic-patched-normal-20260602/` both rejected with the exact
+  `thematic map` error in `0.737s`, one OCR call, `2` labels, and no
+  georeference/full-detail retry. The new locked negative stress row is
+  `climate-vulnerability-thematic-map`. Focused stress passed at
+  `out/thematic-fastfail-stress-20260602/stress-summary.json`: `1/1`
+  expected failure, primary `0.218515s`, repeat `2/2` subsecond, repeat p95
+  `0.011s`. The full real-screenshot hard gate passed at
+  `out/thematic-fastfail-full24-hard-20260602/stress-summary.json`: `24/24`
+  expected, statuses `{"complete":14,"failed":10}`, primary max `0.892198s`,
+  repeat `48/48` subsecond, repeat p95 `0.100s`, and all `14` valid
+  service-area screenshots still completed. Validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`149 passed`),
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runtime_warmup.py
+  tests/test_web_handler.py tests/test_pipeline_version.py -q` (`12 passed`),
+  compileall over `map_boundary_builder`, `api`, and `tests`, `jq empty` on
+  `benchmarks/real-screenshot-stress.json`, `git diff --check`, and the full
+  suite (`595 passed`, `30` subtests).

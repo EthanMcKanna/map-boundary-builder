@@ -388,6 +388,44 @@ def test_focused_sparse_fast_fail_requires_no_catalog_tall_provider_ui() -> None
     )
 
 
+def test_pre_extraction_focus_ocr_defers_small_dark_teal_maps() -> None:
+    assert runner.should_defer_pre_extraction_ocr_for_focus(
+        "dark-teal",
+        city_input=None,
+        allow_catalog=False,
+        width=708,
+        height=468,
+    )
+    assert not runner.should_defer_pre_extraction_ocr_for_focus(
+        "dark-teal",
+        city_input=None,
+        allow_catalog=False,
+        width=1000,
+        height=560,
+    )
+    assert not runner.should_defer_pre_extraction_ocr_for_focus(
+        "dark-teal",
+        city_input=None,
+        allow_catalog=True,
+        width=708,
+        height=468,
+    )
+
+
+def test_non_service_thematic_map_reject_evidence() -> None:
+    labels = [
+        OcrLabel("Khartoum", x=20, y=20, width=90, height=24, confidence=97),
+        OcrLabel("nge Vulnerability Index", x=20, y=60, width=180, height=24, confidence=98),
+    ]
+
+    assert runner.non_service_thematic_map_reject_evidence(labels) == {
+        "thematic_map_labels": ["nge Vulnerability Index"],
+    }
+    assert runner.non_service_thematic_map_reject_evidence(
+        [OcrLabel("Index Road", x=20, y=20, width=90, height=24, confidence=98)]
+    ) is None
+
+
 def test_provider_ui_crop_ocr_max_dimension_uses_gray_fill_cap() -> None:
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("gray-fill", rapidocr_max_dimension=1200) == 450
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("dark-teal", rapidocr_max_dimension=1200) == 750
@@ -1007,6 +1045,50 @@ def test_non_map_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None
         "stats",
         "sync",
     ]
+
+
+def test_thematic_map_fails_before_georeference_and_full_detail_retry(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "thematic.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (708, 468), (244, 244, 244)).save(image_path)
+    rgb = np.full((468, 708, 3), 244, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(250, 120), (420, 120), (420, 300), (250, 300)]),
+        coverage_ratio=0.021,
+        contour_count=1,
+        confidence=1.0,
+    )
+    labels = [
+        OcrLabel("Khartoum", x=260, y=180, width=90, height=24, confidence=97),
+        OcrLabel("nge Vulnerability Index", x=260, y=220, width=190, height=24, confidence=98),
+    ]
+    events: list[dict] = []
+
+    def unexpected_fit_georeference(*_args, **_kwargs):
+        raise AssertionError("thematic map should fail before georeference")
+
+    def unexpected_full_ocr(*_args, **_kwargs):
+        raise AssertionError("thematic map should not retry full-detail OCR")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: labels)
+    monkeypatch.setattr(runner, "fit_georeference", unexpected_fit_georeference)
+    monkeypatch.setattr(runner, "extract_full_ocr_labels_for_style", unexpected_full_ocr)
+
+    with pytest.raises(ValueError, match="thematic map"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+            progress=events.append,
+        )
+
+    assert events[-1]["message"] == "Rejecting thematic map"
+    assert events[-1]["details"]["thematic_map_labels"] == ["nge Vulnerability Index"]
 
 
 def test_ride_route_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:

@@ -145,6 +145,18 @@
       }
     },
     {
+      "slug": "climate-vulnerability-thematic-map",
+      "image": "/Users/ethanmckanna/Downloads/climate vulnerability index.jpg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "thematic map",
+        "min_ocr_labels": 2,
+        "max_total_elapsed_s": 1.0
+      }
+    },
+    {
       "slug": "avride-dallas-map",
       "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
       "no_catalog": true,

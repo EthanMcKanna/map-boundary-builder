@@ -155,12 +155,19 @@ NON_MAP_APP_UI_CATEGORY_PATTERNS = {
     "stats": ("monthly history", "community stats", "track progress", "totals vehicles"),
     "sync": ("sync", "disconnect"),
 }
+NON_SERVICE_THEMATIC_MAP_LABEL_MIN_CONFIDENCE = 80.0
+NON_SERVICE_THEMATIC_MAP_PATTERNS = (
+    "vulnerability index",
+    "climate change vulnerability",
+)
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
 PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
 PRE_EXTRACTION_FOCUS_OCR_STYLES = {"dark-teal"}
 PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT = 1200
 PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO = 1.35
+PRE_EXTRACTION_FOCUS_OCR_SMALL_MAX_DIMENSION = 900
+PRE_EXTRACTION_FOCUS_OCR_SMALL_MAX_ASPECT_RATIO = 1.65
 # Keep below the Ann Arbor focused-success crop's 19 labels; this only catches sparse portrait app crops.
 FOCUSED_SPARSE_FAST_FAIL_MAX_LABELS = 14
 FOCUSED_ADMIN_DISPLAY_PLACE_TYPES = {"city", "municipality", "town", "village"}
@@ -1174,6 +1181,19 @@ def build_boundary(
             "top_labels": [label.text for label in labels[:8]],
         },
     )
+    thematic_map_evidence = non_service_thematic_map_reject_evidence(labels)
+    if thematic_map_evidence is not None:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Rejecting thematic map",
+            percent=48,
+            details=thematic_map_evidence,
+        )
+        raise ValueError(
+            "Could not infer a service-area boundary from a thematic map. "
+            "Upload a service-area coverage map crop with readable place labels."
+        )
     if (
         labels_future_filtered
         and fast_text_ocr_min_area_for_style(extraction.style, source_is_svg=source_is_svg) is None
@@ -2429,9 +2449,16 @@ def should_defer_pre_extraction_ocr_for_focus(
         return False
     if not PROVIDER_UI_FOCUS_CROP_ENABLED or PROVIDER_UI_CROP_OCR_MAX_DIMENSION <= 0:
         return False
-    if width <= 0 or height < PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT:
+    if width <= 0 or height <= 0:
         return False
     aspect_ratio = width / max(float(height), 1.0)
+    if (
+        max(width, height) <= PRE_EXTRACTION_FOCUS_OCR_SMALL_MAX_DIMENSION
+        and aspect_ratio <= PRE_EXTRACTION_FOCUS_OCR_SMALL_MAX_ASPECT_RATIO
+    ):
+        return True
+    if height < PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT:
+        return False
     return aspect_ratio <= PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO
 
 
@@ -3100,6 +3127,22 @@ def non_map_app_ui_reject_evidence(extraction, labels: list[Any]) -> dict[str, A
         "non_map_ui_categories": sorted(categories),
         "non_map_ui_labels": evidence_labels[:5],
     }
+
+
+def non_service_thematic_map_reject_evidence(labels: list[Any]) -> dict[str, Any] | None:
+    evidence_labels: list[str] = []
+    for label in labels:
+        if getattr(label, "confidence", 0.0) < NON_SERVICE_THEMATIC_MAP_LABEL_MIN_CONFIDENCE:
+            continue
+        original_text = getattr(label, "text", "").strip()
+        text = normalize_route_ui_text(original_text)
+        if not text:
+            continue
+        if any(pattern in text for pattern in NON_SERVICE_THEMATIC_MAP_PATTERNS):
+            evidence_labels.append(original_text)
+    if not evidence_labels:
+        return None
+    return {"thematic_map_labels": evidence_labels[:3]}
 
 
 def sparse_low_res_label_catalog_match(
