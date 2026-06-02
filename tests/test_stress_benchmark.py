@@ -2790,6 +2790,9 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
     assert row["execution"] == "in-process"
     assert row["runner_ocr_cache"] is False
     assert row["extraction_cache"] is False
+    assert row["no_catalog"] is True
+    assert row["filename_hint"] == "custom-upload.png"
+    assert row["source_was_svg"] is True
     assert row["expectation_passed"] is True
     assert row["observed_status"] == "complete"
     assert row["source"] == "ocr-georeference:nominatim-label-fit"

@@ -14965,3 +14965,37 @@ with zero failures in 0.531s.
   smokes validate deployed behavior, while
   `out/final-gray800-full27-hard-20260602/stress-summary.json` remains the
   local no-cache subsecond speed gate.
+- Rejected three fresh OCR speed probes before shipping any new runtime change.
+  Lowering the tall route-UI OCR cap to `800px` made the focused route/non-map
+  gate fail: only `2/7` primary expectations passed, two long receipt rows paid
+  full-detail OCR retries, repeat p95 rose to `1.198s`, and label-count guards
+  dropped below the manifest floor on multiple Tesla route screens. The more
+  conservative `900px` and `950px` route caps stayed subsecond but still failed
+  expected OCR-label evidence (`4/7` and `5/7` expectations), so the current
+  `1000px` caps remain the reliability/speed balance. A profile-app UI
+  pre-screen cap of `800px` preserved behavior but worsened the matched
+  four-case profile/Zoox gate (`profile-app-non-map-ui` primary `0.926s`,
+  repeat p95 `0.882s`) versus the current-code baseline
+  `out/profile-app-current-focused-baseline-20260602/stress-summary.json`
+  (`0.690s` primary, repeat p95 `0.637s`). Adding a `500px^2` min-text-area
+  filter to the profile-app pre-screen also lost to the matched baseline
+  (`0.697s` primary, repeat p95 `0.776s`). Bright-blue OCR cap `1350px` failed
+  the all-bright-blue focused gate by dropping Bay Area controls below the
+  manifest floor and Nashville labels below expectation, while detector limit
+  `224/max` preserved labels but introduced a Bay Area primary/repeat tail over
+  `1s`; keep the current `1400px`/`256-max` non-SVG bright-blue settings.
+- Added stress-report row provenance for `no_catalog`, `filename_hint`, and
+  `source_was_svg` so saved R&D artifacts remain self-describing when manifest
+  context materially changes behavior, especially for browser-rasterized SVG
+  PNG source-hint cases. Targeted validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`63 passed`). A source-hint smoke wrote the new row fields
+  (`no_catalog=true`, `filename_hint=a.png`, `source_was_svg=true`) but hit a
+  cold primary source-hint latency outlier (`1.158738s`) while the repeat sample
+  was `0.495s`, so it is evidence for report provenance only, not a speed pass.
+  The full real-screenshot hard gate on the patched harness passed at
+  `out/row-provenance-full27-hard-20260602/stress-summary.json`: `27/27`
+  expected, statuses `{"complete":16,"failed":11}`, primary max `0.787034s`,
+  repeat `54/54` subsecond, repeat p95 `0.601s`, and the `austin-waymo-disguised-svg`
+  row now records `no_catalog=false`, `filename_hint=upload.png`, and
+  `source_was_svg=true` while ordinary raster rows record `source_was_svg=false`.

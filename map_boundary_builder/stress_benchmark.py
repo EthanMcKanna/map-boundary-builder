@@ -1066,9 +1066,15 @@ def first_present_number(*values: Any) -> int | float | None:
 
 
 def base_row(case: dict[str, Any], *, expected_status: str, observed_status: str) -> dict[str, Any]:
+    filename_hint = case.get("filename_hint")
+    if not isinstance(filename_hint, str):
+        filename_hint = GENERIC_FILENAME_HINT
     return {
         "slug": case.get("slug"),
         "image": case.get("image"),
+        "no_catalog": bool(case.get("no_catalog", True)),
+        "filename_hint": filename_hint,
+        "source_was_svg": bool(case.get("source_was_svg", False)),
         "expected_status": expected_status,
         "observed_status": observed_status,
         "status": observed_status,
