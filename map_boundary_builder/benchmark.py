@@ -77,6 +77,7 @@ AREA_ALIASES = {
     "san antonio": "san-antonio",
 }
 PROVIDERS = ("avride", "tesla", "waymo", "zoox")
+MISSING_GEOREFERENCE_SOURCE = "<missing>"
 
 @dataclass(frozen=True)
 class BenchmarkFixture:
@@ -483,6 +484,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional absolute maximum active plus smoke-checked road-match elapsed budget.",
     )
+    parser.add_argument(
+        "--require-active-georeference-source",
+        action="append",
+        default=[],
+        metavar="SOURCE",
+        help=(
+            "Fail if any active full benchmark row reports a georeference_source outside this "
+            "allowed set. Repeat or comma-separate values."
+        ),
+    )
+    parser.add_argument(
+        "--require-evaluated-georeference-source",
+        action="append",
+        default=[],
+        metavar="SOURCE",
+        help=(
+            "Fail if any active plus smoke-checked full benchmark row reports a "
+            "georeference_source outside this allowed set. Repeat or comma-separate values."
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="Print the full JSON report instead of the compact table.")
     return parser
 
@@ -499,6 +520,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         max_repeat_profile_stage_duration_s = parse_stage_duration_budgets(
             args.max_repeat_profile_stage_duration_s
+        )
+        required_active_georeference_sources = parse_georeference_source_requirements(
+            args.require_active_georeference_source
+        )
+        required_evaluated_georeference_sources = parse_georeference_source_requirements(
+            args.require_evaluated_georeference_source
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -603,6 +630,17 @@ def main(argv: list[str] | None = None) -> int:
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
         report["summary"]["passed"] = bool(report["summary"]["passed"] and latency_budget_check["passed"])
+    if required_active_georeference_sources or required_evaluated_georeference_sources:
+        source_requirement_check = check_report_source_requirements(
+            report,
+            required_active_georeference_sources=required_active_georeference_sources,
+            required_evaluated_georeference_sources=required_evaluated_georeference_sources,
+        )
+        report["source_requirement_check"] = source_requirement_check
+        report["summary"]["source_requirement_check_passed"] = source_requirement_check["passed"]
+        report["summary"]["passed"] = bool(
+            report["summary"]["passed"] and source_requirement_check["passed"]
+        )
     report_path.write_text(json.dumps(report, indent=2) + "\n")
 
     if args.json:
@@ -805,6 +843,9 @@ def run_benchmark(
     active_stage_duration = summarize_stage_durations(scored)
     smoke_stage_duration = summarize_stage_durations(smoke_validated)
     evaluated_stage_duration = combine_stage_durations(active_stage_duration, smoke_stage_duration)
+    active_georeference_sources = summarize_georeference_sources(scored)
+    smoke_georeference_sources = summarize_georeference_sources(smoke_validated)
+    evaluated_georeference_sources = summarize_georeference_sources([*scored, *smoke_validated])
     active_road_match_elapsed = summarize_road_match_elapsed(scored)
     smoke_road_match_elapsed = summarize_road_match_elapsed(smoke_validated)
     average_iou = float(mean(ious)) if ious else 0.0
@@ -856,10 +897,13 @@ def run_benchmark(
             "active_total_duration_s": round(active_total_duration, 6),
             "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
             "active_stage_duration_s": active_stage_duration,
+            "active_georeference_sources": active_georeference_sources,
             "active_ocr_engine_profile": summarize_ocr_engine_profiles(scored),
             "smoked_skipped_stage_duration_s": smoke_stage_duration,
+            "smoked_skipped_georeference_sources": smoke_georeference_sources,
             "smoked_skipped_ocr_engine_profile": summarize_ocr_engine_profiles(smoke_validated),
             "evaluated_stage_duration_s": evaluated_stage_duration,
+            "evaluated_georeference_sources": evaluated_georeference_sources,
             "evaluated_ocr_engine_profile": summarize_ocr_engine_profiles(
                 [*scored, *smoke_validated]
             ),
@@ -1215,6 +1259,19 @@ def parse_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
                 raise ValueError(f"Stage budget seconds must be numeric: {entry}") from exc
             budgets[stage] = max(0.0, value)
     return dict(sorted(budgets.items()))
+
+
+def parse_georeference_source_requirements(raw_sources: list[str]) -> list[str]:
+    sources: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_sources:
+        for source in raw.split(","):
+            source = source.strip()
+            if not source or source in seen:
+                continue
+            sources.append(source)
+            seen.add(source)
+    return sources
 
 
 def fixture_matches_filters(fixture: BenchmarkFixture, filters: list[str]) -> bool:
@@ -1803,6 +1860,20 @@ def summarize_stage_durations(scores: list[BenchmarkScore]) -> dict[str, float]:
                 continue
             totals[stage] = totals.get(stage, 0.0) + parsed_duration
     return {stage: round(total, 6) for stage, total in sorted(totals.items())}
+
+
+def summarize_georeference_sources(scores: list[BenchmarkScore]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for score in scores:
+        source = georeference_source_count_key(score.georeference_source)
+        counts[source] = counts.get(source, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def georeference_source_count_key(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return MISSING_GEOREFERENCE_SOURCE
 
 
 OCR_ENGINE_PROFILE_DURATION_KEYS = (
@@ -2593,6 +2664,89 @@ def check_report_latency_budgets(
     }
 
 
+def check_report_source_requirements(
+    report: dict[str, Any],
+    *,
+    required_active_georeference_sources: list[str] | None = None,
+    required_evaluated_georeference_sources: list[str] | None = None,
+) -> dict[str, Any]:
+    active_sources = normalize_required_georeference_sources(required_active_georeference_sources)
+    evaluated_sources = normalize_required_georeference_sources(
+        required_evaluated_georeference_sources
+    )
+    active_rows = report_active_score_rows(report)
+    evaluated_rows = report_evaluated_score_rows(report)
+    issues: list[dict[str, Any]] = []
+
+    for row in active_rows:
+        source = georeference_source_count_key(row.get("georeference_source"))
+        if active_sources and source not in active_sources:
+            issues.append(
+                {
+                    "slug": report_row_slug(row),
+                    "kind": "active_georeference_source_mismatch",
+                    "georeference_source": source,
+                    "required_georeference_sources": active_sources,
+                }
+            )
+
+    for row in evaluated_rows:
+        source = georeference_source_count_key(row.get("georeference_source"))
+        if evaluated_sources and source not in evaluated_sources:
+            issues.append(
+                {
+                    "slug": report_row_slug(row),
+                    "kind": "evaluated_georeference_source_mismatch",
+                    "georeference_source": source,
+                    "required_georeference_sources": evaluated_sources,
+                }
+            )
+
+    return {
+        "passed": not issues,
+        "required_active_georeference_sources": active_sources,
+        "required_evaluated_georeference_sources": evaluated_sources,
+        "active_georeference_sources": summarize_report_georeference_sources(active_rows),
+        "evaluated_georeference_sources": summarize_report_georeference_sources(evaluated_rows),
+        "issues": issues,
+    }
+
+
+def normalize_required_georeference_sources(sources: list[str] | None) -> list[str]:
+    return parse_georeference_source_requirements(sources or [])
+
+
+def report_active_score_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in report.get("scores", []):
+        if isinstance(row, dict) and row.get("status") == "active":
+            rows.append(row)
+    return rows
+
+
+def report_evaluated_score_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in report.get("scores", []):
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") == "active" or row.get("duration_s") is not None or row.get("error"):
+            rows.append(row)
+    return rows
+
+
+def summarize_report_georeference_sources(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        source = georeference_source_count_key(row.get("georeference_source"))
+        counts[source] = counts.get(source, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def report_row_slug(row: dict[str, Any]) -> str:
+    slug = row.get("slug")
+    return slug if isinstance(slug, str) else ""
+
+
 def report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, Any] | None:
     repeat_profile = report.get("repeat_profile")
     if not isinstance(repeat_profile, dict):
@@ -2773,6 +2927,12 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
         f"{duration_text}"
     )
     print(f"report: {report_path}")
+    active_sources_text = format_source_counts(summary.get("active_georeference_sources"))
+    if active_sources_text:
+        print(f"active sources: {active_sources_text}")
+    smoke_sources_text = format_source_counts(summary.get("smoked_skipped_georeference_sources"))
+    if smoke_sources_text:
+        print(f"smoked skipped sources: {smoke_sources_text}")
     print("")
     print(f"{'status':6s} {'iou':>6s} {'time':>7s} {'area':>6s} {'verts':>6s} {'style':12s} {'source':38s} slug")
     for row in report["scores"]:
@@ -2915,6 +3075,25 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(f"       {issue['metric']}: missing evaluated OCR engine profile")
             elif issue["kind"] == "evaluated_ocr_engine_duration_missing":
                 print(f"       {issue['metric']}: missing evaluated OCR engine duration")
+    source_requirement_check = report.get("source_requirement_check")
+    if source_requirement_check:
+        print("")
+        source_status = "PASS" if source_requirement_check["passed"] else "FAIL"
+        print(
+            f"{source_status} source requirement: "
+            f"{len(source_requirement_check['issues'])} issues"
+        )
+        for issue in source_requirement_check["issues"][:12]:
+            if issue["kind"] in {
+                "active_georeference_source_mismatch",
+                "evaluated_georeference_source_mismatch",
+            }:
+                scope = "active" if issue["kind"].startswith("active_") else "evaluated"
+                required = ", ".join(issue["required_georeference_sources"])
+                print(
+                    f"       {issue['slug']}: {scope} source "
+                    f"{issue['georeference_source']} not in [{required}]"
+                )
 
 
 def format_duration(value: Any) -> str:
@@ -2924,6 +3103,21 @@ def format_duration(value: Any) -> str:
         return f"{float(value):.2f}s"
     except (TypeError, ValueError):
         return "-"
+
+
+def format_source_counts(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return ""
+    parts = []
+    for source, count in value.items():
+        if not isinstance(source, str):
+            continue
+        try:
+            parsed_count = int(count)
+        except (TypeError, ValueError):
+            continue
+        parts.append(f"{source}={parsed_count}")
+    return ", ".join(parts)
 
 
 if __name__ == "__main__":

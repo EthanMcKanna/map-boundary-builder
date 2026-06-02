@@ -9,14 +9,17 @@ import map_boundary_builder.benchmark as benchmark_module
 from map_boundary_builder.benchmark import (
     BenchmarkFixture,
     BenchmarkScore,
+    check_report_source_requirements,
     check_report_latency_budgets,
     compare_report_regressions,
     discover_fixtures,
     load_fixture_config,
+    parse_georeference_source_requirements,
     parse_stage_duration_budgets,
     parse_image_name,
     run_benchmark,
     score_full_fixture_in_process,
+    summarize_georeference_sources,
 )
 
 
@@ -78,6 +81,62 @@ def test_parse_stage_duration_budgets_rejects_missing_separator() -> None:
         raise AssertionError("Expected invalid stage budget to raise ValueError")
 
 
+def test_parse_georeference_source_requirements_accepts_repeated_and_comma_values() -> None:
+    sources = parse_georeference_source_requirements(
+        ["catalog-shape-match, ocr-georeference:nominatim-label-fit", "catalog-shape-match"]
+    )
+
+    assert sources == [
+        "catalog-shape-match",
+        "ocr-georeference:nominatim-label-fit",
+    ]
+
+
+def test_summarize_georeference_sources_counts_missing_sources() -> None:
+    scores = [
+        BenchmarkScore(
+            slug="dallas-avride",
+            image="Avride Dallas.png",
+            mode="full",
+            passed=True,
+            iou=0.99,
+            area_ratio=1.0,
+            centroid_distance_m=1.0,
+            vertices=12,
+            style="blue-fill",
+            georeference_source="catalog-shape-match",
+        ),
+        BenchmarkScore(
+            slug="dallas-waymo",
+            image="Waymo Dallas.png",
+            mode="full",
+            passed=True,
+            iou=0.98,
+            area_ratio=1.0,
+            centroid_distance_m=2.0,
+            vertices=10,
+            style="blue-fill",
+            georeference_source=" catalog-shape-match ",
+        ),
+        BenchmarkScore(
+            slug="phoenix-waymo",
+            image="Waymo Phoenix.png",
+            mode="full",
+            passed=False,
+            iou=None,
+            area_ratio=None,
+            centroid_distance_m=None,
+            vertices=None,
+            style=None,
+        ),
+    ]
+
+    assert summarize_georeference_sources(scores) == {
+        "<missing>": 1,
+        "catalog-shape-match": 2,
+    }
+
+
 def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"
     image_dir = tmp_path / "images"
@@ -118,6 +177,55 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     assert generation_env["MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS"] == "3000000"
     assert generation_env["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"] == "24"
     assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
+
+
+def test_run_benchmark_summary_includes_georeference_source_counts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+
+    (polygon_dir / "dallas-waymo.json").write_text("{}\n")
+    (image_dir / "Waymo Dallas.png").write_bytes(b"not an image")
+
+    def fake_score_full_fixture(fixture: BenchmarkFixture, **_kwargs) -> BenchmarkScore:
+        return BenchmarkScore(
+            slug=fixture.slug,
+            image=fixture.image_path.name,
+            mode="full",
+            passed=True,
+            iou=0.99,
+            area_ratio=1.0,
+            centroid_distance_m=5.0,
+            vertices=24,
+            style="blue-fill",
+            duration_s=0.12,
+            georeference_source="catalog-shape-match",
+        )
+
+    monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=tmp_path / "fixtures.json",
+        execution="in-process",
+    )
+
+    assert report["summary"]["active_georeference_sources"] == {"catalog-shape-match": 1}
+    assert report["summary"]["smoked_skipped_georeference_sources"] == {}
+    assert report["summary"]["evaluated_georeference_sources"] == {"catalog-shape-match": 1}
 
 
 def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path: Path) -> None:
@@ -1768,6 +1876,105 @@ def test_report_latency_budget_check_flags_absolute_duration_excess() -> None:
     ]
 
 
+def test_report_source_requirement_check_passes_when_sources_match() -> None:
+    report = {
+        "summary": {},
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "duration_s": 0.08,
+                "georeference_source": "catalog-shape-match",
+            },
+            {
+                "slug": "phoenix-waymo",
+                "status": "reference_mismatch",
+                "duration_s": 0.11,
+                "georeference_source": "catalog-shape-match",
+            },
+        ],
+    }
+
+    check = check_report_source_requirements(
+        report,
+        required_active_georeference_sources=["catalog-shape-match"],
+        required_evaluated_georeference_sources=["catalog-shape-match"],
+    )
+
+    assert check["passed"] is True
+    assert check["active_georeference_sources"] == {"catalog-shape-match": 1}
+    assert check["evaluated_georeference_sources"] == {"catalog-shape-match": 2}
+    assert check["issues"] == []
+
+
+def test_report_source_requirement_check_flags_active_and_evaluated_mismatches() -> None:
+    report = {
+        "summary": {},
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "duration_s": 0.08,
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+            },
+            {
+                "slug": "phoenix-waymo",
+                "status": "active",
+                "duration_s": 0.11,
+                "georeference_source": "catalog-shape-match",
+            },
+            {
+                "slug": "miami-waymo",
+                "status": "reference_mismatch",
+                "duration_s": 0.22,
+                "georeference_source": None,
+            },
+            {
+                "slug": "bay-area-waymo",
+                "status": "reference_mismatch",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+            },
+        ],
+    }
+
+    check = check_report_source_requirements(
+        report,
+        required_active_georeference_sources=["catalog-shape-match"],
+        required_evaluated_georeference_sources=["catalog-shape-match"],
+    )
+
+    assert check["passed"] is False
+    assert check["active_georeference_sources"] == {
+        "catalog-shape-match": 1,
+        "ocr-georeference:nominatim-label-fit": 1,
+    }
+    assert check["evaluated_georeference_sources"] == {
+        "<missing>": 1,
+        "catalog-shape-match": 1,
+        "ocr-georeference:nominatim-label-fit": 1,
+    }
+    assert check["issues"] == [
+        {
+            "slug": "dallas-waymo",
+            "kind": "active_georeference_source_mismatch",
+            "georeference_source": "ocr-georeference:nominatim-label-fit",
+            "required_georeference_sources": ["catalog-shape-match"],
+        },
+        {
+            "slug": "dallas-waymo",
+            "kind": "evaluated_georeference_source_mismatch",
+            "georeference_source": "ocr-georeference:nominatim-label-fit",
+            "required_georeference_sources": ["catalog-shape-match"],
+        },
+        {
+            "slug": "miami-waymo",
+            "kind": "evaluated_georeference_source_mismatch",
+            "georeference_source": "<missing>",
+            "required_georeference_sources": ["catalog-shape-match"],
+        },
+    ]
+
+
 def test_report_latency_budget_check_passes_when_within_budget() -> None:
     report = {
         "summary": {
@@ -2030,6 +2237,64 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
     output = capsys.readouterr().out
     assert "det_elapsed_s: evaluated OCR engine duration 3.250s > budget 3.000s" in output
     assert "rec_elapsed_s: missing evaluated OCR engine duration" in output
+
+
+def test_print_table_reports_georeference_source_requirement_failure(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    report = {
+        "mode": "full",
+        "summary": {
+            "passed": False,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 0,
+            "average_iou": 0.95,
+            "min_iou": 0.95,
+            "total_duration_s": 0.6,
+            "active_georeference_sources": {
+                "ocr-georeference:nominatim-label-fit": 1,
+            },
+        },
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.95,
+                "area_ratio": 1.0,
+                "duration_s": 0.6,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": None,
+            }
+        ],
+        "inventory": {"references_without_images": []},
+        "source_requirement_check": {
+            "passed": False,
+            "issues": [
+                {
+                    "slug": "dallas-waymo",
+                    "kind": "active_georeference_source_mismatch",
+                    "georeference_source": "ocr-georeference:nominatim-label-fit",
+                    "required_georeference_sources": ["catalog-shape-match"],
+                },
+            ],
+        },
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "active sources: ocr-georeference:nominatim-label-fit=1" in output
+    assert "FAIL source requirement: 1 issues" in output
+    assert (
+        "dallas-waymo: active source ocr-georeference:nominatim-label-fit "
+        "not in [catalog-shape-match]"
+    ) in output
 
 
 def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:

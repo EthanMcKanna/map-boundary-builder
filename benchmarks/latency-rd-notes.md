@@ -11745,3 +11745,19 @@ with zero failures in 0.531s.
   either arbitrary no-catalog OCR/georeference, stronger equivalence validation
   for skipping full OCR, or broader catalog/cache coverage without harming
   unseen screenshots.
+- Accepted a benchmark-report hardening follow-up for the catalog fast path:
+  full reports now include active, smoke-skipped, and evaluated
+  `georeference_source` count summaries, and the benchmark CLI can enforce
+  source invariants with `--require-active-georeference-source SOURCE` or
+  `--require-evaluated-georeference-source SOURCE`. This turns the prior
+  manual row inspection into a pass/fail contract, so a future catalog-speed
+  run fails if active fixtures silently fall back to OCR/georeference. The
+  real gated catalog run
+  `out/catalog-fastpath-source-gate-20260602/full-report.json` passed with
+  `8/8` active fixtures, `active_georeference_sources` and
+  `evaluated_georeference_sources` both equal to `catalog-shape-match=8`,
+  average IoU `0.992917`, min IoU `0.943345`, active total `0.552837s`, max
+  fixture `0.098089s`, extract `0.521467s`, georeference `0.000039s`, and
+  `0` issues for both latency and source requirements under the same
+  sub-second budgets. Focused benchmark tests passed (`65 passed`), and the
+  full suite passed (`463 passed`).
