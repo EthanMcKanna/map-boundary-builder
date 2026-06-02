@@ -12361,3 +12361,25 @@ with zero failures in 0.531s.
   tests/test_stress_benchmark.py tests/test_benchmark.py
   tests/test_api_cache.py::ApiRunCacheTests::test_health_payload_can_prewarm_generation_runtime
   tests/test_ocr_georeference.py -q` (`285 passed`).
+- Accepted repeat-profile p90/p95 latency reporting for the stress harness so
+  longer no-cache runs expose tail shape directly in the summary JSON and CLI
+  output instead of forcing manual sample scans. The helper uses linear
+  interpolation and records `p90_total_elapsed_s` / `p95_total_elapsed_s` for
+  repeat summaries and per-case summaries, plus `p90_duration_s` /
+  `p95_duration_s` for stage-duration distributions. Focused unit validation
+  passed with `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_stress_benchmark.py -q` (`14 passed`). A deliberately heavier
+  four-repeat fresh-cache stress run
+  `out/stress-expanded16-stylecap-budget-repeat4-20260602/stress-summary.json`
+  preserved `16/16` primary expectations and `48/48` analyzed repeat
+  expectations, but rejected the idea that the current defaults are robustly
+  subsecond under all local CPU/OCR variance: the `1.0s` latency budget failed
+  with primary max `3.907509s`, analyzed repeat median `1.058597s`, p90
+  `2.252256s`, p95 `2.653041s`, and max `2.874654s`. OCR dominated the tail:
+  repeat OCR median `0.791872s`, p90 `2.011482s`, p95 `2.421938s`, and max
+  `2.667230s`; worst per-case p95s were Zoox tall `2.863694s`, Grand Rapids
+  `2.628354s`, and Zoox mobile `2.346875s`. No runtime change is accepted from
+  this run; it is evidence that the short expanded gate is not enough to prove
+  stable p95 subsecond generation under load, and that future speed work should
+  keep targeting OCR variance, especially full-frame dark-teal and dense
+  dark-teal text recognition.

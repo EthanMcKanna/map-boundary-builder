@@ -599,12 +599,16 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["summary"]["subsecond_case_min_total_count"] == 1
     assert repeat_profile["summary"]["min_total_elapsed_s"] == 0.8
     assert repeat_profile["summary"]["median_total_elapsed_s"] == 0.8
+    assert repeat_profile["summary"]["p90_total_elapsed_s"] == 0.8
+    assert repeat_profile["summary"]["p95_total_elapsed_s"] == 0.8
     assert repeat_profile["summary"]["stage_duration_s"] == {
         "ocr": {
             "samples": 1,
             "min_duration_s": 0.4,
             "median_duration_s": 0.4,
             "average_duration_s": 0.4,
+            "p90_duration_s": 0.4,
+            "p95_duration_s": 0.4,
             "max_duration_s": 0.4,
         }
     }
@@ -703,6 +707,27 @@ def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> No
     )
 
     assert exit_code == 1
+
+
+def test_repeat_profile_duration_stats_record_tail_percentiles() -> None:
+    stats = stress_module.repeat_profile_total_elapsed_stats(
+        [
+            {"total_elapsed_s": 1.0},
+            {"total_elapsed_s": 2.0},
+            {"total_elapsed_s": 4.0},
+        ]
+    )
+
+    assert stats["p90_total_elapsed_s"] == 3.6
+    assert stats["p95_total_elapsed_s"] == 3.8
+    assert stress_module.repeat_profile_stage_duration_distribution([0.1, 0.2, 0.4]) == {
+        "min_duration_s": 0.1,
+        "median_duration_s": 0.2,
+        "average_duration_s": 0.233333,
+        "p90_duration_s": 0.36,
+        "p95_duration_s": 0.38,
+        "max_duration_s": 0.4,
+    }
 
 
 def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatch) -> None:

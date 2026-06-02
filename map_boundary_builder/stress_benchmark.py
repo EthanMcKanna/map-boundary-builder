@@ -1029,12 +1029,16 @@ def repeat_profile_total_elapsed_stats(samples: list[dict[str, Any]]) -> dict[st
             "min_total_elapsed_s": None,
             "median_total_elapsed_s": None,
             "average_total_elapsed_s": None,
+            "p90_total_elapsed_s": None,
+            "p95_total_elapsed_s": None,
             "max_total_elapsed_s": None,
         }
     return {
         "min_total_elapsed_s": round(min(durations), 6),
         "median_total_elapsed_s": round(float(median(durations)), 6),
         "average_total_elapsed_s": round(float(mean(durations)), 6),
+        "p90_total_elapsed_s": round(percentile_linear(durations, 90), 6),
+        "p95_total_elapsed_s": round(percentile_linear(durations, 95), 6),
         "max_total_elapsed_s": round(max(durations), 6),
     }
 
@@ -1067,14 +1071,33 @@ def repeat_profile_stage_duration_distribution(durations: list[float]) -> dict[s
             "min_duration_s": None,
             "median_duration_s": None,
             "average_duration_s": None,
+            "p90_duration_s": None,
+            "p95_duration_s": None,
             "max_duration_s": None,
         }
     return {
         "min_duration_s": round(min(durations), 6),
         "median_duration_s": round(float(median(durations)), 6),
         "average_duration_s": round(float(mean(durations)), 6),
+        "p90_duration_s": round(percentile_linear(durations, 90), 6),
+        "p95_duration_s": round(percentile_linear(durations, 95), 6),
         "max_duration_s": round(max(durations), 6),
     }
+
+
+def percentile_linear(values: list[float], percentile: float) -> float:
+    if not values:
+        raise ValueError("values must not be empty")
+    if percentile <= 0:
+        return min(values)
+    if percentile >= 100:
+        return max(values)
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * (percentile / 100.0)
+    lower_index = int(position)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    fraction = position - lower_index
+    return ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
 
 
 def summarize_repeat_profile_ocr_engine(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -1163,15 +1186,17 @@ def print_stress_table(report: dict[str, Any]) -> None:
         repeat_summary = repeat_profile.get("summary")
         if isinstance(repeat_summary, dict):
             median_total = repeat_summary.get("median_total_elapsed_s")
+            p95_total = repeat_summary.get("p95_total_elapsed_s")
             max_total = repeat_summary.get("max_total_elapsed_s")
             median_text = f"{median_total:.3f}s" if isinstance(median_total, (int, float)) else "-"
+            p95_text = f"{p95_total:.3f}s" if isinstance(p95_total, (int, float)) else "-"
             max_text = f"{max_total:.3f}s" if isinstance(max_total, (int, float)) else "-"
             print(
                 "repeat profile: "
                 f"analyzed={repeat_summary.get('analyzed_samples', 0)}, "
                 f"expected={repeat_summary.get('expectation_passed_samples', 0)}, "
                 f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
-                f"median_total={median_text}, max_total={max_text}"
+                f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
             )
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
