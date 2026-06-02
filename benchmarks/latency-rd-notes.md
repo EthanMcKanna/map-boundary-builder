@@ -13254,3 +13254,40 @@ with zero failures in 0.531s.
   `Inferred map area` instead of `Miami`. Keep the current `1400px`
   bright-blue OCR cap unless a future detector/recognizer path can preserve
   the Bay/LA/Houston strict support floors and bbox locks.
+- Accepted disabling ONNX Runtime's CPU memory arena as the new default after
+  the stricter support+bbox hard gate reproduced a broad latency win without
+  changing signatures. `MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING=0` was only a
+  tie on the strict slow-six probe
+  (`out/probe-onnx-nospin-strict-slow6-20260602/stress-summary.json`): `6/6`
+  primary expectations, `24/24` analyzed repeats, repeat p95 `0.554s`, max
+  `0.566s`, RapidOCR total p95 `0.490s`, and recognizer p95 `0.241s`.
+  `MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA=0` looked better on the
+  environment-only slow-six probe
+  (`out/probe-onnx-noarena-strict-slow6-20260602/stress-summary.json`): `6/6`
+  primary expectations, `24/24` analyzed repeats, repeat p95 `0.546s`, max
+  `0.553s`, RapidOCR total p95 `0.494s`, and recognizer p95 `0.242s`.
+  Combining no-arena with no-spinning
+  (`out/probe-onnx-noarena-nospin-strict-slow6-20260602/stress-summary.json`)
+  did not improve the tail: repeat p95 `0.553s`, max `0.560s`, and RapidOCR
+  total p95 `0.501s`, so spinning stays enabled. The environment-only
+  full-sixteen hard gate
+  (`out/probe-onnx-noarena-full16-hard-20260602/stress-summary.json`) passed
+  `16/16` primary expectations and `48/48` analyzed repeats with repeat p95
+  `0.544s`, max `0.583s`, primary max `0.724544s`, and RapidOCR total p95
+  `0.477s`, versus the current strict-bbox baseline at repeat p95 `0.554s`,
+  max `0.575s`, primary max `0.844544s`, and RapidOCR total p95 `0.485s`.
+  After flipping the actual default, the strict slow-six run
+  (`out/noarena-default-slow6-actual-20260602/stress-summary.json`) stayed
+  correct but was noisier: `6/6` primary expectations, `24/24` analyzed
+  repeats, repeat p95 `0.563s`, max `0.577s`, and RapidOCR total p95 `0.508s`.
+  The broader actual-code hard gate
+  (`out/noarena-default-full16-hard-actual-20260602/stress-summary.json`) is
+  the accepted evidence: `16/16` primary expectations, statuses
+  `{"complete":14,"failed":2}`, `48/48` analyzed repeats, stable signatures
+  for all `16` cases, `48/48` subsecond repeats, primary max `0.814895s`,
+  repeat median `0.345s`, repeat p95 `0.529s`, repeat max `0.567s`, RapidOCR
+  total p95 `0.463s`, detector p95 `0.258s`, and recognizer p95 `0.236s`.
+  This keeps the strict support floors and bbox locks while trimming the
+  full-gate repeat p95 by about `24ms` and the RapidOCR total p95 by about
+  `22ms`; `MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA=1` remains available
+  as an override if a future host shows the opposite profile.
