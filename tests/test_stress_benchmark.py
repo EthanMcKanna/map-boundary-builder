@@ -597,6 +597,8 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["summary"]["unexpected_samples"] == 0
     assert repeat_profile["summary"]["subsecond_samples"] == 1
     assert repeat_profile["summary"]["subsecond_case_min_total_count"] == 1
+    assert repeat_profile["summary"]["stable_signature_cases"] == 1
+    assert repeat_profile["summary"]["unstable_signature_cases"] == []
     assert repeat_profile["summary"]["min_total_elapsed_s"] == 0.8
     assert repeat_profile["summary"]["median_total_elapsed_s"] == 0.8
     assert repeat_profile["summary"]["p90_total_elapsed_s"] == 0.8
@@ -672,6 +674,25 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "selected_box_count": 3,
         },
     }
+    assert repeat_profile["cases"]["kept"]["signature_stability"] == {
+        "samples": 1,
+        "stable": True,
+        "unique_signatures": 1,
+        "signatures": [
+            {
+                "count": 1,
+                "observed_status": "complete",
+                "city": None,
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": None,
+                "ocr_label_count": None,
+                "ocr_label_event": None,
+                "ocr_full_detail_retry": None,
+                "ocr_top_labels": None,
+                "error": None,
+            }
+        ],
+    }
     assert repeat_profile["cases"]["kept"]["max_total_elapsed_s"] == 0.8
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
@@ -689,6 +710,54 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         ],
         "repeat_violations": [],
     }
+
+
+def test_repeat_profile_flags_output_signature_drift() -> None:
+    samples = [
+        {
+            "slug": "drifty",
+            "repeat_index": 1,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.52,
+            "city": "Grand Rapids",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 5,
+            "ocr_label_count": 56,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Highway", "GENTEX"],
+        },
+        {
+            "slug": "drifty",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.58,
+            "city": "Inferred map area",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 4,
+            "ocr_label_count": 49,
+            "ocr_label_event": "Full-detail map labels read",
+            "ocr_full_detail_retry": True,
+            "ocr_top_labels": ["Highway"],
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=2,
+        warmup_runs_per_case=0,
+    )
+
+    assert repeat_profile["summary"]["stable_signature_cases"] == 0
+    assert repeat_profile["summary"]["unstable_signature_cases"] == ["drifty"]
+    stability = repeat_profile["cases"]["drifty"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert [signature["count"] for signature in stability["signatures"]] == [1, 1]
 
 
 def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> None:

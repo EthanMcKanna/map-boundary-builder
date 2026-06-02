@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 import json
 import os
@@ -910,6 +911,11 @@ def summarize_repeat_profile_samples(
         slug: summarize_repeat_profile_sample_group(slug_samples)
         for slug, slug_samples in sorted(case_samples.items())
     }
+    unstable_signature_cases = [
+        slug
+        for slug, case_summary in case_summaries.items()
+        if not case_summary.get("signature_stability", {}).get("stable", True)
+    ]
     analyzed_samples = repeat_profile_analyzed_samples(samples)
     subsecond_case_count = sum(
         1
@@ -929,6 +935,8 @@ def summarize_repeat_profile_samples(
             - count_repeat_expectation_passed_samples(analyzed_samples),
             "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
             "subsecond_case_min_total_count": subsecond_case_count,
+            "stable_signature_cases": len(case_summaries) - len(unstable_signature_cases),
+            "unstable_signature_cases": unstable_signature_cases,
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
@@ -949,6 +957,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "unexpected_samples": len(analyzed_samples)
         - count_repeat_expectation_passed_samples(analyzed_samples),
         "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+        "signature_stability": repeat_profile_signature_stability(analyzed_samples),
         **repeat_profile_total_elapsed_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
         "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
@@ -959,6 +968,35 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
 
 def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [sample for sample in samples if not sample.get("warmup")]
+
+
+def repeat_profile_signature_stability(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    signatures = [repeat_profile_output_signature(sample) for sample in samples]
+    counts = Counter(json.dumps(signature, sort_keys=True) for signature in signatures)
+    return {
+        "samples": len(signatures),
+        "stable": len(counts) <= 1,
+        "unique_signatures": len(counts),
+        "signatures": [
+            {"count": count, **json.loads(encoded)}
+            for encoded, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+    }
+
+
+def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
+    top_labels = sample.get("ocr_top_labels")
+    return {
+        "observed_status": sample.get("observed_status"),
+        "city": sample.get("city"),
+        "source": sample.get("source"),
+        "control_points": sample.get("control_points"),
+        "ocr_label_count": sample.get("ocr_label_count"),
+        "ocr_label_event": sample.get("ocr_label_event"),
+        "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
+        "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
+        "error": sample.get("error"),
+    }
 
 
 def build_latency_budget_summary(
@@ -1225,6 +1263,12 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
                 f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
             )
+            unstable_signature_cases = repeat_summary.get("unstable_signature_cases")
+            if isinstance(unstable_signature_cases, list) and unstable_signature_cases:
+                print(
+                    "repeat signature drift: "
+                    + ", ".join(str(slug) for slug in unstable_signature_cases)
+                )
             ocr_engine_stage_duration = repeat_summary.get("ocr_engine_stage_duration_s")
             if isinstance(ocr_engine_stage_duration, dict) and ocr_engine_stage_duration:
                 labels = {

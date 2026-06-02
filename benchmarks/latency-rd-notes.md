@@ -12530,3 +12530,21 @@ with zero failures in 0.531s.
   confirms the remaining tail is mostly recognizer-heavy on
   `zoox-las-vegas-mobile-tall` (recognizer p95 `0.602424s`) and still worth
   treating separately from bright-blue detector work.
+- Added repeat-output signature stability to stress repeat profiles so future
+  OCR/runtime candidates that pass coarse expectations but drift in city,
+  source, control count, OCR label count, top labels, full-detail retry status,
+  or fail-closed error text are visible without manual JSON diffing. The
+  top-level repeat summary now reports `stable_signature_cases` and
+  `unstable_signature_cases`, and each case records its distinct analyzed
+  signatures with counts. This is diagnostic-only and does not change
+  generation or expectations. Focused unit coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`15 passed`). A real no-cache in-process smoke,
+  `out/stress-signature-stability-smoke-20260602/stress-summary.json`,
+  preserved `2/2` expectations across Grand Rapids and Zoox tall, kept `4/4`
+  analyzed repeat samples subsecond, and reported `stable_signature_cases=2`
+  with no unstable cases. The saved per-case signatures confirmed Grand Rapids
+  held `city=Grand Rapids`, `control_points=5`, `ocr_label_count=56`, and the
+  same top labels across both analyzed repeats, while Zoox tall consistently
+  failed closed with the same sparse-OCR error, `ocr_label_count=62`, and the
+  same top labels.
