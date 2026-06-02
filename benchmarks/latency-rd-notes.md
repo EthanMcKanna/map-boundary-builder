@@ -14438,3 +14438,28 @@ with zero failures in 0.531s.
   boxes, `34` selected boxes, `34` useful labels, zero labels below 70
   confidence, and one label below 80, confirming the source-SVG detector gate is
   live while preserving the locked Austin geometry.
+- Rejected two follow-up SVG-source OCR levers after strict source-hint stress
+  probes. A global-rec-batch sweep used the locked Austin browser-rasterized SVG
+  source-hint manifest only as a proxy for a possible future source-specific
+  override. `out/svg-sourcehint-recbatch-sweep-20260602` preserved the locked
+  `14` controls, `96` OCR labels, `41` raw boxes, `34` selected boxes, and
+  stable signatures at every batch size, but only `6` and the current `12`
+  looked plausible; `4`, `24`, and `32` failed the `0.8s` repeat-p95 gate, and
+  `8`/`16` were slower than current. The longer confirmation rejected `6`:
+  `out/svg-sourcehint-recbatch-confirm-20260602/batch-6/stress-summary.json`
+  failed repeat p95 at `0.805s` and OCR-total p95 `0.499s`, while
+  `batch-6b` passed but still had recognizer p95 `0.281s`; the current `12`
+  control passed twice with p95 `0.723s` / `0.760s` and the best recognizer p95
+  `0.263s`. Keep `RAPIDOCR_REC_BATCH_NUM=12` and do not add a source-SVG
+  recognition-batch override without stronger evidence. A separate SVG OCR max
+  dimension sweep also rejected lowering
+  `MAP_BOUNDARY_RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION`: in
+  `out/svg-sourcehint-ocrdim-sweep-20260602`, dimensions `1200`, `1300`,
+  `1400`, and `1500` all failed the locked `complete` expectation. The failures
+  were label-support losses, not timing wins: `1200` produced only `2` selected
+  boxes and a slow full-detail retry tail, `1300` selected `7` boxes, `1400`
+  selected `9` boxes with `2` labels below 70 confidence, and `1500` selected
+  `21` boxes with zero controls. The current `1600` control passed with
+  `14` controls, `96` OCR labels, `41` raw boxes, `34` selected boxes, repeat
+  p95 `0.732s`, and no signature drift, so the SVG OCR dimension must remain
+  `1600` for this Austin source-hint guard.
