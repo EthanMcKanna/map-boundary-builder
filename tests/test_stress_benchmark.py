@@ -803,7 +803,12 @@ def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatc
 
     def fake_prewarm(*, runner_ocr_cache, extraction_cache):
         prewarm_calls.append((runner_ocr_cache, extraction_cache))
-        return {"status": "ok", "rapidocr_inference_warmed": True, "total_s": 0.12}
+        return {
+            "status": "ok",
+            "rapidocr_inference_warmed": True,
+            "rapidocr_s": 0.09,
+            "total_s": 0.12,
+        }
 
     def fake_run_case(
         case,
@@ -834,6 +839,7 @@ def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatc
         tmp_path / "out",
         prewarm_runtime=True,
         max_prewarm_runtime_s=0.2,
+        max_prewarm_stage_s={"rapidocr_s": 0.1},
         runner_ocr_cache=False,
         extraction_cache=False,
         python_executable="python",
@@ -842,13 +848,20 @@ def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatc
     saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
     assert prewarm_calls == [(False, False)]
     assert report["prewarm_runtime"] is True
-    assert saved["prewarm"] == {"status": "ok", "rapidocr_inference_warmed": True, "total_s": 0.12}
+    assert saved["prewarm"] == {
+        "status": "ok",
+        "rapidocr_inference_warmed": True,
+        "rapidocr_s": 0.09,
+        "total_s": 0.12,
+    }
     assert saved["latency_budget"] == {
         "passed": True,
         "primary_violations": [],
         "repeat_violations": [],
         "max_prewarm_runtime_s": 0.2,
         "prewarm_violations": [],
+        "max_prewarm_stage_s": {"rapidocr_s": 0.1},
+        "prewarm_stage_violations": [],
     }
 
 
@@ -1603,6 +1616,10 @@ def test_main_accepts_successful_requested_prewarm(tmp_path, monkeypatch) -> Non
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["prewarm_runtime"] is True
         assert kwargs["max_prewarm_runtime_s"] == 0.5
+        assert kwargs["max_prewarm_stage_s"] == {
+            "rapidocr_s": 1.2,
+            "total_s": 1.5,
+        }
         return {
             "prewarm": {"status": "ok", "total_s": 0.1},
             "summary": {
@@ -1635,6 +1652,8 @@ def test_main_accepts_successful_requested_prewarm(tmp_path, monkeypatch) -> Non
             "--prewarm-runtime",
             "--max-prewarm-runtime-s",
             "0.5",
+            "--max-prewarm-stage-s",
+            "rapidocr_s=1.2,total_elapsed_s=1.5",
         ]
     )
 
@@ -1767,6 +1786,18 @@ def test_main_rejects_nonpositive_prewarm_budget(monkeypatch) -> None:
     assert exc.value.code == 2
 
 
+def test_main_rejects_invalid_prewarm_stage_budget(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run with an invalid prewarm stage budget")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--max-prewarm-stage-s", "rapidocr_s=0"])
+
+    assert exc.value.code == 2
+
+
 def test_latency_budget_flags_repeat_profile_p95_excess_and_missing() -> None:
     repeat_profile = {
         "summary": {
@@ -1839,6 +1870,72 @@ def test_latency_budget_flags_prewarm_excess_and_missing() -> None:
         {
             "kind": "prewarm_runtime_missing",
             "max_prewarm_runtime_s": 1.0,
+        }
+    ]
+
+
+def test_parse_prewarm_stage_duration_budgets_accepts_repeated_and_comma_values() -> None:
+    assert stress_module.parse_prewarm_stage_duration_budgets(
+        ["rapidocr_s=1.2, extraction_s=0.05", "total_elapsed_s=1.5"]
+    ) == {
+        "extraction_s": 0.05,
+        "rapidocr_s": 1.2,
+        "total_s": 1.5,
+    }
+
+
+def test_parse_prewarm_stage_duration_budgets_rejects_invalid_values() -> None:
+    with pytest.raises(ValueError, match="METRIC=SECONDS"):
+        stress_module.parse_prewarm_stage_duration_budgets(["rapidocr_s:1.2"])
+    with pytest.raises(ValueError, match="positive"):
+        stress_module.parse_prewarm_stage_duration_budgets(["rapidocr_s=0"])
+    with pytest.raises(ValueError, match="Unknown prewarm stage metric"):
+        stress_module.parse_prewarm_stage_duration_budgets(["det_elapsed_s=0.6"])
+
+
+def test_latency_budget_flags_prewarm_stage_excess_and_missing() -> None:
+    budget = stress_module.build_latency_budget_summary(
+        [],
+        None,
+        prewarm={"status": "ok", "rapidocr_s": 1.32},
+        max_prewarm_stage_s={
+            "extraction_s": 0.05,
+            "rapidocr_s": 1.2,
+        },
+    )
+
+    assert budget["passed"] is False
+    assert budget["max_prewarm_stage_s"] == {
+        "extraction_s": 0.05,
+        "rapidocr_s": 1.2,
+    }
+    assert budget["prewarm_stage_violations"] == [
+        {
+            "kind": "prewarm_stage_missing",
+            "metric": "extraction_s",
+            "max_prewarm_stage_s": 0.05,
+        },
+        {
+            "kind": "prewarm_stage_budget_exceeded",
+            "metric": "rapidocr_s",
+            "duration_s": 1.32,
+            "max_prewarm_stage_s": 1.2,
+            "excess_s": 0.12,
+        },
+    ]
+
+    missing_budget = stress_module.build_latency_budget_summary(
+        [],
+        None,
+        max_prewarm_stage_s={"rapidocr_s": 1.2},
+    )
+
+    assert missing_budget["passed"] is False
+    assert missing_budget["prewarm_stage_violations"] == [
+        {
+            "kind": "prewarm_stage_missing",
+            "metric": "rapidocr_s",
+            "max_prewarm_stage_s": 1.2,
         }
     ]
 

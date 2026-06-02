@@ -14055,3 +14055,27 @@ with zero failures in 0.531s.
   kept their new OCR label floors (`3` and `14` labels), so the prewarm budget
   guard did not mask the arbitrary-screenshot negative-control reliability
   checks.
+- Added a stress-harness prewarm stage duration budget with
+  `--max-prewarm-stage-s`, plus saved `latency_budget.max_prewarm_stage_s` and
+  `prewarm_stage_violations`. This closes the next RapidOCR warm-shape gap:
+  strict gates can now fail if `rapidocr_s`, `extraction_s`, `seed_s`,
+  `catalog_s`, or `total_s` silently regresses, even when the broad total
+  prewarm budget still passes. Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`60` tests). A two-case live smoke
+  `out/prewarm-stage-budget-smoke-20260602/stress-summary.json` passed with
+  prewarm `total_s=1.225565`, `rapidocr_s=1.150590` under the new `1.2s`
+  stage budget, primary max `0.691929s`, primary OCR engine max `0.508708s`,
+  repeat p95 `0.535343s`, repeat OCR total p95 `0.474671s`, and zero
+  `prewarm_stage_violations`. The first full 16-case run
+  `out/prewarm-stage-budget-full16-20260602/stress-summary.json` proved the new
+  stage guard stayed green (`rapidocr_s=0.892443`, zero stage violations) but
+  was rejected as a no-ship variance run because Bay Area Waymo primary OCR
+  hit `0.672256s` against the existing `0.65s` primary OCR-engine cap. The
+  rerun `out/prewarm-stage-budget-full16-rerun-20260602/stress-summary.json`
+  passed all strict budgets with OCR/extraction caches disabled: prewarm
+  `total_s=0.934300`, `rapidocr_s=0.857204`, `16/16` primary expectations,
+  statuses `{"complete":14,"failed":2}`, `32/32` analyzed repeat expectations,
+  stable signatures, primary max `0.661026s`, primary OCR engine max
+  `0.540224s`, repeat p95 `0.527612s`, repeat OCR total p95 `0.455583s`, and
+  zero prewarm runtime or stage violations.

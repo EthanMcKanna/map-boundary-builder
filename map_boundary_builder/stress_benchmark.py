@@ -35,6 +35,10 @@ OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
 }
+PREWARM_STAGE_DURATION_KEYS = ("catalog_s", "seed_s", "extraction_s", "rapidocr_s", "total_s")
+PREWARM_STAGE_METRIC_ALIASES = {
+    "total_elapsed_s": "total_s",
+}
 OCR_ENGINE_BOX_AREA_KEYS = (
     "raw_box_area_min",
     "raw_box_area_p25",
@@ -166,6 +170,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail when generation runtime prewarm total_s is missing or exceeds this duration budget.",
     )
     parser.add_argument(
+        "--max-prewarm-stage-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Fail when a generation prewarm stage metric is missing or exceeds this duration budget. "
+            "Repeat or comma-separate entries such as rapidocr_s=1.2,extraction_s=0.05,total_s=1.5."
+        ),
+    )
+    parser.add_argument(
         "--max-repeat-ocr-engine-p95-duration-s",
         action="append",
         default=[],
@@ -224,6 +238,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
         parser.error("--max-prewarm-runtime-s must be positive")
     try:
+        max_prewarm_stage_s = parse_prewarm_stage_duration_budgets(args.max_prewarm_stage_s)
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
         max_repeat_ocr_engine_p95_duration_s = parse_metric_duration_budgets(
             args.max_repeat_ocr_engine_p95_duration_s
         )
@@ -259,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         max_total_elapsed_s=args.max_total_elapsed_s,
         max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
         max_prewarm_runtime_s=args.max_prewarm_runtime_s,
+        max_prewarm_stage_s=max_prewarm_stage_s,
         max_ocr_engine_duration_s=max_ocr_engine_duration_s,
         max_ocr_engine_count=max_ocr_engine_count,
         max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
@@ -305,6 +324,7 @@ def run_stress_benchmark(
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
     max_prewarm_runtime_s: float | None = None,
+    max_prewarm_stage_s: dict[str, float] | None = None,
     max_ocr_engine_duration_s: dict[str, float] | None = None,
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
@@ -325,6 +345,7 @@ def run_stress_benchmark(
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
     ocr_engine_p95_count_budgets = dict(max_repeat_ocr_engine_p95_count or {})
+    prewarm_stage_budgets = dict(max_prewarm_stage_s or {})
     if execution not in {"subprocess", "in-process"}:
         raise ValueError(f"Unsupported stress execution mode: {execution}")
     manifest = load_manifest(manifest_path)
@@ -396,6 +417,7 @@ def run_stress_benchmark(
         max_total_elapsed_s is not None
         or max_repeat_profile_p95_duration_s is not None
         or max_prewarm_runtime_s is not None
+        or prewarm_stage_budgets
         or ocr_engine_budgets
         or ocr_engine_count_budgets
         or ocr_engine_p95_budgets
@@ -408,6 +430,7 @@ def run_stress_benchmark(
             max_total_elapsed_s=max_total_elapsed_s,
             max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
             max_prewarm_runtime_s=max_prewarm_runtime_s,
+            max_prewarm_stage_s=prewarm_stage_budgets,
             max_ocr_engine_duration_s=ocr_engine_budgets,
             max_ocr_engine_count=ocr_engine_count_budgets,
             max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
@@ -1622,6 +1645,7 @@ def build_latency_budget_summary(
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
     max_prewarm_runtime_s: float | None = None,
+    max_prewarm_stage_s: dict[str, float] | None = None,
     max_ocr_engine_duration_s: dict[str, float] | None = None,
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
@@ -1663,12 +1687,17 @@ def build_latency_budget_summary(
         prewarm,
         max_prewarm_runtime_s=max_prewarm_runtime_s,
     )
+    prewarm_stage_violations = prewarm_stage_budget_violations(
+        prewarm,
+        max_prewarm_stage_s or {},
+    )
     summary = {
         "passed": (
             not primary_violations
             and not repeat_violations
             and not repeat_p95_violations
             and not prewarm_violations
+            and not prewarm_stage_violations
             and not ocr_engine_violations
             and not ocr_engine_count_violations
             and not repeat_ocr_engine_p95_violations
@@ -1685,6 +1714,12 @@ def build_latency_budget_summary(
     if max_prewarm_runtime_s is not None:
         summary["max_prewarm_runtime_s"] = round(float(max_prewarm_runtime_s), 6)
         summary["prewarm_violations"] = prewarm_violations
+    if max_prewarm_stage_s:
+        summary["max_prewarm_stage_s"] = {
+            metric: round(float(seconds), 6)
+            for metric, seconds in sorted(max_prewarm_stage_s.items())
+        }
+        summary["prewarm_stage_violations"] = prewarm_stage_violations
     if max_ocr_engine_duration_s:
         summary["max_ocr_engine_duration_s"] = {
             metric: round(float(seconds), 6)
@@ -1739,6 +1774,36 @@ def prewarm_runtime_budget_violations(
             "excess_s": round(parsed - budget, 6),
         }
     ]
+
+
+def prewarm_stage_budget_violations(
+    prewarm: dict[str, Any] | None,
+    budgets: dict[str, float],
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for metric, budget in sorted(budgets.items()):
+        stage_s = prewarm.get(metric) if isinstance(prewarm, dict) else None
+        parsed = parse_nonnegative_float(stage_s)
+        if parsed is None:
+            violations.append(
+                {
+                    "kind": "prewarm_stage_missing",
+                    "metric": metric,
+                    "max_prewarm_stage_s": round(float(budget), 6),
+                }
+            )
+            continue
+        if parsed > budget:
+            violations.append(
+                {
+                    "kind": "prewarm_stage_budget_exceeded",
+                    "metric": metric,
+                    "duration_s": round(parsed, 6),
+                    "max_prewarm_stage_s": round(float(budget), 6),
+                    "excess_s": round(parsed - budget, 6),
+                }
+            )
+    return violations
 
 
 def repeat_profile_p95_budget_violations(
@@ -1801,6 +1866,29 @@ def parse_metric_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
     return dict(sorted(budgets.items()))
 
 
+def parse_prewarm_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"Prewarm stage budget must use METRIC=SECONDS: {entry}")
+            raw_metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not raw_metric:
+                raise ValueError(f"Prewarm stage budget is missing a metric name: {entry}")
+            metric = normalize_prewarm_stage_duration_metric(raw_metric)
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"Prewarm stage budget seconds must be numeric: {entry}") from exc
+            if value <= 0.0:
+                raise ValueError(f"Prewarm stage budget seconds must be positive: {entry}")
+            budgets[metric] = value
+    return dict(sorted(budgets.items()))
+
+
 def parse_metric_count_budgets(raw_budgets: list[str]) -> dict[str, float]:
     budgets: dict[str, float] = {}
     for raw in raw_budgets:
@@ -1829,6 +1917,14 @@ def normalize_ocr_engine_duration_metric(metric: str) -> str:
     if normalized not in OCR_ENGINE_STAGE_MAX_KEYS:
         expected = ", ".join(OCR_ENGINE_STAGE_MAX_KEYS)
         raise ValueError(f"Unknown OCR engine duration metric {metric!r}; expected one of: {expected}")
+    return normalized
+
+
+def normalize_prewarm_stage_duration_metric(metric: str) -> str:
+    normalized = PREWARM_STAGE_METRIC_ALIASES.get(metric.strip(), metric.strip())
+    if normalized not in PREWARM_STAGE_DURATION_KEYS:
+        expected = ", ".join(PREWARM_STAGE_DURATION_KEYS)
+        raise ValueError(f"Unknown prewarm stage metric {metric!r}; expected one of: {expected}")
     return normalized
 
 
@@ -2344,6 +2440,10 @@ def print_stress_table(report: dict[str, Any]) -> None:
             prewarm_violation_count = (
                 len(prewarm_violations) if isinstance(prewarm_violations, list) else 0
             )
+            prewarm_stage_violations = latency_budget.get("prewarm_stage_violations")
+            prewarm_stage_violation_count = (
+                len(prewarm_stage_violations) if isinstance(prewarm_stage_violations, list) else 0
+            )
             total_budget_text = f" total<={budget_text}" if isinstance(budget, (int, float)) else ""
             print(
                 "latency budget: failed"
@@ -2352,6 +2452,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"repeat={len(latency_budget.get('repeat_violations', []))} "
                 f"repeat_p95={repeat_p95_count} "
                 f"prewarm={prewarm_violation_count} "
+                f"prewarm_stage={prewarm_stage_violation_count} "
                 f"ocr_engine={ocr_engine_count} "
                 f"ocr_engine_count={ocr_engine_count_budget_count} "
                 f"repeat_ocr_engine_p95={repeat_ocr_engine_count} "
@@ -2369,6 +2470,19 @@ def print_stress_table(report: dict[str, Any]) -> None:
                         )
                     elif issue.get("kind") == "prewarm_runtime_missing":
                         print("   - prewarm total_s metric missing")
+            if isinstance(prewarm_stage_violations, list):
+                for issue in prewarm_stage_violations[:5]:
+                    if not isinstance(issue, dict):
+                        continue
+                    metric = issue.get("metric")
+                    if issue.get("kind") == "prewarm_stage_budget_exceeded":
+                        print(
+                            "   - "
+                            f"prewarm {metric} {float(issue['duration_s']):.3f}s "
+                            f"> budget {float(issue['max_prewarm_stage_s']):.3f}s"
+                        )
+                    elif issue.get("kind") == "prewarm_stage_missing":
+                        print(f"   - prewarm {metric} metric missing")
             if isinstance(repeat_p95, list):
                 for issue in repeat_p95[:3]:
                     if not isinstance(issue, dict):
