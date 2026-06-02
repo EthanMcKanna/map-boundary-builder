@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import tempfile
 import threading
 import time
@@ -97,6 +98,43 @@ JPEG_XMP_PREFIX = b"http://ns.adobe.com/xap/1.0/\x00"
 WEBP_RIFF_SIGNATURE = b"RIFF"
 WEBP_SIGNATURE = b"WEBP"
 WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
+TIFF_LITTLE_ENDIAN_SIGNATURE = b"II"
+TIFF_BIG_ENDIAN_SIGNATURE = b"MM"
+TIFF_CLASSIC_MAGIC = 42
+TIFF_TYPE_SIZES = {
+    1: 1,  # BYTE
+    2: 1,  # ASCII
+    3: 2,  # SHORT
+    4: 4,  # LONG
+    5: 8,  # RATIONAL
+    6: 1,  # SBYTE
+    7: 1,  # UNDEFINED
+    8: 2,  # SSHORT
+    9: 4,  # SLONG
+    10: 8,  # SRATIONAL
+    11: 4,  # FLOAT
+    12: 8,  # DOUBLE
+}
+TIFF_NON_VISUAL_TAGS = {
+    270,  # ImageDescription
+    271,  # Make
+    272,  # Model
+    285,  # PageName
+    305,  # Software
+    306,  # DateTime
+    315,  # Artist
+    33432,  # Copyright
+    33723,  # IPTC
+    34377,  # Photoshop
+    34665,  # ExifIFDPointer
+    34853,  # GPSInfoIFDPointer
+    700,  # XMP
+}
+TIFF_STRIP_OFFSETS_TAG = 273
+TIFF_STRIP_BYTE_COUNTS_TAG = 279
+TIFF_TILE_OFFSETS_TAG = 324
+TIFF_TILE_BYTE_COUNTS_TAG = 325
+TIFF_MAX_IFDS = 16
 SUPPORTED_IMAGE_EXTENSIONS = {
     ".avif",
     ".png",
@@ -283,6 +321,8 @@ class handler(BaseHTTPRequestHandler):
             events.append({"timestamp": time.time(), **event})
 
         normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=False)
+        profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
+        profile["normalized_cache_lookup_s"] = 0.0
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
@@ -465,8 +505,41 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        tiff_visual_cache_started = time.perf_counter()
+        tiff_visual_hash = tiff_visual_sha256(image_bytes)
+        if tiff_visual_hash is not None:
+            tiff_visual_cache_key, tiff_visual_success_cache_key = run_result_cache_key_pair_for_hash(
+                "tiff_visual_sha256",
+                tiff_visual_hash,
+                city,
+                options,
+            )
+        else:
+            tiff_visual_cache_key = None
+            tiff_visual_success_cache_key = None
+        if tiff_visual_cache_key is not None:
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                tiff_visual_cache_key,
+                tiff_visual_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
+        profile["tiff_visual_cache_lookup_s"] = elapsed_seconds(tiff_visual_cache_started)
+        if tiff_visual_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "tiff-visual-compatible" if compatible_cache_hit else "tiff-visual"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            self.send_json(
+                payload,
+                status=cached_run_response_status(payload),
+            )
+            return
+
         cache_key: str | None = None
-        profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         if normalized_cache_lookup:
             normalized_cache_started = time.perf_counter()
             cache_key, normalized_success_cache_key = run_result_cache_key_pair_for_hash(
@@ -493,8 +566,6 @@ class handler(BaseHTTPRequestHandler):
                     status=cached_run_response_status(payload),
                 )
                 return
-        else:
-            profile["normalized_cache_lookup_s"] = 0.0
 
         run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
         debug_dir = run_dir / "debug" if options.include_overlay else None
@@ -564,6 +635,8 @@ class handler(BaseHTTPRequestHandler):
                 write_run_result_cache(jpeg_visual_cache_key, payload)
             if webp_visual_cache_key is not None:
                 write_run_result_cache(webp_visual_cache_key, payload)
+            if tiff_visual_cache_key is not None:
+                write_run_result_cache(tiff_visual_cache_key, payload)
             write_run_result_cache(raw_cache_key, payload)
             self.send_json(payload, status=HTTPStatus.OK)
             return
@@ -585,6 +658,8 @@ class handler(BaseHTTPRequestHandler):
                     write_run_result_cache(jpeg_visual_cache_key, payload)
                 if webp_visual_cache_key is not None:
                     write_run_result_cache(webp_visual_cache_key, payload)
+                if tiff_visual_cache_key is not None:
+                    write_run_result_cache(tiff_visual_cache_key, payload)
                 write_run_result_cache(raw_cache_key, payload)
             self.send_json(
                 payload,
@@ -619,6 +694,8 @@ class handler(BaseHTTPRequestHandler):
             write_run_result_cache(jpeg_visual_cache_key, payload)
         if webp_visual_cache_key is not None:
             write_run_result_cache(webp_visual_cache_key, payload)
+        if tiff_visual_cache_key is not None:
+            write_run_result_cache(tiff_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
         write_success_run_result_cache_keys(
             payload,
@@ -627,6 +704,7 @@ class handler(BaseHTTPRequestHandler):
             jpeg_commentless_success_cache_key,
             jpeg_visual_success_cache_key,
             webp_visual_success_cache_key,
+            tiff_visual_success_cache_key,
             normalized_success_cache_key if cache_key is not None else None,
         )
         profile["cache_write_s"] = elapsed_seconds(cache_write_started)
@@ -1120,6 +1198,26 @@ def webp_visual_run_result_success_cache_key(image_bytes: bytes, city: str | Non
     )
 
 
+def tiff_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = tiff_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash("tiff_visual_sha256", visual_hash, city, options)
+
+
+def tiff_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    visual_hash = tiff_visual_sha256(image_bytes)
+    if visual_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "tiff_visual_sha256",
+        visual_hash,
+        city,
+        options,
+        threshold_compatible=True,
+    )
+
+
 def run_result_cache_key_for_hash(
     image_hash_name: str,
     image_hash: str,
@@ -1407,6 +1505,114 @@ def webp_visual_sha256(image_bytes: bytes) -> str | None:
         offset = padded_end
     if offset != riff_end:
         return None
+    return digest.hexdigest()
+
+
+def tiff_visual_sha256(image_bytes: bytes) -> str | None:
+    if len(image_bytes) < 8 or image_bytes[:2] not in {
+        TIFF_LITTLE_ENDIAN_SIGNATURE,
+        TIFF_BIG_ENDIAN_SIGNATURE,
+    }:
+        return None
+    byte_order = "little" if image_bytes[:2] == TIFF_LITTLE_ENDIAN_SIGNATURE else "big"
+    endian = "<" if byte_order == "little" else ">"
+    magic = int.from_bytes(image_bytes[2:4], byte_order)
+    if magic != TIFF_CLASSIC_MAGIC:
+        return None
+    ifd_offset = int.from_bytes(image_bytes[4:8], byte_order)
+    digest = hashlib.sha256()
+    digest.update(b"tiff-visual-v1")
+    digest.update(image_bytes[:4])
+    visited_ifds: set[int] = set()
+    ifd_count = 0
+
+    def entry_value_bytes(type_id: int, value_count: int, raw_value: bytes) -> bytes | None:
+        type_size = TIFF_TYPE_SIZES.get(type_id)
+        if type_size is None:
+            return None
+        value_size = type_size * value_count
+        if value_size <= 4:
+            return raw_value[:value_size]
+        value_offset = int.from_bytes(raw_value, byte_order)
+        if value_offset < 0 or value_offset + value_size > len(image_bytes):
+            return None
+        return image_bytes[value_offset : value_offset + value_size]
+
+    def entry_int_values(type_id: int, value_count: int, raw_value: bytes) -> list[int] | None:
+        value = entry_value_bytes(type_id, value_count, raw_value)
+        if value is None:
+            return None
+        if type_id == 3:
+            step = 2
+        elif type_id == 4:
+            step = 4
+        else:
+            return None
+        if len(value) != value_count * step:
+            return None
+        return [int.from_bytes(value[index : index + step], byte_order) for index in range(0, len(value), step)]
+
+    def hash_image_segments(label: bytes, offsets: list[int] | None, byte_counts: list[int] | None) -> bool:
+        if offsets is None and byte_counts is None:
+            return True
+        if not offsets or not byte_counts or len(offsets) != len(byte_counts):
+            return False
+        digest.update(label)
+        digest.update(len(offsets).to_bytes(4, "big"))
+        for data_offset, byte_count in zip(offsets, byte_counts):
+            if data_offset < 0 or byte_count < 0 or data_offset + byte_count > len(image_bytes):
+                return False
+            digest.update(byte_count.to_bytes(8, "big"))
+            digest.update(image_bytes[data_offset : data_offset + byte_count])
+        return True
+
+    while ifd_offset:
+        if ifd_offset in visited_ifds or ifd_offset + 2 > len(image_bytes) or ifd_count >= TIFF_MAX_IFDS:
+            return None
+        visited_ifds.add(ifd_offset)
+        ifd_count += 1
+        entry_count = int.from_bytes(image_bytes[ifd_offset : ifd_offset + 2], byte_order)
+        entries_start = ifd_offset + 2
+        entries_end = entries_start + entry_count * 12
+        next_ifd_offset_start = entries_end
+        if entries_end + 4 > len(image_bytes):
+            return None
+        digest.update(b"IFD")
+        strip_offsets: list[int] | None = None
+        strip_byte_counts: list[int] | None = None
+        tile_offsets: list[int] | None = None
+        tile_byte_counts: list[int] | None = None
+        for entry_index in range(entry_count):
+            entry_start = entries_start + entry_index * 12
+            tag, type_id, value_count = struct.unpack(endian + "HHI", image_bytes[entry_start : entry_start + 8])
+            raw_value = image_bytes[entry_start + 8 : entry_start + 12]
+            if tag == TIFF_STRIP_OFFSETS_TAG:
+                strip_offsets = entry_int_values(type_id, value_count, raw_value)
+                continue
+            if tag == TIFF_STRIP_BYTE_COUNTS_TAG:
+                strip_byte_counts = entry_int_values(type_id, value_count, raw_value)
+                continue
+            if tag == TIFF_TILE_OFFSETS_TAG:
+                tile_offsets = entry_int_values(type_id, value_count, raw_value)
+                continue
+            if tag == TIFF_TILE_BYTE_COUNTS_TAG:
+                tile_byte_counts = entry_int_values(type_id, value_count, raw_value)
+                continue
+            if tag in TIFF_NON_VISUAL_TAGS:
+                continue
+            value = entry_value_bytes(type_id, value_count, raw_value)
+            if value is None:
+                return None
+            digest.update(struct.pack(endian + "HHI", tag, type_id, value_count))
+            digest.update(len(value).to_bytes(8, "big"))
+            digest.update(value)
+        if strip_offsets is None and tile_offsets is None:
+            return None
+        if not hash_image_segments(b"STRIPS", strip_offsets, strip_byte_counts):
+            return None
+        if not hash_image_segments(b"TILES", tile_offsets, tile_byte_counts):
+            return None
+        ifd_offset = int.from_bytes(image_bytes[next_ifd_offset_start : next_ifd_offset_start + 4], byte_order)
     return digest.hexdigest()
 
 

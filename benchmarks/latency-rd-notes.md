@@ -11543,3 +11543,31 @@ with zero failures in 0.531s.
   validation passed with `15` selected API/frontend cache tests, `node --check`
   on `app.js`, full `tests/test_api_cache.py` (`69 passed`), and
   `git diff --check`; the full suite also passed (`439 passed`).
+- Accepted a TIFF-specific visual run-result cache tier instead of broadening
+  the generic decoded-pixel normalized lookup to TIFF uploads. The generic TIFF
+  normalized-cache probes proved the hit is real but the miss tax is too
+  format- and workload-sensitive for a frontend default: Dallas Tesla improved
+  repeats but the tiny catalog-fast source miss went from about `0.177s` with
+  normalized lookup disabled to `0.412s` with normalized lookup enabled, while
+  the larger Ann Arbor TIFF metadata variant hit in `0.071s` but its source
+  miss rose from about `0.792s` to `1.199s`
+  (`out/tiff-normalized-cache-probe-20260602/api-tiff-normalized-cache-same-filename-results.json`,
+  `out/tiff-normalized-cache-probe-20260602/api-aa-tiff-normalized-cache-same-filename-results.json`).
+  A lossless TIFF parser that ignores nonvisual IFD tags such as
+  `ImageDescription`, hashes strip/tile payload bytes, and returns `None` for
+  malformed, BigTIFF, or unsupported image-data layouts caught the same
+  metadata-only variants without decoding the full image. In a process-isolated
+  API probe with `normalized_cache_lookup` omitted, the byte-different but
+  pixel-identical Ann Arbor TIFF variant hit `cache_hit: tiff-visual` in
+  `0.018021s` with `tiff_visual_cache_lookup_s: 0.005213`; the control with
+  TIFF visual hashing disabled rebuilt the variant in `0.781534s`. The tiny
+  Dallas TIFF variant hit `tiff-visual` in `0.010264s` with
+  `tiff_visual_cache_lookup_s: 0.000745`; its disabled control rebuilt in
+  `0.190481s`
+  (`out/tiff-visual-cache-probe-20260602/api-tiff-visual-cache-same-filename-results.json`).
+  First-miss overhead is bounded to the TIFF parser/hash timing rather than the
+  decoded-pixel path, and early cache-hit profiles now report
+  `normalized_cache_lookup_enabled` / `normalized_cache_lookup_s` explicitly.
+  Focused validation passed with `6` selected TIFF/normalized API cache tests,
+  `py_compile` for the edited API/test files, full `tests/test_api_cache.py`
+  (`72 passed`), and `git diff --check`.

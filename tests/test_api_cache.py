@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PIL import Image, PngImagePlugin, features
+from PIL import Image, PngImagePlugin, TiffImagePlugin, features
 
 import api.index as api_index
 from api.index import (
@@ -51,6 +51,8 @@ from api.index import (
     run_result_cache_tmp_path,
     run_result_cache_key,
     run_result_success_cache_key,
+    tiff_visual_run_result_cache_key,
+    tiff_visual_sha256,
     webp_visual_run_result_cache_key,
     webp_visual_sha256,
     write_run_result_cache,
@@ -69,6 +71,17 @@ from map_boundary_builder.runner import (
 def jpeg_bytes(image: Image.Image, **save_options: object) -> bytes:
     buffer = BytesIO()
     image.save(buffer, format="JPEG", **save_options)
+    return buffer.getvalue()
+
+
+def tiff_bytes(image: Image.Image, *, description: str | None = None) -> bytes:
+    buffer = BytesIO()
+    save_options: dict[str, object] = {}
+    if description is not None:
+        tiff_info = TiffImagePlugin.ImageFileDirectory_v2()
+        tiff_info[270] = description
+        save_options["tiffinfo"] = tiff_info
+    image.save(buffer, format="TIFF", **save_options)
     return buffer.getvalue()
 
 
@@ -634,6 +647,37 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         self.assertIsNone(webp_visual_run_result_cache_key(b"not a webp", None, BoundaryBuildOptions()))
 
+    def test_tiff_visual_hash_ignores_metadata_only(self) -> None:
+        base = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)))
+        first = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="first metadata")
+        second = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="second metadata")
+        changed = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 57)), description="first metadata")
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(tiff_visual_sha256(base), tiff_visual_sha256(first))
+        self.assertEqual(tiff_visual_sha256(first), tiff_visual_sha256(second))
+        self.assertNotEqual(tiff_visual_sha256(first), tiff_visual_sha256(changed))
+        self.assertIsNone(tiff_visual_sha256(b"not a tiff"))
+        self.assertIsNone(tiff_visual_sha256(base[:-1]))
+
+    def test_tiff_visual_run_cache_key_ignores_metadata_but_keeps_options(self) -> None:
+        first = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="cache bust a")
+        second = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="cache bust b")
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            tiff_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            tiff_visual_run_result_cache_key(second, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            tiff_visual_run_result_cache_key(first, None, BoundaryBuildOptions()),
+            tiff_visual_run_result_cache_key(first, "Dallas", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(tiff_visual_run_result_cache_key(b"not a tiff", None, BoundaryBuildOptions()))
+
     def test_run_cache_round_trip_and_payload_rehydration(self) -> None:
         cache_key = run_result_cache_key(b"unit-cache-image", None, BoundaryBuildOptions())
         cached = {
@@ -914,6 +958,70 @@ class ApiRunCacheTests(unittest.TestCase):
             self.assertEqual(payload["profile"]["cache_hit"], "raw-compatible")
             self.assertIn("raw_cache_write_s", payload["profile"])
             self.assertEqual(payload["summary"]["combined_confidence"], 0.846)
+
+    def test_create_run_uses_tiff_visual_cache_without_normalized_lookup(self) -> None:
+        filename = "Ann Arbor.tiff"
+        first = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="first metadata")
+        second = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="second metadata")
+        cache_options = SimpleNamespace(
+            simplify_px=6.0,
+            min_confidence=0.55,
+            min_control_points=3,
+            include_overlay=False,
+            preview_max_dimension=None,
+            overlay_format="png",
+            write_mask_artifact=False,
+            allow_catalog=True,
+            catalog_probe_only=False,
+            catalog_probe_missed=False,
+            catalog_probe_miss_low_iou=False,
+            filename_hint=filename,
+        )
+        cached_payload = {
+            "id": "old-run",
+            "filename": filename,
+            "city": "Ann Arbor",
+            "status": "complete",
+            "summary": {
+                "city": "Ann Arbor",
+                "combined_confidence": 0.805,
+                "control_points": 3,
+            },
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+        with (
+            TemporaryDirectory() as workdir,
+            patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)),
+            patch("api.index.get_pipeline_version", return_value="pipeline-tiff-visual-cache"),
+        ):
+            visual_key = tiff_visual_run_result_cache_key(first, None, cache_options)
+            assert visual_key is not None
+            write_run_result_cache(visual_key, cached_payload)
+
+            request = api_index.handler.__new__(api_index.handler)
+            request.parse_upload_request = lambda: (
+                {"include_overlay": "0"},
+                {"image": (filename, second)},
+                "json",
+            )
+            captured: dict[str, object] = {}
+
+            def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+                captured["payload"] = payload
+                captured["status"] = status
+
+            request.send_json = send_json
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["profile"]["cache_hit"], "tiff-visual")
+        self.assertFalse(payload["profile"]["normalized_cache_lookup_enabled"])
+        self.assertEqual(payload["profile"]["normalized_cache_lookup_s"], 0.0)
+        self.assertIn("tiff_visual_cache_lookup_s", payload["profile"])
+        self.assertEqual(payload["summary"]["city"], "Ann Arbor")
 
     def test_create_run_reports_runner_import_failure_without_secondary_error(self) -> None:
         request = api_index.handler.__new__(api_index.handler)
