@@ -14418,3 +14418,23 @@ with zero failures in 0.531s.
   confidence in primary or repeat OCR profiles. Focused runtime/API/stress
   tests passed `362` tests, `compileall` and `git diff --check` were clean, and
   the full suite passed `587` tests plus `30` subtests.
+- Production deployment `dpl_2sKu6wC5PDVmExn7L2mRwdmgyaXF` is aliased to
+  `https://mapboundary.app`. Public `/api/health?warm=ocr` returned `ok: true`
+  and exposed the new SVG bright-blue detector settings:
+  `rapidocr_svg_bright_blue_detector_limit_side_len=208`,
+  `rapidocr_svg_bright_blue_warm_sample_max_dimension=1400`, and warm key
+  `[208,"en-ppocrv5","max",12,1400]`; the first production warm call reported
+  `total_s=4.936s` and `rapidocr_s=4.555s`. A live Austin browser-rasterized
+  SVG PNG upload with `source_was_svg=1`, no catalog, overlay disabled,
+  normalized cache lookup disabled, and `profile_ocr_engine=1` wrote
+  `out/prod-svg-det208-smoke-20260602/response.json`; it was a cache miss and
+  returned `201` in `2.997s`, with `build_boundary_s=2.235s`,
+  `total_before_send_s=2.241s`, `14` controls, confidence `0.93`, source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, bbox
+  `[-97.8882068,30.1170481,-97.6603375,30.4090807]`, road score `0.823563`,
+  and stage timings `ocr=1.525s`, `georeference=0.490s`, `extract=0.105s`,
+  `inspect=0.036s`. The RapidOCR profile captured one production call with
+  detector limit `208/max`, detector `0.717s`, recognizer `0.787s`, `41` raw
+  boxes, `34` selected boxes, `34` useful labels, zero labels below 70
+  confidence, and one label below 80, confirming the source-SVG detector gate is
+  live while preserving the locked Austin geometry.
