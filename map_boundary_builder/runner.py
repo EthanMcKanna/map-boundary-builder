@@ -113,6 +113,8 @@ CATALOG_MISS_REFINE_MAX_DIMENSION = max(
     ),
 )
 SVG_CATALOG_PATH_FILL = "#07f"
+SVG_PROVIDER_UI_LABEL_LAYER_IDS = ("City_names", "City_Name", "Neighborhoods")
+SVG_PROVIDER_UI_LABEL_LAYER_BACKGROUND_FILL = "#fff"
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
@@ -366,6 +368,18 @@ def svg_catalog_service_path_document(svg_bytes: bytes) -> bytes | None:
     viewbox_match = re.search(r'\bviewBox\s*=\s*(["\'])(?P<value>[^"\']+)\1', text)
     if viewbox_match is None:
         return None
+    path_tag = svg_catalog_service_path_tag(text)
+    if path_tag is None:
+        return None
+    viewbox = viewbox_match.group("value")
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}">'
+        f"{path_tag}"
+        "</svg>"
+    ).encode("utf-8")
+
+
+def svg_catalog_service_path_tag(text: str) -> str | None:
     fill_classes = svg_classes_with_fill(text, SVG_CATALOG_PATH_FILL)
     path_tags = re.findall(r"<path\b[^>]*>", text, flags=re.IGNORECASE | re.DOTALL)
     service_paths = [
@@ -378,12 +392,7 @@ def svg_catalog_service_path_document(svg_bytes: bytes) -> bytes | None:
     path_tag = svg_path_tag_with_fill(service_paths[0], SVG_CATALOG_PATH_FILL)
     if path_tag is None:
         return None
-    viewbox = viewbox_match.group("value")
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}">'
-        f"{path_tag}"
-        "</svg>"
-    ).encode("utf-8")
+    return path_tag
 
 
 def svg_classes_with_fill(text: str, fill: str) -> set[str]:
@@ -435,7 +444,7 @@ def svg_viewbox(svg_bytes: bytes) -> tuple[float, float, float, float] | None:
 
 def svg_with_viewbox(svg_bytes: bytes, viewbox: tuple[float, float, float, float]) -> bytes:
     text = svg_bytes.decode("utf-8", "replace")
-    value = " ".join(f"{part:.6f}".rstrip("0").rstrip(".") for part in viewbox)
+    value = svg_viewbox_attribute_value(viewbox)
     replaced = re.sub(
         r'\bviewBox\s*=\s*(["\'])(?P<value>[^"\']+)\1',
         f'viewBox="{value}"',
@@ -444,6 +453,61 @@ def svg_with_viewbox(svg_bytes: bytes, viewbox: tuple[float, float, float, float
         flags=re.IGNORECASE,
     )
     return replaced.encode("utf-8")
+
+
+def svg_viewbox_attribute_value(viewbox: tuple[float, float, float, float]) -> str:
+    return " ".join(f"{part:.6f}".rstrip("0").rstrip(".") for part in viewbox)
+
+
+def svg_defs_fragment(text: str) -> str:
+    match = re.search(r"<defs\b.*?</defs>", text, flags=re.IGNORECASE | re.DOTALL)
+    return match.group(0) if match is not None else ""
+
+
+def svg_group_fragment_by_id(text: str, group_id: str) -> str | None:
+    for match in re.finditer(r"<g\b[^>]*>", text, flags=re.IGNORECASE | re.DOTALL):
+        if svg_tag_attribute(match.group(0), "id") != group_id:
+            continue
+        depth = 1
+        tag_re = re.compile(r"</?g\b[^>]*>", flags=re.IGNORECASE | re.DOTALL)
+        for tag_match in tag_re.finditer(text, match.end()):
+            tag = tag_match.group(0).strip()
+            if tag.startswith("</"):
+                depth -= 1
+                if depth == 0:
+                    return text[match.start() : tag_match.end()]
+            elif not tag.endswith("/>"):
+                depth += 1
+        return None
+    return None
+
+
+def svg_provider_ui_label_layer_document(
+    svg_bytes: bytes,
+    viewbox: tuple[float, float, float, float],
+) -> bytes | None:
+    text = svg_bytes.decode("utf-8", "replace")
+    service_path = svg_catalog_service_path_tag(text)
+    if service_path is None:
+        return None
+    label_groups = [
+        group
+        for group_id in SVG_PROVIDER_UI_LABEL_LAYER_IDS
+        if (group := svg_group_fragment_by_id(text, group_id)) is not None
+    ]
+    if not label_groups:
+        return None
+    viewbox_value = svg_viewbox_attribute_value(viewbox)
+    min_x, min_y, width, height = viewbox
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox_value}">'
+        f"{svg_defs_fragment(text)}"
+        f'<rect x="{min_x:.6f}" y="{min_y:.6f}" width="{width:.6f}" height="{height:.6f}" '
+        f'fill="{SVG_PROVIDER_UI_LABEL_LAYER_BACKGROUND_FILL}"/>'
+        f"<g>{service_path}</g>"
+        f"{''.join(label_groups)}"
+        "</svg>"
+    ).encode("utf-8")
 
 
 def svg_tag_attribute(tag: str, name: str) -> str | None:
@@ -2324,8 +2388,9 @@ def svg_provider_ui_crop_document(
         max(1.0, (right - left) * scale_x),
         max(1.0, (bottom - top) * scale_y),
     )
+    label_layer_document = svg_provider_ui_label_layer_document(svg_bytes, crop_viewbox)
     return (
-        svg_with_viewbox(svg_bytes, crop_viewbox),
+        label_layer_document if label_layer_document is not None else svg_with_viewbox(svg_bytes, crop_viewbox),
         float(left),
         float(top),
         svg_provider_ui_crop_ocr_max_dimension_for_style(

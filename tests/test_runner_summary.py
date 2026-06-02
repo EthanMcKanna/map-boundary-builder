@@ -1418,6 +1418,61 @@ def test_svg_provider_ui_crop_rewrites_viewbox_and_uses_svg_ocr_kwargs(monkeypat
     assert labels[0].y == 102.0
 
 
+def test_svg_provider_ui_crop_uses_named_label_layer_document(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(runner, "PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 900)
+    monkeypatch.setattr(runner, "SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 625)
+    image_path = tmp_path / "map.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 1000">
+<defs><style>.service{fill:#07f}.label{fill:#515c67}.street{stroke:#aaa}</style></defs>
+<g id="Streets"><path class="street" d="M1 1h2v2H1z"/></g>
+<path class="service" d="M100 200h300v400H100z"/>
+<g id="City_Name"><g><path class="label" d="M210 330h30v20H210z"/></g></g>
+<g id="Neighborhoods"><g><path class="label" d="M220 360h35v20H220z"/></g></g>
+</svg>""",
+        encoding="utf-8",
+    )
+    extraction = ExtractionResult(
+        mask=np.zeros((1000, 500), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(100, 200), (400, 200), (400, 600), (100, 600), (100, 200)]),
+        coverage_ratio=0.24,
+        contour_count=1,
+        confidence=1.0,
+    )
+    raster_calls: list[dict] = []
+
+    def fake_rasterize_svg_bytes_to_png(svg_bytes, target_path, **kwargs):
+        raster_calls.append({"svg": svg_bytes.decode("utf-8"), "kwargs": kwargs})
+        Image.fromarray(np.zeros((625, 479, 3), dtype=np.uint8)).save(target_path)
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize_svg_bytes_to_png)
+    monkeypatch.setattr(
+        runner,
+        "extract_ocr_labels_from_rgb",
+        lambda *_args, **_kwargs: [OcrLabel("Miami", x=1, y=2, width=30, height=10, confidence=99)],
+    )
+
+    labels = runner.extract_provider_ui_labels_from_svg(
+        image_path,
+        extraction=extraction,
+        width=500,
+        height=1000,
+        rapidocr_max_dimension=1200,
+    )
+
+    svg = raster_calls[0]["svg"]
+    assert 'viewBox="20 100 460 600"' in svg
+    assert 'fill="#07f"' in svg
+    assert 'fill="#fff"' in svg
+    assert 'id="City_Name"' in svg
+    assert 'id="Neighborhoods"' in svg
+    assert 'id="Streets"' not in svg
+    assert "M1 1h2v2H1z" not in svg
+    assert labels[0].x == 21.0
+    assert labels[0].y == 102.0
+
+
 def test_svg_catalog_service_path_document_extracts_single_blue_class_path() -> None:
     svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
 <defs><style>.st1{fill:#fff}.st2{fill:#07f}</style></defs>

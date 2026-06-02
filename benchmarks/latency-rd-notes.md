@@ -15381,3 +15381,31 @@ with zero failures in 0.531s.
   repeat max `0.821s`, and no repeat signature drift; all 30 pre-existing row
   signatures were unchanged versus
   `out/avride-webp-full30-hard-20260602/stress-summary.json`.
+- Profiled the new Miami direct-SVG tail and found the bottleneck was SVG
+  crop rasterization, not RapidOCR. The focused control at
+  `out/svg-provider-crop625-control-miami-20260602/stress-summary.json` took
+  `0.956613s` primary / repeat p95 `0.735s`, with about `0.845s` in the OCR
+  stage even though RapidOCR's own profiled total was only about `0.250555s`.
+  Direct timing of the provider crop showed `resvg-py` spent about
+  `0.59-0.61s` rasterizing because the crop only rewrote the viewBox while
+  keeping the full 3.75 MB Illustrator document. A labels/service-layer-only
+  scratch probe preserved the `miami-waymo` provider-label match while cutting
+  rasterization from about `0.58s` to about `0.006s`.
+- Shipped a conservative SVG provider-label crop fast path that only activates
+  when the document has named Illustrator label groups (`City_names`,
+  `City_Name`, or `Neighborhoods`) plus the single `#07f` service-area path;
+  otherwise it falls back to the existing full-document crop. Focused Miami
+  validation at `out/svg-label-layer-miami-20260602/stress-summary.json`
+  passed with source `catalog-shape-match:provider-ui-label`, primary
+  `0.550562s`, repeat p95 `0.234s`, and no repeat signature drift. The five
+  SVG-row slice at `out/svg-label-layer-slice-20260602/stress-summary.json`
+  passed `5/5`, primary max `0.383022s`, repeat p95 `0.210s`, and all rows
+  subsecond. The full hard gate at
+  `out/svg-label-layer-full32-hard-20260602/stress-summary.json` passed
+  `32/32`, statuses `{"complete":21,"failed":11}`, primary max `0.865167s`,
+  repeat `32/32` subsecond, repeat p95 `0.544s`, repeat max `0.613s`, and no
+  repeat signature drift. Comparing the new full gate against
+  `out/direct-svg-full32-hard-20260602/stress-summary.json` showed zero changes
+  across all 32 common rows for status, source, city, bbox, geometry hash,
+  confidence, and catalog fields; Miami direct-SVG improved from `0.851713s`
+  total / `0.782633s` OCR stage to `0.303031s` total / `0.236899s` OCR stage.
