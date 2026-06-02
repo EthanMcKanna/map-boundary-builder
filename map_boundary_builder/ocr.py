@@ -1425,15 +1425,20 @@ def rapidocr_detector_limit_for_input(
 @lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
     try:
-        sample = rapidocr_warm_sample()
-        for detector_limit, recognition_profile, detector_limit_type, rec_batch_num in rapidocr_warm_engine_keys():
+        samples: dict[int, np.ndarray] = {}
+        for (
+            detector_limit,
+            recognition_profile,
+            detector_limit_type,
+            rec_batch_num,
+            warm_side,
+        ) in rapidocr_warm_engine_sample_plan():
             engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
+            sample = samples.get(warm_side)
+            if sample is None:
+                sample = rapidocr_warm_sample_for_side(warm_side)
+                samples[warm_side] = sample
             engine(sample, use_cls=False)
-        bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side()
-        if bright_blue_warm_side > 0:
-            detector_limit, recognition_profile, detector_limit_type, rec_batch_num = rapidocr_bright_blue_warm_key()
-            engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
-            engine(rapidocr_warm_sample_for_side(bright_blue_warm_side), use_cls=False)
     except Exception:
         return False
     return True
@@ -1477,6 +1482,20 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:
             if detector_limit > 0 and key not in keys:
                 keys.append(key)
     return keys
+
+
+def rapidocr_warm_engine_sample_plan() -> list[tuple[int, str, str, int, int]]:
+    generic_side = rapidocr_generic_warm_sample_side()
+    bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side()
+    bright_blue_key = rapidocr_bright_blue_warm_key()
+    plan: list[tuple[int, str, str, int, int]] = []
+    for key in rapidocr_warm_engine_keys():
+        if bright_blue_warm_side > 0 and key == bright_blue_key:
+            continue
+        plan.append((*key, generic_side))
+    if bright_blue_warm_side > 0:
+        plan.append((*bright_blue_key, bright_blue_warm_side))
+    return plan
 
 
 def rapidocr_warm_sample() -> np.ndarray:

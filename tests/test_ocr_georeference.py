@@ -1509,8 +1509,29 @@ class OcrGroupingTests(unittest.TestCase):
             calls,
             [
                 ((608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM), (608, 608, 3), False),
-                ((256, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (608, 608, 3), False),
                 ((256, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (1400, 1400, 3), False),
+            ],
+        )
+
+    def test_rapidocr_warm_engine_sample_plan_skips_redundant_small_bright_blue_shape(self) -> None:
+        with (
+            patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+            patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 608),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 256),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
+            patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", 16),
+            patch.object(ocr_module, "RAPIDOCR_REC_BATCH_NUM", 12),
+        ):
+            plan = ocr_module.rapidocr_warm_engine_sample_plan()
+
+        self.assertEqual(
+            plan,
+            [
+                (608, "default", "default", 12, 608),
+                (608, "default", "default", 16, 608),
+                (256, "en-ppocrv5", "max", 12, 1400),
             ],
         )
 
@@ -1601,7 +1622,7 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertTrue(warm_rapidocr_runtime())
                 self.assertTrue(warm_rapidocr_runtime())
 
-            expected_keys = ocr_module.rapidocr_warm_engine_keys() + [ocr_module.rapidocr_bright_blue_warm_key()]
+            expected_keys = [plan[:4] for plan in ocr_module.rapidocr_warm_engine_sample_plan()]
             self.assertEqual(
                 [call.args for call in rapidocr.call_args_list],
                 expected_keys,

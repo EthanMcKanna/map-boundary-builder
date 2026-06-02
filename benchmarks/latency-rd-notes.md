@@ -13977,3 +13977,18 @@ with zero failures in 0.531s.
   health/runtime prewarm (`~1.26s` vs `~0.76s`) for a lower first scored
   generation tail (`0.632s` vs `0.675s`) and lower primary OCR-engine tail
   (`0.501s` vs `0.562s`) without correctness regressions.
+- Removed the redundant small-sample bright-blue warm pass after the large
+  bright-blue warm landed. The probe
+  `out/probe-skip-small-brightblue-warm-full16-20260602/stress-summary.json`
+  showed the idea could preserve strict correctness while reducing prewarm
+  work, so the default warm plan now skips the 608px pass for the
+  `256/max/en-ppocrv5` bright-blue engine when a larger bright-blue warm sample
+  is configured. The real patched gate
+  `out/skip-small-brightblue-warm-full16-actual-20260602/stress-summary.json`
+  passed with OCR and extraction caches disabled: prewarm `status=ok`, prewarm
+  total `0.931534s`, `16/16` expected, primary max `0.614404s`, primary OCR
+  engine max `0.476599s`, repeat p95 `0.530443s`, repeat OCR `total_s` p95
+  `0.441655s`, selected-box p95 `26.25`, and stable signatures for all `16`
+  cases. Compared with the just-landed large bright-blue warm gate, this
+  reduces health/runtime prewarm by roughly `0.32s` (`1.256s -> 0.932s`) while
+  keeping first generation and OCR tails below the same strict budgets.
