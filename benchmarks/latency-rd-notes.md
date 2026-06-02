@@ -15043,3 +15043,35 @@ with zero failures in 0.531s.
   five `robotaxi-austin` repeats with p95 `0.391s` and max `0.396s`, supporting
   that the failed full rerun was variance evidence rather than a deterministic
   regression from the row-metrics patch.
+- Reopened and accepted a narrower direct-SVG catalog shortcut after proving
+  the earlier vector-layer rejection was a low-resolution/parser prototype
+  artifact rather than a hard limit. A text-scan parser finds exactly one
+  Illustrator class-backed `#07f` service-area path in both
+  `/Users/ethanmckanna/Downloads/a.png` and
+  `/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg`, avoiding the full
+  SVG DOM/raster pass unless the path renders and passes the existing strict
+  catalog shape gate. At the production SVG raster cap (`1600px` longest side),
+  the single-path render measured Austin raster `0.0426s`, extract `0.0349s`,
+  IoU `0.974165`, margin `0.291463`, area ratio `0.990175`; Nashville raster
+  `0.0394s`, extract `0.0331s`, IoU `0.983823`, margin `0.317378`, area ratio
+  `1.001818`. The shipped code only takes the shortcut for real SVG uploads
+  with catalog matching enabled, exactly one matching path, and a successful
+  catalog match; all parse/render/match misses fall back to the existing full
+  SVG pipeline. Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_image_io.py tests/test_runner_summary.py tests/test_stress_benchmark.py -q`
+  (`179 passed`). The locked Austin SVG stress smoke
+  `out/svg-catalog-path-austin-final-smoke-20260602/stress-summary.json`
+  passed `1/1` at `0.225436s` with zero OCR calls, preserving
+  `georeference_source=catalog-shape-match`. A catalog-enabled Nashville CLI
+  smoke wrote `out/svg-catalog-path-nashville-20260602.geojson` in
+  `0.220422s` with `catalog_shape_iou=0.983823`, replacing the earlier
+  no-catalog SVG evidence that spent `1.006543s` in full SVG rasterization
+  alone. The full no-cache hard gate passed at
+  `out/svg-catalog-path-full27-hard-rerun-20260602/stress-summary.json`:
+  `27/27` expected, statuses `{"complete":16,"failed":11}`, primary max
+  `0.750284s`, repeat `54/54` subsecond, repeat p95 `0.641s`, repeat max
+  `0.808s`, and the `austin-waymo-disguised-svg` row dropped to `0.263880s`
+  while preserving
+  `165` GeoJSON coordinates and strict catalog metrics (`catalog_shape_iou`
+  `0.974165`, `catalog_shape_margin` `0.291463`, `catalog_area_ratio`
+  `0.990175`).

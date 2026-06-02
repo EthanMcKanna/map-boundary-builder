@@ -1300,6 +1300,101 @@ def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None
     assert runner.rapidocr_detector_limit_type_for_ocr_style(None) is None
 
 
+def test_svg_catalog_service_path_document_extracts_single_blue_class_path() -> None:
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st1{fill:#fff}.st2{fill:#07f}</style></defs>
+<rect class="st1" width="100" height="80"/>
+<path class="st2" d="M10 10h60v40H10z"/>
+</svg>"""
+
+    slim = runner.svg_catalog_service_path_document(svg)
+
+    assert slim is not None
+    assert b'viewBox="0 0 100 80"' in slim
+    assert b"<rect" not in slim
+    assert b'class="st2"' not in slim
+    assert b'fill="#07f"' in slim
+    assert b'stroke="none"' in slim
+    assert b'M10 10h60v40H10z' in slim
+
+
+def test_svg_catalog_service_path_document_rejects_multiple_blue_paths() -> None:
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<path class="st2" d="M10 10h20v20H10z"/>
+<path class="st2" d="M50 10h20v20H50z"/>
+</svg>"""
+
+    assert runner.svg_catalog_service_path_document(svg) is None
+
+
+def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "known.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<path class="st2" d="M10 10h60v40H10z"/>
+</svg>""",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+    mask = np.zeros((80, 100), dtype=bool)
+    mask[10:50, 10:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    rendered_documents: list[bytes] = []
+    extract_calls: list[dict] = []
+    finish_calls: list[dict] = []
+    fake_match = SimpleNamespace(iou=0.98, entry=SimpleNamespace(slug="austin-waymo"))
+
+    def fake_rasterize(svg_bytes, target_path, **kwargs):
+        rendered_documents.append(svg_bytes)
+        assert kwargs["max_dimension"] == runner.SVG_RASTER_MAX_DIMENSION
+        assert kwargs["source_path"] == image_path
+        Image.fromarray(rgb).save(target_path)
+
+    def fake_extract_service_area(path, **kwargs):
+        extract_calls.append({"path": Path(path), **kwargs})
+        return extraction
+
+    def fake_finish_catalog_boundary_result(*args, **kwargs):
+        finish_calls.append(kwargs)
+        return BoundaryBuildResult(
+            geojson={"type": "FeatureCollection", "features": []},
+            summary={"status": "complete", "georeference_source": kwargs["georeference_source"]},
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (fake_match, None))
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+    monkeypatch.setattr(
+        runner,
+        "normalize_image_for_processing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full SVG rasterization should be skipped")),
+    )
+
+    result = build_boundary(image_path, None, output_path)
+
+    assert result.summary["georeference_source"] == "catalog-shape-match"
+    assert len(rendered_documents) == 1
+    assert b"<rect" not in rendered_documents[0]
+    assert b'fill="#07f"' in rendered_documents[0]
+    assert extract_calls[0]["cache"] is False
+    assert extract_calls[0]["max_dimension"] == 0
+    assert finish_calls[0]["image_path"] == image_path
+    assert finish_calls[0]["width"] == 100
+    assert finish_calls[0]["height"] == 80
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 

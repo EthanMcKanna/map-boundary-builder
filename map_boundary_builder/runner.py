@@ -7,6 +7,7 @@ from math import hypot
 import os
 from pathlib import Path
 import re
+import tempfile
 from typing import Any, Callable
 
 import cv2
@@ -60,7 +61,7 @@ from .georeference import (
 )
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
-from .image_io import is_svg_image, normalize_image_for_processing
+from .image_io import is_svg_image, normalize_image_for_processing, rasterize_svg_bytes_to_png, read_svg_bytes
 from .ocr import OcrLabel, extract_ocr_labels_from_rgb, submit_with_rapidocr_profile_context
 from .osm_roads import image_feature_distance
 from .runtime_config import (
@@ -110,6 +111,7 @@ CATALOG_MISS_REFINE_MAX_DIMENSION = max(
         )
     ),
 )
+SVG_CATALOG_PATH_FILL = "#07f"
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
 CATALOG_LABEL_HINT_SPARSE_LABEL_COUNT = 5
@@ -350,6 +352,157 @@ def extraction_progress_details(extraction: Any) -> dict[str, Any]:
     return details
 
 
+def svg_catalog_service_path_document(svg_bytes: bytes) -> bytes | None:
+    text = svg_bytes.decode("utf-8", "replace")
+    viewbox_match = re.search(r'\bviewBox\s*=\s*(["\'])(?P<value>[^"\']+)\1', text)
+    if viewbox_match is None:
+        return None
+    fill_classes = svg_classes_with_fill(text, SVG_CATALOG_PATH_FILL)
+    path_tags = re.findall(r"<path\b[^>]*>", text, flags=re.IGNORECASE | re.DOTALL)
+    service_paths = [
+        tag
+        for tag in path_tags
+        if svg_path_tag_matches_fill(tag, fill_classes=fill_classes, fill=SVG_CATALOG_PATH_FILL)
+    ]
+    if len(service_paths) != 1:
+        return None
+    path_tag = svg_path_tag_with_fill(service_paths[0], SVG_CATALOG_PATH_FILL)
+    if path_tag is None:
+        return None
+    viewbox = viewbox_match.group("value")
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}">'
+        f"{path_tag}"
+        "</svg>"
+    ).encode("utf-8")
+
+
+def svg_classes_with_fill(text: str, fill: str) -> set[str]:
+    classes: set[str] = set()
+    for class_name, body in re.findall(r"\.([A-Za-z0-9_-]+)\s*\{([^{}]*)\}", text, flags=re.DOTALL):
+        fill_match = re.search(r"\bfill\s*:\s*([^;}\s]+)", body, flags=re.IGNORECASE)
+        if fill_match is not None and normalize_svg_fill(fill_match.group(1)) == normalize_svg_fill(fill):
+            classes.add(class_name)
+    return classes
+
+
+def svg_path_tag_matches_fill(tag: str, *, fill_classes: set[str], fill: str) -> bool:
+    direct_fill = svg_tag_attribute(tag, "fill")
+    if direct_fill is not None and normalize_svg_fill(direct_fill) == normalize_svg_fill(fill):
+        return True
+    style = svg_tag_attribute(tag, "style")
+    if style is not None:
+        style_fill = re.search(r"\bfill\s*:\s*([^;}\s]+)", style, flags=re.IGNORECASE)
+        if style_fill is not None and normalize_svg_fill(style_fill.group(1)) == normalize_svg_fill(fill):
+            return True
+    class_value = svg_tag_attribute(tag, "class") or ""
+    return any(token in fill_classes for token in class_value.split())
+
+
+def svg_path_tag_with_fill(tag: str, fill: str) -> str | None:
+    if svg_tag_attribute(tag, "d") is None:
+        return None
+    tag = re.sub(r"\s(?:class|style|fill|stroke)\s*=\s*([\"']).*?\1", "", tag, flags=re.IGNORECASE | re.DOTALL)
+    tag = re.sub(r"\s*/?>\s*$", "", tag)
+    return f'{tag} fill="{fill}" stroke="none"/>'
+
+
+def svg_tag_attribute(tag: str, name: str) -> str | None:
+    match = re.search(rf"\b{re.escape(name)}\s*=\s*([\"'])(?P<value>.*?)\1", tag, flags=re.IGNORECASE | re.DOTALL)
+    return match.group("value") if match is not None else None
+
+
+def normalize_svg_fill(value: str) -> str:
+    normalized = value.strip().lower()
+    if re.fullmatch(r"#[0-9a-f]{3}", normalized):
+        return "#" + "".join(char * 2 for char in normalized[1:])
+    return normalized
+
+
+def try_svg_catalog_shape_shortcut(
+    image_path: Path,
+    *,
+    city_input: str | None,
+    allow_pre_ocr_catalog: bool,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult | None:
+    if not allow_pre_ocr_catalog:
+        return None
+    try:
+        svg_document = svg_catalog_service_path_document(read_svg_bytes(image_path))
+    except Exception:
+        return None
+    if svg_document is None:
+        return None
+
+    emit_progress(
+        progress,
+        stage="inspect",
+        message="Reading SVG service-area path",
+        percent=5,
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="map-boundary-svg-catalog-") as tmp_dir:
+            raster_path = Path(tmp_dir) / f"{image_path.stem}.catalog-path.png"
+            rasterize_svg_bytes_to_png(
+                svg_document,
+                raster_path,
+                max_dimension=SVG_RASTER_MAX_DIMENSION,
+                source_path=image_path,
+            )
+            rgb = load_rgb(raster_path)
+            height, width = rgb.shape[:2]
+            emit_progress(
+                progress,
+                stage="extract",
+                message="Extracting SVG service-area path",
+                percent=18,
+                details={"width": width, "height": height},
+            )
+            extraction = extract_service_area(
+                raster_path,
+                simplify_px=opts.simplify_px,
+                rgb=rgb,
+                max_dimension=0,
+                cache=False,
+            )
+            emit_progress(
+                progress,
+                stage="extract",
+                message="SVG service-area path extracted",
+                percent=36,
+                details=extraction_progress_details(extraction),
+            )
+            if not catalog_style_supported(extraction.style):
+                return None
+            catalog_match, catalog_match_source = hinted_catalog_shape_match(
+                extraction.pixel_geometry,
+                style=extraction.style,
+                city_input=city_input,
+            )
+            if catalog_match is None:
+                return None
+    except Exception:
+        return None
+    return finish_catalog_boundary_result(
+        extraction,
+        catalog_match,
+        width=width,
+        height=height,
+        image_path=image_path,
+        city_input=city_input or "Auto",
+        output_path=output_path,
+        debug_path=debug_path,
+        opts=opts,
+        rgb=rgb,
+        progress=progress,
+        georeference_source=catalog_match_source or "catalog-shape-match",
+    )
+
+
 def build_boundary(
     image_path: str | Path,
     city: str | None,
@@ -380,6 +533,19 @@ def build_boundary(
     allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
     upload_is_svg = is_svg_image(image_path)
     source_is_svg = upload_is_svg or opts.source_was_svg
+
+    if upload_is_svg:
+        svg_catalog_result = try_svg_catalog_shape_shortcut(
+            image_path,
+            city_input=city_input,
+            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+            output_path=output_path,
+            debug_path=debug_path,
+            opts=opts,
+            progress=progress,
+        )
+        if svg_catalog_result is not None:
+            return svg_catalog_result
 
     emit_progress(
         progress,

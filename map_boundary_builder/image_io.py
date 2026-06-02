@@ -88,6 +88,21 @@ def composite_raster_to_opaque(source_path: Path, target_path: Path) -> None:
 
 def rasterize_svg_to_png(source_path: Path, target_path: Path, *, max_dimension: int = 0) -> None:
     svg_bytes = read_svg_bytes(source_path)
+    rasterize_svg_bytes_to_png(
+        svg_bytes,
+        target_path,
+        max_dimension=max_dimension,
+        source_path=source_path,
+    )
+
+
+def rasterize_svg_bytes_to_png(
+    svg_bytes: bytes,
+    target_path: Path,
+    *,
+    max_dimension: int = 0,
+    source_path: Path | None = None,
+) -> None:
     output_size = capped_svg_output_size(svg_bytes, max_dimension=max_dimension)
     rasterizers: tuple[tuple[str, Callable[..., None]], ...] = (
         ("CairoSVG", rasterize_svg_with_cairosvg),
@@ -106,8 +121,9 @@ def rasterize_svg_to_png(source_path: Path, target_path: Path, *, max_dimension:
                 except OSError:
                     pass
     detail = "; ".join(errors)
+    source_name = source_path.name if source_path is not None else "SVG"
     raise ValueError(
-        f"Could not rasterize SVG image {source_path.name}. Export it as PNG, JPG, WebP, or TIFF "
+        f"Could not rasterize SVG image {source_name}. Export it as PNG, JPG, WebP, or TIFF "
         f"and try again. Rasterizer errors: {detail}"
     )
 
