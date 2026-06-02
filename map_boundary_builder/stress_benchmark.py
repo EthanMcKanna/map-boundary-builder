@@ -107,6 +107,16 @@ def build_parser() -> argparse.ArgumentParser:
             "Fail when any primary row or analyzed repeat-profile sample exceeds this total elapsed budget."
         ),
     )
+    parser.add_argument(
+        "--max-repeat-ocr-engine-p95-duration-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Fail when a profiled repeat OCR engine metric p95 exceeds this budget. "
+            "Repeat or comma-separate entries such as det_elapsed_s=0.3,rec_elapsed_s=0.6."
+        ),
+    )
     return parser
 
 
@@ -121,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-repeat-signature-drift requires --repeat-profile-runs")
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
+    try:
+        max_repeat_ocr_engine_p95_duration_s = parse_metric_duration_budgets(
+            args.max_repeat_ocr_engine_p95_duration_s
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     report = run_stress_benchmark(
         Path(args.manifest),
         Path(args.out_dir),
@@ -134,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
         max_total_elapsed_s=args.max_total_elapsed_s,
+        max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
     )
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
@@ -171,6 +188,7 @@ def run_stress_benchmark(
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
     max_total_elapsed_s: float | None = None,
+    max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
@@ -179,6 +197,7 @@ def run_stress_benchmark(
         raise ValueError("repeat_profile_warmups must be non-negative")
     if max_total_elapsed_s is not None and max_total_elapsed_s <= 0.0:
         raise ValueError("max_total_elapsed_s must be positive")
+    ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
     if execution not in {"subprocess", "in-process"}:
         raise ValueError(f"Unsupported stress execution mode: {execution}")
     manifest = load_manifest(manifest_path)
@@ -230,11 +249,12 @@ def run_stress_benchmark(
     }
     if repeat_profile is not None:
         report["repeat_profile"] = repeat_profile
-    if max_total_elapsed_s is not None:
+    if max_total_elapsed_s is not None or ocr_engine_p95_budgets:
         report["latency_budget"] = build_latency_budget_summary(
             rows,
             repeat_profile,
             max_total_elapsed_s=max_total_elapsed_s,
+            max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -1071,7 +1091,8 @@ def build_latency_budget_summary(
     rows: list[dict[str, Any]],
     repeat_profile: dict[str, Any] | None,
     *,
-    max_total_elapsed_s: float,
+    max_total_elapsed_s: float | None = None,
+    max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     repeat_samples: list[dict[str, Any]] = []
     if isinstance(repeat_profile, dict):
@@ -1080,14 +1101,97 @@ def build_latency_budget_summary(
             repeat_samples = repeat_profile_analyzed_samples(
                 [sample for sample in samples if isinstance(sample, dict)]
             )
-    primary_violations = latency_budget_violations(rows, max_total_elapsed_s=max_total_elapsed_s)
-    repeat_violations = latency_budget_violations(repeat_samples, max_total_elapsed_s=max_total_elapsed_s)
-    return {
-        "max_total_elapsed_s": round(float(max_total_elapsed_s), 6),
-        "passed": not primary_violations and not repeat_violations,
+    primary_violations: list[dict[str, Any]] = []
+    repeat_violations: list[dict[str, Any]] = []
+    if max_total_elapsed_s is not None:
+        primary_violations = latency_budget_violations(rows, max_total_elapsed_s=max_total_elapsed_s)
+        repeat_violations = latency_budget_violations(repeat_samples, max_total_elapsed_s=max_total_elapsed_s)
+    repeat_ocr_engine_p95_violations = repeat_ocr_engine_p95_budget_violations(
+        repeat_profile,
+        max_repeat_ocr_engine_p95_duration_s or {},
+    )
+    summary = {
+        "passed": not primary_violations and not repeat_violations and not repeat_ocr_engine_p95_violations,
         "primary_violations": primary_violations,
         "repeat_violations": repeat_violations,
     }
+    if max_total_elapsed_s is not None:
+        summary["max_total_elapsed_s"] = round(float(max_total_elapsed_s), 6)
+    if max_repeat_ocr_engine_p95_duration_s:
+        summary["max_repeat_ocr_engine_p95_duration_s"] = {
+            metric: round(float(seconds), 6)
+            for metric, seconds in sorted(max_repeat_ocr_engine_p95_duration_s.items())
+        }
+        summary["repeat_ocr_engine_p95_violations"] = repeat_ocr_engine_p95_violations
+    return summary
+
+
+def parse_metric_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"OCR engine budget must use METRIC=SECONDS: {entry}")
+            metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not metric:
+                raise ValueError(f"OCR engine budget is missing a metric name: {entry}")
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"OCR engine budget seconds must be numeric: {entry}") from exc
+            if value <= 0.0:
+                raise ValueError(f"OCR engine budget seconds must be positive: {entry}")
+            budgets[metric] = value
+    return dict(sorted(budgets.items()))
+
+
+def repeat_ocr_engine_p95_budget_violations(
+    repeat_profile: dict[str, Any] | None,
+    budgets: dict[str, float],
+) -> list[dict[str, Any]]:
+    if not budgets:
+        return []
+    if not isinstance(repeat_profile, dict):
+        return [
+            {
+                "kind": "repeat_ocr_engine_p95_missing",
+                "metric": metric,
+                "max_repeat_ocr_engine_p95_duration_s": round(float(budget), 6),
+            }
+            for metric, budget in sorted(budgets.items())
+        ]
+    summary = repeat_profile.get("summary")
+    stage_stats = summary.get("ocr_engine_stage_duration_s") if isinstance(summary, dict) else None
+    if not isinstance(stage_stats, dict):
+        stage_stats = {}
+    violations: list[dict[str, Any]] = []
+    for metric, budget in sorted(budgets.items()):
+        stats = stage_stats.get(metric)
+        p95_duration_s = stats.get("p95_duration_s") if isinstance(stats, dict) else None
+        parsed = parse_nonnegative_float(p95_duration_s)
+        if parsed is None:
+            violations.append(
+                {
+                    "kind": "repeat_ocr_engine_p95_missing",
+                    "metric": metric,
+                    "max_repeat_ocr_engine_p95_duration_s": round(float(budget), 6),
+                }
+            )
+            continue
+        if parsed > budget:
+            violations.append(
+                {
+                    "kind": "repeat_ocr_engine_p95_budget_exceeded",
+                    "metric": metric,
+                    "p95_duration_s": round(parsed, 6),
+                    "max_repeat_ocr_engine_p95_duration_s": round(float(budget), 6),
+                    "excess_s": round(parsed - budget, 6),
+                }
+            )
+    return violations
 
 
 def latency_budget_violations(
@@ -1308,12 +1412,28 @@ def print_stress_table(report: dict[str, Any]) -> None:
         if latency_budget.get("passed"):
             print(f"latency budget: passed total<={budget_text}")
         else:
+            repeat_ocr_engine = latency_budget.get("repeat_ocr_engine_p95_violations")
+            repeat_ocr_engine_count = len(repeat_ocr_engine) if isinstance(repeat_ocr_engine, list) else 0
             print(
                 "latency budget: failed "
                 f"total<={budget_text} "
                 f"primary={len(latency_budget.get('primary_violations', []))} "
-                f"repeat={len(latency_budget.get('repeat_violations', []))}"
+                f"repeat={len(latency_budget.get('repeat_violations', []))} "
+                f"repeat_ocr_engine_p95={repeat_ocr_engine_count}"
             )
+            if isinstance(repeat_ocr_engine, list):
+                for issue in repeat_ocr_engine[:6]:
+                    if not isinstance(issue, dict):
+                        continue
+                    metric = issue.get("metric")
+                    if issue.get("kind") == "repeat_ocr_engine_p95_budget_exceeded":
+                        print(
+                            "   - "
+                            f"{metric}: repeat OCR engine p95 {float(issue['p95_duration_s']):.3f}s "
+                            f"> budget {float(issue['max_repeat_ocr_engine_p95_duration_s']):.3f}s"
+                        )
+                    elif issue.get("kind") == "repeat_ocr_engine_p95_missing":
+                        print(f"   - {metric}: repeat OCR engine p95 metric missing")
     repeat_profile = report.get("repeat_profile")
     if isinstance(repeat_profile, dict):
         repeat_summary = repeat_profile.get("summary")

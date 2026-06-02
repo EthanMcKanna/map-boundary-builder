@@ -12690,3 +12690,28 @@ with zero failures in 0.531s.
   against this and focus on the remaining Zoox tall / Grand Rapids OCR
   recognizer tail rather than accepting broad OCR shortcuts without the full
   repeat/signature/latency gates.
+- Added an OCR-engine p95 budget gate to the real-screenshot stress harness so
+  future arbitrary-upload speed probes can fail specifically on detector or
+  recognizer tail regressions instead of relying only on the broad total-time
+  budget. The new `--max-repeat-ocr-engine-p95-duration-s METRIC=SECONDS`
+  option reads profiled repeat-profile OCR engine distributions, fails when a
+  requested metric is missing, and reports p95 violations for metrics such as
+  `det_elapsed_s`, `rec_elapsed_s`, or `total_s`; it is diagnostic-only and
+  does not change generation, OCR inputs, georeferencing, or cache keys.
+  Focused stress-harness validation passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`26 passed`) and `py_compile` passed for the edited stress harness and
+  tests; full validation also passed with `PYTHONPATH=. .venv/bin/python -m
+  pytest -q` (`509 passed, 30 subtests passed`), and `git diff --check`
+  passed. A real dark-teal tail smoke,
+  `out/stress-repeat-ocr-engine-p95-gate-smoke-20260602/stress-summary.json`,
+  used `grand-rapids-may-mobility` plus expected fail-closed
+  `zoox-las-vegas-mobile-tall`, in-process execution, OCR/extraction caches
+  disabled, OCR-engine profiling, `--repeat-profile-runs 3`,
+  `--repeat-profile-warmups 1`, `--fail-on-unexpected`,
+  `--fail-on-repeat-signature-drift`, `--max-total-elapsed-s 1.5`, and OCR
+  engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It passed `2/2`
+  primary expectations and `4/4` analyzed repeat expectations, kept `4/4`
+  analyzed repeats subsecond, reported stable repeat signatures, and passed
+  the new OCR-engine p95 budgets with repeat recognizer p95 `0.585s` and
+  RapidOCR total p95 `0.749s`.

@@ -1017,6 +1017,197 @@ def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> No
     assert exit_code == 1
 
 
+def test_parse_metric_duration_budgets_accepts_repeated_and_comma_values() -> None:
+    assert stress_module.parse_metric_duration_budgets(
+        ["det_elapsed_s=0.3, rec_elapsed_s=0.6", "total_s=0.9"]
+    ) == {
+        "det_elapsed_s": 0.3,
+        "rec_elapsed_s": 0.6,
+        "total_s": 0.9,
+    }
+
+
+def test_parse_metric_duration_budgets_rejects_invalid_values() -> None:
+    with pytest.raises(ValueError, match="METRIC=SECONDS"):
+        stress_module.parse_metric_duration_budgets(["rec_elapsed_s:0.6"])
+    with pytest.raises(ValueError, match="positive"):
+        stress_module.parse_metric_duration_budgets(["rec_elapsed_s=0"])
+
+
+def test_latency_budget_flags_repeat_ocr_engine_p95_excess_and_missing() -> None:
+    repeat_profile = {
+        "summary": {
+            "ocr_engine_stage_duration_s": {
+                "rec_elapsed_s": {
+                    "samples": 3,
+                    "p95_duration_s": 0.72,
+                }
+            }
+        },
+        "samples": [
+            {"slug": "zoox-tall", "warmup": False, "total_elapsed_s": 0.8},
+        ],
+    }
+
+    budget = stress_module.build_latency_budget_summary(
+        [],
+        repeat_profile,
+        max_repeat_ocr_engine_p95_duration_s={
+            "det_elapsed_s": 0.3,
+            "rec_elapsed_s": 0.6,
+        },
+    )
+
+    assert budget["passed"] is False
+    assert budget["primary_violations"] == []
+    assert budget["repeat_violations"] == []
+    assert budget["max_repeat_ocr_engine_p95_duration_s"] == {
+        "det_elapsed_s": 0.3,
+        "rec_elapsed_s": 0.6,
+    }
+    assert budget["repeat_ocr_engine_p95_violations"] == [
+        {
+            "kind": "repeat_ocr_engine_p95_missing",
+            "metric": "det_elapsed_s",
+            "max_repeat_ocr_engine_p95_duration_s": 0.3,
+        },
+        {
+            "kind": "repeat_ocr_engine_p95_budget_exceeded",
+            "metric": "rec_elapsed_s",
+            "p95_duration_s": 0.72,
+            "max_repeat_ocr_engine_p95_duration_s": 0.6,
+            "excess_s": 0.12,
+        },
+    ]
+
+
+def test_stress_benchmark_can_gate_repeat_ocr_engine_p95(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+    durations = iter([0.7, 0.9, 0.8])
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        duration = next(durations)
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": duration,
+            "ocr_engine_profile": {
+                "calls": 1,
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": duration,
+                "total_s": duration,
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        repeat_profile_runs=2,
+        profile_ocr_engine=True,
+        max_repeat_ocr_engine_p95_duration_s={"rec_elapsed_s": 0.82},
+        python_executable="python",
+    )
+
+    assert report["latency_budget"]["passed"] is False
+    assert report["latency_budget"]["repeat_ocr_engine_p95_violations"] == [
+        {
+            "kind": "repeat_ocr_engine_p95_budget_exceeded",
+            "metric": "rec_elapsed_s",
+            "p95_duration_s": 0.895,
+            "max_repeat_ocr_engine_p95_duration_s": 0.82,
+            "excess_s": 0.075,
+        }
+    ]
+
+
+def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
+            "rec_elapsed_s": 0.6,
+            "total_s": 0.8,
+        }
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.6,
+                }
+            ],
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+                "max_repeat_ocr_engine_p95_duration_s": {
+                    "rec_elapsed_s": 0.6,
+                    "total_s": 0.8,
+                },
+                "repeat_ocr_engine_p95_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--repeat-profile-runs",
+            "2",
+            "--max-repeat-ocr-engine-p95-duration-s",
+            "rec_elapsed_s=0.6,total_s=0.8",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_repeat_profile_duration_stats_record_tail_percentiles() -> None:
     stats = stress_module.repeat_profile_total_elapsed_stats(
         [
