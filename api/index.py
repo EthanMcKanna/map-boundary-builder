@@ -344,6 +344,7 @@ class handler(BaseHTTPRequestHandler):
             catalog_probe_missed=catalog_probe_missed,
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
             filename_hint=original_filename,
+            source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_started = time.perf_counter()
@@ -1330,6 +1331,7 @@ def run_result_cache_key_for_hash(
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
         "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
+        "source_was_svg": bool(getattr(options, "source_was_svg", False)),
     }
     encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

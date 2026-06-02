@@ -182,6 +182,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                 catalog_probe_missed=fast_catalog_handoff or bool_field(fields, "catalog_probe_missed", default=False),
                 write_mask_artifact=False,
                 filename_hint=original_filename,
+                source_was_svg=bool_field(fields, "source_was_svg", default=False),
             )
             try:
                 build_started = time.perf_counter()
@@ -254,6 +255,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
             filename_hint=original_filename,
+            source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )
         record_event(
             state,

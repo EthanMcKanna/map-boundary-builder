@@ -285,6 +285,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(allow_catalog=False),
         )
+        changed_svg_source_hint = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(source_was_svg=True),
+        )
         changed_overlay_mode = run_result_cache_key(
             b"image-a",
             None,
@@ -309,6 +314,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(base, changed_catalog_probe_missed_options)
         self.assertNotEqual(changed_catalog_probe_missed_options, changed_catalog_probe_miss_low_iou_options)
         self.assertNotEqual(base, changed_allow_catalog)
+        self.assertNotEqual(base, changed_svg_source_hint)
         self.assertNotEqual(base, changed_overlay_mode)
 
     def test_success_run_cache_key_ignores_acceptance_thresholds(self) -> None:
@@ -1823,6 +1829,25 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"function isCompressedSvgFile(file) {", app_js)
         self.assertIn(b'type === "image/svg+xml-compressed"', app_js)
         self.assertIn(b"/\\.svgz$/i.test(file?.name || \"\")", app_js)
+
+    def test_frontend_marks_browser_rasterized_svg_source_context(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        form_data = app_js.index(b"const formData = new FormData(form);")
+        image_set = app_js.index(b'formData.set("image", uploadFile, uploadFile.name);', form_data)
+        svg_guard = app_js.index(b"if (isSvgFile(selectedFile) && !isCompressedSvgFile(selectedFile)) {", image_set)
+        source_hint = app_js.index(b'formData.set("source_was_svg", "1");', svg_guard)
+        cache_lookup = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);", source_hint)
+        settings_fields = app_js.index(b'const RUN_CACHE_SETTING_FIELDS = [')
+        source_cache_field = app_js.index(b'"source_was_svg"', settings_fields)
+
+        self.assertLess(image_set, svg_guard)
+        self.assertLess(svg_guard, source_hint)
+        self.assertLess(source_hint, cache_lookup)
+        self.assertIn(b"const SVG_RASTER_MAX_DIMENSION = 1600;", app_js)
+        self.assertIn(b"const maxDimension = SVG_RASTER_MAX_DIMENSION;", app_js)
+        self.assertLess(settings_fields, source_cache_field)
 
     def test_frontend_preserves_failed_run_payload_for_reports(self) -> None:
         app_js, mime = web_asset_response("app.js")

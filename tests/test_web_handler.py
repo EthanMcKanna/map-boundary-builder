@@ -18,7 +18,7 @@ class LocalWebHandlerTests(unittest.TestCase):
     def test_background_run_preserves_original_filename_hint(self) -> None:
         request = web.BoundaryWebHandler.__new__(web.BoundaryWebHandler)
         request.parse_upload_request = lambda: (
-            {},
+            {"source_was_svg": "1"},
             {"image": ("Waymo Bay Area.png", b"image-bytes")},
         )
         captured_response: dict[str, object] = {}
@@ -56,6 +56,7 @@ class LocalWebHandlerTests(unittest.TestCase):
         self.assertEqual(state.profile["pipeline_version"], "pipeline-test")
         self.assertEqual(state.original_filename, "Waymo Bay Area.png")
         self.assertEqual(options.filename_hint, "Waymo Bay Area.png")
+        self.assertTrue(options.source_was_svg)
 
     def test_background_failure_records_terminal_failed_event(self) -> None:
         with TemporaryDirectory() as temp_dir:

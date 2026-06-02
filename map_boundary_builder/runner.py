@@ -229,6 +229,7 @@ class BoundaryBuildOptions:
     catalog_probe_missed: bool = False
     catalog_probe_miss_low_iou: bool = False
     filename_hint: str | None = None
+    source_was_svg: bool = False
 
 
 class CatalogProbeMiss(ValueError):
@@ -314,19 +315,20 @@ def build_boundary(
         allow_pre_ocr_catalog=would_try_pre_ocr_catalog,
     )
     allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
-    source_is_svg = is_svg_image(image_path)
+    upload_is_svg = is_svg_image(image_path)
+    source_is_svg = upload_is_svg or opts.source_was_svg
 
     emit_progress(
         progress,
         stage="inspect",
-        message="Rasterizing SVG upload" if source_is_svg else "Reading image metadata",
+        message="Rasterizing SVG upload" if upload_is_svg else "Reading image metadata",
         percent=5,
     )
     image_path = normalize_image_for_processing(
         image_path,
         output_dir=debug_path or output_path.parent,
         composite_transparent_rasters=False,
-        svg_max_dimension=SVG_RASTER_MAX_DIMENSION if source_is_svg else None,
+        svg_max_dimension=SVG_RASTER_MAX_DIMENSION if upload_is_svg else None,
     )
     with Image.open(image_path) as img:
         width, height = img.size

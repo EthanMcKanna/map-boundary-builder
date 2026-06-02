@@ -1087,6 +1087,92 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
     ]
 
 
+def test_browser_rasterized_svg_hint_uses_vector_ocr_without_rerasterizing(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "browser-rasterized-svg.png"
+    Image.new("RGB", (1600, 856), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((856, 1600, 3), 245, dtype=np.uint8)
+    mask = np.zeros((856, 1600), dtype=bool)
+    mask[160:700, 320:1280] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(320, 160), (1280, 160), (1280, 700), (320, 700)]),
+        coverage_ratio=0.38,
+        contour_count=1,
+        confidence=1.0,
+    )
+    ocr_kwargs: list[dict] = []
+    normalize_kwargs: list[dict] = []
+
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Austin",
+            lon=-97.74,
+            lat=30.27,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=20.0,
+            rotation_radians=0.0,
+            confidence=0.91,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[SimpleNamespace(), SimpleNamespace(), SimpleNamespace()],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+
+    def fake_normalize_image_for_processing(path, **kwargs):
+        assert Path(path) == image_path
+        normalize_kwargs.append(kwargs)
+        return image_path
+
+    def fake_extract_ocr_labels_from_rgb(_path, _prepared_rgb, **kwargs):
+        ocr_kwargs.append(kwargs)
+        return [
+            OcrLabel("Austin", 800, 430, 80, 20, 98.0),
+            OcrLabel("South Lamar", 720, 540, 100, 20, 96.0),
+            OcrLabel("Lady Bird Lake", 880, 450, 120, 20, 96.0),
+        ]
+
+    monkeypatch.setattr(runner, "normalize_image_for_processing", fake_normalize_image_for_processing)
+    monkeypatch.setattr(runner, "classify_style_for_ocr", lambda _rgb: "bright-blue")
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "preload_georeference_resources", lambda: {})
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
+
+    build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            allow_catalog=False,
+            write_mask_artifact=False,
+            source_was_svg=True,
+        ),
+    )
+
+    assert normalize_kwargs == [
+        {
+            "output_dir": output_path.parent,
+            "composite_transparent_rasters": False,
+            "svg_max_dimension": None,
+        }
+    ]
+    assert ocr_kwargs == [
+        {
+            "rapidocr_max_dimension": runner.RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
+            "rapidocr_min_text_area": runner.SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
+            "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
+            "cache": True,
+        }
+    ]
+
+
 def test_dark_teal_catalog_miss_uses_focused_georef_ocr(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unknown-dark-teal.png"
     Image.new("RGB", (1000, 700), (245, 245, 245)).save(image_path)

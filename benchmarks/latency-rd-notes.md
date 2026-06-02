@@ -14233,3 +14233,37 @@ with zero failures in 0.531s.
   `582` tests plus `30` subtests; `compileall` and `git diff --check` were
   clean; replaying `print_stress_table` against the full16 report printed
   `conf_lt80=p95 0.0 max 0.0` and `conf_lt90=p95 1.4 max 2.0`.
+- Accepted a narrow browser-rasterized SVG source-context hint after testing
+  the plain-SVG frontend path separately from backend `.svgz`/direct-SVG
+  rasterization. Backend rasterizer A/B on
+  `/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg` rejected changing
+  the server rasterizer order: CairoSVG and `resvg-py` both took roughly
+  `2.3-2.9s` to rasterize the 3840x2055 vector at the current 1600px cap, and
+  a server cap sweep rejected lower backend caps because 1400px was not faster
+  while 1200px/1000px/800px lost too many labels and failed georeferencing.
+  Browser-side raster cap probing then found a separate issue: plain `.svg`
+  uploads were converted to ordinary PNGs before upload, so the backend lost
+  the vector-source OCR profile. A 1400px browser PNG made Nashville fast but
+  failed the Austin vector map; 1600px plus a `source_was_svg` form hint kept
+  the bytes as PNG while applying the SVG bright-blue OCR profile. The actual
+  code path on browser-generated 1600px PNGs
+  (`out/browser-svg-sourcehint-actual-20260602`) recovered the Austin vector
+  map from repeated 4096px ordinary-PNG failure to `confidence=0.93`, `14`
+  controls, and repeat totals `0.690/0.568/0.558s`; Nashville returned
+  `confidence=0.86`, `4` controls, and repeat totals `0.426/0.368/0.365s`.
+  The browser PNG payloads shrink from about `856 KB` to `242 KB` on Austin and
+  from about `843 KB` to `257 KB` on Nashville. The shipped patch caps plain
+  SVG browser rasterization at 1600px, sends `source_was_svg=1` only for
+  browser-rasterized plain SVGs, includes that hint in both browser and server
+  run-cache keys, and leaves backend SVG/SVGZ rasterization unchanged. Focused
+  validation passed `6` targeted tests, then
+  `tests/test_runner_summary.py tests/test_api_cache.py tests/test_web_handler.py`
+  passed `158` tests; `node --check`, `compileall`, full pytest (`584` tests
+  plus `30` subtests), and `git diff --check` were clean. The full actual-code
+  hard stress gate
+  `out/svg-sourcehint-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `32/32` analyzed repeat expectations, all repeats subsecond, primary max
+  `0.751s`, repeat p95 `0.681s`, repeat max `0.717s`, RapidOCR repeat-total
+  p95 `0.588s`, and zero labels below 70/80 confidence in primary or repeat
+  profiles.

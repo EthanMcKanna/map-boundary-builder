@@ -98,7 +98,15 @@ const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
 const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
 const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v5";
-const RUN_CACHE_SETTING_FIELDS = ["city", "include_overlay", "min_confidence", "min_control_points", "simplify_px"];
+const RUN_CACHE_SETTING_FIELDS = [
+  "city",
+  "include_overlay",
+  "min_confidence",
+  "min_control_points",
+  "simplify_px",
+  "source_was_svg",
+];
+const SVG_RASTER_MAX_DIMENSION = 1600;
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const RUN_CACHE_DEFERRED_HISTORY_WAIT_MS = 180;
 const CATALOG_PROBE_MAX_DIMENSION = 520;
@@ -388,6 +396,9 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    if (isSvgFile(selectedFile) && !isCompressedSvgFile(selectedFile)) {
+      formData.set("source_was_svg", "1");
+    }
     if (shouldUseServerNormalizedCacheLookup(uploadFile)) {
       formData.set("normalized_cache_lookup", "1");
     }
@@ -1509,7 +1520,7 @@ function svgRasterSize(svgText) {
   const viewBoxHeight = viewBox.length === 4 && Number.isFinite(viewBox[3]) ? viewBox[3] : null;
   const width = parseSvgLength(svg.getAttribute("width")) || viewBoxWidth || fallback.width;
   const height = parseSvgLength(svg.getAttribute("height")) || viewBoxHeight || fallback.height;
-  const maxDimension = 4096;
+  const maxDimension = SVG_RASTER_MAX_DIMENSION;
   const scale = Math.min(1, maxDimension / Math.max(width, height));
   return {
     width: Math.max(1, Math.round(width * scale)),
