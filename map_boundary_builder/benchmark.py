@@ -470,6 +470,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-evaluated-ocr-engine-count",
+        action="append",
+        default=[],
+        metavar="METRIC=COUNT",
+        help=(
+            "Optional absolute evaluated OCR engine-profile count budget. "
+            "Requires --profile-ocr-engine data. Repeat or comma-separate entries "
+            "such as selected_box_count=30,raw_box_count=50."
+        ),
+    )
+    parser.add_argument(
         "--max-evaluated-road-match-increase-ratio",
         type=float,
         default=None,
@@ -541,6 +552,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         max_evaluated_ocr_engine_duration_s = parse_stage_duration_budgets(
             args.max_evaluated_ocr_engine_duration_s
+        )
+        max_evaluated_ocr_engine_count = parse_ocr_engine_count_budgets(
+            args.max_evaluated_ocr_engine_count
         )
         max_repeat_profile_stage_duration_s = parse_stage_duration_budgets(
             args.max_repeat_profile_stage_duration_s
@@ -632,6 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_evaluated_duration_s is not None
         or bool(max_evaluated_stage_duration_s)
         or bool(max_evaluated_ocr_engine_duration_s)
+        or bool(max_evaluated_ocr_engine_count)
         or args.max_evaluated_road_match_s is not None
         or args.max_repeat_profile_duration_s is not None
         or args.max_repeat_profile_median_duration_s is not None
@@ -648,6 +663,7 @@ def main(argv: list[str] | None = None) -> int:
             max_evaluated_duration_s=args.max_evaluated_duration_s,
             max_evaluated_stage_duration_s=max_evaluated_stage_duration_s,
             max_evaluated_ocr_engine_duration_s=max_evaluated_ocr_engine_duration_s,
+            max_evaluated_ocr_engine_count=max_evaluated_ocr_engine_count,
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
             max_repeat_profile_duration_s=args.max_repeat_profile_duration_s,
             max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
@@ -1373,6 +1389,37 @@ def parse_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
                 raise ValueError(f"Stage budget seconds must be numeric: {entry}") from exc
             budgets[stage] = max(0.0, value)
     return dict(sorted(budgets.items()))
+
+
+def parse_ocr_engine_count_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"OCR engine count budget must use METRIC=COUNT: {entry}")
+            raw_metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not raw_metric:
+                raise ValueError(f"OCR engine count budget is missing a metric name: {entry}")
+            metric = normalize_ocr_engine_count_metric(raw_metric)
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"OCR engine count budget must be numeric: {entry}") from exc
+            if value < 0.0:
+                raise ValueError(f"OCR engine count budget must be non-negative: {entry}")
+            budgets[metric] = value
+    return dict(sorted(budgets.items()))
+
+
+def normalize_ocr_engine_count_metric(metric: str) -> str:
+    normalized = metric.strip()
+    if normalized not in OCR_ENGINE_PROFILE_COUNT_KEYS:
+        expected = ", ".join(OCR_ENGINE_PROFILE_COUNT_KEYS)
+        raise ValueError(f"Unknown OCR engine count metric {metric!r}; expected one of: {expected}")
+    return normalized
 
 
 def parse_georeference_source_requirements(raw_sources: list[str]) -> list[str]:
@@ -2208,6 +2255,27 @@ def report_summary_ocr_engine_durations(report: dict[str, Any], key: str) -> dic
     return durations
 
 
+def report_summary_has_profile(report: dict[str, Any], key: str) -> bool:
+    summary = report.get("summary", {})
+    return isinstance(summary, dict) and isinstance(summary.get(key), dict)
+
+
+def report_summary_ocr_engine_counts(report: dict[str, Any], key: str) -> dict[str, int]:
+    summary = report.get("summary", {})
+    if not isinstance(summary, dict):
+        return {}
+    profile = summary.get(key)
+    if not isinstance(profile, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for metric in OCR_ENGINE_PROFILE_COUNT_KEYS:
+        count = parse_report_label_count(profile.get(metric))
+        if count is None:
+            continue
+        counts[metric] = count
+    return counts
+
+
 def compare_report_regressions(
     report: dict[str, Any],
     baseline_report: dict[str, Any],
@@ -2529,6 +2597,7 @@ def check_report_latency_budgets(
     max_evaluated_duration_s: float | None = None,
     max_evaluated_stage_duration_s: dict[str, float] | None = None,
     max_evaluated_ocr_engine_duration_s: dict[str, float] | None = None,
+    max_evaluated_ocr_engine_count: dict[str, float] | None = None,
     max_evaluated_road_match_s: float | None = None,
     max_repeat_profile_duration_s: float | None = None,
     max_repeat_profile_median_duration_s: float | None = None,
@@ -2551,6 +2620,11 @@ def check_report_latency_budgets(
     evaluated_ocr_engine_budgets = {
         metric: max(0.0, float(duration))
         for metric, duration in (max_evaluated_ocr_engine_duration_s or {}).items()
+        if metric
+    }
+    evaluated_ocr_engine_count_budgets = {
+        metric: max(0.0, float(count))
+        for metric, count in (max_evaluated_ocr_engine_count or {}).items()
         if metric
     }
     evaluated_road_match_budget = (
@@ -2593,6 +2667,14 @@ def check_report_latency_budgets(
     evaluated_duration = report_evaluated_duration(report)
     evaluated_stage_durations = report_summary_stage_durations(report, "evaluated_stage_duration_s")
     evaluated_ocr_engine_durations = report_summary_ocr_engine_durations(
+        report,
+        "evaluated_ocr_engine_profile",
+    )
+    evaluated_ocr_engine_profile_present = report_summary_has_profile(
+        report,
+        "evaluated_ocr_engine_profile",
+    )
+    evaluated_ocr_engine_counts = report_summary_ocr_engine_counts(
         report,
         "evaluated_ocr_engine_profile",
     )
@@ -2700,6 +2782,32 @@ def check_report_latency_budgets(
                     "evaluated_ocr_engine_duration_s": round(metric_duration, 6),
                     "max_evaluated_ocr_engine_duration_s": metric_budget,
                     "excess_s": round(metric_duration - metric_budget, 6),
+                }
+            )
+    for metric, metric_budget in sorted(evaluated_ocr_engine_count_budgets.items()):
+        metric_count = evaluated_ocr_engine_counts.get(metric)
+        if metric_count is None:
+            kind = (
+                "evaluated_ocr_engine_count_missing"
+                if evaluated_ocr_engine_profile_present
+                else "evaluated_ocr_engine_profile_missing"
+            )
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": kind,
+                    "max_evaluated_ocr_engine_count": metric_budget,
+                }
+            )
+            continue
+        if metric_count > metric_budget:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "evaluated_ocr_engine_count_budget_exceeded",
+                    "evaluated_ocr_engine_count": metric_count,
+                    "max_evaluated_ocr_engine_count": metric_budget,
+                    "excess_count": round(metric_count - metric_budget, 6),
                 }
             )
     if evaluated_road_match_budget is not None:
@@ -2860,6 +2968,7 @@ def check_report_latency_budgets(
         "max_evaluated_duration_s": evaluated_budget,
         "max_evaluated_stage_duration_s": evaluated_stage_budgets,
         "max_evaluated_ocr_engine_duration_s": evaluated_ocr_engine_budgets,
+        "max_evaluated_ocr_engine_count": evaluated_ocr_engine_count_budgets,
         "max_evaluated_road_match_s": evaluated_road_match_budget,
         "max_repeat_profile_duration_s": repeat_profile_duration_budget,
         "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
@@ -2873,6 +2982,7 @@ def check_report_latency_budgets(
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
         "evaluated_stage_duration_s": evaluated_stage_durations,
         "evaluated_ocr_engine_duration_s": evaluated_ocr_engine_durations,
+        "evaluated_ocr_engine_count": evaluated_ocr_engine_counts,
         "evaluated_road_match_elapsed_s": (
             round(evaluated_road_match, 6) if evaluated_road_match is not None else None
         ),
@@ -3367,10 +3477,19 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"> budget {issue['max_evaluated_ocr_engine_duration_s']:.3f}s "
                     f"(+{issue['excess_s']:.3f}s)"
                 )
+            elif issue["kind"] == "evaluated_ocr_engine_count_budget_exceeded":
+                print(
+                    f"       {issue['metric']}: evaluated OCR engine count "
+                    f"{issue['evaluated_ocr_engine_count']:.1f} "
+                    f"> budget {issue['max_evaluated_ocr_engine_count']:.1f} "
+                    f"(+{issue['excess_count']:.1f})"
+                )
             elif issue["kind"] == "evaluated_ocr_engine_profile_missing":
                 print(f"       {issue['metric']}: missing evaluated OCR engine profile")
             elif issue["kind"] == "evaluated_ocr_engine_duration_missing":
                 print(f"       {issue['metric']}: missing evaluated OCR engine duration")
+            elif issue["kind"] == "evaluated_ocr_engine_count_missing":
+                print(f"       {issue['metric']}: missing evaluated OCR engine count")
             elif issue["kind"] == "repeat_profile_p95_duration_budget_exceeded":
                 print(
                     f"       repeat profile p95 duration "

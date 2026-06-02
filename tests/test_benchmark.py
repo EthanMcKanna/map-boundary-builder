@@ -15,6 +15,7 @@ from map_boundary_builder.benchmark import (
     discover_fixtures,
     load_fixture_config,
     parse_georeference_source_requirements,
+    parse_ocr_engine_count_budgets,
     parse_stage_duration_budgets,
     parse_image_name,
     run_benchmark,
@@ -81,6 +82,27 @@ def test_parse_stage_duration_budgets_rejects_missing_separator() -> None:
         assert "STAGE=SECONDS" in str(exc)
     else:
         raise AssertionError("Expected invalid stage budget to raise ValueError")
+
+
+def test_parse_ocr_engine_count_budgets_accepts_known_counts() -> None:
+    budgets = parse_ocr_engine_count_budgets(
+        ["selected_box_count=30, raw_box_count=50", "label_count=24"]
+    )
+
+    assert budgets == {
+        "label_count": 24.0,
+        "raw_box_count": 50.0,
+        "selected_box_count": 30.0,
+    }
+
+
+def test_parse_ocr_engine_count_budgets_rejects_unknown_counts() -> None:
+    try:
+        parse_ocr_engine_count_budgets(["det_elapsed_s=1"])
+    except ValueError as exc:
+        assert "Unknown OCR engine count metric" in str(exc)
+    else:
+        raise AssertionError("Expected invalid OCR engine count budget to raise ValueError")
 
 
 def test_parse_georeference_source_requirements_accepts_repeated_and_comma_values() -> None:
@@ -2407,6 +2429,99 @@ def test_report_latency_budget_check_flags_missing_ocr_engine_profile() -> None:
     ]
 
 
+def test_report_latency_budget_check_passes_ocr_engine_count_budgets() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 5.5,
+            "evaluated_ocr_engine_profile": {
+                "raw_box_count": 42,
+                "selected_box_count": 28,
+                "label_count": 19,
+            },
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "duration_s": 0.9}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_count={
+            "raw_box_count": 50,
+            "selected_box_count": 30,
+        },
+    )
+
+    assert check["passed"] is True
+    assert check["max_evaluated_ocr_engine_count"] == {
+        "raw_box_count": 50.0,
+        "selected_box_count": 30.0,
+    }
+    assert check["evaluated_ocr_engine_count"] == {
+        "raw_box_count": 42,
+        "selected_box_count": 28,
+        "label_count": 19,
+    }
+    assert check["issues"] == []
+
+
+def test_report_latency_budget_check_flags_ocr_engine_count_excess_and_missing_metric() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 5.5,
+            "evaluated_ocr_engine_profile": {
+                "selected_box_count": 31,
+            },
+        },
+        "scores": [{"slug": "dallas-waymo", "status": "active", "duration_s": 1.1}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_count={
+            "raw_box_count": 50,
+            "selected_box_count": 30,
+        },
+    )
+
+    assert check["passed"] is False
+    assert check["evaluated_ocr_engine_count"] == {"selected_box_count": 31}
+    assert check["issues"] == [
+        {
+            "metric": "raw_box_count",
+            "kind": "evaluated_ocr_engine_count_missing",
+            "max_evaluated_ocr_engine_count": 50.0,
+        },
+        {
+            "metric": "selected_box_count",
+            "kind": "evaluated_ocr_engine_count_budget_exceeded",
+            "evaluated_ocr_engine_count": 31,
+            "max_evaluated_ocr_engine_count": 30.0,
+            "excess_count": 1.0,
+        },
+    ]
+
+
+def test_report_latency_budget_check_flags_missing_ocr_engine_profile_for_count_budget() -> None:
+    report = {
+        "summary": {"total_duration_s": 5.5},
+        "scores": [{"slug": "orlando-waymo", "status": "active", "duration_s": 0.6}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_count={"selected_box_count": 30},
+    )
+
+    assert check["passed"] is False
+    assert check["evaluated_ocr_engine_count"] == {}
+    assert check["issues"] == [
+        {
+            "metric": "selected_box_count",
+            "kind": "evaluated_ocr_engine_profile_missing",
+            "max_evaluated_ocr_engine_count": 30.0,
+        }
+    ]
+
+
 def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path: Path) -> None:
     report = {
         "mode": "full",
@@ -2450,6 +2565,18 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
                     "kind": "evaluated_ocr_engine_duration_missing",
                     "max_evaluated_ocr_engine_duration_s": 1.5,
                 },
+                {
+                    "metric": "selected_box_count",
+                    "kind": "evaluated_ocr_engine_count_budget_exceeded",
+                    "evaluated_ocr_engine_count": 31,
+                    "max_evaluated_ocr_engine_count": 30.0,
+                    "excess_count": 1.0,
+                },
+                {
+                    "metric": "raw_box_count",
+                    "kind": "evaluated_ocr_engine_count_missing",
+                    "max_evaluated_ocr_engine_count": 50.0,
+                },
             ],
         },
     }
@@ -2459,6 +2586,8 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
     output = capsys.readouterr().out
     assert "det_elapsed_s: evaluated OCR engine duration 3.250s > budget 3.000s" in output
     assert "rec_elapsed_s: missing evaluated OCR engine duration" in output
+    assert "selected_box_count: evaluated OCR engine count 31.0 > budget 30.0" in output
+    assert "raw_box_count: missing evaluated OCR engine count" in output
 
 
 def test_print_table_reports_georeference_source_requirement_failure(

@@ -13801,3 +13801,29 @@ with zero failures in 0.531s.
   touched harness/test files, and the full suite
   `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest -q` (`542`
   tests plus `30` subtests).
+- Rejected another bright-blue OCR work-reduction probe before editing runtime
+  code. A monkeypatched fast-text selection change that required large rescue
+  boxes to have aspect ratio at least `1.8`
+  (`out/probe-brightblue-large-aspect18-slow5-20260602`) reduced Los Angeles
+  selected boxes only from `30` to `29`, worsened that sample's recognizer time,
+  and failed the focused slow-five hard gate because Bay Area hit `1.015029s`
+  against the subsecond primary budget. The fail-closed Zoox negative controls
+  remain stable and fast on the current harness (`zoox-las-vegas-mobile` repeat
+  p95 `0.148182s`; `zoox-las-vegas-mobile-tall` repeat p95 `0.306057s`), so no
+  runtime filtering change was shipped.
+- Added parity OCR engine count budgets to the ordinary benchmark harness so
+  active/evaluated fixture runs can fail on excessive profiled RapidOCR work,
+  not only elapsed time. The benchmark CLI now accepts
+  `--max-evaluated-ocr-engine-count`, validates count metric names against the
+  recorded OCR profile count keys, stores `max_evaluated_ocr_engine_count` and
+  `evaluated_ocr_engine_count` in `latency_budget_check`, and prints count
+  excess/missing-profile failures in the compact table. Focused tests passed
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest
+  tests/test_benchmark.py -q` (`77` tests) plus compileall for the touched
+  benchmark/test files. Live CLI smoke also passed on an OCR-path fixture:
+  `out/evaluated-ocr-count-budget-smoke-20260602-dallas-nocatalog/full-report.json`
+  (`dallas-waymo`, no catalog, IoU `0.955`, total `0.998133s`, OCR
+  `0.386117s`, `selected_box_count=7`, latency budget passed with
+  `selected_box_count=200`). A catalog-shape Nashville smoke intentionally
+  failed the count budget as missing OCR work, proving count budgets do not pass
+  silently when a run has no evaluated OCR profile.
