@@ -11944,3 +11944,21 @@ with zero failures in 0.531s.
   OCR failure. Ann Arbor, Grand Rapids, and Zoox SF still met expectations, but
   the latency regression is decisive; keep the existing
   `provider_ui_fast_ocr_max_dimension is None` guard for focused georef OCR.
+- Accepted summary-level OCR retry reporting so slow focused-OCR retry
+  candidates surface immediately in the compact stress summary instead of
+  requiring row-by-row inspection. The stress runner now aggregates
+  `ocr_label_event_counts`, `ocr_full_detail_retry_count`, and
+  `ocr_full_detail_retry_rows`, and prints the retry row list when any full
+  detail retries occur. A two-case smoke
+  `out/stress-retry-summary-smoke-20260602/stress-summary.json` passed `2/2`
+  expectations with `ocr_label_event_counts` of
+  `{"Focused map labels read": 1, "Map labels read": 2}` and zero full-detail
+  retries. The full real-screenshot rerun
+  `out/real-screenshot-stress-retry-summary-20260602/stress-summary.json`
+  passed `12/12` expectations with max internal `1.254984s`, stage totals
+  `ocr=7.429708s`, `extract=3.026451s`, `georeference=0.400551s`,
+  `inspect=0.081028s`, `export=0.008226s`, OCR event counts
+  `{"Focused map labels read": 1, "Map labels read": 12}`, and
+  `ocr_full_detail_retry_count=0`. Focused stress-runner tests passed (`7
+  passed`), full pytest passed (`477 passed`), `py_compile` passed, and
+  `git diff --check` passed.

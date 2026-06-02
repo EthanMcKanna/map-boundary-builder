@@ -400,6 +400,8 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     unexpected = [row["slug"] for row in rows if not row.get("expectation_passed")]
     statuses: dict[str, int] = {}
     sources: dict[str, int] = {}
+    ocr_label_event_counts: dict[str, int] = {}
+    ocr_full_detail_retry_rows: list[str] = []
     stage_totals: dict[str, float] = {}
     stage_max_rows: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -408,6 +410,16 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         source = row.get("source")
         if isinstance(source, str) and source:
             sources[source] = sources.get(source, 0) + 1
+        ocr_label_events = row.get("ocr_label_events")
+        if isinstance(ocr_label_events, list):
+            for event in ocr_label_events:
+                if not isinstance(event, dict):
+                    continue
+                message = event.get("message")
+                if isinstance(message, str) and message:
+                    ocr_label_event_counts[message] = ocr_label_event_counts.get(message, 0) + 1
+        if row.get("ocr_full_detail_retry"):
+            ocr_full_detail_retry_rows.append(str(row.get("slug")))
         stages = row.get("stages")
         if isinstance(stages, dict):
             for stage, elapsed_s in stages.items():
@@ -427,6 +439,9 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "unexpected": unexpected,
         "statuses": dict(sorted(statuses.items())),
         "sources": dict(sorted(sources.items())),
+        "ocr_label_event_counts": dict(sorted(ocr_label_event_counts.items())),
+        "ocr_full_detail_retry_count": len(ocr_full_detail_retry_rows),
+        "ocr_full_detail_retry_rows": ocr_full_detail_retry_rows,
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
@@ -451,6 +466,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"{stage}={row['elapsed_s']:.3f}s@{row['slug']}" for stage, row in summary["stage_max_rows"].items()
         )
         print(f"stage max: {stage_max_text}")
+    if summary.get("ocr_full_detail_retry_count"):
+        retry_rows = ", ".join(summary.get("ocr_full_detail_retry_rows", []))
+        print(f"ocr full-detail retries: {summary['ocr_full_detail_retry_count']} ({retry_rows})")
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
         elapsed = row.get("total_elapsed_s")

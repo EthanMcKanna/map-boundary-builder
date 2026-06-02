@@ -304,11 +304,14 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert [row["slug"] for row in report["rows"]] == ["kept"]
     assert saved["summary"]["expectation_passed"] == 1
     assert saved["summary"]["sources"] == {"ocr-georeference:nominatim-label-fit": 1}
+    assert saved["summary"]["ocr_label_event_counts"] == {}
+    assert saved["summary"]["ocr_full_detail_retry_count"] == 0
+    assert saved["summary"]["ocr_full_detail_retry_rows"] == []
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
 
 
-def test_summarize_rows_records_stage_totals_and_max_cases() -> None:
+def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
     summary = stress_module.summarize_rows(
         [
             {
@@ -318,6 +321,11 @@ def test_summarize_rows_records_stage_totals_and_max_cases() -> None:
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 1.3,
                 "stages": {"ocr": 0.9, "extract": 0.3},
+                "ocr_label_events": [
+                    {"message": "Focused map labels read", "label_count": 4},
+                    {"message": "Map labels read", "label_count": 4},
+                ],
+                "ocr_full_detail_retry": False,
             },
             {
                 "slug": "bay-area",
@@ -326,10 +334,22 @@ def test_summarize_rows_records_stage_totals_and_max_cases() -> None:
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 1.5,
                 "stages": {"ocr": 1.1, "extract": 0.2},
+                "ocr_label_events": [
+                    {"message": "Focused map labels read", "label_count": 2},
+                    {"message": "Full-detail map labels read", "label_count": 12},
+                ],
+                "ocr_full_detail_retry": True,
             },
         ]
     )
 
+    assert summary["ocr_label_event_counts"] == {
+        "Focused map labels read": 2,
+        "Full-detail map labels read": 1,
+        "Map labels read": 1,
+    }
+    assert summary["ocr_full_detail_retry_count"] == 1
+    assert summary["ocr_full_detail_retry_rows"] == ["bay-area"]
     assert summary["stage_duration_s"] == {"extract": 0.5, "ocr": 2.0}
     assert summary["stage_max_rows"] == {
         "extract": {"slug": "ann-arbor", "elapsed_s": 0.3},
