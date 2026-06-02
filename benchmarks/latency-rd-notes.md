@@ -13667,3 +13667,32 @@ with zero failures in 0.531s.
   `48/48` subsecond repeats, primary max `0.802725s`, repeat median `0.340s`,
   repeat p95 `0.561s`, repeat max `0.581s`, RapidOCR total p95 `0.493s`,
   detector p95 `0.258s`, and recognizer p95 `0.239s`.
+- Added a production reliability fallback for SVG rasterization after the
+  `pipeline-b7d37e6775a2f196` deploy proved the code was live but direct API
+  upload of `/Users/ethanmckanna/Downloads/a.png` still failed with HTTP `422`
+  because CairoSVG could not rasterize SVG content in the Vercel runtime. The
+  new path keeps CairoSVG as the preferred renderer and only falls back to the
+  Rust-backed `resvg-py` wheel if CairoSVG import or render fails; health now
+  probes both renderers and fails closed when neither can rasterize a tiny SVG.
+  Local R&D rejected `svglib` because its binary-only dependency resolution
+  reintroduced `pycairo`, while `resvg-py==0.3.2` had a CPython 3.12
+  manylinux2014 x86_64 wheel and rendered the Austin SVG under simulated
+  missing-Cairo conditions. The fallback raster is not accepted as a better
+  default: with the SVG OCR profile it completed Austin with `16` controls and
+  confidence `0.873` versus Cairo's `17` controls and confidence `0.93`, so the
+  patch is reliability-only. Focused validation passed:
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest
+  tests/test_image_io.py tests/test_api_cache.py tests/test_pipeline_version.py
+  -q` produced `107` passes,
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest -q` produced
+  `539` passes plus `30` subtests, and `PYTHONPATH=. .venv/bin/python -m
+  compileall -q map_boundary_builder api tests` passed. The full hard gate
+  `out/resvg-fallback-full16-hard-20260602/stress-summary.json` passed `16/16`
+  primary expectations, statuses `{"complete":14,"failed":2}`, `48/48`
+  analyzed repeat expectations, stable geometry-inclusive signatures, `48/48`
+  subsecond repeats, primary max `0.792409s`, repeat median `0.340s`, repeat
+  p95 `0.551s`, repeat max `0.563s`, RapidOCR total p95 `0.486s`, detector p95
+  `0.268s`, and recognizer p95 `0.240s`. Vercel production build also passed
+  with pipeline `pipeline-b202d8651ee809b8`; the generated function bundle
+  lists `resvg-py` as a direct dependency and includes
+  `_vendor/resvg_py/resvg_py.cpython-312-x86_64-linux-gnu.so`.

@@ -28,6 +28,7 @@ dependencies = [
   "opencv-python-headless==4.10.0.84",
   "pillow>=10.0",
   "rapidocr-onnxruntime>=1.4,<2.0",
+  "resvg-py>=0.3.2",
   "shapely>=2.0",
 ]
 

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import gzip
+import importlib
+from io import BytesIO
 from pathlib import Path
 import re
+import time
+from typing import Any, Callable
 from xml.etree import ElementTree
 
 from PIL import Image
@@ -11,6 +15,10 @@ from PIL import Image
 RASTER_IMAGE_EXTENSIONS = {".avif", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 SVG_IMAGE_EXTENSIONS = {".svg", ".svgz"}
 SUPPORTED_IMAGE_EXTENSIONS = RASTER_IMAGE_EXTENSIONS | SVG_IMAGE_EXTENSIONS
+SVG_RASTERIZER_PROBE = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 3">
+<rect width="4" height="3" fill="#fff"/>
+<rect x="1" y="1" width="2" height="1" fill="#0087ff"/>
+</svg>"""
 
 
 def safe_image_extension(filename: str) -> str:
@@ -79,31 +87,119 @@ def composite_raster_to_opaque(source_path: Path, target_path: Path) -> None:
 
 
 def rasterize_svg_to_png(source_path: Path, target_path: Path, *, max_dimension: int = 0) -> None:
+    svg_bytes = read_svg_bytes(source_path)
+    output_size = capped_svg_output_size(svg_bytes, max_dimension=max_dimension)
+    rasterizers: tuple[tuple[str, Callable[..., None]], ...] = (
+        ("CairoSVG", rasterize_svg_with_cairosvg),
+        ("resvg-py", rasterize_svg_with_resvg),
+    )
+    errors: list[str] = []
+    for rasterizer_name, rasterizer in rasterizers:
+        try:
+            rasterizer(svg_bytes, target_path, output_size=output_size, source_path=source_path)
+            return
+        except Exception as exc:
+            errors.append(f"{rasterizer_name}: {exception_summary(exc)}")
+            if target_path.exists():
+                try:
+                    target_path.unlink()
+                except OSError:
+                    pass
+    detail = "; ".join(errors)
+    raise ValueError(
+        f"Could not rasterize SVG image {source_path.name}. Export it as PNG, JPG, WebP, or TIFF "
+        f"and try again. Rasterizer errors: {detail}"
+    )
+
+
+def rasterize_svg_with_cairosvg(
+    svg_bytes: bytes,
+    target_path: Path,
+    *,
+    output_size: tuple[int, int] | None = None,
+    source_path: Path | None = None,
+) -> None:
     try:
-        import cairosvg
+        cairosvg = importlib.import_module("cairosvg")
     except Exception as exc:  # pragma: no cover - depends on optional native libs.
         raise ValueError(
-            "SVG uploads need to be rasterized before extraction. Use the web app upload flow "
-            "or install CairoSVG support, then try again."
+            "CairoSVG support is unavailable."
         ) from exc
 
+    kwargs: dict[str, object] = {
+        "bytestring": svg_bytes,
+        "write_to": str(target_path),
+    }
+    if output_size is not None:
+        output_width, output_height = output_size
+        kwargs["output_width"] = output_width
+        kwargs["output_height"] = output_height
+    cairosvg.svg2png(**kwargs)
+
+
+def rasterize_svg_with_resvg(
+    svg_bytes: bytes,
+    target_path: Path,
+    *,
+    output_size: tuple[int, int] | None = None,
+    source_path: Path | None = None,
+) -> None:
     try:
-        svg_bytes = read_svg_bytes(source_path)
-        kwargs: dict[str, object] = {
-            "bytestring": svg_bytes,
-            "write_to": str(target_path),
+        resvg_py = importlib.import_module("resvg_py")
+    except Exception as exc:  # pragma: no cover - depends on optional binary wheel availability.
+        raise ValueError("resvg-py support is unavailable.") from exc
+
+    kwargs: dict[str, object] = {
+        "svg_string": svg_bytes.decode("utf-8", "replace"),
+    }
+    if output_size is not None:
+        output_width, output_height = output_size
+        kwargs["width"] = output_width
+        kwargs["height"] = output_height
+    if source_path is not None:
+        kwargs["resources_dir"] = str(source_path.parent)
+    png_bytes = resvg_py.svg_to_bytes(**kwargs)
+    target_path.write_bytes(png_bytes)
+
+
+def svg_rasterizer_diagnostics() -> dict[str, Any]:
+    diagnostics = {
+        "ok": False,
+        "preferred": None,
+        "cairosvg": probe_svg_rasterizer("CairoSVG", rasterize_svg_with_cairosvg),
+        "resvg_py": probe_svg_rasterizer("resvg-py", rasterize_svg_with_resvg),
+    }
+    if diagnostics["cairosvg"]["ok"]:
+        diagnostics["ok"] = True
+        diagnostics["preferred"] = "cairosvg"
+    elif diagnostics["resvg_py"]["ok"]:
+        diagnostics["ok"] = True
+        diagnostics["preferred"] = "resvg-py"
+    return diagnostics
+
+
+def probe_svg_rasterizer(name: str, rasterizer: Callable[..., None]) -> dict[str, Any]:
+    started = time.perf_counter()
+    target = BytesIO()
+    try:
+        if name == "CairoSVG":
+            cairosvg = importlib.import_module("cairosvg")
+            cairosvg.svg2png(bytestring=SVG_RASTERIZER_PROBE, write_to=target)
+            size = len(target.getvalue())
+        else:
+            resvg_py = importlib.import_module("resvg_py")
+            png_bytes = resvg_py.svg_to_bytes(svg_string=SVG_RASTERIZER_PROBE.decode("utf-8"))
+            size = len(png_bytes)
+        return {
+            "ok": size > 0,
+            "elapsed_s": round(max(0.0, time.perf_counter() - started), 6),
         }
-        output_size = capped_svg_output_size(svg_bytes, max_dimension=max_dimension)
-        if output_size is not None:
-            output_width, output_height = output_size
-            kwargs["output_width"] = output_width
-            kwargs["output_height"] = output_height
-        cairosvg.svg2png(**kwargs)
     except Exception as exc:
-        raise ValueError(
-            f"Could not rasterize SVG image {source_path.name}. Export it as PNG, JPG, WebP, or TIFF "
-            "and try again."
-        ) from exc
+        return {
+            "ok": False,
+            "elapsed_s": round(max(0.0, time.perf_counter() - started), 6),
+            "error": exception_summary(exc),
+        }
 
 
 def read_svg_bytes(source_path: Path) -> bytes:
@@ -111,6 +207,14 @@ def read_svg_bytes(source_path: Path) -> bytes:
     if source_path.suffix.lower() == ".svgz":
         return gzip.decompress(data)
     return data
+
+
+def exception_summary(exc: Exception, *, max_length: int = 240) -> str:
+    summary = f"{exc.__class__.__name__}: {exc}"
+    summary = " ".join(summary.split())
+    if len(summary) > max_length:
+        return f"{summary[: max_length - 1]}..."
+    return summary
 
 
 def capped_svg_output_size(svg_bytes: bytes, *, max_dimension: int) -> tuple[int, int] | None:

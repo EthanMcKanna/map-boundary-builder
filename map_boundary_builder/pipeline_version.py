@@ -10,12 +10,14 @@ from . import __version__
 
 PIPELINE_VERSION_ENV = "MAP_BOUNDARY_PIPELINE_VERSION"
 PIPELINE_VERSION_PACKAGES = (
+    "cairosvg",
     "numpy",
     "onnxruntime",
     "opencv-python",
     "opencv-python-headless",
     "pillow",
     "rapidocr-onnxruntime",
+    "resvg-py",
     "shapely",
 )
 PIPELINE_VERSION_FILES = (

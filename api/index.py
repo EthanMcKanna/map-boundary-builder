@@ -24,6 +24,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache")
 
 from map_boundary_builder.asset_response import web_asset_response
+from map_boundary_builder.image_io import svg_rasterizer_diagnostics
 from map_boundary_builder.pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from map_boundary_builder.runtime_warmup import (
     prewarm_generation_runtime,
@@ -1005,13 +1006,19 @@ def first_query_value(query: dict[str, list[str]], name: str) -> str | None:
 def health_payload(*, warm: str | None = None) -> dict[str, Any]:
     runtime_dependencies = dict(pipeline_version_dependency_versions())
     tmp_writable = os.access(tempfile.gettempdir(), os.W_OK)
+    svg_rasterizer = svg_rasterizer_diagnostics()
     payload: dict[str, Any] = {
-        "ok": runtime_health_ok(runtime_dependencies, tmp_writable=tmp_writable),
+        "ok": runtime_health_ok(
+            runtime_dependencies,
+            tmp_writable=tmp_writable,
+            svg_rasterizer_ok=svg_rasterizer.get("ok") is True,
+        ),
         "runtime": "vercel-python",
         "tesseract": shutil.which("tesseract"),
         "tmp_writable": tmp_writable,
         "pipeline_version": get_pipeline_version(),
         "runtime_dependencies": runtime_dependencies,
+        "svg_rasterizer": svg_rasterizer,
         "ocr": ocr_runtime_config(),
         "generation_env": generation_runtime_env_config(),
     }
@@ -1035,8 +1042,15 @@ def cron_warm_generation_payload(*, authorization_header: str | None) -> tuple[d
     }, HTTPStatus.OK if ok else HTTPStatus.SERVICE_UNAVAILABLE
 
 
-def runtime_health_ok(runtime_dependencies: dict[str, str], *, tmp_writable: bool) -> bool:
+def runtime_health_ok(
+    runtime_dependencies: dict[str, str],
+    *,
+    tmp_writable: bool,
+    svg_rasterizer_ok: bool = True,
+) -> bool:
     if not tmp_writable:
+        return False
+    if not svg_rasterizer_ok:
         return False
     for dependency in ("numpy", "onnxruntime", "pillow", "rapidocr-onnxruntime", "shapely", "cv2"):
         if runtime_dependencies.get(dependency) in {None, "", "missing", "unknown"}:

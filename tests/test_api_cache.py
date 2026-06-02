@@ -1285,6 +1285,7 @@ class ApiRunCacheTests(unittest.TestCase):
         with (
             patch.dict("os.environ", {}, clear=True),
             patch("api.index.prewarm_generation_runtime", return_value={"status": "ok", "total_s": 0.1}) as prewarm,
+            patch("api.index.svg_rasterizer_diagnostics", return_value={"ok": True, "preferred": "cairosvg"}),
         ):
             cold = health_payload()
             warm = health_payload(warm="ocr")
@@ -1334,8 +1335,11 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS"], "3000000")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"], "24")
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
+        self.assertIn("cairosvg", cold["runtime_dependencies"])
+        self.assertIn("resvg-py", cold["runtime_dependencies"])
         self.assertIn("cv2", cold["runtime_dependencies"])
         self.assertIn("rapidocr-onnxruntime", cold["runtime_dependencies"])
+        self.assertEqual(cold["svg_rasterizer"], {"ok": True, "preferred": "cairosvg"})
         self.assertNotIn("warm", cold)
         self.assertEqual(warm["warm"], {"status": "ok", "total_s": 0.1})
         prewarm.assert_called_once_with()
@@ -1354,6 +1358,7 @@ class ApiRunCacheTests(unittest.TestCase):
         with (
             patch("api.index.pipeline_version_dependency_versions", return_value=dependencies),
             patch("api.index.prewarm_generation_runtime", return_value={"status": "error", "error": "No module named cv2"}),
+            patch("api.index.svg_rasterizer_diagnostics", return_value={"ok": True, "preferred": "resvg-py"}),
         ):
             cold = health_payload()
             warm = health_payload(warm="ocr")
@@ -1362,6 +1367,30 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(warm["ok"])
         self.assertEqual(warm["warm"]["status"], "error")
         self.assertEqual(health_response_status(warm), HTTPStatus.SERVICE_UNAVAILABLE)
+
+    def test_health_payload_marks_missing_svg_rasterizer_unhealthy(self) -> None:
+        dependencies = [
+            ("cairosvg", "2.9.0"),
+            ("numpy", "2.4.6"),
+            ("onnxruntime", "1.26.0"),
+            ("opencv-python", "missing"),
+            ("opencv-python-headless", "4.10.0.84"),
+            ("pillow", "12.2.0"),
+            ("rapidocr-onnxruntime", "1.4.4"),
+            ("resvg-py", "missing"),
+            ("shapely", "2.1.2"),
+            ("cv2", "4.10.0"),
+        ]
+        svg_rasterizer = {"ok": False, "preferred": None, "cairosvg": {"ok": False}, "resvg_py": {"ok": False}}
+        with (
+            patch("api.index.pipeline_version_dependency_versions", return_value=dependencies),
+            patch("api.index.svg_rasterizer_diagnostics", return_value=svg_rasterizer),
+        ):
+            payload = health_payload()
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["svg_rasterizer"], svg_rasterizer)
+        self.assertEqual(health_response_status(payload), HTTPStatus.SERVICE_UNAVAILABLE)
 
     def test_cron_warm_generation_requires_bearer_secret(self) -> None:
         self.assertEqual(CRON_WARM_PATH, "/api/cron/warm-generation-v2")

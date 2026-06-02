@@ -1,13 +1,16 @@
 import gzip
+from io import BytesIO
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image, features
 
 from map_boundary_builder.extract import load_rgb, write_overlay_image, write_overlay_png
-from map_boundary_builder.image_io import normalize_image_for_processing, safe_image_extension
+from map_boundary_builder.image_io import normalize_image_for_processing, safe_image_extension, svg_rasterizer_diagnostics
 
 
 class SvgImageIoTests(unittest.TestCase):
@@ -110,6 +113,65 @@ class SvgImageIoTests(unittest.TestCase):
             rgb = load_rgb(image_path)
 
             self.assertEqual(rgb.shape, (8, 12, 3))
+
+    def test_svg_rasterization_falls_back_to_resvg_when_cairosvg_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            svg_path = workdir / "input.svg"
+            svg_path.write_text(
+                """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4000 2000">
+<rect width="4000" height="2000" fill="#ffffff"/>
+<rect x="1000" y="500" width="2000" height="1000" fill="#00a6ff"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+            png_bytes = png_fixture_bytes((1000, 500), rect=(250, 125, 750, 375))
+            calls: list[dict[str, object]] = []
+
+            def fake_import_module(name: str):
+                if name == "cairosvg":
+                    raise OSError("libcairo missing")
+                if name == "resvg_py":
+                    return SimpleNamespace(
+                        svg_to_bytes=lambda **kwargs: calls.append(kwargs) or png_bytes,
+                    )
+                raise AssertionError(name)
+
+            with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
+                image_path = normalize_image_for_processing(
+                    svg_path,
+                    output_dir=workdir,
+                    svg_max_dimension=1000,
+                )
+
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(image_path.name, "input.raster.png")
+            self.assertEqual(rgb.shape, (500, 1000, 3))
+            self.assertEqual(calls[0]["width"], 1000)
+            self.assertEqual(calls[0]["height"], 500)
+            self.assertEqual(calls[0]["resources_dir"], str(workdir))
+            self.assertGreater(int(rgb[:, :, 2].max()), 200)
+
+    def test_svg_rasterizer_diagnostics_prefers_resvg_when_cairo_fails(self) -> None:
+        png_bytes = png_fixture_bytes((4, 3), rect=(1, 1, 3, 2))
+
+        def fake_import_module(name: str):
+            if name == "cairosvg":
+                raise OSError("libcairo missing")
+            if name == "resvg_py":
+                return SimpleNamespace(svg_to_bytes=lambda **_kwargs: png_bytes)
+            raise AssertionError(name)
+
+        with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
+            diagnostics = svg_rasterizer_diagnostics()
+
+        self.assertTrue(diagnostics["ok"])
+        self.assertEqual(diagnostics["preferred"], "resvg-py")
+        self.assertFalse(diagnostics["cairosvg"]["ok"])
+        self.assertIn("libcairo missing", diagnostics["cairosvg"]["error"])
+        self.assertTrue(diagnostics["resvg_py"]["ok"])
 
     def test_transparent_png_is_composited_before_processing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,6 +311,16 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(rgb.shape, (8, 16, 3))
             self.assertLess(np.abs(rgb[:, :8].mean(axis=(0, 1)) - np.array([12, 34, 56])).max(), 8)
             self.assertLess(np.abs(rgb[:, 8:].mean(axis=(0, 1)) - np.array([98, 76, 54])).max(), 8)
+
+
+def png_fixture_bytes(size: tuple[int, int], *, rect: tuple[int, int, int, int]) -> bytes:
+    image = Image.new("RGB", size, (255, 255, 255))
+    for y in range(rect[1], rect[3]):
+        for x in range(rect[0], rect[2]):
+            image.putpixel((x, y), (0, 166, 255))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class OverlayPreviewTests(unittest.TestCase):

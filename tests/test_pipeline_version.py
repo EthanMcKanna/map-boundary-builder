@@ -21,11 +21,13 @@ def test_pipeline_version_is_stable_hash() -> None:
 def test_pipeline_version_tracks_runtime_dependency_versions() -> None:
     versions = dict(pipeline_version_dependency_versions())
 
+    assert versions["cairosvg"]
     assert versions["onnxruntime"]
     assert "opencv-python" in versions
     assert versions["opencv-python-headless"]
     assert versions["cv2"]
     assert versions["rapidocr-onnxruntime"]
+    assert versions["resvg-py"]
 
 
 def test_pipeline_hash_dependencies_do_not_import_cv2(monkeypatch) -> None:
@@ -40,7 +42,9 @@ def test_pipeline_hash_dependencies_do_not_import_cv2(monkeypatch) -> None:
     hash_versions = dict(pipeline_version_hash_dependency_versions())
 
     assert version.startswith("pipeline-")
+    assert "cairosvg" in hash_versions
     assert "opencv-python-headless" in hash_versions
+    assert "resvg-py" in hash_versions
     assert "cv2" not in hash_versions
 
 
