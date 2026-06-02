@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image, PngImagePlugin
 
 import map_boundary_builder.ocr as ocr_module
+import map_boundary_builder.geocoder as geocoder_module
 import map_boundary_builder.runner as runner_module
 import map_boundary_builder.runtime_config as runtime_config_module
 from map_boundary_builder.georeference import (
@@ -2907,6 +2908,63 @@ def control_points_for_context(label_prefix: str, count: int) -> list[ControlPoi
 
 
 class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_seeded_ann_arbor_focus_labels_keep_yost_control_without_network(self) -> None:
+        labels = [
+            OcrLabel("North Qu", 939.567, 575.269, 102.993, 26.702, 99.33),
+            OcrLabel("Hands On", 656.337, 487.535, 104.9, 30.516, 99.02),
+            OcrLabel("Museum", 652.523, 509.468, 97.271, 32.424, 98.704),
+            OcrLabel("Michigan Union", 712.602, 692.566, 167.84, 32.424, 97.794),
+            OcrLabel("Amtrak Station", 689.715, 340.675, 160.211, 30.516, 97.075),
+            OcrLabel("Farmer's Market", 827.038, 457.018, 167.84, 26.702, 96.276),
+            OcrLabel("Ann Arbor Farmer's Market", 826.085, 445.575, 169.747, 49.589, 95.856),
+            OcrLabel("Ann Arbor", 798.429, 435.085, 114.436, 28.609, 95.435),
+            OcrLabel("Michigan Union South Quad Dorm", 704.019, 708.778, 185.005, 64.847, 95.433),
+            OcrLabel("Law Quad", 940.521, 723.083, 101.085, 20.98, 95.143),
+            OcrLabel("North Qu N Univers", 921.448, 585.759, 139.231, 47.682, 93.462),
+            OcrLabel("Michigan Union Uof M Mu", 809.873, 685.891, 362.382, 45.775, 93.248),
+            OcrLabel("South Quad Dorm", 704.019, 727.851, 185.005, 26.702, 93.073),
+            OcrLabel("North Qu The Diag", 939.567, 609.6, 102.993, 95.364, 93.036),
+            OcrLabel("Nickols Arcade", 717.37, 609.6, 158.304, 26.702, 92.573),
+            OcrLabel("Yost Ice Arena", 913.819, 902.366, 154.489, 28.609, 92.057),
+            OcrLabel("Uof M Mu Law Quad", 936.706, 698.288, 108.715, 70.569, 91.922),
+            OcrLabel("Nickols Arcade N Univers", 790.8, 604.832, 305.164, 36.238, 90.083),
+            OcrLabel("Uof M Mu", 936.706, 676.355, 108.715, 26.702, 88.702),
+            OcrLabel("The Diag Uof M Mu", 936.706, 660.143, 108.715, 59.125, 87.722),
+            OcrLabel("N Univers", 897.607, 598.156, 91.549, 22.887, 87.593),
+            OcrLabel("N Univers The Diag", 921.448, 621.997, 139.231, 70.569, 87.167),
+            OcrLabel("The Diag", 948.15, 643.931, 85.827, 26.702, 86.742),
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder_module, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder_module, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder_module, "_GEOCODER_SEED", None),
+                patch.object(geocoder_module, "urlopen", side_effect=AssertionError("network should not run")),
+                patch("map_boundary_builder.georeference.build_osm_place_control_points", return_value=[]),
+            ):
+                geocoder_module._geocode_cached.cache_clear()
+                result = georeference_from_labels(
+                    labels,
+                    "ann-arbor.png",
+                    None,
+                    1696,
+                    1365,
+                    min_control_points=3,
+                    anchor_marker_dots=False,
+                    allow_road_refinement=False,
+                    allow_credible_cached_fit=True,
+                )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result.control_points), 4)
+        self.assertEqual(result.transform.city, "Yost Ice Arena")
+        self.assertEqual(
+            [control.label.text for control in result.control_points],
+            ["Yost Ice Arena", "Michigan Union", "Amtrak Station", "Ann Arbor"],
+        )
+        self.assertAlmostEqual(result.transform.confidence, 0.854, places=3)
+
     def test_city_context_inference_does_not_promote_road_label_as_broad_context(self) -> None:
         contexts = infer_city_contexts(
             [

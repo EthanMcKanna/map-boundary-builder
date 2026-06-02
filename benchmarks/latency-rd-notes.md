@@ -15240,3 +15240,27 @@ with zero failures in 0.531s.
   improved from the immediately prior SVG-crop gate's `0.867585s` to
   `0.722746s`; Ann Arbor landed at `0.535237s`, four controls, confidence
   `0.854`, and Grand Rapids at `0.564087s`, five controls, confidence `0.781`.
+- Fixed a cold-cache reliability split exposed by production Ann Arbor after
+  the `320px` focused OCR detector change. The deployed run used the new
+  focused crop settings and the same useful OCR label set as local, but a fresh
+  function cache only had seeded geocodes for `Ann Arbor`, `Michigan Union`,
+  and `Amtrak Station`, so it fit three controls at confidence `0.805` with bbox
+  `[-83.7510725,42.2635917,-83.7308025,42.2878783]`. The local warm cache also
+  had `Yost Ice Arena`, producing the stronger four-control fit at confidence
+  `0.854` with bbox `[-83.7531447,42.2600279,-83.7359233,42.2886506]`. A
+  temporary in-memory seed proved that adding the Yost Nominatim payload alone
+  makes the seed-only path pick the four-control fit without network or OSM
+  place lookup. After adding the bundled Yost seed, validation passed the
+  targeted geocoder/georeference slice (`4 passed, 154 deselected, 13 subtests
+  passed`), a seed-only Ann Arbor CLI repro with `MAP_BOUNDARY_BLOCK_NETWORK=1`
+  and an empty `MAP_BOUNDARY_CACHE_DIR` (`control_points=4`, confidence `0.854`,
+  same bbox), full `pytest -q` (`609 passed, 31 subtests passed`), the
+  fresh-cache/network-blocked dark-teal stress slice at
+  `out/yost-seedonly-darkteal-focused-20260602/stress-summary.json` (`7/7`
+  expected, primary max `0.637914s`, repeat `14/14` subsecond, repeat p95
+  `0.623995s`, repeat max `0.654535s`, Ann Arbor four controls at `0.63449s`),
+  and the fresh-cache/network-blocked full hard gate at
+  `out/yost-seedonly-full29-hard-20260602/stress-summary.json` (`29/29`
+  expected, statuses `{"complete":18,"failed":11}`, primary max `0.744776s`,
+  repeat `58/58` subsecond, repeat p95 `0.672277s`, repeat max `0.775204s`,
+  OCR calls `26`, Ann Arbor four controls at `0.62192s`).

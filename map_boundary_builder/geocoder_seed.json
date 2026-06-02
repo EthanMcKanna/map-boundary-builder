@@ -635,6 +635,29 @@
       }
     ],
     "1d12f18b75d0225020053ced": [],
+    "1de8c7cc9dd6ad5b2863434a": [
+      {
+        "addresstype": "stadium",
+        "boundingbox": [
+          "42.2671422",
+          "42.2680918",
+          "-83.7413390",
+          "-83.7407105"
+        ],
+        "category": "leisure",
+        "display_name": "Yost Ice Arena, South State Street, Burns Park, Ann Arbor, Washtenaw County, Michigan, 48108, United States",
+        "importance": 0.415002101916886,
+        "lat": "42.2675777",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-83.7410248",
+        "name": "Yost Ice Arena",
+        "osm_id": 128634894,
+        "osm_type": "way",
+        "place_id": 369094814,
+        "place_rank": 30,
+        "type": "stadium"
+      }
+    ],
     "1e077472360bb806d18cc525": [
       {
         "addresstype": "neighbourhood",

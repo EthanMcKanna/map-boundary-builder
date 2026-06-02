@@ -259,6 +259,7 @@ class GeocoderSeedTests(unittest.TestCase):
             "Nickols Arcade, Ann Arbor": "Nickels Arcade",
             "Ross Schoolof Business, Ann Arbor": "Ross School of Business Building",
             "Ann Arbor Farmer Market, Ann Arbor": "Ann Arbor Farmers Market",
+            "Yost Ice Arena": "Yost Ice Arena",
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
