@@ -15088,3 +15088,28 @@ with zero failures in 0.531s.
   disguised-SVG upload with the same profiling options completed via
   `catalog-shape-match`, zero OCR calls, `catalog_slug=austin-waymo`,
   `catalog_shape_iou=0.974266`, and `build_boundary_s=0.226265`.
+- Extended SVG fast-path coverage from the local SVG inventory. Ten SVG-like
+  downloads were found; seven exposed a single slim service-area path and six
+  passed the strict catalog shape gate across Austin, Houston, and Nashville.
+  The newly locked stress fixtures are `houston-waymo-svg` and
+  `nashville-waymo-svg`, both disguised as a generic `upload.png` so the test
+  proves the SVG path parser and catalog geometry gate rather than filename
+  hints. Focused no-cache validation passed at
+  `out/svg-fastpath-new-fixtures-smoke-20260602/stress-summary.json`: `2/2`
+  expected, max total `0.371613s`, zero OCR calls, Houston `0.372s`, and
+  Nashville `0.104s`. The expanded hard gate passed at
+  `out/svg-fastpath-expanded29-hard-20260602/stress-summary.json`: `29/29`
+  expected, statuses `{"complete":18,"failed":11}`, primary max `0.831148s`,
+  repeat `58/58` subsecond, repeat p95 `0.565s`, repeat max `0.599s`, and OCR
+  calls unchanged at `26`. The Houston row completed in `0.098869s` with
+  `catalog_slug=houston-waymo`, `catalog_shape_iou=0.981923`,
+  `catalog_shape_margin=0.37373`, `catalog_area_ratio=1.00171`, and `126`
+  GeoJSON coordinates. The Nashville row completed in `0.10122s` with
+  `catalog_slug=nashville-waymo`, `catalog_shape_iou=0.983823`,
+  `catalog_shape_margin=0.317378`, `catalog_area_ratio=1.001818`, and `136`
+  GeoJSON coordinates. One non-shipped candidate, `/Users/ethanmckanna/Downloads/mi.svg`,
+  proved useful as future R&D evidence: it exposes a parseable path but does
+  not pass strict catalog matching, and the existing full-SVG fallback failed
+  after spending `2.379596s`; the promising next experiment is to reuse the
+  extracted SVG path as candidate geometry for catalog misses while still
+  georeferencing through the existing OCR/map-label path.
