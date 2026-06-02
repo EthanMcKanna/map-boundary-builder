@@ -13559,3 +13559,30 @@ with zero failures in 0.531s.
   repeats, primary max `0.776044s`, repeat median `0.372s`, repeat p95
   `0.535s`, repeat max `0.588s`, RapidOCR engine total p95 `0.462s`, detector
   p95 `0.259s`, and recognizer p95 `0.230s`.
+- Bounded SVG rasterization before Pillow/OpenCV processing so vector uploads
+  do not pay to materialize the full Illustrator canvas when OCR and extraction
+  will immediately work at smaller dimensions. The accepted default is
+  `MAP_BOUNDARY_SVG_RASTER_MAX_DIMENSION=1600`, matching the SVG bright-blue OCR
+  profile. On the Austin SVG hidden behind `/Users/ethanmckanna/Downloads/a.png`,
+  a monkeypatched runner prototype showed the 1600px path completing in
+  `0.758923s` with `combined_confidence=0.93`, `control_points=16`,
+  `georeference_source=ocr-georeference:nominatim-label-fit+osm-road-refine`,
+  and bbox `[-97.889554, 30.1164732, -97.6603062, 30.4097371]`. CLI
+  comparisons in fresh subprocesses showed full-size SVG rasterization at
+  `1.393004s` total with `0.518346s` inspect time and confidence `0.916`;
+  1600px at `1.198955s` total with `0.330797s` inspect time, confidence `0.93`,
+  and the same road-refined source; 1800px/2000px were slightly faster but
+  dropped road refinement and confidence to `0.878`/`0.877`. 1200px and 1400px
+  were rejected because OCR became too sparse and georeference failed. Focused
+  validation: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_image_io.py
+  tests/test_runner_summary.py -q` passed `99` tests, and a confirmation CLI
+  run with the shipped 1600px cap produced bbox
+  `[-97.8876796, 30.1171301, -97.6607465, 30.4090075]`,
+  `combined_confidence=0.93`, `control_points=17`, and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`. The full actual-code
+  hard gate `out/svg-raster-cap-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.860066s`, repeat median `0.353s`,
+  repeat p95 `0.519s`, repeat max `0.577s`, RapidOCR engine total p95
+  `0.456s`, detector p95 `0.247s`, and recognizer p95 `0.226s`.

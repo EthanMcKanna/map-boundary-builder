@@ -80,6 +80,7 @@ from .runtime_config import (
     RAPIDOCR_REC_BATCH_NUM,
     RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
     SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
+    SVG_RASTER_MAX_DIMENSION,
 )
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -323,6 +324,7 @@ def build_boundary(
         image_path,
         output_dir=debug_path or output_path.parent,
         composite_transparent_rasters=False,
+        svg_max_dimension=SVG_RASTER_MAX_DIMENSION if source_is_svg else None,
     )
     with Image.open(image_path) as img:
         width, height = img.size

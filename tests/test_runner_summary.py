@@ -1014,6 +1014,7 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
         confidence=1.0,
     )
     ocr_kwargs: list[dict] = []
+    normalize_kwargs: list[dict] = []
 
     georef = GeoreferenceResult(
         transform=GeoreferenceTransform(
@@ -1034,6 +1035,7 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
 
     def fake_normalize_image_for_processing(path, **_kwargs):
         assert Path(path) == image_path
+        normalize_kwargs.append(_kwargs)
         return raster_path
 
     def fake_extract_ocr_labels_from_rgb(_path, _prepared_rgb, **kwargs):
@@ -1059,6 +1061,13 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
         options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
     )
 
+    assert normalize_kwargs == [
+        {
+            "output_dir": output_path.parent,
+            "composite_transparent_rasters": False,
+            "svg_max_dimension": runner.SVG_RASTER_MAX_DIMENSION,
+        }
+    ]
     assert ocr_kwargs == [
         {
             "rapidocr_max_dimension": runner.RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,

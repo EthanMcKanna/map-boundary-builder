@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
+import re
+from xml.etree import ElementTree
 
 from PIL import Image
 
@@ -22,13 +25,14 @@ def normalize_image_for_processing(
     *,
     output_dir: str | Path | None = None,
     composite_transparent_rasters: bool = True,
+    svg_max_dimension: int | None = None,
 ) -> Path:
     image_path = Path(path)
     target_dir = Path(output_dir) if output_dir is not None else image_path.parent
     if is_svg_image(image_path):
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"{image_path.stem}.raster.png"
-        rasterize_svg_to_png(image_path, target_path)
+        rasterize_svg_to_png(image_path, target_path, max_dimension=svg_max_dimension or 0)
         return target_path
 
     if composite_transparent_rasters and raster_has_transparency(image_path):
@@ -74,7 +78,7 @@ def composite_raster_to_opaque(source_path: Path, target_path: Path) -> None:
         background.convert("RGB").save(target_path)
 
 
-def rasterize_svg_to_png(source_path: Path, target_path: Path) -> None:
+def rasterize_svg_to_png(source_path: Path, target_path: Path, *, max_dimension: int = 0) -> None:
     try:
         import cairosvg
     except Exception as exc:  # pragma: no cover - depends on optional native libs.
@@ -84,12 +88,77 @@ def rasterize_svg_to_png(source_path: Path, target_path: Path) -> None:
         ) from exc
 
     try:
-        if source_path.suffix.lower() == ".svgz":
-            cairosvg.svg2png(url=str(source_path), write_to=str(target_path))
-        else:
-            cairosvg.svg2png(bytestring=source_path.read_bytes(), write_to=str(target_path))
+        svg_bytes = read_svg_bytes(source_path)
+        kwargs: dict[str, object] = {
+            "bytestring": svg_bytes,
+            "write_to": str(target_path),
+        }
+        output_size = capped_svg_output_size(svg_bytes, max_dimension=max_dimension)
+        if output_size is not None:
+            output_width, output_height = output_size
+            kwargs["output_width"] = output_width
+            kwargs["output_height"] = output_height
+        cairosvg.svg2png(**kwargs)
     except Exception as exc:
         raise ValueError(
             f"Could not rasterize SVG image {source_path.name}. Export it as PNG, JPG, WebP, or TIFF "
             "and try again."
         ) from exc
+
+
+def read_svg_bytes(source_path: Path) -> bytes:
+    data = source_path.read_bytes()
+    if source_path.suffix.lower() == ".svgz":
+        return gzip.decompress(data)
+    return data
+
+
+def capped_svg_output_size(svg_bytes: bytes, *, max_dimension: int) -> tuple[int, int] | None:
+    max_dimension = max(0, int(max_dimension))
+    if max_dimension <= 0:
+        return None
+    intrinsic_size = svg_intrinsic_size(svg_bytes)
+    if intrinsic_size is None:
+        return None
+    width, height = intrinsic_size
+    largest = max(width, height)
+    if largest <= max_dimension:
+        return None
+    scale = max_dimension / largest
+    return (max(1, round(width * scale)), max(1, round(height * scale)))
+
+
+def svg_intrinsic_size(svg_bytes: bytes) -> tuple[float, float] | None:
+    try:
+        root = ElementTree.fromstring(svg_bytes)
+    except ElementTree.ParseError:
+        return None
+    view_box = root.attrib.get("viewBox") or root.attrib.get("viewbox")
+    if view_box:
+        parts = re.split(r"[\s,]+", view_box.strip())
+        if len(parts) == 4:
+            try:
+                width = float(parts[2])
+                height = float(parts[3])
+            except ValueError:
+                width = height = 0.0
+            if width > 0.0 and height > 0.0:
+                return (width, height)
+    width = svg_dimension(root.attrib.get("width"))
+    height = svg_dimension(root.attrib.get("height"))
+    if width is None or height is None:
+        return None
+    return (width, height)
+
+
+def svg_dimension(value: str | None) -> float | None:
+    if not value:
+        return None
+    match = re.match(r"\s*([0-9]+(?:\.[0-9]+)?)", value)
+    if match is None:
+        return None
+    try:
+        parsed = float(match.group(1))
+    except ValueError:
+        return None
+    return parsed if parsed > 0.0 else None

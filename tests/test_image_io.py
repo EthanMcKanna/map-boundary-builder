@@ -66,6 +66,51 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(rgb.shape, (6, 10, 3))
             self.assertGreater(int(rgb[:, :, 2].max()), 200)
 
+    def test_large_svg_can_be_rasterized_at_max_dimension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            svg_path = workdir / "wide-map.png"
+            svg_path.write_text(
+                """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4000 2000">
+<rect width="4000" height="2000" fill="#ffffff"/>
+<rect x="1000" y="500" width="2000" height="1000" fill="#00a6ff"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            image_path = normalize_image_for_processing(
+                svg_path,
+                output_dir=workdir,
+                svg_max_dimension=1000,
+            )
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(rgb.shape, (500, 1000, 3))
+            self.assertGreater(int(rgb[:, :, 2].max()), 200)
+
+    def test_svg_max_dimension_does_not_upscale_small_svgs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            svg_path = workdir / "small.svg"
+            svg_path.write_text(
+                """<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8">
+<rect width="12" height="8" fill="#ffffff"/>
+<rect x="2" y="1" width="8" height="6" fill="#00a6ff"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+
+            image_path = normalize_image_for_processing(
+                svg_path,
+                output_dir=workdir,
+                svg_max_dimension=1000,
+            )
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(rgb.shape, (8, 12, 3))
+
     def test_transparent_png_is_composited_before_processing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
