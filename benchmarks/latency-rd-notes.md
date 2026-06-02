@@ -14712,3 +14712,21 @@ with zero failures in 0.531s.
   tests/test_stress_benchmark.py -q` (`146 passed`), compileall over
   `map_boundary_builder`, `api`, and `tests`, `git diff --check`, and the full
   suite (`592 passed`, `30` subtests).
+  Production deploy proof: commit `bd1cda3` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_5aJTAjWJcRFFCuTjY5SmXCBsAaTd`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-6140a57522200d6f`,
+  `light_fill_route_ui_ocr_max_dimension=1000`, and the expected dependency
+  versions. A cold neutral-filename live upload of `IMG_0083.PNG` returned HTTP
+  `422` with the exact `ride-route UI` error, `29` labels, route metrics
+  `8 08mi 32min License Plate XFY5869` and `8 08mi 32min`,
+  `build_stage_elapsed_s.georeference=0.000013`, and `build_boundary_s=3.745837`
+  while paying cold OCR. A cache-busted warmed live upload of the same image
+  returned HTTP `422` with `cache_hit=miss`, the same route evidence,
+  `build_stage_elapsed_s.georeference=0.000011`, and `build_boundary_s=0.133837`.
+  A cache-busted warmed Dallas no-catalog positive smoke with
+  `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg` returned HTTP `201`, city
+  `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
+  bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
+  `build_boundary_s=0.152238`.
