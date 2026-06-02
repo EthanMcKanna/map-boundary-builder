@@ -810,6 +810,21 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
             issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
 
+    append_min_confidence_expectation_issue(
+        row,
+        expect,
+        row_key="combined_confidence",
+        expect_key="min_combined_confidence",
+        issues=issues,
+    )
+    append_min_confidence_expectation_issue(
+        row,
+        expect,
+        row_key="georeference_confidence",
+        expect_key="min_georeference_confidence",
+        issues=issues,
+    )
+
     append_total_elapsed_expectation_issue(row, expect, issues)
 
     expected_bbox = expect.get("bbox_approx")
@@ -829,6 +844,22 @@ def append_total_elapsed_expectation_issue(row: dict[str, Any], expect: dict[str
         total_elapsed_s = row.get("total_elapsed_s")
         if not isinstance(total_elapsed_s, (int, float)) or total_elapsed_s > float(max_total_elapsed_s):
             issues.append(f"total_elapsed_s {total_elapsed_s!r} above {max_total_elapsed_s}")
+
+
+def append_min_confidence_expectation_issue(
+    row: dict[str, Any],
+    expect: dict[str, Any],
+    *,
+    row_key: str,
+    expect_key: str,
+    issues: list[str],
+) -> None:
+    minimum = expect.get(expect_key)
+    if not isinstance(minimum, (int, float)):
+        return
+    confidence = row.get(row_key)
+    if not isinstance(confidence, (int, float)) or float(confidence) < float(minimum):
+        issues.append(f"{row_key} {confidence!r} below {minimum}")
 
 
 def bbox_max_corner_error_m(observed: object, expected: object) -> float | None:

@@ -361,6 +361,31 @@ def test_check_expectations_rejects_low_ocr_label_count() -> None:
     assert issues == ["ocr_label_count 17 below 18"]
 
 
+def test_check_expectations_rejects_low_confidence() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Los Angeles",
+            "control_points": 18,
+            "combined_confidence": 0.72,
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Los Angeles",
+            "min_control_points": 18,
+            "min_combined_confidence": 0.83,
+            "min_georeference_confidence": 0.83,
+        },
+    )
+
+    assert issues == [
+        "combined_confidence 0.72 below 0.83",
+        "georeference_confidence None below 0.83",
+    ]
+
+
 def test_check_expectations_rejects_bbox_outside_meter_tolerance() -> None:
     issues = stress_module.check_expectations(
         {

@@ -13439,3 +13439,26 @@ with zero failures in 0.531s.
   signature now explicitly includes `combined_confidence=0.879`,
   `georeference_confidence=0.879`, `18` controls, the locked bbox, and `40`
   OCR labels.
+- Added manifest-level `min_combined_confidence` support so future speed probes
+  cannot consistently lower confidence on every repeat and still pass solely
+  because the output signature is stable. The real-screenshot manifest now has
+  conservative floors on all completed cases, set below the identical
+  confidence values observed across the last five full hard gates: Ann Arbor
+  `0.80` (`0.854` current), Grand Rapids `0.74` (`0.781`), Avride Dallas map
+  `0.90` (`0.952`), Robotaxi Austin `0.94` (`0.992`), Avride Dallas web
+  `0.72` (`0.769`), Zoox SF `0.90` (`0.953`), Tesla Dallas `0.78` (`0.825`),
+  Bay Area `0.82` (`0.873`), Los Angeles `0.83` (`0.879`), Houston Waymo
+  `0.83` (`0.882`), Orlando `0.81` (`0.861`), Nashville `0.70` (`0.7465`),
+  Houston Robotaxi gray `0.81` (`0.860`), and Miami `0.70` (`0.730`). Focused
+  validation: `jq empty` on `benchmarks/real-screenshot-stress.json` passed,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `39` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `529` tests plus `30` subtests. The full actual-code hard gate
+  `out/min-confidence-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, confidence-inclusive stable signatures
+  for all `16` cases, `48/48` subsecond repeats, primary max `0.749402s`,
+  repeat median `0.355s`, repeat p95 `0.560s`, repeat max `0.610s`,
+  RapidOCR total p95 `0.494s`, and recognizer p95 `0.236s`; all completed
+  primary rows had zero expectation issues under the new confidence floors.
