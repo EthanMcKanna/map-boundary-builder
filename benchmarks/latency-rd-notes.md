@@ -13827,3 +13827,21 @@ with zero failures in 0.531s.
   `selected_box_count=200`). A catalog-shape Nashville smoke intentionally
   failed the count budget as missing OCR work, proving count budgets do not pass
   silently when a run has no evaluated OCR profile.
+- Extended the ordinary benchmark repeat-profile summary with analyzed-sample
+  OCR engine duration and count distributions, plus p95 budgets for those
+  metrics. The new flags are
+  `--max-repeat-profile-ocr-engine-p95-duration-s` and
+  `--max-repeat-profile-ocr-engine-p95-count`; the duration parser normalizes
+  `total_elapsed_s` to RapidOCR's `total_s`, and count/duration budget failures
+  are printed in the compact latency-budget table. Focused validation passed
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest
+  tests/test_benchmark.py -q` (`80` tests) plus compileall for the touched
+  files. Live Dallas no-catalog repeat-profile smoke with the default runner OCR
+  cache intentionally failed the new budgets as missing OCR p95 work because
+  repeat samples were cache hits (`calls=0`). Re-running the same smoke with
+  `MAP_BOUNDARY_RUNNER_OCR_CACHE=0` passed at
+  `out/repeat-ocr-budget-smoke-dallas-nocache-20260602/full-report.json`:
+  active IoU `0.955`, repeat analyzed samples `2`, repeat p95 duration
+  `0.723560s`, repeat OCR `total_s` p95 `0.416903s`, and repeat
+  `selected_box_count` p95 `7` under the budgets (`total_s=1.0`,
+  `selected_box_count=20`).

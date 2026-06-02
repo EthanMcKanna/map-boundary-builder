@@ -15,6 +15,7 @@ from map_boundary_builder.benchmark import (
     discover_fixtures,
     load_fixture_config,
     parse_georeference_source_requirements,
+    parse_ocr_engine_duration_budgets,
     parse_ocr_engine_count_budgets,
     parse_stage_duration_budgets,
     parse_image_name,
@@ -82,6 +83,27 @@ def test_parse_stage_duration_budgets_rejects_missing_separator() -> None:
         assert "STAGE=SECONDS" in str(exc)
     else:
         raise AssertionError("Expected invalid stage budget to raise ValueError")
+
+
+def test_parse_ocr_engine_duration_budgets_accepts_aliases() -> None:
+    budgets = parse_ocr_engine_duration_budgets(
+        ["det_elapsed_s=0.3,total_elapsed_s=0.7", "rec_elapsed_s=0.4"]
+    )
+
+    assert budgets == {
+        "det_elapsed_s": 0.3,
+        "rec_elapsed_s": 0.4,
+        "total_s": 0.7,
+    }
+
+
+def test_parse_ocr_engine_duration_budgets_rejects_unknown_metrics() -> None:
+    try:
+        parse_ocr_engine_duration_budgets(["ocr=1"])
+    except ValueError as exc:
+        assert "Unknown OCR engine duration metric" in str(exc)
+    else:
+        raise AssertionError("Expected invalid OCR engine duration budget to raise ValueError")
 
 
 def test_parse_ocr_engine_count_budgets_accepts_known_counts() -> None:
@@ -376,6 +398,7 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
     def fake_score_full_fixture(fixture: BenchmarkFixture, **kwargs) -> BenchmarkScore:
         calls.append((fixture.slug, kwargs["execution"], kwargs["score_reference"]))
         duration = next(durations)
+        selected_box_count = int(duration * 10)
         return BenchmarkScore(
             slug=fixture.slug,
             image=fixture.image_path.name,
@@ -393,6 +416,23 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
             road_match_score=0.7,
             road_match_elapsed_s=0.05,
             stage_elapsed_s={"ocr": duration / 2},
+            ocr_engine_profile={
+                "calls": 1,
+                "det_elapsed_s": duration / 4,
+                "rec_elapsed_s": duration / 5,
+                "total_s": duration / 2,
+                "selected_box_count": selected_box_count,
+                "raw_box_count": selected_box_count + 2,
+                "calls_detail": [
+                    {
+                        "det_elapsed_s": duration / 4,
+                        "rec_elapsed_s": duration / 5,
+                        "total_s": duration / 2,
+                        "selected_box_count": selected_box_count,
+                        "raw_box_count": selected_box_count + 2,
+                    }
+                ],
+            },
             status=fixture.status,
             note=fixture.note,
         )
@@ -445,10 +485,75 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
             "max_duration_s": 0.4,
         }
     }
+    assert repeat_profile["summary"]["ocr_engine_profile"] == {
+        "fixtures": 1,
+        "calls": 1,
+        "det_elapsed_s": 0.2,
+        "rec_elapsed_s": 0.16,
+        "total_s": 0.4,
+        "raw_box_count": 10,
+        "selected_box_count": 8,
+    }
+    assert repeat_profile["summary"]["ocr_engine_stage_duration_s"] == {
+        "det_elapsed_s": {
+            "samples": 1,
+            "min_duration_s": 0.2,
+            "median_duration_s": 0.2,
+            "average_duration_s": 0.2,
+            "p90_duration_s": 0.2,
+            "p95_duration_s": 0.2,
+            "max_duration_s": 0.2,
+        },
+        "rec_elapsed_s": {
+            "samples": 1,
+            "min_duration_s": 0.16,
+            "median_duration_s": 0.16,
+            "average_duration_s": 0.16,
+            "p90_duration_s": 0.16,
+            "p95_duration_s": 0.16,
+            "max_duration_s": 0.16,
+        },
+        "total_s": {
+            "samples": 1,
+            "min_duration_s": 0.4,
+            "median_duration_s": 0.4,
+            "average_duration_s": 0.4,
+            "p90_duration_s": 0.4,
+            "p95_duration_s": 0.4,
+            "max_duration_s": 0.4,
+        },
+    }
+    assert repeat_profile["summary"]["ocr_engine_count_metric"] == {
+        "raw_box_count": {
+            "samples": 1,
+            "min_count": 10,
+            "median_count": 10,
+            "average_count": 10,
+            "p90_count": 10,
+            "p95_count": 10,
+            "max_count": 10,
+        },
+        "selected_box_count": {
+            "samples": 1,
+            "min_count": 8,
+            "median_count": 8,
+            "average_count": 8,
+            "p90_count": 8,
+            "p95_count": 8,
+            "max_count": 8,
+        },
+    }
     assert repeat_profile["fixtures"]["phoenix-waymo"]["min_iou"] == 0.99
     assert repeat_profile["fixtures"]["phoenix-waymo"]["signature_stability"]["stable"] is True
     assert repeat_profile["fixtures"]["phoenix-waymo"]["signature_stability"]["unique_signatures"] == 1
     assert repeat_profile["fixtures"]["phoenix-waymo"]["stage_duration_s"]["ocr"]["max_duration_s"] == 0.4
+    assert (
+        repeat_profile["fixtures"]["phoenix-waymo"]["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]
+        == 0.4
+    )
+    assert repeat_profile["fixtures"]["phoenix-waymo"]["ocr_engine_count_metric"]["selected_box_count"][
+        "p95_count"
+    ] == 8
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
 
@@ -2577,6 +2682,30 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
                     "kind": "evaluated_ocr_engine_count_missing",
                     "max_evaluated_ocr_engine_count": 50.0,
                 },
+                {
+                    "metric": "total_s",
+                    "kind": "repeat_profile_ocr_engine_p95_duration_budget_exceeded",
+                    "repeat_profile_ocr_engine_p95_duration_s": 0.71,
+                    "max_repeat_profile_ocr_engine_p95_duration_s": 0.65,
+                    "excess_s": 0.06,
+                },
+                {
+                    "metric": "det_elapsed_s",
+                    "kind": "repeat_profile_ocr_engine_p95_duration_missing",
+                    "max_repeat_profile_ocr_engine_p95_duration_s": 0.3,
+                },
+                {
+                    "metric": "selected_box_count",
+                    "kind": "repeat_profile_ocr_engine_p95_count_budget_exceeded",
+                    "repeat_profile_ocr_engine_p95_count": 31.0,
+                    "max_repeat_profile_ocr_engine_p95_count": 30.0,
+                    "excess_count": 1.0,
+                },
+                {
+                    "metric": "raw_box_count",
+                    "kind": "repeat_profile_ocr_engine_p95_count_missing",
+                    "max_repeat_profile_ocr_engine_p95_count": 50.0,
+                },
             ],
         },
     }
@@ -2588,6 +2717,10 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
     assert "rec_elapsed_s: missing evaluated OCR engine duration" in output
     assert "selected_box_count: evaluated OCR engine count 31.0 > budget 30.0" in output
     assert "raw_box_count: missing evaluated OCR engine count" in output
+    assert "total_s: repeat OCR engine p95 duration 0.710s > budget 0.650s" in output
+    assert "det_elapsed_s: missing repeat OCR engine p95 duration" in output
+    assert "selected_box_count: repeat OCR engine p95 count 31.0 > budget 30.0" in output
+    assert "raw_box_count: missing repeat OCR engine p95 count" in output
 
 
 def test_print_table_reports_georeference_source_requirement_failure(
@@ -2794,6 +2927,13 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
                 "stage_duration_s": {
                     "ocr": {"max_duration_s": 0.72},
                 },
+                "ocr_engine_stage_duration_s": {
+                    "det_elapsed_s": {"p95_duration_s": 0.25},
+                    "total_s": {"p95_duration_s": 0.48},
+                },
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": 28.0},
+                },
             }
         },
     }
@@ -2804,6 +2944,8 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
         max_repeat_profile_median_duration_s=0.8,
         max_repeat_profile_p95_duration_s=1.0,
         max_repeat_profile_stage_duration_s={"ocr": 0.8},
+        max_repeat_profile_ocr_engine_p95_duration_s={"total_s": 0.5},
+        max_repeat_profile_ocr_engine_p95_count={"selected_box_count": 30},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
         fail_on_repeat_profile_signature_drift=True,
@@ -2815,6 +2957,11 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     assert check["repeat_profile_median_duration_s"] == 0.7
     assert check["repeat_profile_p95_duration_s"] == 0.94
     assert check["repeat_profile_stage_duration_s"] == {"ocr": 0.72}
+    assert check["repeat_profile_ocr_engine_p95_duration_s"] == {
+        "det_elapsed_s": 0.25,
+        "total_s": 0.48,
+    }
+    assert check["repeat_profile_ocr_engine_p95_count"] == {"selected_box_count": 28.0}
     assert check["repeat_profile_pass_ratio"] == 1.0
     assert check["repeat_profile_subsecond_ratio"] == 0.75
     assert check["repeat_profile_signature_drift_fixtures"] == []
@@ -2947,6 +3094,74 @@ def test_report_latency_budget_check_flags_repeat_profile_stage_budget_failures(
             "repeat_profile_stage_duration_s": 1.2,
             "max_repeat_profile_stage_duration_s": 1.0,
             "excess_s": 0.2,
+        },
+    ]
+
+
+def test_report_latency_budget_check_flags_repeat_profile_ocr_engine_budget_failures() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [{"slug": "los-angeles-waymo", "status": "active", "duration_s": 0.7}],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {"p95_duration_s": 0.71},
+                },
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": 31.0},
+                },
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_repeat_profile_ocr_engine_p95_duration_s={
+            "det_elapsed_s": 0.3,
+            "total_s": 0.65,
+        },
+        max_repeat_profile_ocr_engine_p95_count={
+            "raw_box_count": 50,
+            "selected_box_count": 30,
+        },
+    )
+
+    assert check["passed"] is False
+    assert check["max_repeat_profile_ocr_engine_p95_duration_s"] == {
+        "det_elapsed_s": 0.3,
+        "total_s": 0.65,
+    }
+    assert check["max_repeat_profile_ocr_engine_p95_count"] == {
+        "raw_box_count": 50.0,
+        "selected_box_count": 30.0,
+    }
+    assert check["repeat_profile_ocr_engine_p95_duration_s"] == {"total_s": 0.71}
+    assert check["repeat_profile_ocr_engine_p95_count"] == {"selected_box_count": 31.0}
+    assert check["issues"] == [
+        {
+            "metric": "det_elapsed_s",
+            "kind": "repeat_profile_ocr_engine_p95_duration_missing",
+            "max_repeat_profile_ocr_engine_p95_duration_s": 0.3,
+        },
+        {
+            "metric": "total_s",
+            "kind": "repeat_profile_ocr_engine_p95_duration_budget_exceeded",
+            "repeat_profile_ocr_engine_p95_duration_s": 0.71,
+            "max_repeat_profile_ocr_engine_p95_duration_s": 0.65,
+            "excess_s": 0.06,
+        },
+        {
+            "metric": "raw_box_count",
+            "kind": "repeat_profile_ocr_engine_p95_count_missing",
+            "max_repeat_profile_ocr_engine_p95_count": 50.0,
+        },
+        {
+            "metric": "selected_box_count",
+            "kind": "repeat_profile_ocr_engine_p95_count_budget_exceeded",
+            "repeat_profile_ocr_engine_p95_count": 31.0,
+            "max_repeat_profile_ocr_engine_p95_count": 30.0,
+            "excess_count": 1.0,
         },
     ]
 

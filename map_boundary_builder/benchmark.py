@@ -332,6 +332,28 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-repeat-profile-ocr-engine-p95-duration-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Optional maximum analyzed repeat-profile OCR engine p95 duration budget. "
+            "Requires --repeat-profile-runs and --profile-ocr-engine data. Repeat or "
+            "comma-separate entries such as total_s=0.7,det_elapsed_s=0.35."
+        ),
+    )
+    parser.add_argument(
+        "--max-repeat-profile-ocr-engine-p95-count",
+        action="append",
+        default=[],
+        metavar="METRIC=COUNT",
+        help=(
+            "Optional maximum analyzed repeat-profile OCR engine p95 count budget. "
+            "Requires --repeat-profile-runs and --profile-ocr-engine data. Repeat or "
+            "comma-separate entries such as selected_box_count=30,raw_box_count=50."
+        ),
+    )
+    parser.add_argument(
         "--min-repeat-profile-pass-ratio",
         type=float,
         default=None,
@@ -559,6 +581,12 @@ def main(argv: list[str] | None = None) -> int:
         max_repeat_profile_stage_duration_s = parse_stage_duration_budgets(
             args.max_repeat_profile_stage_duration_s
         )
+        max_repeat_profile_ocr_engine_p95_duration_s = parse_ocr_engine_duration_budgets(
+            args.max_repeat_profile_ocr_engine_p95_duration_s
+        )
+        max_repeat_profile_ocr_engine_p95_count = parse_ocr_engine_count_budgets(
+            args.max_repeat_profile_ocr_engine_p95_count
+        )
         required_active_georeference_sources = parse_georeference_source_requirements(
             args.require_active_georeference_source
         )
@@ -652,6 +680,8 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_repeat_profile_median_duration_s is not None
         or args.max_repeat_profile_p95_duration_s is not None
         or bool(max_repeat_profile_stage_duration_s)
+        or bool(max_repeat_profile_ocr_engine_p95_duration_s)
+        or bool(max_repeat_profile_ocr_engine_p95_count)
         or args.min_repeat_profile_pass_ratio is not None
         or args.min_repeat_profile_subsecond_ratio is not None
         or args.fail_on_repeat_profile_signature_drift
@@ -669,6 +699,8 @@ def main(argv: list[str] | None = None) -> int:
             max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
             max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
             max_repeat_profile_stage_duration_s=max_repeat_profile_stage_duration_s,
+            max_repeat_profile_ocr_engine_p95_duration_s=max_repeat_profile_ocr_engine_p95_duration_s,
+            max_repeat_profile_ocr_engine_p95_count=max_repeat_profile_ocr_engine_p95_count,
             min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
             min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
             fail_on_repeat_profile_signature_drift=args.fail_on_repeat_profile_signature_drift,
@@ -1079,6 +1111,9 @@ def summarize_repeat_profile_samples(
             **repeat_profile_duration_stats(analyzed_samples),
             **repeat_profile_iou_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+            "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+            "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
+            "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
         },
         "fixtures": fixture_summaries,
         "samples": samples,
@@ -1097,6 +1132,9 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         **repeat_profile_duration_stats(analyzed_samples),
         **repeat_profile_iou_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+        "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+        "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
+        "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
     }
 
 
@@ -1198,6 +1236,90 @@ def repeat_profile_stage_duration_stats(samples: list[dict[str, Any]]) -> dict[s
             **duration_distribution_stats(durations),
         }
         for stage, durations in sorted(stage_durations.items())
+    }
+
+
+def summarize_repeat_profile_ocr_engine(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
+    profiles = [
+        profile
+        for profile in (sample.get("ocr_engine_profile") for sample in samples)
+        if isinstance(profile, dict)
+    ]
+    return summarize_ocr_engine_profile_summaries(profiles)
+
+
+def repeat_profile_ocr_engine_stage_duration_stats(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    durations: dict[str, list[float]] = {}
+    for sample in samples:
+        ocr_engine_profile = sample.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        calls = ocr_engine_profile.get("calls_detail")
+        call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+        if not call_profiles:
+            call_profiles = [ocr_engine_profile]
+        for call in call_profiles:
+            for key in OCR_ENGINE_PROFILE_DURATION_KEYS:
+                duration = parse_report_duration(call.get(key))
+                if duration is None:
+                    continue
+                durations.setdefault(key, []).append(duration)
+    return {
+        key: {
+            "samples": len(values),
+            **duration_distribution_stats(values),
+        }
+        for key, values in sorted(durations.items())
+    }
+
+
+def repeat_profile_ocr_engine_count_stats(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    counts: dict[str, list[float]] = {}
+    for sample in samples:
+        ocr_engine_profile = sample.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        calls = ocr_engine_profile.get("calls_detail")
+        call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+        for call in call_profiles:
+            for key in OCR_ENGINE_PROFILE_COUNT_KEYS:
+                if key in ocr_engine_profile:
+                    continue
+                value = parse_report_count_metric(call.get(key))
+                if value is None:
+                    continue
+                counts.setdefault(key, []).append(value)
+        for key in OCR_ENGINE_PROFILE_COUNT_KEYS:
+            value = parse_report_count_metric(ocr_engine_profile.get(key))
+            if value is None:
+                continue
+            counts.setdefault(key, []).append(value)
+    return {
+        key: {
+            "samples": len(values),
+            **count_distribution_stats(values),
+        }
+        for key, values in sorted(counts.items())
+    }
+
+
+def count_distribution_stats(counts: list[float]) -> dict[str, float | None]:
+    if not counts:
+        return {
+            "min_count": None,
+            "median_count": None,
+            "average_count": None,
+            "p90_count": None,
+            "p95_count": None,
+            "max_count": None,
+        }
+    return {
+        "min_count": round(min(counts), 6),
+        "median_count": round(float(median(counts)), 6),
+        "average_count": round(float(mean(counts)), 6),
+        "p90_count": round(duration_percentile(counts, 90.0), 6),
+        "p95_count": round(duration_percentile(counts, 95.0), 6),
+        "max_count": round(max(counts), 6),
     }
 
 
@@ -1389,6 +1511,37 @@ def parse_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
                 raise ValueError(f"Stage budget seconds must be numeric: {entry}") from exc
             budgets[stage] = max(0.0, value)
     return dict(sorted(budgets.items()))
+
+
+def parse_ocr_engine_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"OCR engine duration budget must use METRIC=SECONDS: {entry}")
+            raw_metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not raw_metric:
+                raise ValueError(f"OCR engine duration budget is missing a metric name: {entry}")
+            metric = normalize_ocr_engine_duration_metric(raw_metric)
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"OCR engine duration budget seconds must be numeric: {entry}") from exc
+            if value < 0.0:
+                raise ValueError(f"OCR engine duration budget seconds must be non-negative: {entry}")
+            budgets[metric] = value
+    return dict(sorted(budgets.items()))
+
+
+def normalize_ocr_engine_duration_metric(metric: str) -> str:
+    normalized = OCR_ENGINE_PROFILE_DURATION_ALIASES.get(metric.strip(), metric.strip())
+    if normalized not in OCR_ENGINE_PROFILE_DURATION_KEYS:
+        expected = ", ".join(OCR_ENGINE_PROFILE_DURATION_KEYS)
+        raise ValueError(f"Unknown OCR engine duration metric {metric!r}; expected one of: {expected}")
+    return normalized
 
 
 def parse_ocr_engine_count_budgets(raw_budgets: list[str]) -> dict[str, float]:
@@ -2130,6 +2283,9 @@ OCR_ENGINE_PROFILE_DURATION_KEYS = (
     "classifier_total_s",
     "total_s",
 )
+OCR_ENGINE_PROFILE_DURATION_ALIASES = {
+    "total_elapsed_s": "total_s",
+}
 OCR_ENGINE_PROFILE_COUNT_KEYS = (
     "raw_box_count",
     "selected_box_count",
@@ -2156,6 +2312,10 @@ def summarize_ocr_engine_profile_events(events: list[dict[str, Any]] | None) -> 
 
 def summarize_ocr_engine_profiles(scores: list[BenchmarkScore]) -> dict[str, Any] | None:
     profiles = [score.ocr_engine_profile for score in scores if score.ocr_engine_profile is not None]
+    return summarize_ocr_engine_profile_summaries(profiles)
+
+
+def summarize_ocr_engine_profile_summaries(profiles: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not profiles:
         return None
     summary: dict[str, Any] = {
@@ -2603,6 +2763,8 @@ def check_report_latency_budgets(
     max_repeat_profile_median_duration_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
     max_repeat_profile_stage_duration_s: dict[str, float] | None = None,
+    max_repeat_profile_ocr_engine_p95_duration_s: dict[str, float] | None = None,
+    max_repeat_profile_ocr_engine_p95_count: dict[str, float] | None = None,
     min_repeat_profile_pass_ratio: float | None = None,
     min_repeat_profile_subsecond_ratio: float | None = None,
     fail_on_repeat_profile_signature_drift: bool = False,
@@ -2652,6 +2814,16 @@ def check_report_latency_budgets(
         for stage, duration in (max_repeat_profile_stage_duration_s or {}).items()
         if stage
     }
+    repeat_profile_ocr_engine_p95_duration_budgets = {
+        metric: max(0.0, float(duration))
+        for metric, duration in (max_repeat_profile_ocr_engine_p95_duration_s or {}).items()
+        if metric
+    }
+    repeat_profile_ocr_engine_p95_count_budgets = {
+        metric: max(0.0, float(count))
+        for metric, count in (max_repeat_profile_ocr_engine_p95_count or {}).items()
+        if metric
+    }
     repeat_profile_pass_ratio_budget = (
         None
         if min_repeat_profile_pass_ratio is None
@@ -2691,6 +2863,12 @@ def check_report_latency_budgets(
         "p95_duration_s",
     )
     repeat_profile_stage_durations = report_repeat_profile_stage_durations(repeat_profile_summary)
+    repeat_profile_ocr_engine_p95_durations = report_repeat_profile_ocr_engine_p95_durations(
+        repeat_profile_summary
+    )
+    repeat_profile_ocr_engine_p95_counts = report_repeat_profile_ocr_engine_p95_counts(
+        repeat_profile_summary
+    )
     repeat_profile_pass_ratio = report_repeat_profile_sample_ratio(
         repeat_profile_summary,
         "passed_samples",
@@ -2827,6 +3005,12 @@ def check_report_latency_budgets(
             repeat_profile_median_duration_budget,
             repeat_profile_p95_duration_budget,
             repeat_profile_stage_budgets if repeat_profile_stage_budgets else None,
+            repeat_profile_ocr_engine_p95_duration_budgets
+            if repeat_profile_ocr_engine_p95_duration_budgets
+            else None,
+            repeat_profile_ocr_engine_p95_count_budgets
+            if repeat_profile_ocr_engine_p95_count_budgets
+            else None,
             repeat_profile_pass_ratio_budget,
             repeat_profile_subsecond_ratio_budget,
         )
@@ -2916,6 +3100,52 @@ def check_report_latency_budgets(
                     "excess_s": round(stage_duration - stage_budget, 6),
                 }
             )
+    for metric, metric_budget in sorted(repeat_profile_ocr_engine_p95_duration_budgets.items()):
+        if not has_repeat_profile_samples:
+            continue
+        metric_duration = repeat_profile_ocr_engine_p95_durations.get(metric)
+        if metric_duration is None:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "repeat_profile_ocr_engine_p95_duration_missing",
+                    "max_repeat_profile_ocr_engine_p95_duration_s": metric_budget,
+                }
+            )
+            continue
+        if metric_duration > metric_budget:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "repeat_profile_ocr_engine_p95_duration_budget_exceeded",
+                    "repeat_profile_ocr_engine_p95_duration_s": round(metric_duration, 6),
+                    "max_repeat_profile_ocr_engine_p95_duration_s": metric_budget,
+                    "excess_s": round(metric_duration - metric_budget, 6),
+                }
+            )
+    for metric, metric_budget in sorted(repeat_profile_ocr_engine_p95_count_budgets.items()):
+        if not has_repeat_profile_samples:
+            continue
+        metric_count = repeat_profile_ocr_engine_p95_counts.get(metric)
+        if metric_count is None:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "repeat_profile_ocr_engine_p95_count_missing",
+                    "max_repeat_profile_ocr_engine_p95_count": metric_budget,
+                }
+            )
+            continue
+        if metric_count > metric_budget:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "repeat_profile_ocr_engine_p95_count_budget_exceeded",
+                    "repeat_profile_ocr_engine_p95_count": round(metric_count, 6),
+                    "max_repeat_profile_ocr_engine_p95_count": metric_budget,
+                    "excess_count": round(metric_count - metric_budget, 6),
+                }
+            )
     if repeat_profile_pass_ratio_budget is not None and has_repeat_profile_samples:
         if repeat_profile_pass_ratio is None:
             issues.append(
@@ -2974,6 +3204,8 @@ def check_report_latency_budgets(
         "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
         "max_repeat_profile_p95_duration_s": repeat_profile_p95_duration_budget,
         "max_repeat_profile_stage_duration_s": repeat_profile_stage_budgets,
+        "max_repeat_profile_ocr_engine_p95_duration_s": repeat_profile_ocr_engine_p95_duration_budgets,
+        "max_repeat_profile_ocr_engine_p95_count": repeat_profile_ocr_engine_p95_count_budgets,
         "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
         "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
         "fail_on_repeat_profile_signature_drift": fail_on_repeat_profile_signature_drift,
@@ -3003,6 +3235,8 @@ def check_report_latency_budgets(
             else None
         ),
         "repeat_profile_stage_duration_s": repeat_profile_stage_durations,
+        "repeat_profile_ocr_engine_p95_duration_s": repeat_profile_ocr_engine_p95_durations,
+        "repeat_profile_ocr_engine_p95_count": repeat_profile_ocr_engine_p95_counts,
         "repeat_profile_pass_ratio": (
             round(repeat_profile_pass_ratio, 6)
             if repeat_profile_pass_ratio is not None
@@ -3142,6 +3376,40 @@ def report_repeat_profile_stage_durations(summary: dict[str, Any] | None) -> dic
     return dict(sorted(stage_durations.items()))
 
 
+def report_repeat_profile_ocr_engine_p95_durations(summary: dict[str, Any] | None) -> dict[str, float]:
+    if summary is None:
+        return {}
+    raw_durations = summary.get("ocr_engine_stage_duration_s")
+    if not isinstance(raw_durations, dict):
+        return {}
+    durations: dict[str, float] = {}
+    for metric, stats in raw_durations.items():
+        if not isinstance(metric, str) or not metric or not isinstance(stats, dict):
+            continue
+        duration = parse_report_duration(stats.get("p95_duration_s"))
+        if duration is None:
+            continue
+        durations[metric] = round(duration, 6)
+    return dict(sorted(durations.items()))
+
+
+def report_repeat_profile_ocr_engine_p95_counts(summary: dict[str, Any] | None) -> dict[str, float]:
+    if summary is None:
+        return {}
+    raw_counts = summary.get("ocr_engine_count_metric")
+    if not isinstance(raw_counts, dict):
+        return {}
+    counts: dict[str, float] = {}
+    for metric, stats in raw_counts.items():
+        if not isinstance(metric, str) or not metric or not isinstance(stats, dict):
+            continue
+        count = parse_report_count_metric(stats.get("p95_count"))
+        if count is None:
+            continue
+        counts[metric] = round(count, 6)
+    return dict(sorted(counts.items()))
+
+
 def report_repeat_profile_sample_ratio(summary: dict[str, Any] | None, key: str) -> float | None:
     analyzed_samples = repeat_profile_analyzed_sample_count(summary)
     if summary is None or analyzed_samples <= 0:
@@ -3216,6 +3484,16 @@ def parse_report_label_count(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return label_count if label_count >= 0 else None
+
+
+def parse_report_count_metric(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        count = float(value)
+    except (TypeError, ValueError):
+        return None
+    return count if count >= 0.0 else None
 
 
 def normalized_report_label_set(value: Any) -> set[str]:
@@ -3499,6 +3777,24 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 )
             elif issue["kind"] == "repeat_profile_p95_duration_missing":
                 print("       missing repeat profile p95 duration")
+            elif issue["kind"] == "repeat_profile_ocr_engine_p95_duration_budget_exceeded":
+                print(
+                    f"       {issue['metric']}: repeat OCR engine p95 duration "
+                    f"{issue['repeat_profile_ocr_engine_p95_duration_s']:.3f}s "
+                    f"> budget {issue['max_repeat_profile_ocr_engine_p95_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "repeat_profile_ocr_engine_p95_duration_missing":
+                print(f"       {issue['metric']}: missing repeat OCR engine p95 duration")
+            elif issue["kind"] == "repeat_profile_ocr_engine_p95_count_budget_exceeded":
+                print(
+                    f"       {issue['metric']}: repeat OCR engine p95 count "
+                    f"{issue['repeat_profile_ocr_engine_p95_count']:.1f} "
+                    f"> budget {issue['max_repeat_profile_ocr_engine_p95_count']:.1f} "
+                    f"(+{issue['excess_count']:.1f})"
+                )
+            elif issue["kind"] == "repeat_profile_ocr_engine_p95_count_missing":
+                print(f"       {issue['metric']}: missing repeat OCR engine p95 count")
             elif issue["kind"] == "repeat_profile_signature_drift":
                 fixtures = ", ".join(issue.get("unstable_signature_fixtures", []))
                 print(f"       repeat profile signature drift: {fixtures}")
