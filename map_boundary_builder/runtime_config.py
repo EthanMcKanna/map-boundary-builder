@@ -266,6 +266,53 @@ def rapidocr_warm_engine_keys_config() -> list[list[int | str]]:
     return keys
 
 
+def rapidocr_generic_warm_sample_side_config() -> int:
+    warm_side = RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION
+    if warm_side <= 0:
+        warm_side = RAPIDOCR_MAX_DIMENSION
+    if warm_side <= 0:
+        warm_side = 1600
+    return bounded_rapidocr_warm_sample_side(warm_side)
+
+
+def rapidocr_bright_blue_large_warm_sample_side_config() -> int:
+    if RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION <= 0:
+        return 0
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+        return 0
+    warm_side = bounded_rapidocr_warm_sample_side(RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION)
+    if warm_side <= rapidocr_generic_warm_sample_side_config():
+        return 0
+    return warm_side
+
+
+def rapidocr_bright_blue_warm_key_config() -> list[int | str]:
+    return [
+        RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+        normalized_rapidocr_recognition_profile(RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE),
+        normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE),
+        RAPIDOCR_REC_BATCH_NUM,
+    ]
+
+
+def rapidocr_warm_engine_sample_plan_config() -> list[list[int | str]]:
+    generic_side = rapidocr_generic_warm_sample_side_config()
+    bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side_config()
+    bright_blue_key = rapidocr_bright_blue_warm_key_config()
+    plan: list[list[int | str]] = []
+    for key in rapidocr_warm_engine_keys_config():
+        if bright_blue_warm_side > 0 and key == bright_blue_key:
+            continue
+        plan.append([*key, generic_side])
+    if bright_blue_warm_side > 0:
+        plan.append([*bright_blue_key, bright_blue_warm_side])
+    return plan
+
+
+def bounded_rapidocr_warm_sample_side(warm_side: int) -> int:
+    return max(384, min(1600, int(warm_side)))
+
+
 def normalized_rapidocr_detector_limit_type(value: str | None = None) -> str:
     normalized = (value or "").strip().lower()
     if normalized in {"max", "min"}:
@@ -362,6 +409,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
         "rapidocr_warm_detector_limits": rapidocr_warm_detector_limits(),
         "rapidocr_warm_engine_keys": rapidocr_warm_engine_keys_config(),
+        "rapidocr_warm_engine_sample_plan": rapidocr_warm_engine_sample_plan_config(),
         "rapidocr_warm_sample_max_dimension": RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION,
         "rapidocr_native_array_min_dimension": RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
         "onnxruntime_enable_cpu_mem_arena": ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,

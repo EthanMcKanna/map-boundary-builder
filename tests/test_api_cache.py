@@ -1317,6 +1317,14 @@ class ApiRunCacheTests(unittest.TestCase):
                 [608, "default", "default", 16],
             ],
         )
+        self.assertEqual(
+            cold["ocr"]["rapidocr_warm_engine_sample_plan"],
+            [
+                [608, "default", "default", 12, 608],
+                [608, "default", "default", 16, 608],
+                [256, "en-ppocrv5", "max", 12, 1400],
+            ],
+        )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)
         self.assertFalse(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])
         self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])

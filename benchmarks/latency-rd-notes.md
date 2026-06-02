@@ -13992,3 +13992,18 @@ with zero failures in 0.531s.
   cases. Compared with the just-landed large bright-blue warm gate, this
   reduces health/runtime prewarm by roughly `0.32s` (`1.256s -> 0.932s`) while
   keeping first generation and OCR tails below the same strict budgets.
+- Added `runtime_config.ocr.rapidocr_warm_engine_sample_plan` to benchmark and
+  stress reports so the saved runtime config now records the actual warmup
+  shape plan, not only the set of RapidOCR engine keys. This matters after the
+  redundant small bright-blue warm was removed: `rapidocr_warm_engine_keys`
+  still lists the bright-blue engine, while the real warm plan shows generic
+  default and dark-teal engines at `608px` and the bright-blue
+  `256/max/en-ppocrv5` engine at `1400px`. Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_ocr_georeference.py
+  tests/test_api_cache.py tests/test_stress_benchmark.py` (`267` tests). The
+  runtime-config stress smoke
+  `out/warm-plan-runtime-config-smoke-20260602/stress-summary.json` passed
+  `2/2` hard bright-blue cases and recorded the plan as
+  `[[608,"default","default",12,608],[608,"default","default",16,608],
+  [256,"en-ppocrv5","max",12,1400]]`, making future prewarm regressions easier
+  to reproduce from a saved report.
