@@ -219,6 +219,39 @@
       }
     },
     {
+      "slug": "miami-waymo-direct-svg",
+      "image": "/Users/ethanmckanna/Downloads/mi.svg",
+      "no_catalog": false,
+      "filename_hint": "upload.svg",
+      "source_was_svg": true,
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match:provider-ui-label",
+        "city_equals": "Miami",
+        "min_ocr_labels": 8,
+        "min_combined_confidence": 0.70,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "austin-waymo-direct-svg",
+      "image": "/Users/ethanmckanna/Downloads/aymo austin.svg",
+      "no_catalog": false,
+      "filename_hint": "upload.svg",
+      "source_was_svg": true,
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Austin",
+        "min_combined_confidence": 0.95,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-97.8914452, 30.1144685, -97.6579857, 30.4108558],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "houston-waymo-svg",
       "image": "/Users/ethanmckanna/Downloads/h-waymo.svg",
       "no_catalog": false,

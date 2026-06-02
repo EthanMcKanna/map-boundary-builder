@@ -15343,3 +15343,41 @@ with zero failures in 0.531s.
   `0.746377s`, repeat `60/60` subsecond, repeat p95 `0.537073s`, repeat max
   `0.578689s`, and no existing 29 row signature changes versus
   `out/roadcache3m-default-full29-hard-20260602/stress-summary.json`.
+- Rechecked the bright-blue road-feature precompute toggle after the
+  30-fixture hard gate. Disabling `MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES` on
+  the five current bright-blue tail rows preserved signatures but failed the
+  primary latency budget at
+  `out/precompute-off-slow5-20260602/stress-summary.json`: Bay Area reached
+  `1.009513s`, with stage maxes `extract=0.384s` and `ocr=0.557s`. The matched
+  precompute-on control at
+  `out/precompute-on-slow5-control-20260602/stress-summary.json` passed `5/5`
+  with primary max `0.800129s`, repeat p95 `0.534s`, and Nashville still on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`. Keep speculative
+  road-feature precompute enabled.
+- Added two direct-SVG stress rows after inventorying local untracked downloads
+  against the manifest by SHA-256. `mi.svg` is a distinct direct SVG for the
+  previously debugged Miami SVG upload path; it exercises the SVG
+  provider-label catalog route rather than the disguised rasterized-SVG row.
+  `/Users/ethanmckanna/Downloads/aymo austin.svg` is a distinct direct Austin
+  SVG that completes through the zero-OCR catalog shape path. The focused
+  candidate inventory at `out/svg-candidate-inventory-20260602/stress-summary.json`
+  passed Miami at `0.910347s` with source
+  `catalog-shape-match:provider-ui-label`, 10 provider labels, confidence
+  `0.72`, and bbox `[-80.3461737, 25.6799742, -80.1149101, 25.976257]`;
+  Austin passed at `0.065294s` with source `catalog-shape-match`, confidence
+  `0.973976`, and bbox
+  `[-97.8914452, 30.1144685, -97.6579857, 30.4108558]`. The same probe
+  rejected the duplicate Bay Area SVG pair (`bay 3.svg` /
+  `b09a52237f541016cbc9a33f530c26d471f4e9c3.svg`) for now: it completed but
+  took `2.166194s`, with `1.630367s` spent in SVG inspection. The temporary
+  expanded hard gate at
+  `out/svg-candidates-full32-hard-20260602/stress-summary.json` passed `32/32`
+  expected rows, statuses `{"complete":21,"failed":11}`, primary max
+  `0.933225s`, repeat `32/32` subsecond, repeat p95 `0.573s`, repeat max
+  `0.733s`, and no repeat signature drift. After adding the rows to the
+  tracked manifest, the actual hard gate at
+  `out/direct-svg-full32-hard-20260602/stress-summary.json` passed `32/32`,
+  primary max `0.851713s`, repeat `32/32` subsecond, repeat p95 `0.573s`,
+  repeat max `0.821s`, and no repeat signature drift; all 30 pre-existing row
+  signatures were unchanged versus
+  `out/avride-webp-full30-hard-20260602/stress-summary.json`.
