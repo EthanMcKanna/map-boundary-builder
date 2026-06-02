@@ -12737,3 +12737,23 @@ with zero failures in 0.531s.
   `4/4` analyzed repeat expectations, `4/4` subsecond repeats, stable
   signatures, total repeat p95 `0.855098s`, recognizer p95 `0.587147s`, and
   RapidOCR total p95 `0.745907s`, with no latency-budget violations.
+- Rejected dark-teal-only PP-OCRv5 recognition after the new stress p95 gates
+  made the speed/correctness tradeoff explicit. A same-session default
+  dark-teal control over Ann Arbor May Mobility, Grand Rapids May Mobility,
+  both Zoox Las Vegas mobile fail-closed screenshots, and Zoox SF
+  (`out/darkteal-current-ppocrv5-control-20260602/stress-summary.json`)
+  preserved `5/5` primary expectations and `10/10` analyzed repeat
+  expectations, kept all repeats subsecond, and passed the total/OCR-engine p95
+  budgets with repeat total p95 `0.844321s`, recognizer p95 `0.584250s`, and
+  RapidOCR total p95 `0.735430s`. A runtime monkeypatch that returned
+  `en-ppocrv5` only for `dark-teal` runner OCR
+  (`out/darkteal-ppocrv5-profile-candidate-20260602/stress-summary.json`)
+  did make OCR a little faster, with repeat total p95 `0.797s`, recognizer p95
+  `0.514s`, and RapidOCR total p95 `0.683s`, but it failed correctness:
+  primary expectations dropped to `3/5`, analyzed repeat expectations to
+  `6/10`, Grand Rapids consistently produced only 4 controls instead of the
+  required 5, and Zoox tall consistently failed with the generic
+  OCR/geocoded-label error instead of the expected sparse-OCR fail-closed
+  message. Keep PP-OCRv5 scoped to the accepted bright-blue path; the dark-teal
+  default recognizer remains necessary for stable Grand Rapids control support
+  and Zoox sparse-failure semantics.
