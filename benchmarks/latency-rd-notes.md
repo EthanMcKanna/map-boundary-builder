@@ -12238,3 +12238,28 @@ with zero failures in 0.531s.
   `1.326393s`, confirming the flag keeps fresh OCR cost visible. This is the
   current best measurement lane for arbitrary unseen screenshots on a warm
   instance.
+- Rejected dark-teal full-image OCR max-dimension and detector-limit trimming
+  after target no-cache stress probes on Ann Arbor May Mobility, Grand Rapids
+  May Mobility, both Zoox Las Vegas portrait fail-closed screenshots, and Zoox
+  SF. The current-control target
+  `out/darkteal-current-nocache-target-20260602/stress-summary.json`
+  preserved `5/5` expectations with statuses `{"complete": 3, "failed": 2}`,
+  primary max `1.882320s`, OCR total `6.179046s`, and OCR-engine totals
+  `det_elapsed_s=1.986301s`, `rec_elapsed_s=3.881911s`. A global
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1400` candidate was slower and failed
+  the strict expectation check because Zoox tall no longer produced the
+  expected sparse-OCR failure text: `4/5` expected, primary max `3.057419s`,
+  OCR total `7.611784s`, engine totals `det=2.102507s` and `rec=5.606670s`
+  (`out/darkteal-maxdim1400-nocache-target-20260602/stress-summary.json`).
+  A more aggressive 1200px max-dimension probe with provider UI cap kept below
+  the global cap made Zoox SF faster, but dropped Grand Rapids from 5 to 4
+  controls and Zoox SF from 17 to 8 controls, so only `3/5` expectations
+  passed and OCR still rose to `7.946s`
+  (`out/darkteal-maxdim1200-provider900-nocache-target-20260602/stress-summary.json`).
+  Lowering the generic dark-teal detector path to `512` preserved all
+  expectations but was decisively slower, with primary max `3.801887s`, OCR
+  total `10.433374s`, engine totals `det=2.872589s` and `rec=7.461262s`
+  (`out/darkteal-det512-nocache-target-20260602/stress-summary.json`). Leave
+  dark-teal full-image OCR at the accepted defaults; the reliable path remains
+  fixture/expectation hardening plus narrow focused OCR where the existing
+  guards prove city/control stability.
