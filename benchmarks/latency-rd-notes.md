@@ -13586,3 +13586,28 @@ with zero failures in 0.531s.
   `48/48` subsecond repeats, primary max `0.860066s`, repeat median `0.353s`,
   repeat p95 `0.519s`, repeat max `0.577s`, RapidOCR engine total p95
   `0.456s`, detector p95 `0.247s`, and recognizer p95 `0.226s`.
+- Accepted a narrower focused dark-teal OCR detector limit after probing the
+  remaining focused path rather than broad OCR defaults. The scoped sweep over
+  Ann Arbor, Grand Rapids, both Zoox Las Vegas fail-closed screenshots, and
+  Zoox SF rejected `352` because Ann Arbor fell into a slow failed retry
+  (`4/5` expectations, primary max `11.294553s`, repeat p95 `1.189s`) and
+  rejected `320` as too noisy to improve over default (`5/5`, repeat p95
+  `0.418s`, repeat OCR total p95 `0.374s`). The accepted
+  `MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN=384` candidate preserved
+  `5/5` focused expectations, stable signatures, and the expected two sparse
+  Las Vegas failures while improving the focused repeat profile from the
+  default `0.410s` p95 / `0.377s` OCR-total p95 to `0.380s` p95 / `0.345s`
+  OCR-total p95. The full hard candidate
+  `out/focus-detlimit384-full16-hard-candidate-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.816444s`, repeat median `0.342s`,
+  repeat p95 `0.538s`, repeat max `0.603s`, RapidOCR total p95 `0.472s`,
+  detector p95 `0.243s`, and recognizer p95 `0.236s`. After changing the
+  shipped default to `384`, the actual-code hard gate
+  `out/focus-detlimit384-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.885088s`, repeat median `0.355s`,
+  repeat p95 `0.545s`, repeat max `0.575s`, RapidOCR total p95 `0.479s`,
+  detector p95 `0.251s`, and recognizer p95 `0.237s`.

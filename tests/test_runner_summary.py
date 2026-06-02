@@ -307,7 +307,7 @@ def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     assert not runner.focus_georef_ocr_enabled(gray_fill, rgb=rgb, city_input=None)
     assert runner.focus_georef_ocr_max_dimension_for_style("dark-teal") == 550
     assert runner.focus_georef_ocr_max_dimension_for_style("gray-fill") is None
-    assert runner.focus_georef_ocr_detector_limit_for_style("dark-teal") == 416
+    assert runner.focus_georef_ocr_detector_limit_for_style("dark-teal") == 384
     assert runner.focus_georef_ocr_detector_limit_for_style("gray-fill") is None
     assert runner.focus_georef_ocr_min_text_area_for_style("dark-teal") == 500.0
     assert runner.focus_georef_ocr_min_text_area_for_style("gray-fill") == 1500.0
@@ -391,7 +391,7 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
         return [OcrLabel("Ann Arbor", x=10, y=20, width=80, height=20, confidence=95)]
 
     monkeypatch.setattr(runner, "FOCUS_GEOREF_OCR_MAX_DIMENSION", 550)
-    monkeypatch.setattr(runner, "FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN", 416)
+    monkeypatch.setattr(runner, "FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN", 384)
     monkeypatch.setattr(runner, "FOCUS_GEOREF_OCR_MIN_TEXT_AREA", 500.0)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
 
@@ -404,7 +404,7 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
         "kwargs": {
             "allow_tesseract_fallback": False,
             "cache": True,
-            "rapidocr_detector_limit_side_len": 416,
+            "rapidocr_detector_limit_side_len": 384,
             "rapidocr_max_dimension": 550,
             "rapidocr_min_text_area": 500.0,
             "rapidocr_rec_batch_num": 16,
