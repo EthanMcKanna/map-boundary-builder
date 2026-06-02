@@ -47,6 +47,7 @@ EXTRACTION_DISK_CACHE_ENABLED = os.environ.get("MAP_BOUNDARY_EXTRACTION_DISK_CAC
     "true",
     "yes",
 }
+EXTRACTION_CACHE_ENV = "MAP_BOUNDARY_EXTRACTION_CACHE"
 EXTRACTION_CACHE_DEPENDENCY_PACKAGES = (
     "numpy",
     "opencv-python",
@@ -158,6 +159,7 @@ def extract_service_area(
         rgb = load_rgb(image_path)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
+    cache = cache and extraction_cache_enabled()
     canonical_key: str | None = None
     canonical_origin = (0.0, 0.0)
     if cache:
@@ -227,6 +229,13 @@ def extract_service_area(
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
     return result
+
+
+def extraction_cache_enabled() -> bool:
+    value = os.environ.get(EXTRACTION_CACHE_ENV)
+    if value is not None:
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return True
 
 
 def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:

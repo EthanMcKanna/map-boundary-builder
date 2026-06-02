@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import map_boundary_builder.stress_benchmark as stress_module
+from map_boundary_builder.extract import EXTRACTION_CACHE_ENV
 from map_boundary_builder.runner import RUNNER_OCR_CACHE_ENV
 
 
@@ -229,6 +230,50 @@ def test_run_stress_case_can_disable_runner_ocr_cache_for_subprocess(tmp_path, m
     assert row["runner_ocr_cache"] is False
 
 
+def test_run_stress_case_can_disable_extraction_cache_for_subprocess(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+
+    def fake_run(command, *, text, capture_output, timeout, check, env):
+        assert env[EXTRACTION_CACHE_ENV] == "0"
+        assert EXTRACTION_CACHE_ENV not in os.environ
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "city": "Houston",
+                    "georeference_source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "event_profile": {"total_elapsed_s": 0.6},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(stress_module.subprocess, "run", fake_run)
+
+    row = stress_module.run_stress_case(
+        {
+            "slug": "houston",
+            "image": str(image),
+            "expect": {
+                "status": "complete",
+                "source_prefix": "ocr-georeference:",
+                "min_control_points": 5,
+            },
+        },
+        tmp_path / "out",
+        timeout_seconds=5,
+        write_debug=False,
+        extraction_cache=False,
+        python_executable="python",
+    )
+
+    assert row["expectation_passed"] is True
+    assert row["extraction_cache"] is False
+
+
 def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")
@@ -418,11 +463,13 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
         write_debug,
         profile_ocr_engine,
         runner_ocr_cache,
+        extraction_cache,
         execution,
         python_executable,
     ):
         assert profile_ocr_engine is False
         assert runner_ocr_cache is True
+        assert extraction_cache is True
         assert execution == "subprocess"
         return {
             "slug": case["slug"],
@@ -484,10 +531,12 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         write_debug,
         profile_ocr_engine,
         runner_ocr_cache,
+        extraction_cache,
         execution,
         python_executable,
     ):
         assert runner_ocr_cache is True
+        assert extraction_cache is True
         assert execution == "subprocess"
         calls.append((case["slug"], out_dir.name, timeout_seconds, write_debug, profile_ocr_engine))
         duration = next(durations)
@@ -621,6 +670,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
 
     def fake_build_boundary(image_path, city, output_path, *, debug_dir, options, progress):
         assert os.environ[RUNNER_OCR_CACHE_ENV] == "0"
+        assert os.environ[EXTRACTION_CACHE_ENV] == "0"
         calls.append(
             {
                 "image_path": image_path,
@@ -668,14 +718,17 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
         tmp_path / "out",
         execution="in-process",
         runner_ocr_cache=False,
+        extraction_cache=False,
         python_executable="python",
     )
 
     row = report["rows"][0]
     assert report["execution"] == "in-process"
     assert report["runner_ocr_cache"] is False
+    assert report["extraction_cache"] is False
     assert row["execution"] == "in-process"
     assert row["runner_ocr_cache"] is False
+    assert row["extraction_cache"] is False
     assert row["expectation_passed"] is True
     assert row["observed_status"] == "complete"
     assert row["source"] == "ocr-georeference:nominatim-label-fit"

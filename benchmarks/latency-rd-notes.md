@@ -12283,3 +12283,25 @@ with zero failures in 0.531s.
   Bay Area detector max `0.726704s`, Zoox tall recognizer max `1.068915s`,
   and Zoox tall total max `1.393367s`. This is harness/reliability progress,
   not a runtime speed claim.
+- Accepted explicit extraction-cache control in the stress harness after the
+  no-cache OCR repeat profiles exposed an ambiguity: `--disable-ocr-cache`
+  keeps OCR fresh, but in-process repeat samples could still reuse extraction
+  memory caches. `MAP_BOUNDARY_EXTRACTION_CACHE=0` now disables extraction
+  cache reads/writes at call time, and the stress runner exposes it through
+  `--disable-extraction-cache`, records `extraction_cache=false`, includes the
+  flag in in-process command summaries, and applies it to subprocess and
+  in-process runs alongside the existing OCR cache control. Focused stress
+  tests cover both subprocess and in-process cache-disabling paths. The strict
+  fresh-cache full stress proof
+  `out/stress-inprocess-fresh-cache-disabled-full-20260602/stress-summary.json`
+  disabled both OCR and extraction caches, preserved `12/12` expectations with
+  statuses `{"complete": 10, "failed": 2}`, and made every primary row
+  subsecond: primary max `0.967819s`, OCR max `0.848301s` on
+  `zoox-las-vegas-mobile-tall`, extraction max `0.225839s` on
+  `bay-area-waymo`, and no full-detail OCR retries. The stricter repeat
+  profile kept paying both extraction and OCR cost on every analyzed sample and
+  still passed `24/24`, with `24/24` subsecond, median `0.565818s`, average
+  `0.573070s`, max `0.900717s`, extraction median/max
+  `0.120945s`/`0.200528s`, and OCR median/max `0.407988s`/`0.783848s`.
+  This is the current cleanest local warm-instance arbitrary-screenshot
+  latency proof.

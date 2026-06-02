@@ -1,4 +1,5 @@
 import unittest
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -10,6 +11,7 @@ import map_boundary_builder.extract as extract_module
 from map_boundary_builder.extract import (
     _EXTRACTION_MEMORY_CACHE,
     _SCALED_EXTRACTION_MEMORY_CACHE,
+    EXTRACTION_CACHE_ENV,
     extract_service_area,
     extraction_cache_dependency_signature,
     classify_style,
@@ -218,6 +220,27 @@ class MaskRepairTests(unittest.TestCase):
                     ) as wrapped:
                         extract_service_area("base.png", rgb=base)
                         extract_service_area("base.png", rgb=base, cache=False)
+                finally:
+                    _EXTRACTION_MEMORY_CACHE.clear()
+
+        self.assertEqual(wrapped.call_count, 2)
+
+    def test_extraction_cache_env_bypasses_memory_cache(self) -> None:
+        base = np.full((80, 100, 3), 255, dtype=np.uint8)
+        base[24:58, 30:74] = (46, 119, 246)
+
+        with TemporaryDirectory() as workdir:
+            with patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)):
+                _EXTRACTION_MEMORY_CACHE.clear()
+                try:
+                    with patch.object(
+                        extract_module,
+                        "extract_service_area_from_rgb",
+                        wraps=extract_module.extract_service_area_from_rgb,
+                    ) as wrapped:
+                        extract_service_area("base.png", rgb=base)
+                        with patch.dict(os.environ, {EXTRACTION_CACHE_ENV: "0"}):
+                            extract_service_area("base.png", rgb=base)
                 finally:
                     _EXTRACTION_MEMORY_CACHE.clear()
 
