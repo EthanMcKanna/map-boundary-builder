@@ -14463,3 +14463,27 @@ with zero failures in 0.531s.
   `14` controls, `96` OCR labels, `41` raw boxes, `34` selected boxes, repeat
   p95 `0.732s`, and no signature drift, so the SVG OCR dimension must remain
   `1600` for this Austin source-hint guard.
+- Rejected lowering the default road-refine sample cap from `4000` to `3800`.
+  Focused Nashville sweeps initially made the change look plausible:
+  `out/nashville-roadpoints-sweep-20260602` rejected `1000`/`1500`/`2000`
+  because they lost the expected complete road-refined result, rejected `3000`
+  because the locked bbox missed by `1148.6m`, rejected `6000` for bbox and
+  latency regressions, and kept `4000` as passing. The fine sweep
+  `out/nashville-roadpoints-fine-20260602` still rejected `3200`, while
+  `3400`/`3600`/`3800`/`4000` preserved the locked Nashville source and bbox;
+  `3800` had repeat p95 `0.774s` versus `0.791s` for `4000` in that narrow
+  run. A full hard 16-case actual-code gate with the `3800` default also passed
+  at `out/roadpoints3800-full16-hard-actual-20260602`: `16/16` expectations,
+  statuses `{"complete":14,"failed":2}`, primary max `0.823s`, `32/32`
+  analyzed repeats subsecond, repeat p95 `0.762s`, repeat max `0.838s`, stable
+  signatures, and zero low-confidence OCR labels. The broader no-catalog
+  current-reference benchmark did not justify shipping it, though:
+  `out/roadpoints3800-full-benchmark-actual-20260602/full-report.json` and the
+  control rerun
+  `out/roadpoints4000-benchmark-control-20260602/full-report.json` produced
+  identical active IoUs and sources, both failed the older strict-IoU baseline
+  for unrelated current OCR/georeference drift, and `3800` was slightly slower
+  than the `4000` control on active/evaluated totals (`5.816s`/`8.753s` versus
+  `5.781s`/`8.630s`) with a slower active road-match total (`0.265s` versus
+  `0.256s`). Keep `MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=4000` until a lower cap
+  shows a repeatable advantage across both stress and full benchmark lanes.
