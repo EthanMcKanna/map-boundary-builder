@@ -249,6 +249,30 @@ def test_benchmark_score_reports_ocr_label_summary() -> None:
     assert row["ocr_label_event"] == "Full-detail map labels read"
 
 
+def test_benchmark_score_reports_ocr_engine_profile() -> None:
+    profile = {
+        "calls": 1,
+        "det_elapsed_s": 0.42,
+        "rec_elapsed_s": 0.18,
+        "raw_box_count": 26,
+        "selected_box_count": 14,
+    }
+    row = BenchmarkScore(
+        slug="nashville-waymo",
+        image="Waymo Nashville.png",
+        mode="full",
+        passed=True,
+        iou=0.95,
+        area_ratio=1.0,
+        centroid_distance_m=0.0,
+        vertices=42,
+        style="bright-blue",
+        ocr_engine_profile=profile,
+    ).as_dict()
+
+    assert row["ocr_engine_profile"] == profile
+
+
 def test_ocr_label_summary_from_events_uses_last_ocr_label_read() -> None:
     summary = benchmark_module.ocr_label_summary_from_events(
         [
@@ -274,6 +298,56 @@ def test_ocr_label_summary_from_events_uses_last_ocr_label_read() -> None:
         "ocr_label_count": 12,
         "ocr_top_labels": ["Miami", "Aventura"],
         "ocr_label_event": "Full-detail map labels read",
+    }
+
+
+def test_summarize_ocr_engine_profiles_totals_fixture_calls() -> None:
+    scores = [
+        BenchmarkScore(
+            slug="dallas-waymo",
+            image="Waymo Dallas.png",
+            mode="full",
+            passed=True,
+            iou=0.96,
+            area_ratio=1.0,
+            centroid_distance_m=0.0,
+            vertices=42,
+            style="bright-blue",
+            ocr_engine_profile={
+                "calls": 1,
+                "det_elapsed_s": 0.63,
+                "rec_elapsed_s": 0.09,
+                "raw_box_count": 17,
+                "selected_box_count": 9,
+            },
+        ),
+        BenchmarkScore(
+            slug="phoenix-waymo",
+            image="Waymo Phoenix.png",
+            mode="full",
+            passed=True,
+            iou=0.98,
+            area_ratio=1.0,
+            centroid_distance_m=0.0,
+            vertices=42,
+            style="bright-blue",
+            ocr_engine_profile={
+                "calls": 1,
+                "det_elapsed_s": 0.33,
+                "rec_elapsed_s": 0.36,
+                "raw_box_count": 85,
+                "selected_box_count": 44,
+            },
+        ),
+    ]
+
+    assert benchmark_module.summarize_ocr_engine_profiles(scores) == {
+        "fixtures": 2,
+        "calls": 2,
+        "det_elapsed_s": 0.96,
+        "rec_elapsed_s": 0.45,
+        "raw_box_count": 102,
+        "selected_box_count": 53,
     }
 
 
@@ -341,6 +415,7 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "ocr_label_count": None,
             "ocr_top_labels": None,
             "ocr_label_event": None,
+            "ocr_engine_profile": None,
             "error": None,
             "status": "reference_mismatch",
             "note": "changed live service area",
@@ -2172,6 +2247,113 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
             "write_mask_artifact": False,
         }
     ]
+
+
+def test_in_process_full_fixture_can_record_ocr_engine_profile(tmp_path: Path, monkeypatch) -> None:
+    polygon = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-112.0, 33.0],
+                            [-111.0, 33.0],
+                            [-111.0, 34.0],
+                            [-112.0, 33.0],
+                        ]
+                    ],
+                },
+            }
+        ],
+    }
+    image_path = tmp_path / "Waymo Phoenix.png"
+    reference_path = tmp_path / "phoenix-waymo.json"
+    image_path.write_bytes(b"unused by patched runner")
+    reference_path.write_text(json.dumps(polygon) + "\n")
+    fixture = BenchmarkFixture(
+        slug="phoenix-waymo",
+        provider="waymo",
+        area="Phoenix",
+        image_path=image_path,
+        reference_path=reference_path,
+    )
+
+    class FakeRapidOcrProfileContext:
+        def __enter__(self):
+            self.events = [
+                {
+                    "det_elapsed_s": 0.32,
+                    "rec_elapsed_s": 0.21,
+                    "raw_box_count": 30,
+                    "selected_box_count": 18,
+                    "label_count": 16,
+                }
+            ]
+            return self.events
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_collect_rapidocr_profiles():
+        return FakeRapidOcrProfileContext()
+
+    def fake_build_boundary(_image, _city, _output_path, *, debug_dir, options, progress):
+        progress(
+            {
+                "stage": "ocr",
+                "message": "Map labels read",
+                "percent": 47,
+                "status": "running",
+                "details": {"label_count": 16, "top_labels": ["Phoenix"]},
+            }
+        )
+        return SimpleNamespace(
+            geojson=polygon,
+            summary={
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "combined_confidence": 0.96,
+                "catalog_slug": None,
+            },
+        )
+
+    monkeypatch.setattr("map_boundary_builder.ocr.collect_rapidocr_profiles", fake_collect_rapidocr_profiles)
+    monkeypatch.setattr("map_boundary_builder.runner.build_boundary", fake_build_boundary)
+
+    score = score_full_fixture_in_process(
+        fixture,
+        output_path=tmp_path / "out" / "boundary.geojson",
+        debug_dir=None,
+        min_iou=0.99,
+        city_overrides=False,
+        no_catalog=True,
+        catalog_probe_missed=False,
+        debug_artifacts=False,
+        profile_ocr_engine=True,
+    )
+
+    assert score.passed is True
+    assert score.ocr_engine_profile == {
+        "calls": 1,
+        "det_elapsed_s": 0.32,
+        "rec_elapsed_s": 0.21,
+        "raw_box_count": 30,
+        "selected_box_count": 18,
+        "label_count": 16,
+        "calls_detail": [
+            {
+                "det_elapsed_s": 0.32,
+                "rec_elapsed_s": 0.21,
+                "raw_box_count": 30,
+                "selected_box_count": 18,
+                "label_count": 16,
+            }
+        ],
+    }
 
 
 def test_in_process_full_fixture_can_use_neutral_filename_hint(tmp_path: Path, monkeypatch) -> None:

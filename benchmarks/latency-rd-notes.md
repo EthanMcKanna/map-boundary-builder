@@ -11667,3 +11667,27 @@ with zero failures in 0.531s.
   a very narrow market/style trigger; simple lower detector caps, recognition
   caps/batches, global max-side trims, and native-array I/O cleanups have all
   already been ruled out or accepted where safe.
+- Accepted a benchmark-only OCR engine profile flag so future speed probes can
+  record the same detector/recognizer evidence without a throwaway scratch
+  script. `--profile-ocr-engine` is deliberately restricted to full,
+  in-process benchmarks and leaves normal production API/CLI generation on the
+  existing unprofiled path; when enabled it records per-fixture RapidOCR call
+  counts, detector and recognizer elapsed times, raw/selected text-box counts,
+  and compact per-call details in each score plus active/evaluated report
+  summaries. A fresh active no-catalog benchmark with the flag passed the
+  strict OCR-label baseline comparison with `8/8` scored fixtures, average IoU
+  `0.967842`, min IoU `0.942536`, active total `5.594146s`, and `0`
+  regression issues against
+  `out/ocr-label-regression-gate-pass-20260602/full-report.json`
+  (`out/ocr-engine-profile-report-20260602/full-report.json`). The recorded
+  active OCR stage was `4.132287s`; OCR internals attributed `2.762073s` to
+  detector inference and `1.237219s` to recognition across `235` raw boxes and
+  `137` selected boxes. Per-fixture evidence stayed behavior-neutral while
+  clarifying the bottleneck: Dallas Waymo remained detector-heavy
+  (`0.757809s` detector, `0.093314s` recognition, `17` raw / `9` selected
+  boxes), Phoenix remained recognizer-heavy (`0.330700s` detector,
+  `0.388737s` recognition, `85` raw / `44` selected boxes), and Los Angeles
+  stayed mixed (`0.541075s` detector, `0.263045s` recognition, `52` raw /
+  `33` selected boxes). Focused benchmark tests passed (`55 passed`), and
+  `py_compile` passed for the edited OCR, benchmark, and benchmark-test files;
+  the full suite also passed (`453 passed`).

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 import csv
@@ -13,7 +14,9 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -79,6 +82,50 @@ RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT = "default"
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
+_RAPIDOCR_PROFILE_LOCK = threading.RLock()
+_RAPIDOCR_PROFILE_EVENTS: list[dict[str, Any]] | None = None
+
+
+@contextmanager
+def collect_rapidocr_profiles():
+    global _RAPIDOCR_PROFILE_EVENTS
+    events: list[dict[str, Any]] = []
+    with _RAPIDOCR_PROFILE_LOCK:
+        previous = _RAPIDOCR_PROFILE_EVENTS
+        _RAPIDOCR_PROFILE_EVENTS = events
+    try:
+        yield events
+    finally:
+        with _RAPIDOCR_PROFILE_LOCK:
+            _RAPIDOCR_PROFILE_EVENTS = previous
+
+
+def rapidocr_profile_enabled() -> bool:
+    with _RAPIDOCR_PROFILE_LOCK:
+        return _RAPIDOCR_PROFILE_EVENTS is not None
+
+
+def record_rapidocr_profile(profile: dict[str, Any]) -> None:
+    with _RAPIDOCR_PROFILE_LOCK:
+        if _RAPIDOCR_PROFILE_EVENTS is None:
+            return
+        _RAPIDOCR_PROFILE_EVENTS.append(sanitize_rapidocr_profile(profile))
+
+
+def sanitize_rapidocr_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in profile.items():
+        if isinstance(value, bool) or value is None:
+            sanitized[key] = value
+        elif isinstance(value, int):
+            sanitized[key] = value
+        elif isinstance(value, float):
+            sanitized[key] = round(max(0.0, value), 6) if key.endswith("_s") else value
+        elif isinstance(value, str):
+            sanitized[key] = value
+        elif isinstance(value, (list, tuple)):
+            sanitized[key] = list(value)
+    return sanitized
 
 
 def extract_ocr_labels(
@@ -810,12 +857,16 @@ def run_rapidocr_words(
     rapidocr_recognition_profile: str | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> list[OcrLabel]:
+    profile_enabled = rapidocr_profile_enabled()
+    profile_started = time.perf_counter()
+    input_started = time.perf_counter()
     ocr_input, scale_x, scale_y = rapidocr_input_array(
         image_path,
         prepared_bgr=prepared_bgr,
         composited_alpha=composited_alpha,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
+    input_elapsed = time.perf_counter() - input_started
     label_shape = rapidocr_label_target_shape(ocr_input, scale_x=scale_x, scale_y=scale_y)
     detector_limit = rapidocr_detector_limit_for_input(
         ocr_input,
@@ -824,9 +875,31 @@ def run_rapidocr_words(
     min_text_area = max(0.0, float(rapidocr_min_text_area or 0.0))
     recognition_profile = normalized_rapidocr_recognition_profile(rapidocr_recognition_profile)
     detector_limit_type = normalized_rapidocr_detector_limit_type(rapidocr_detector_limit_type)
+    profile: dict[str, Any] | None = None
+    if profile_enabled:
+        profile = {
+            "input_s": input_elapsed,
+            "input_kind": "array" if isinstance(ocr_input, np.ndarray) else "path",
+            "input_shape": list(ocr_input.shape[:2]) if isinstance(ocr_input, np.ndarray) else None,
+            "scale_x": scale_x,
+            "scale_y": scale_y,
+            "detector_limit": detector_limit,
+            "detector_limit_type": detector_limit_type,
+            "recognition_profile": recognition_profile,
+            "min_text_area": min_text_area,
+            "classifier_retry": False,
+        }
     try:
         engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type)
-        if min_text_area > 0.0:
+        if profile_enabled:
+            result, engine_profile = run_rapidocr_profiled_items(
+                engine,
+                ocr_input,
+                min_text_area=min_text_area,
+            )
+            if profile is not None:
+                profile.update(engine_profile)
+        elif min_text_area > 0.0:
             result = run_rapidocr_filtered_items(engine, ocr_input, min_text_area=min_text_area)
         else:
             result, _elapsed = engine(ocr_input, use_cls=False)
@@ -835,16 +908,35 @@ def run_rapidocr_words(
             label_shape,
         )
         if not should_retry_rapidocr_with_classifier(labels):
+            if profile is not None:
+                profile["total_s"] = time.perf_counter() - profile_started
+                profile["label_count"] = len(labels)
+                profile["useful_label_count"] = count_useful_labels(labels)
+                record_rapidocr_profile(profile)
             return labels
+        classifier_started = time.perf_counter()
         result, _elapsed = rapidocr_classifier_engine(
             detector_limit,
             recognition_profile,
             detector_limit_type,
         )(ocr_input, use_cls=True)
+        if profile is not None:
+            profile["classifier_retry"] = True
+            profile["classifier_total_s"] = time.perf_counter() - classifier_started
     except Exception:
+        if profile is not None:
+            profile["total_s"] = time.perf_counter() - profile_started
+            profile["error"] = "rapidocr_failed"
+            record_rapidocr_profile(profile)
         return []
     labels = scale_rapidocr_labels(rapidocr_items_to_labels(result), scale_x, scale_y)
-    return filter_ocr_labels_to_image_bounds(labels, label_shape)
+    labels = filter_ocr_labels_to_image_bounds(labels, label_shape)
+    if profile is not None:
+        profile["total_s"] = time.perf_counter() - profile_started
+        profile["label_count"] = len(labels)
+        profile["useful_label_count"] = count_useful_labels(labels)
+        record_rapidocr_profile(profile)
+    return labels
 
 
 def rapidocr_label_target_shape(
@@ -906,6 +998,67 @@ def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_tex
     origin_boxes = engine._get_origin_points(selected, op_record, raw_h, raw_w)
     result, _elapsed = engine.get_final_res(origin_boxes, None, rec_res, 0.0, 0.0, 0.0)
     return result
+
+
+def run_rapidocr_profiled_items(
+    engine,
+    ocr_input: Path | np.ndarray,
+    *,
+    min_text_area: float,
+) -> tuple[Any, dict[str, Any]]:
+    profile: dict[str, Any] = {}
+    total_started = time.perf_counter()
+    load_started = time.perf_counter()
+    img = engine.load_img(ocr_input)
+    profile["load_img_s"] = time.perf_counter() - load_started
+    raw_h, raw_w = img.shape[:2]
+    preprocess_started = time.perf_counter()
+    img, ratio_h, ratio_w = engine.preprocess(img)
+    op_record = {"preprocess": {"ratio_h": ratio_h, "ratio_w": ratio_w}}
+    img, op_record = engine.maybe_add_letterbox(img, op_record)
+    profile["preprocess_s"] = time.perf_counter() - preprocess_started
+    dt_boxes, det_elapsed = engine.auto_text_det(img)
+    profile["det_elapsed_s"] = float(det_elapsed or 0.0)
+    if dt_boxes is None:
+        profile.update(
+            {
+                "raw_box_count": 0,
+                "selected_box_count": 0,
+                "result_count": 0,
+                "profiled_total_s": time.perf_counter() - total_started,
+            }
+        )
+        return None, profile
+
+    raw_boxes = list(dt_boxes)
+    selected = [
+        box
+        for box in raw_boxes
+        if min_text_area <= 0.0 or rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
+    ]
+    profile["raw_box_count"] = len(raw_boxes)
+    profile["selected_box_count"] = len(selected)
+    if not selected:
+        profile.update(
+            {
+                "result_count": 0,
+                "profiled_total_s": time.perf_counter() - total_started,
+            }
+        )
+        return None, profile
+
+    crop_started = time.perf_counter()
+    crop_images = engine.get_crop_img_list(img, selected)
+    profile["crop_s"] = time.perf_counter() - crop_started
+    rec_res, rec_elapsed = engine.text_rec(crop_images, False)
+    profile["rec_elapsed_s"] = float(rec_elapsed or 0.0)
+    final_started = time.perf_counter()
+    origin_boxes = engine._get_origin_points(selected, op_record, raw_h, raw_w)
+    result, _elapsed = engine.get_final_res(origin_boxes, None, rec_res, 0.0, 0.0, 0.0)
+    profile["final_s"] = time.perf_counter() - final_started
+    profile["result_count"] = len(result) if isinstance(result, list) else 0
+    profile["profiled_total_s"] = time.perf_counter() - total_started
+    return result, profile
 
 
 def rapidocr_box_area(box: np.ndarray) -> float:

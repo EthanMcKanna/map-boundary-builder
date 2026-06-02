@@ -112,6 +112,7 @@ class BenchmarkScore:
     ocr_label_count: int | None = None
     ocr_top_labels: list[str] | None = None
     ocr_label_event: str | None = None
+    ocr_engine_profile: dict[str, Any] | None = None
     error: str | None = None
     status: str = "active"
     note: str | None = None
@@ -141,6 +142,7 @@ class BenchmarkScore:
             "ocr_label_count": self.ocr_label_count,
             "ocr_top_labels": self.ocr_top_labels,
             "ocr_label_event": self.ocr_label_event,
+            "ocr_engine_profile": self.ocr_engine_profile,
             "error": self.error,
             "status": self.status,
             "note": self.note,
@@ -325,6 +327,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional minimum ratio of analyzed repeat-profile samples under one second.",
     )
     parser.add_argument(
+        "--profile-ocr-engine",
+        action="store_true",
+        help=(
+            "For --mode full with --execution in-process, record RapidOCR detector/recognizer "
+            "timings and text-box counts in each benchmark score."
+        ),
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -486,6 +496,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat-profile-runs requires --mode full")
     if args.repeat_profile_runs and args.execution != "in-process":
         parser.error("--repeat-profile-runs requires --execution in-process")
+    if args.profile_ocr_engine and args.mode != "full":
+        parser.error("--profile-ocr-engine requires --mode full")
+    if args.profile_ocr_engine and args.execution != "in-process":
+        parser.error("--profile-ocr-engine requires --execution in-process")
     report = run_benchmark(
         polygon_dir=args.polygon_dir,
         image_dir=args.image_dir,
@@ -515,6 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         block_network=args.block_network,
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
+        profile_ocr_engine=args.profile_ocr_engine,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -609,6 +624,7 @@ def run_benchmark(
     block_network: bool = False,
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
+    profile_ocr_engine: bool = False,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
         raise ValueError("repeat_profile_runs must be non-negative")
@@ -660,6 +676,7 @@ def run_benchmark(
                         debug_artifacts=debug_artifacts,
                         score_reference=True,
                         reference_geometry=catalog_reference,
+                        profile_ocr_engine=profile_ocr_engine,
                     )
                     if require_scored_catalog_evidence:
                         score = require_current_catalog_evidence(
@@ -690,6 +707,7 @@ def run_benchmark(
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=False,
+                        profile_ocr_engine=profile_ocr_engine,
                     )
                     if require_smoked_catalog_miss and score.catalog_slug:
                         score = replace(
@@ -726,6 +744,7 @@ def run_benchmark(
                         execution=execution,
                         debug_artifacts=debug_artifacts,
                         score_reference=True,
+                        profile_ocr_engine=profile_ocr_engine,
                     )
                 )
                 repeat_targets.append(
@@ -752,6 +771,7 @@ def run_benchmark(
                 neutral_filename_hint=neutral_filename_hint,
                 execution=execution,
                 debug_artifacts=debug_artifacts,
+                profile_ocr_engine=profile_ocr_engine,
             )
             if repeat_profile_runs
             else None
@@ -800,6 +820,7 @@ def run_benchmark(
             "block_network": block_network,
             "repeat_profile_runs": repeat_profile_runs,
             "repeat_profile_warmups": repeat_profile_warmups,
+            "profile_ocr_engine": profile_ocr_engine,
         },
         "runtime_config": runtime_config,
         "summary": {
@@ -819,8 +840,13 @@ def run_benchmark(
             "active_total_duration_s": round(active_total_duration, 6),
             "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
             "active_stage_duration_s": active_stage_duration,
+            "active_ocr_engine_profile": summarize_ocr_engine_profiles(scored),
             "smoked_skipped_stage_duration_s": smoke_stage_duration,
+            "smoked_skipped_ocr_engine_profile": summarize_ocr_engine_profiles(smoke_validated),
             "evaluated_stage_duration_s": evaluated_stage_duration,
+            "evaluated_ocr_engine_profile": summarize_ocr_engine_profiles(
+                [*scored, *smoke_validated]
+            ),
             "active_road_match_elapsed_s": active_road_match_elapsed,
             "smoked_skipped_road_match_elapsed_s": smoke_road_match_elapsed,
             "evaluated_road_match_elapsed_s": round(active_road_match_elapsed + smoke_road_match_elapsed, 6),
@@ -850,6 +876,7 @@ def build_repeat_profile(
     neutral_filename_hint: bool,
     execution: str,
     debug_artifacts: bool,
+    profile_ocr_engine: bool = False,
 ) -> dict[str, Any]:
     samples: list[dict[str, Any]] = []
     for target in targets:
@@ -869,6 +896,7 @@ def build_repeat_profile(
                 debug_artifacts=debug_artifacts,
                 score_reference=bool(target["score_reference"]),
                 reference_geometry=target.get("reference_geometry"),
+                profile_ocr_engine=profile_ocr_engine,
             ).as_dict()
             score = {
                 "repeat_index": repeat_index,
@@ -1249,6 +1277,7 @@ def score_full_fixture(
     neutral_filename_hint: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
+    profile_ocr_engine: bool = False,
 ) -> BenchmarkScore:
     output_path = out_dir / "full-outputs" / f"{fixture.slug}.geojson"
     debug_dir = out_dir / "full-debug" / fixture.slug if debug_artifacts else None
@@ -1266,6 +1295,7 @@ def score_full_fixture(
             debug_artifacts=debug_artifacts,
             score_reference=score_reference,
             reference_geometry=reference_geometry,
+            profile_ocr_engine=profile_ocr_engine,
         )
     if execution != "subprocess":
         raise ValueError(f"Unsupported full benchmark execution mode: {execution}")
@@ -1386,18 +1416,20 @@ def score_full_fixture_in_process(
     neutral_filename_hint: bool = False,
     score_reference: bool = True,
     reference_geometry: Polygon | MultiPolygon | None = None,
+    profile_ocr_engine: bool = False,
 ) -> BenchmarkScore:
     from .cli import stage_elapsed_seconds
     from .runner import BoundaryBuildOptions, build_boundary
 
     events: list[dict[str, Any]] = []
+    ocr_engine_events: list[dict[str, Any]] | None = None
     started = time.perf_counter()
 
     def progress(event: dict[str, Any]) -> None:
         events.append({"elapsed_s": round(time.perf_counter() - started, 6), **event})
 
-    try:
-        result = build_boundary(
+    def run_build_boundary():
+        return build_boundary(
             fixture.image_path,
             fixture.area if city_overrides else None,
             output_path,
@@ -1411,6 +1443,16 @@ def score_full_fixture_in_process(
             ),
             progress=progress,
         )
+
+    try:
+        if profile_ocr_engine:
+            from .ocr import collect_rapidocr_profiles
+
+            with collect_rapidocr_profiles() as collected:
+                ocr_engine_events = collected
+                result = run_build_boundary()
+        else:
+            result = run_build_boundary()
         duration_s = time.perf_counter() - started
         output_geometry = shape(result.geojson["features"][0]["geometry"])
         metrics = (
@@ -1456,11 +1498,25 @@ def score_full_fixture_in_process(
             ),
             stage_elapsed_s=stage_elapsed_seconds(events),
             **ocr_label_summary_from_events(events),
+            ocr_engine_profile=(
+                summarize_ocr_engine_profile_events(ocr_engine_events)
+                if profile_ocr_engine
+                else None
+            ),
             status=fixture.status,
             note=fixture.note,
         )
     except Exception as exc:
-        return failed_full_score(fixture, str(exc), duration_s=time.perf_counter() - started)
+        return failed_full_score(
+            fixture,
+            str(exc),
+            duration_s=time.perf_counter() - started,
+            ocr_engine_profile=(
+                summarize_ocr_engine_profile_events(ocr_engine_events)
+                if profile_ocr_engine
+                else None
+            ),
+        )
 
 
 def fixture_filename_hint(fixture: BenchmarkFixture, *, neutral: bool) -> str:
@@ -1604,6 +1660,7 @@ def failed_full_score(
     ocr_label_count: int | None = None,
     ocr_top_labels: list[str] | None = None,
     ocr_label_event: str | None = None,
+    ocr_engine_profile: dict[str, Any] | None = None,
 ) -> BenchmarkScore:
     return BenchmarkScore(
         slug=fixture.slug,
@@ -1620,6 +1677,7 @@ def failed_full_score(
         ocr_label_count=ocr_label_count,
         ocr_top_labels=ocr_top_labels,
         ocr_label_event=ocr_label_event,
+        ocr_engine_profile=ocr_engine_profile,
         error=error,
         status=fixture.status,
         note=fixture.note,
@@ -1729,6 +1787,88 @@ def summarize_stage_durations(scores: list[BenchmarkScore]) -> dict[str, float]:
                 continue
             totals[stage] = totals.get(stage, 0.0) + parsed_duration
     return {stage: round(total, 6) for stage, total in sorted(totals.items())}
+
+
+OCR_ENGINE_PROFILE_DURATION_KEYS = (
+    "input_s",
+    "load_img_s",
+    "preprocess_s",
+    "det_elapsed_s",
+    "crop_s",
+    "rec_elapsed_s",
+    "final_s",
+    "profiled_total_s",
+    "classifier_total_s",
+    "total_s",
+)
+OCR_ENGINE_PROFILE_COUNT_KEYS = (
+    "raw_box_count",
+    "selected_box_count",
+    "result_count",
+    "label_count",
+    "useful_label_count",
+)
+
+
+def summarize_ocr_engine_profile_events(events: list[dict[str, Any]] | None) -> dict[str, Any]:
+    calls = events or []
+    summary: dict[str, Any] = {"calls": len(calls)}
+    for key in OCR_ENGINE_PROFILE_DURATION_KEYS:
+        total = sum_profile_number(call.get(key) for call in calls)
+        if total is not None:
+            summary[key] = round(total, 6)
+    for key in OCR_ENGINE_PROFILE_COUNT_KEYS:
+        total = sum_profile_int(call.get(key) for call in calls)
+        if total is not None:
+            summary[key] = total
+    summary["calls_detail"] = calls
+    return summary
+
+
+def summarize_ocr_engine_profiles(scores: list[BenchmarkScore]) -> dict[str, Any] | None:
+    profiles = [score.ocr_engine_profile for score in scores if score.ocr_engine_profile is not None]
+    if not profiles:
+        return None
+    summary: dict[str, Any] = {
+        "fixtures": len(profiles),
+        "calls": sum_profile_int(profile.get("calls") for profile in profiles) or 0,
+    }
+    for key in OCR_ENGINE_PROFILE_DURATION_KEYS:
+        total = sum_profile_number(profile.get(key) for profile in profiles)
+        if total is not None:
+            summary[key] = round(total, 6)
+    for key in OCR_ENGINE_PROFILE_COUNT_KEYS:
+        total = sum_profile_int(profile.get(key) for profile in profiles)
+        if total is not None:
+            summary[key] = total
+    return summary
+
+
+def sum_profile_number(values) -> float | None:
+    total = 0.0
+    seen = False
+    for value in values:
+        parsed = parse_report_duration(value)
+        if parsed is None:
+            continue
+        total += parsed
+        seen = True
+    return total if seen else None
+
+
+def sum_profile_int(values) -> int | None:
+    total = 0
+    seen = False
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        total += max(0, parsed)
+        seen = True
+    return total if seen else None
 
 
 def summarize_road_match_elapsed(scores: list[BenchmarkScore]) -> float:
