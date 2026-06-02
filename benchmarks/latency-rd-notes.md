@@ -15290,3 +15290,56 @@ with zero failures in 0.531s.
   repeat `58/58` subsecond, repeat p95 `0.554s`, repeat max `0.596s`, OCR
   calls `26`, and Nashville still preserved three controls on the
   road-refined path at `0.773s`.
+- Rechecked the remaining OCR tails after the `3000000` road-refine cache cap
+  and rejected two tempting OCR cap reductions. Lowering the non-SVG
+  bright-blue fast OCR cap from `1400px` to `1300px` failed the tail slice at
+  `out/brightblue-max1300-tail-slice-20260602/stress-summary.json`: Bay Area
+  dropped to `15` controls, Nashville dropped below its `14` OCR-label floor,
+  Miami fell to `4` controls with a bbox error over `1000m`, primary max rose
+  to `1.282425s`, and repeat p95 rose to `1.039s` after full-detail retries.
+  `1350px` and `1375px` were still unsafe:
+  `out/brightblue-max1350-tail-slice-20260602/stress-summary.json` dropped Bay
+  Area controls and Nashville labels, while
+  `out/brightblue-max1375-tail-slice-20260602/stress-summary.json` dropped Bay
+  Area controls/labels, Houston controls, and Nashville labels. Keep the
+  ordinary bright-blue path at `1400px`.
+- Rechecked the dark-teal profile-app non-map UI pre-screen and rejected a
+  lower profile-app OCR cap. The current `1000px` focused profile-app stress at
+  `out/profile-app-ocr1000-stress-20260602/stress-summary.json` failed the
+  locked negative correctly with repeat p95 `0.583s`, repeat max `0.584s`, and
+  OCR recognizer p95 `0.385s`. A monkeypatched `600px` cap at
+  `out/profile-app-ocr600-stress-20260602/stress-summary.json` still found the
+  same non-map UI categories, but made repeat p95 worse at `0.829s`, repeat max
+  `0.829s`, and OCR recognizer p95 `0.610s` because smaller/glued text was
+  harder to recognize. Keep `PROFILE_APP_UI_OCR_MAX_DIMENSION=1000`.
+- Probed reducing `MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD` from `3` to `1` as a
+  possible way to stop cached-only control geocoding earlier on Miami-like
+  label-rich maps. The focused eight-positive slice at
+  `out/geocode-lookahead1-tail-slice-20260602/stress-summary.json` preserved
+  all expected signatures and passed with primary max `0.769982s`, repeat p95
+  `0.512s`, and Miami at `0.677s`. A full hard candidate at
+  `out/geocode-lookahead1-full29-hard-20260602/stress-summary.json` also
+  preserved byte-for-byte row signatures against
+  `out/roadcache3m-default-full29-hard-20260602/stress-summary.json`, passed
+  `29/29`, and looked faster on the first run (`max=0.742611s`, repeat p95
+  `0.496s`). A confirmation full gate at
+  `out/geocode-lookahead1-confirm-full29-hard-20260602/stress-summary.json`
+  passed correctness and latency budgets but did not prove a no-regression
+  improvement: primary max rose to `0.796920s`, with Miami at `0.797s`, above
+  the current default gate's `0.773081s` max. Treat the first faster run as
+  timing noise and keep `MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD=3`.
+- Added a distinct low-resolution arbitrary-upload stress fixture for
+  `/Users/ethanmckanna/Downloads/avride dallas.webp`, which is not the existing
+  1400x933 Avride Dallas PNG fixture. The new WebP is 680x551, no-catalog, and
+  filename-neutral so it exercises OCR/georeference instead of the Avride
+  filename/catalog rescue. Focused fresh-cache validation at
+  `out/avride-dallas-webp-lowres-focused-20260602/stress-summary.json` passed
+  with Dallas, three controls, 36 OCR labels, confidence `0.769`,
+  bbox `[-96.8173575, 32.7689853, -96.7658767, 32.8249894]`, total
+  `0.552699s`, repeat p95 `0.311182s`, and repeat max `0.315104s`. The
+  expanded hard gate at
+  `out/avride-webp-full30-hard-20260602/stress-summary.json` passed `30/30`
+  expected rows with statuses `{"complete":19,"failed":11}`, primary max
+  `0.746377s`, repeat `60/60` subsecond, repeat p95 `0.537073s`, repeat max
+  `0.578689s`, and no existing 29 row signature changes versus
+  `out/roadcache3m-default-full29-hard-20260602/stress-summary.json`.

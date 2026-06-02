@@ -186,6 +186,23 @@
       }
     },
     {
+      "slug": "avride-dallas-webp-lowres",
+      "image": "/Users/ethanmckanna/Downloads/avride dallas.webp",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Dallas",
+        "min_control_points": 3,
+        "min_ocr_labels": 30,
+        "min_combined_confidence": 0.74,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8173575, 32.7689853, -96.7658767, 32.8249894],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "austin-waymo-disguised-svg",
       "image": "/Users/ethanmckanna/Downloads/a.png",
       "no_catalog": false,
