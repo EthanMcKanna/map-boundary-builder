@@ -13291,3 +13291,31 @@ with zero failures in 0.531s.
   full-gate repeat p95 by about `24ms` and the RapidOCR total p95 by about
   `22ms`; `MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA=1` remains available
   as an override if a future host shows the opposite profile.
+- Rejected explicit ONNX Runtime thread caps and memory-pattern toggles after
+  the no-arena default. The apples-to-apples current tail-five baseline
+  (`out/probe-onnx-threads-baseline-tail5-20260602/stress-summary.json`) passed
+  `5/5` primary expectations and `20/20` analyzed repeats with repeat p95
+  `0.543s`, repeat max `0.547s`, RapidOCR total p95 `0.484s`, detector p95
+  `0.241s`, and recognizer p95 `0.239s`. Scratch monkeypatches that forced
+  RapidOCR ONNX session threads all preserved correctness but regressed the
+  OCR tail: `intra=1,inter=1`
+  (`out/probe-onnx-threads-i1-j1-tail5-20260602/stress-summary.json`) hit
+  repeat p95 `1.414s`, RapidOCR total p95 `1.360s`, and recognizer p95
+  `0.982s`; `intra=2,inter=1`
+  (`out/probe-onnx-threads-i2-j1-tail5-20260602/stress-summary.json`) hit
+  repeat p95 `0.800s` and RapidOCR total p95 `0.746s`; `intra=4,inter=1`
+  (`out/probe-onnx-threads-i4-j1-tail5-20260602/stress-summary.json`) was the
+  least bad at repeat p95 `0.613s` and RapidOCR total p95 `0.557s`; and
+  `intra=2,inter=2`
+  (`out/probe-onnx-threads-i2-j2-tail5-20260602/stress-summary.json`) hit
+  repeat p95 `0.822s` and RapidOCR total p95 `0.763s`. Disabling
+  `SessionOptions.enable_mem_pattern`
+  (`out/probe-onnx-pattern0-tail5-20260602/stress-summary.json`) also trailed
+  baseline with repeat p95 `0.558s` and RapidOCR total p95 `0.495s`;
+  disabling `enable_mem_reuse`
+  (`out/probe-onnx-reuse0-tail5-20260602/stress-summary.json`) hit repeat p95
+  `0.561s` and RapidOCR total p95 `0.506s`; disabling both
+  (`out/probe-onnx-both0-tail5-20260602/stress-summary.json`) hit repeat p95
+  `0.567s` and RapidOCR total p95 `0.509s`. Keep ONNX thread counts, memory
+  pattern, and memory reuse on their package defaults; the only accepted ONNX
+  session default change remains CPU memory arena disabled.
