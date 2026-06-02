@@ -59,7 +59,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v7"
+OCR_CACHE_VERSION = "ocr-labels-v8"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK = 0xF8
 OCR_BORDER_COLOR_TOLERANCE = 6
@@ -99,6 +99,7 @@ RAPIDOCR_PROFILE_COUNT_KEYS = (
     "label_count",
     "useful_label_count",
     "header_region_filter_used",
+    "footer_region_filter_used",
 )
 RAPIDOCR_HEADER_REGION_FILTER_MIN_BOXES = 24
 RAPIDOCR_HEADER_REGION_FILTER_MIN_HEADER_BOXES = 8
@@ -110,6 +111,9 @@ RAPIDOCR_HEADER_REGION_FILTER_MIN_Y = 90.0
 RAPIDOCR_HEADER_REGION_FILTER_MAX_Y = 180.0
 RAPIDOCR_HEADER_REGION_FILTER_LEFT_TITLE_X_RATIO = 0.44
 RAPIDOCR_HEADER_REGION_FILTER_WIDE_TEXT_RATIO = 0.12
+RAPIDOCR_HEADER_REGION_FILTER_FOOTER_Y_RATIO = 0.93
+RAPIDOCR_HEADER_REGION_FILTER_MIN_FOOTER_REMOVED_BOXES = 2
+RAPIDOCR_HEADER_REGION_FILTER_MIN_FOOTER_SELECTED_BOXES = 10
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
@@ -1077,6 +1081,7 @@ def run_rapidocr_words(
             "classifier_retry": False,
             "header_region_filter": header_region_filter,
             "header_region_filter_used": 0,
+            "footer_region_filter_used": 0,
         }
     try:
         engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
@@ -1188,7 +1193,7 @@ def run_rapidocr_filtered_items(
     dt_boxes, _det_elapsed = engine.auto_text_det(img)
     if dt_boxes is None:
         return None
-    selected, _header_filter_used = select_rapidocr_boxes(
+    selected, _header_filter_used, _footer_filter_used = select_rapidocr_boxes(
         list(dt_boxes),
         img.shape[:2],
         min_text_area=min_text_area,
@@ -1235,7 +1240,7 @@ def run_rapidocr_profiled_items(
         return None, profile
 
     raw_boxes = list(dt_boxes)
-    selected, header_filter_used = select_rapidocr_boxes(
+    selected, header_filter_used, footer_filter_used = select_rapidocr_boxes(
         raw_boxes,
         img.shape[:2],
         min_text_area=min_text_area,
@@ -1244,6 +1249,7 @@ def run_rapidocr_profiled_items(
     profile["raw_box_count"] = len(raw_boxes)
     profile["selected_box_count"] = len(selected)
     profile["header_region_filter_used"] = int(header_filter_used)
+    profile["footer_region_filter_used"] = int(footer_filter_used)
     profile.update(rapidocr_box_area_profile("raw", raw_boxes))
     profile.update(rapidocr_box_area_profile("selected", selected))
     if not selected:
@@ -1295,18 +1301,21 @@ def select_rapidocr_boxes(
     *,
     min_text_area: float,
     header_region_filter: bool,
-) -> tuple[list[np.ndarray], bool]:
+) -> tuple[list[np.ndarray], bool, bool]:
     selected = [
         box
         for box in raw_boxes
         if min_text_area <= 0.0 or rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
     ]
     if not header_region_filter:
-        return selected, False
+        return selected, False, False
     header_selected = select_rapidocr_header_region_boxes(selected, image_shape)
     if header_selected is None:
-        return selected, False
-    return header_selected, True
+        return selected, False, False
+    footer_selected = select_rapidocr_extreme_footer_boxes(header_selected, image_shape)
+    if footer_selected is None:
+        return header_selected, True, False
+    return footer_selected, True, True
 
 
 def select_rapidocr_header_region_boxes(
@@ -1339,6 +1348,22 @@ def select_rapidocr_header_region_boxes(
     if len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_SELECTED_BOXES:
         return None
     if len(boxes) - len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_REMOVED_BOXES:
+        return None
+    return selected
+
+
+def select_rapidocr_extreme_footer_boxes(
+    boxes: list[np.ndarray],
+    image_shape: tuple[int, int],
+) -> list[np.ndarray] | None:
+    height, _width = image_shape
+    if height <= 0:
+        return None
+    footer_cutoff_y = height * RAPIDOCR_HEADER_REGION_FILTER_FOOTER_Y_RATIO
+    selected = [box for box in boxes if rapidocr_box_center_y(box) <= footer_cutoff_y]
+    if len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_FOOTER_SELECTED_BOXES:
+        return None
+    if len(boxes) - len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_FOOTER_REMOVED_BOXES:
         return None
     return selected
 

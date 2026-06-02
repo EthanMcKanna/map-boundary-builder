@@ -1023,6 +1023,28 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertIsNone(ocr_module.select_rapidocr_header_region_boxes(boxes, (1012, 1280)))
 
+    def test_rapidocr_header_region_filter_trims_extreme_footer_noise(self) -> None:
+        title = rapidocr_test_box(20.0, 40.0, 520.0, 44.0)
+        wide_context = rapidocr_test_box(920.0, 42.0, 170.0, 24.0)
+        header_noise = [rapidocr_test_box(610.0 + idx * 8.0, 40.0, 60.0, 20.0) for idx in range(9)]
+        street_boxes = [rapidocr_test_box(240.0 + idx * 42.0, 250.0 + idx * 18.0, 82.0, 22.0) for idx in range(14)]
+        footer_noise = [rapidocr_test_box(240.0 + idx * 140.0, 952.0, 96.0, 22.0) for idx in range(3)]
+        boxes = [title, *header_noise, wide_context, *street_boxes, *footer_noise]
+
+        selected, header_used, footer_used = ocr_module.select_rapidocr_boxes(
+            boxes,
+            (1012, 1280),
+            min_text_area=0.0,
+            header_region_filter=True,
+        )
+
+        self.assertTrue(header_used)
+        self.assertTrue(footer_used)
+        self.assertTrue(any(box is title for box in selected))
+        self.assertTrue(any(box is wide_context for box in selected))
+        self.assertTrue(all(any(selected_box is box for selected_box in selected) for box in street_boxes))
+        self.assertTrue(all(all(selected_box is not box for selected_box in selected) for box in footer_noise))
+
     def test_rapidocr_min_text_area_filters_boxes_before_recognition(self) -> None:
         small_box = np.array(
             [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]],
@@ -1065,7 +1087,8 @@ class OcrGroupingTests(unittest.TestCase):
         wide_context = rapidocr_test_box(920.0, 42.0, 170.0, 24.0)
         header_noise = [rapidocr_test_box(610.0 + idx * 8.0, 40.0, 60.0, 20.0) for idx in range(9)]
         street_boxes = [rapidocr_test_box(240.0 + idx * 42.0, 250.0 + idx * 18.0, 82.0, 22.0) for idx in range(14)]
-        engine = FakeFilteredRapidOcrEngine([title, *header_noise, wide_context, *street_boxes])
+        footer_noise = [rapidocr_test_box(240.0 + idx * 140.0, 952.0, 96.0, 22.0) for idx in range(3)]
+        engine = FakeFilteredRapidOcrEngine([title, *header_noise, wide_context, *street_boxes, *footer_noise])
 
         with (
             patch.object(
@@ -1083,8 +1106,10 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertLess(len(engine.selected_boxes), len(engine.boxes))
         self.assertTrue(any(box is title for box in engine.selected_boxes))
         self.assertTrue(any(box is wide_context for box in engine.selected_boxes))
+        self.assertTrue(all(all(box is not footer for box in engine.selected_boxes) for footer in footer_noise))
         self.assertEqual(len(profiles), 1)
         self.assertEqual(profiles[0]["header_region_filter_used"], 1)
+        self.assertEqual(profiles[0]["footer_region_filter_used"], 1)
         self.assertEqual(profiles[0]["raw_box_count"], len(engine.boxes))
         self.assertEqual(profiles[0]["selected_box_count"], len(engine.selected_boxes))
 

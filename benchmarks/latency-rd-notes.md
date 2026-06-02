@@ -13073,3 +13073,49 @@ with zero failures in 0.531s.
   labels needed for arbitrary no-catalog georeference. Keep bright-blue scale,
   rescue, and box-count caps at current defaults unless a future validator can
   prove same-signature support or trigger a cheap correction path.
+- Accepted a narrower follow-up to the dense dark-teal header selector: after
+  the existing dense-header gate fires, trim only extreme-footer boxes below
+  `93%` of image height when at least two boxes are removed and at least ten
+  selected boxes remain. The failed `90%` footer-trim probe
+  `out/probe-darkteal-header-bottomtrim-20260602/stress-summary.json` was an
+  important guardrail: it made Grand Rapids fail because recognition changed
+  enough that the street retry selected only `3` controls. A ranked-street
+  retry variant in `out/probe-darkteal-bottomtrim-rankedstreets-20260602`
+  still left Grand Rapids at `3` controls. The gentler `93%` probe
+  `out/probe-darkteal-extreme-footertrim-20260602/stress-summary.json`
+  preserved all dark-teal expectations and Grand Rapids' `5` controls while
+  dropping the May Mobility footer/promo text. The shipped code records
+  `footer_region_filter_used` in RapidOCR profiles and bumps the OCR label
+  cache version to `ocr-labels-v8`.
+  Validation: `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_ocr_georeference.py -q` passed `136` tests, full
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` passed `521` tests and `30`
+  subtests, `compileall` over `map_boundary_builder` and `tests` passed, and
+  `git diff --check` passed. The actual-code dark-teal gate
+  `out/header-footer-filter-darkteal-actual-20260602/stress-summary.json`
+  used Ann Arbor May Mobility, Grand Rapids May Mobility, both Zoox Las Vegas
+  portrait screenshots, and Zoox SF with in-process execution, disabled
+  OCR/extraction caches, OCR-engine profiling, `--repeat-profile-runs 4`,
+  `--repeat-profile-warmups 1`, signature drift checks, total p95 budget
+  `1.05s`, and OCR-engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It
+  passed `5/5` primary expectations, `15/15` analyzed repeat expectations,
+  stable signatures for all five cases, `15/15` subsecond repeats, primary max
+  `0.617486s`, repeat median `0.337580s`, repeat p95 `0.412312s`, repeat max
+  `0.432886s`, recognizer p95 `0.216181s`, and RapidOCR total p95
+  `0.377667s`. Compared with the previous dark-teal gate
+  `out/header-region-filter-darkteal-actual-20260602` at primary max
+  `0.775262s`, repeat median `0.346639s`, repeat p95 `0.590931s`, repeat max
+  `0.611390s`, recognizer p95 `0.383547s`, and RapidOCR total p95
+  `0.556586s`, this is a real targeted tail reduction. Grand Rapids now reads
+  `18` labels and selects `20` boxes instead of `21` labels and `24` boxes,
+  preserves the same bbox and `5` controls, and reports both
+  `header_region_filter_used=1` and `footer_region_filter_used=1`.
+  The full 16-case hard gate
+  `out/header-footer-filter-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, `48/48` analyzed repeat expectations,
+  stable signatures for all `16` cases, `48/48` subsecond repeats, primary max
+  `0.972181s`, repeat median `0.378057s`, repeat p95 `0.570036s`, and repeat
+  max `0.636310s`, with zero unexpected rows. The full-gate p95 is effectively
+  flat versus the previous `0.565971s` checkpoint because the remaining repeat
+  tail is now Tesla/LA bright-blue/gray OCR noise, but the target dark-teal
+  path improves without cross-style regressions.
