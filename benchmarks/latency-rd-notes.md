@@ -13239,3 +13239,18 @@ with zero failures in 0.531s.
   signatures for all `16` cases, `48/48` subsecond repeats, primary max
   `0.844544s`, repeat median `0.366s`, repeat p95 `0.554s`, repeat max
   `0.575s`, RapidOCR total p95 `0.485s`, and recognizer p95 `0.238s`.
+- Rejected smaller bright-blue OCR input caps under the stricter support and
+  bbox gate. With `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION=1350`, the
+  strict slow-six probe
+  `out/probe-brightblue-maxdim1350-strict-slow6-20260602/stress-summary.json`
+  reduced repeat p95 to `0.534s` and RapidOCR total p95 to `0.478s`, but
+  failed Bay Area: primary controls dropped from the required `16` to `15`,
+  and all `4` analyzed Bay repeat samples were unexpected. With
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION=1375`, the strict slow-six
+  probe
+  `out/probe-brightblue-maxdim1375-strict-slow6-20260602/stress-summary.json`
+  failed `3/6` primary cases and `12/24` analyzed repeats: Bay Area dropped to
+  `13` controls, Houston dropped to `9` controls, and Miami inferred
+  `Inferred map area` instead of `Miami`. Keep the current `1400px`
+  bright-blue OCR cap unless a future detector/recognizer path can preserve
+  the Bay/LA/Houston strict support floors and bbox locks.
