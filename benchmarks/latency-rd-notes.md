@@ -12123,3 +12123,23 @@ with zero failures in 0.531s.
   `1.883s@zoox-las-vegas-mobile-tall`, and OCR-engine totals
   `det_elapsed_s=1.308s`, `rec_elapsed_s=1.106s`. Leave both ONNX Runtime
   defaults unchanged.
+- Rejected an early inferred-context/no-catalog fast-fail shortcut for dark
+  screenshots. The idea was to skip georeference when `road_context_queries()`
+  returns no concrete city/region after OCR, because
+  `zoox-las-vegas-mobile-tall` has only an `"Inferred map area"` context and is
+  later rejected as sparse OCR support. Scratch inspection showed the shortcut
+  would not move the real tail enough: it still requires the full OCR pass, and
+  the clean profile only spent about `0.34s` total georeferencing across all 12
+  stress rows. It is also brittle. The current stress context scan found the
+  successful `bay-area-waymo` row also has no concrete road-context query before
+  georeference (`first_contexts=["Inferred map area"]`), while successful
+  dark-teal rows used concrete contexts (`South State Street`, `Grand Rapids`,
+  or `San Francisco`). A style-specific version would only target one expected
+  failure and save little post-OCR work, so keep the existing sparse-fit
+  rejection late in the pipeline. A fresh profiled stress refresh after the
+  latest commits, `out/current-stress-refresh-20260602/stress-summary.json`,
+  preserved `12/12` expectations with statuses `{"complete": 10, "failed": 2}`
+  but was too noisy to use as a latency baseline: max total `4.399219s`, OCR
+  total `17.774s`, and OCR-engine totals `det_elapsed_s=7.658s`,
+  `rec_elapsed_s=8.458s`, versus the earlier clean profiled baseline at max
+  `1.086533s` and OCR total `6.337804s`.
