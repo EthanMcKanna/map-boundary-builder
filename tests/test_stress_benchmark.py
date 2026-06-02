@@ -318,6 +318,74 @@ def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
     assert row["expectation_issues"] == ["city 'Yost Ice Arena' did not equal 'Ann Arbor'"]
 
 
+def test_check_expectations_accepts_bbox_within_meter_tolerance() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Los Angeles",
+            "control_points": 18,
+            "bbox": [-118.52404, 33.93024, -118.21938, 34.11846],
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Los Angeles",
+            "min_control_points": 18,
+            "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+            "max_bbox_error_m": 20,
+        },
+    )
+
+    assert issues == []
+
+
+def test_check_expectations_rejects_bbox_outside_meter_tolerance() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Los Angeles",
+            "control_points": 18,
+            "bbox": [-118.50, 33.93, -118.20, 34.12],
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Los Angeles",
+            "min_control_points": 18,
+            "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+            "max_bbox_error_m": 500,
+        },
+    )
+
+    assert len(issues) == 1
+    assert issues[0].startswith("bbox max corner error ")
+    assert issues[0].endswith("m above 500m")
+
+
+def test_check_expectations_rejects_invalid_bbox() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Los Angeles",
+            "control_points": 18,
+            "bbox": None,
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Los Angeles",
+            "min_control_points": 18,
+            "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+            "max_bbox_error_m": 500,
+        },
+    )
+
+    assert issues == ["bbox was missing or invalid"]
+
+
 def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> None:
     image = tmp_path / "zoox.png"
     image.write_bytes(b"not a real image")

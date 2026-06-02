@@ -114,7 +114,9 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
-        "min_control_points": 16
+        "min_control_points": 16,
+        "bbox_approx": [-122.5053058, 37.3057357, -121.8559714, 37.8082677],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -126,7 +128,9 @@
         "status": "complete",
         "source_prefix": "ocr-georeference:",
         "city_equals": "Los Angeles",
-        "min_control_points": 18
+        "min_control_points": 18,
+        "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -138,7 +142,9 @@
         "status": "complete",
         "source_prefix": "ocr-georeference:",
         "city_equals": "Houston",
-        "min_control_points": 10
+        "min_control_points": 10,
+        "bbox_approx": [-95.432149, 29.6688021, -95.2875061, 29.820507],
+        "max_bbox_error_m": 1000
       }
     },
     {

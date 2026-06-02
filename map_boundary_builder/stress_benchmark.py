@@ -14,6 +14,7 @@ from typing import Any
 
 from .cli import stage_elapsed_seconds
 from .extract import EXTRACTION_CACHE_ENV
+from .georef_transform import lonlat_to_mercator
 from .ocr import (
     collect_rapidocr_profiles,
     summarize_rapidocr_profile_events,
@@ -806,7 +807,54 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         total_elapsed_s = row.get("total_elapsed_s")
         if not isinstance(total_elapsed_s, (int, float)) or total_elapsed_s > float(max_total_elapsed_s):
             issues.append(f"total_elapsed_s {total_elapsed_s!r} above {max_total_elapsed_s}")
+
+    expected_bbox = expect.get("bbox_approx")
+    max_bbox_error_m = expect.get("max_bbox_error_m")
+    if isinstance(expected_bbox, list) and isinstance(max_bbox_error_m, (int, float)):
+        bbox_error_m = bbox_max_corner_error_m(row.get("bbox"), expected_bbox)
+        if bbox_error_m is None:
+            issues.append("bbox was missing or invalid")
+        elif bbox_error_m > float(max_bbox_error_m):
+            issues.append(f"bbox max corner error {bbox_error_m:.1f}m above {float(max_bbox_error_m):g}m")
     return issues
+
+
+def bbox_max_corner_error_m(observed: object, expected: object) -> float | None:
+    observed_bbox = parse_bbox(observed)
+    expected_bbox = parse_bbox(expected)
+    if observed_bbox is None or expected_bbox is None:
+        return None
+    observed_corners = bbox_corners(observed_bbox)
+    expected_corners = bbox_corners(expected_bbox)
+    max_error_m = 0.0
+    for observed_corner, expected_corner in zip(observed_corners, expected_corners):
+        observed_x, observed_y = lonlat_to_mercator(*observed_corner)
+        expected_x, expected_y = lonlat_to_mercator(*expected_corner)
+        corner_error_m = ((observed_x - expected_x) ** 2 + (observed_y - expected_y) ** 2) ** 0.5
+        max_error_m = max(max_error_m, corner_error_m)
+    return max_error_m
+
+
+def parse_bbox(value: object) -> tuple[float, float, float, float] | None:
+    if not isinstance(value, list) or len(value) != 4:
+        return None
+    try:
+        min_lon, min_lat, max_lon, max_lat = (float(item) for item in value)
+    except (TypeError, ValueError):
+        return None
+    if min_lon > max_lon or min_lat > max_lat:
+        return None
+    return min_lon, min_lat, max_lon, max_lat
+
+
+def bbox_corners(bbox: tuple[float, float, float, float]) -> tuple[tuple[float, float], ...]:
+    min_lon, min_lat, max_lon, max_lat = bbox
+    return (
+        (min_lon, min_lat),
+        (min_lon, max_lat),
+        (max_lon, min_lat),
+        (max_lon, max_lat),
+    )
 
 
 def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:

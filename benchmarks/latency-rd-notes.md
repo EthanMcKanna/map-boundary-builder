@@ -13214,3 +13214,28 @@ with zero failures in 0.531s.
   signatures for all `16` cases, `48/48` subsecond repeats, primary max
   `0.973704s`, repeat median `0.352s`, repeat p95 `0.625s`, repeat max
   `0.658s`, RapidOCR total p95 `0.564s`, and recognizer p95 `0.239s`.
+- Added an optional bbox-accuracy assertion to the real-screenshot stress
+  harness so hard-case speed probes cannot preserve city/control counts while
+  moving the generated geography. The new manifest fields are `bbox_approx`
+  and `max_bbox_error_m`; the harness compares all four bbox corners in Web
+  Mercator meters and reports `bbox max corner error ...` when a row exceeds
+  the tolerance. The first locked cases are the current stable bright-blue
+  no-catalog hard cases: Bay Area
+  `[-122.5053058,37.3057357,-121.8559714,37.8082677]`, Los Angeles
+  `[-118.5240391,33.9302354,-118.2193825,34.1184628]`, and Houston
+  `[-95.432149,29.6688021,-95.2875061,29.820507]`, each with a `1000m`
+  max-corner tolerance. Validation: `jq empty` on
+  `benchmarks/real-screenshot-stress.json` passed, `git diff --check` passed,
+  `PYTHONPATH=. .venv/bin/python -m compileall -q map_boundary_builder tests`
+  passed, and `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_stress_benchmark.py -q` passed `34` tests. The actual-code
+  slow-six gate `out/strict-bbox-slow6-actual-20260602/stress-summary.json`
+  passed `6/6` primary expectations, `24/24` analyzed repeat expectations,
+  stable signatures for all six cases, `24/24` subsecond repeats, primary max
+  `0.813791s`, repeat median `0.491s`, repeat p95 `0.552s`, and repeat max
+  `0.580s`. The full hard gate
+  `out/strict-bbox-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, `48/48` analyzed repeat expectations, stable
+  signatures for all `16` cases, `48/48` subsecond repeats, primary max
+  `0.844544s`, repeat median `0.366s`, repeat p95 `0.554s`, repeat max
+  `0.575s`, RapidOCR total p95 `0.485s`, and recognizer p95 `0.238s`.
