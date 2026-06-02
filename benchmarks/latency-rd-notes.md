@@ -11691,3 +11691,21 @@ with zero failures in 0.531s.
   `33` selected boxes). Focused benchmark tests passed (`55 passed`), and
   `py_compile` passed for the edited OCR, benchmark, and benchmark-test files;
   the full suite also passed (`453 passed`).
+- Accepted the follow-on OCR engine latency budget gate so profiled OCR
+  internals can be used as a first-class pass/fail condition in future speed
+  sweeps. The benchmark CLI now accepts
+  `--max-evaluated-ocr-engine-duration-s METRIC=SECONDS` entries such as
+  `det_elapsed_s=3.0,rec_elapsed_s=1.5`; budget checks fail explicitly when
+  the evaluated OCR engine profile is missing, when a requested metric is
+  missing, or when the metric exceeds its budget, and compact table output
+  names the failing metric. A real active no-catalog run with
+  `--profile-ocr-engine`, strict OCR-label retention, and detector/recognizer
+  budgets passed with `8/8` scored fixtures, average IoU `0.967842`, min IoU
+  `0.942536`, active total `5.392462s`, `0` regression issues against the
+  prior profiled baseline, and `0` latency-budget issues
+  (`out/ocr-engine-budget-gate-pass-20260602/full-report.json`). The budget
+  evidence recorded evaluated OCR engine durations of `2.720296s` detector and
+  `1.211974s` recognizer, under the conservative `3.0s` / `1.5s` budgets, with
+  the same `235` raw boxes and `137` selected boxes as the earlier profile.
+  Focused benchmark tests passed (`59 passed`), and `py_compile` passed for
+  the edited benchmark and benchmark-test files.

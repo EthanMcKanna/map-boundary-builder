@@ -434,6 +434,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-evaluated-ocr-engine-duration-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Optional absolute evaluated OCR engine-profile duration budget. "
+            "Requires --profile-ocr-engine data. Repeat or comma-separate entries "
+            "such as det_elapsed_s=3.0,rec_elapsed_s=1.5."
+        ),
+    )
+    parser.add_argument(
         "--max-evaluated-road-match-increase-ratio",
         type=float,
         default=None,
@@ -482,6 +493,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         max_evaluated_stage_duration_s = parse_stage_duration_budgets(
             args.max_evaluated_stage_duration_s
+        )
+        max_evaluated_ocr_engine_duration_s = parse_stage_duration_budgets(
+            args.max_evaluated_ocr_engine_duration_s
         )
         max_repeat_profile_stage_duration_s = parse_stage_duration_budgets(
             args.max_repeat_profile_stage_duration_s
@@ -564,6 +578,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_total_duration_s is not None
         or args.max_evaluated_duration_s is not None
         or bool(max_evaluated_stage_duration_s)
+        or bool(max_evaluated_ocr_engine_duration_s)
         or args.max_evaluated_road_match_s is not None
         or args.max_repeat_profile_duration_s is not None
         or args.max_repeat_profile_median_duration_s is not None
@@ -577,6 +592,7 @@ def main(argv: list[str] | None = None) -> int:
             max_total_duration_s=args.max_total_duration_s,
             max_evaluated_duration_s=args.max_evaluated_duration_s,
             max_evaluated_stage_duration_s=max_evaluated_stage_duration_s,
+            max_evaluated_ocr_engine_duration_s=max_evaluated_ocr_engine_duration_s,
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
             max_repeat_profile_duration_s=args.max_repeat_profile_duration_s,
             max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
@@ -1910,6 +1926,22 @@ def report_summary_stage_durations(report: dict[str, Any], key: str) -> dict[str
     return dict(sorted(stage_durations.items()))
 
 
+def report_summary_ocr_engine_durations(report: dict[str, Any], key: str) -> dict[str, float]:
+    summary = report.get("summary", {})
+    if not isinstance(summary, dict):
+        return {}
+    profile = summary.get(key)
+    if not isinstance(profile, dict):
+        return {}
+    durations: dict[str, float] = {}
+    for metric in OCR_ENGINE_PROFILE_DURATION_KEYS:
+        duration = parse_report_duration(profile.get(metric))
+        if duration is None:
+            continue
+        durations[metric] = round(duration, 6)
+    return durations
+
+
 def compare_report_regressions(
     report: dict[str, Any],
     baseline_report: dict[str, Any],
@@ -2230,6 +2262,7 @@ def check_report_latency_budgets(
     max_total_duration_s: float | None = None,
     max_evaluated_duration_s: float | None = None,
     max_evaluated_stage_duration_s: dict[str, float] | None = None,
+    max_evaluated_ocr_engine_duration_s: dict[str, float] | None = None,
     max_evaluated_road_match_s: float | None = None,
     max_repeat_profile_duration_s: float | None = None,
     max_repeat_profile_median_duration_s: float | None = None,
@@ -2246,6 +2279,11 @@ def check_report_latency_budgets(
         stage: max(0.0, float(duration))
         for stage, duration in (max_evaluated_stage_duration_s or {}).items()
         if stage
+    }
+    evaluated_ocr_engine_budgets = {
+        metric: max(0.0, float(duration))
+        for metric, duration in (max_evaluated_ocr_engine_duration_s or {}).items()
+        if metric
     }
     evaluated_road_match_budget = (
         None
@@ -2281,6 +2319,10 @@ def check_report_latency_budgets(
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = report_evaluated_duration(report)
     evaluated_stage_durations = report_summary_stage_durations(report, "evaluated_stage_duration_s")
+    evaluated_ocr_engine_durations = report_summary_ocr_engine_durations(
+        report,
+        "evaluated_ocr_engine_profile",
+    )
     evaluated_road_match = report_evaluated_road_match_elapsed(report)
     repeat_profile_summary = report_repeat_profile_summary(report)
     repeat_profile_analyzed_samples = repeat_profile_analyzed_sample_count(repeat_profile_summary)
@@ -2354,6 +2396,32 @@ def check_report_latency_budgets(
                     "evaluated_stage_duration_s": round(stage_duration, 6),
                     "max_evaluated_stage_duration_s": stage_budget,
                     "excess_s": round(stage_duration - stage_budget, 6),
+                }
+            )
+    for metric, metric_budget in sorted(evaluated_ocr_engine_budgets.items()):
+        metric_duration = evaluated_ocr_engine_durations.get(metric)
+        if metric_duration is None:
+            kind = (
+                "evaluated_ocr_engine_profile_missing"
+                if not evaluated_ocr_engine_durations
+                else "evaluated_ocr_engine_duration_missing"
+            )
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": kind,
+                    "max_evaluated_ocr_engine_duration_s": metric_budget,
+                }
+            )
+            continue
+        if metric_duration > metric_budget:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "evaluated_ocr_engine_duration_budget_exceeded",
+                    "evaluated_ocr_engine_duration_s": round(metric_duration, 6),
+                    "max_evaluated_ocr_engine_duration_s": metric_budget,
+                    "excess_s": round(metric_duration - metric_budget, 6),
                 }
             )
     if evaluated_road_match_budget is not None:
@@ -2484,6 +2552,7 @@ def check_report_latency_budgets(
         "max_total_duration_s": total_budget,
         "max_evaluated_duration_s": evaluated_budget,
         "max_evaluated_stage_duration_s": evaluated_stage_budgets,
+        "max_evaluated_ocr_engine_duration_s": evaluated_ocr_engine_budgets,
         "max_evaluated_road_match_s": evaluated_road_match_budget,
         "max_repeat_profile_duration_s": repeat_profile_duration_budget,
         "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
@@ -2494,6 +2563,7 @@ def check_report_latency_budgets(
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
         "evaluated_stage_duration_s": evaluated_stage_durations,
+        "evaluated_ocr_engine_duration_s": evaluated_ocr_engine_durations,
         "evaluated_road_match_elapsed_s": (
             round(evaluated_road_match, 6) if evaluated_road_match is not None else None
         ),
@@ -2834,6 +2904,17 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"> budget {issue['max_evaluated_duration_s']:.3f}s "
                     f"(+{issue['excess_s']:.3f}s)"
                 )
+            elif issue["kind"] == "evaluated_ocr_engine_duration_budget_exceeded":
+                print(
+                    f"       {issue['metric']}: evaluated OCR engine duration "
+                    f"{issue['evaluated_ocr_engine_duration_s']:.3f}s "
+                    f"> budget {issue['max_evaluated_ocr_engine_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "evaluated_ocr_engine_profile_missing":
+                print(f"       {issue['metric']}: missing evaluated OCR engine profile")
+            elif issue["kind"] == "evaluated_ocr_engine_duration_missing":
+                print(f"       {issue['metric']}: missing evaluated OCR engine duration")
 
 
 def format_duration(value: Any) -> str:

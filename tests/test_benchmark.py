@@ -1885,6 +1885,153 @@ def test_report_latency_budget_check_flags_road_match_excess() -> None:
     ]
 
 
+def test_report_latency_budget_check_passes_ocr_engine_profile_budgets() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 5.5,
+            "evaluated_ocr_engine_profile": {
+                "det_elapsed_s": 2.76,
+                "rec_elapsed_s": 1.24,
+                "profiled_total_s": 4.05,
+            },
+        },
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "duration_s": 0.9}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_duration_s={
+            "det_elapsed_s": 3.0,
+            "rec_elapsed_s": 1.5,
+        },
+    )
+
+    assert check["passed"] is True
+    assert check["max_evaluated_ocr_engine_duration_s"] == {
+        "det_elapsed_s": 3.0,
+        "rec_elapsed_s": 1.5,
+    }
+    assert check["evaluated_ocr_engine_duration_s"] == {
+        "det_elapsed_s": 2.76,
+        "rec_elapsed_s": 1.24,
+        "profiled_total_s": 4.05,
+    }
+    assert check["issues"] == []
+
+
+def test_report_latency_budget_check_flags_ocr_engine_excess_and_missing_metric() -> None:
+    report = {
+        "summary": {
+            "total_duration_s": 5.5,
+            "evaluated_ocr_engine_profile": {
+                "det_elapsed_s": 3.25,
+            },
+        },
+        "scores": [{"slug": "dallas-waymo", "status": "active", "duration_s": 1.1}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_duration_s={
+            "det_elapsed_s": 3.0,
+            "rec_elapsed_s": 1.5,
+        },
+    )
+
+    assert check["passed"] is False
+    assert check["evaluated_ocr_engine_duration_s"] == {"det_elapsed_s": 3.25}
+    assert check["issues"] == [
+        {
+            "metric": "det_elapsed_s",
+            "kind": "evaluated_ocr_engine_duration_budget_exceeded",
+            "evaluated_ocr_engine_duration_s": 3.25,
+            "max_evaluated_ocr_engine_duration_s": 3.0,
+            "excess_s": 0.25,
+        },
+        {
+            "metric": "rec_elapsed_s",
+            "kind": "evaluated_ocr_engine_duration_missing",
+            "max_evaluated_ocr_engine_duration_s": 1.5,
+        },
+    ]
+
+
+def test_report_latency_budget_check_flags_missing_ocr_engine_profile() -> None:
+    report = {
+        "summary": {"total_duration_s": 5.5},
+        "scores": [{"slug": "orlando-waymo", "status": "active", "duration_s": 0.6}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_evaluated_ocr_engine_duration_s={"det_elapsed_s": 3.0},
+    )
+
+    assert check["passed"] is False
+    assert check["evaluated_ocr_engine_duration_s"] == {}
+    assert check["issues"] == [
+        {
+            "metric": "det_elapsed_s",
+            "kind": "evaluated_ocr_engine_profile_missing",
+            "max_evaluated_ocr_engine_duration_s": 3.0,
+        }
+    ]
+
+
+def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path: Path) -> None:
+    report = {
+        "mode": "full",
+        "summary": {
+            "passed": False,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 0,
+            "average_iou": 0.95,
+            "min_iou": 0.95,
+            "total_duration_s": 5.5,
+        },
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.95,
+                "area_ratio": 1.0,
+                "duration_s": 1.1,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": None,
+            }
+        ],
+        "inventory": {"references_without_images": []},
+        "latency_budget_check": {
+            "passed": False,
+            "issues": [
+                {
+                    "metric": "det_elapsed_s",
+                    "kind": "evaluated_ocr_engine_duration_budget_exceeded",
+                    "evaluated_ocr_engine_duration_s": 3.25,
+                    "max_evaluated_ocr_engine_duration_s": 3.0,
+                    "excess_s": 0.25,
+                },
+                {
+                    "metric": "rec_elapsed_s",
+                    "kind": "evaluated_ocr_engine_duration_missing",
+                    "max_evaluated_ocr_engine_duration_s": 1.5,
+                },
+            ],
+        },
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "det_elapsed_s: evaluated OCR engine duration 3.250s > budget 3.000s" in output
+    assert "rec_elapsed_s: missing evaluated OCR engine duration" in output
+
+
 def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     report = {
         "summary": {"total_duration_s": 2.5},
