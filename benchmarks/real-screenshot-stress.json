@@ -156,7 +156,9 @@
         "status": "complete",
         "source_prefix": "ocr-georeference:",
         "city_equals": "Orlando",
-        "min_control_points": 5
+        "min_control_points": 5,
+        "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -192,7 +194,9 @@
         "status": "complete",
         "source_prefix": "ocr-georeference:",
         "city_equals": "Miami",
-        "min_control_points": 5
+        "min_control_points": 5,
+        "bbox_approx": [-80.3388012, 25.6886035, -80.1116863, 25.9830147],
+        "max_bbox_error_m": 1000
       }
     }
   ]

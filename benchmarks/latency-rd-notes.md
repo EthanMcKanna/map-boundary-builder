@@ -13319,3 +13319,29 @@ with zero failures in 0.531s.
   `0.567s` and RapidOCR total p95 `0.509s`. Keep ONNX thread counts, memory
   pattern, and memory reuse on their package defaults; the only accepted ONNX
   session default change remains CPU memory arena disabled.
+- Added bbox locks for the remaining stable bright-blue slow-tail fixtures so
+  future speed probes cannot pass while moving Miami or Orlando geography. The
+  new manifest locks are Orlando
+  `[-81.5079188,28.3608344,-81.3623837,28.5556556]` and Miami
+  `[-80.3388012,25.6886035,-80.1116863,25.9830147]`, both with the existing
+  `1000m` max-corner tolerance used by the Bay Area, Los Angeles, and Houston
+  bbox checks. These bboxes came from the accepted no-arena actual-code hard
+  gate, where analyzed repeats produced identical Miami/Orlando bbox values.
+  Validation: `jq empty` on `benchmarks/real-screenshot-stress.json` passed and
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `34` tests. The targeted strict slow-six gate
+  `out/strict-bbox-plus-miami-orlando-slow6-actual-20260602/stress-summary.json`
+  passed `6/6` primary expectations, `24/24` analyzed repeat expectations,
+  stable signatures for all six cases, `24/24` subsecond repeats, primary max
+  `0.750933s`, repeat median `0.478s`, repeat p95 `0.604s`, repeat max
+  `0.624s`, RapidOCR total p95 `0.548s`, and recognizer p95 `0.251s`. The
+  broader actual-code hard gate
+  `out/strict-bbox-plus-miami-orlando-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeats, stable signatures for all `16` cases, `48/48`
+  subsecond repeats, primary max `0.756613s`, repeat median `0.361s`, repeat
+  p95 `0.591s`, repeat max `0.696s`, RapidOCR total p95 `0.512s`, and
+  recognizer p95 `0.214s`. The full-gate timing sample was noisier than the
+  no-arena baseline because one `houston-robotaxi-gray` repeat reached
+  `0.696s`, but the stricter manifest preserved correctness and stayed inside
+  the hard latency budgets.
