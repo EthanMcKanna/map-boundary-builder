@@ -13501,3 +13501,25 @@ with zero failures in 0.531s.
   all `16` cases, `48/48` subsecond repeats, primary max `0.769288s`, repeat
   median `0.357s`, repeat p95 `0.564s`, repeat max `0.605s`, RapidOCR engine
   total p95 `0.499s`, detector p95 `0.255s`, and recognizer p95 `0.233s`.
+- Added conservative bbox locks for the remaining completed no-catalog
+  real-screenshot stress rows that previously had no manifest-level geometry
+  check: Ann Arbor, Grand Rapids, both Avride Dallas screenshots, Robotaxi
+  Austin, Zoox SF, Tesla Dallas, Nashville, and Houston Robotaxi gray. This is
+  a stability guard for future speed probes, not a claim that these generated
+  boxes are independent ground truth. Each new lock uses the existing `1000m`
+  max-corner tolerance, and every added bbox was identical across eight recent
+  full hard-gate reports. Focused validation: `jq empty` on
+  `benchmarks/real-screenshot-stress.json` passed, all `14` completed stress
+  cases now have `bbox_approx` plus `max_bbox_error_m`, the stress benchmark
+  test module passed `41` tests, `PYTHONPATH=. .venv/bin/python -m compileall
+  -q map_boundary_builder tests` passed, `git diff --check` passed, and the
+  full suite passed `531` tests plus `30` subtests. The primary actual-code
+  gate `out/all-bbox-locks-primary-actual-20260602/stress-summary.json` passed
+  `16/16` expectations with statuses `{"complete":14,"failed":2}` and primary
+  max `0.770151s`. The full actual-code hard gate
+  `out/all-bbox-locks-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, `48/48` analyzed repeat expectations, stable
+  bbox-inclusive signatures for all `16` cases, `48/48` subsecond repeats,
+  primary max `0.818809s`, repeat median `0.353s`, repeat p95 `0.566s`,
+  repeat max `0.682s`, RapidOCR engine total p95 `0.503s`, detector p95
+  `0.257s`, and recognizer p95 `0.229s`.

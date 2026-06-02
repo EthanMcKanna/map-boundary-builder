@@ -14,7 +14,9 @@
         "min_control_points": 3,
         "min_ocr_labels": 16,
         "min_combined_confidence": 0.80,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-83.7532039, 42.2599682, -83.7359287, 42.288679],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -29,7 +31,9 @@
         "min_control_points": 5,
         "min_ocr_labels": 16,
         "min_combined_confidence": 0.74,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-85.6950388, 42.96273, -85.6671371, 42.97809],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -66,7 +70,9 @@
         "min_control_points": 5,
         "min_ocr_labels": 20,
         "min_combined_confidence": 0.90,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8185907, 32.7682169, -96.7555604, 32.8374414],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -81,7 +87,9 @@
         "min_control_points": 8,
         "min_ocr_labels": 30,
         "min_combined_confidence": 0.94,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-97.8098256, 30.2102538, -97.6775433, 30.2751566],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -96,7 +104,9 @@
         "min_control_points": 3,
         "min_ocr_labels": 30,
         "min_combined_confidence": 0.72,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8173575, 32.7689853, -96.7658767, 32.8249894],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -111,7 +121,9 @@
         "min_control_points": 10,
         "min_ocr_labels": 18,
         "min_combined_confidence": 0.90,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -125,7 +137,9 @@
         "city_equals": "Dallas",
         "min_control_points": 2,
         "min_combined_confidence": 0.78,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8609589, 32.7622926, -96.7517738, 32.8735617],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -207,7 +221,9 @@
         "min_control_points": 3,
         "min_ocr_labels": 14,
         "min_combined_confidence": 0.70,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-86.8475058, 36.1153856, -86.6964806, 36.2435026],
+        "max_bbox_error_m": 1000
       }
     },
     {
@@ -221,7 +237,9 @@
         "city_equals": "Houston",
         "min_control_points": 3,
         "min_combined_confidence": 0.81,
-        "max_total_elapsed_s": 1.0
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-95.666187, 29.8350303, -95.4797339, 29.9966451],
+        "max_bbox_error_m": 1000
       }
     },
     {
