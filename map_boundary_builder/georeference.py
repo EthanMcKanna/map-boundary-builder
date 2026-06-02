@@ -3759,6 +3759,14 @@ def should_try_road_refinement(
     if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 1200.0:
         return False
     if (
+        meters_per_pixel >= 18.0
+        and inlier_count >= 6
+        and residual_median_m <= 1600.0
+        and residual_p90_m <= 1800.0
+        and spread >= image_area * 0.10
+    ):
+        return False
+    if (
         meters_per_pixel >= 20.0
         and inlier_count >= 8
         and residual_median_m <= 1600.0

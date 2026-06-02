@@ -15409,3 +15409,26 @@ with zero failures in 0.531s.
   across all 32 common rows for status, source, city, bbox, geometry hash,
   confidence, and catalog fields; Miami direct-SVG improved from `0.851713s`
   total / `0.782633s` OCR stage to `0.303031s` total / `0.236899s` OCR stage.
+- Accepted a narrow road-refinement skip for high-control, broadly spread,
+  moderate-residual label fits. Fresh traces showed the arbitrary no-catalog
+  Miami row had six controls, scale `20.186px/m`, median/p90 residuals
+  `1443m`/`1659m`, spread ratio `0.170`, and local roads available, so the old
+  branch paid a `0.27-0.33s` OSM road search that returned a high road score
+  but was rejected by the label-fit preservation guard. The same trace kept
+  Nashville and Phoenix outside the new branch: Nashville has only three
+  controls and remains road-refined, while Phoenix has only four controls and
+  low spread. The new skip requires `meters_per_pixel >= 18`, at least six
+  inliers, median residual `<=1600m`, p90 residual `<=1800m`, and spread at
+  least `10%` of the image area. Focused unit coverage passed `6` road
+  refinement decision tests. Focused hard stress
+  `out/road-skip-miami-focused-clean-20260602/stress-summary.json` passed
+  `4/4`, primary max `0.741146s`, repeat p95 `0.538841s`, and kept Nashville on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`; Miami completed with
+  unchanged bbox/source/hash at `0.520604s`. The full 32-row hard gate
+  `out/road-skip-full32-hard-20260602/stress-summary.json` passed `32/32`,
+  statuses `{"complete":21,"failed":11}`, primary max `0.747601s`, repeat
+  `32/32` subsecond, repeat p95 `0.628s`, repeat max `0.776s`, and no repeat
+  signature drift. Comparing all 32 common rows against
+  `out/svg-label-layer-full32-hard-20260602/stress-summary.json` showed zero
+  changes for status, source, city, bbox, geometry hash, coordinate count, or
+  control count; Miami improved from `0.865167s` to `0.558249s`.

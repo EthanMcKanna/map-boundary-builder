@@ -3348,6 +3348,35 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 )
             )
 
+    def test_broad_moderate_label_fit_skips_road_refinement_even_with_local_roads(self) -> None:
+        context = CityContext(
+            query="Miami",
+            center=GeocodeResult(
+                label="Miami",
+                lon=-80.1918,
+                lat=25.7617,
+                display_name="Miami, Miami-Dade County, Florida, United States",
+                bbox=(-80.32, 25.7, -80.13, 25.86),
+                importance=0.72,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertFalse(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=20.19,
+                    inlier_count=6,
+                    residual_median_m=1443.0,
+                    residual_p90_m=1659.0,
+                    spread=816110.0,
+                    width=2190,
+                    height=2190,
+                )
+            )
+
     def test_sparse_rotated_fit_requires_road_or_stronger_label_evidence(self) -> None:
         self.assertTrue(
             sparse_rotated_fit_without_road_evidence(
