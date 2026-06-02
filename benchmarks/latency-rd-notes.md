@@ -13028,3 +13028,48 @@ with zero failures in 0.531s.
   same city/source/controls/bbox with `build_boundary_s: 0.163889`,
   `total_before_send_s: 0.175637`, and stages `extract=0.110085s`,
   `ocr=0.011446s`, `georeference=0.013121s`.
+- Current slow-tail profile after the dark-teal header selector confirms the
+  remaining local warm-path work is mostly bright-blue detector/recognizer
+  sensitivity, not a clean broad threshold away. The five-case profiled gate
+  `out/slow5-current-profile-20260602/stress-summary.json` covered Grand
+  Rapids, Bay Area, Los Angeles, Orlando, and Miami with in-process execution,
+  disabled OCR/extraction caches, OCR-engine profiling, `--repeat-profile-runs
+  4`, `--repeat-profile-warmups 1`, signature drift checks, total p95 budget
+  `1.05s`, and OCR-engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It
+  passed `5/5` primary expectations, `15/15` analyzed repeat expectations,
+  stable signatures for all `5` cases, `15/15` subsecond repeats, primary max
+  `0.992945s`, repeat median `0.521213s`, repeat p95 `0.581531s`, repeat max
+  `0.581819s`, OCR-engine total p95 `0.545363s`, and recognizer p95
+  `0.379207s`. Grand Rapids remains the repeat tail at `21` labels and `24`
+  selected boxes after the header filter; Los Angeles is the next OCR-heavy
+  repeat row with `50` raw boxes, `31` selected boxes, `40` labels, and `18`
+  controls.
+- Rejected a broad bright-blue rescued-box area bump. With
+  `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_AREA=1300`, the five-case bright-blue
+  probe `out/probe-brightblue-rescue1300-slow5-20260602/stress-summary.json`
+  reduced repeat p95 to `0.527s` and removed sub-1300 selected boxes from LA
+  and Bay Area, but failed the expectation gate: Houston dropped to `6`
+  controls, below the required `8`, with only `14` labels. This confirms the
+  medium-horizontal rescue still protects regional control support even when
+  the speed numbers look attractive.
+- Rejected a narrower dense-fast-text rescue prototype as not clean enough to
+  ship. A monkeypatched selector that only removed rescued boxes below
+  `1300` px^2 when a fast-text frame had at least `45` raw boxes passed the
+  same five-case subset in
+  `out/probe-dense-fasttext-rescue1300-slow5-20260602/stress-summary.json`,
+  with repeat p95 `0.553174s` and no unexpected rows, but it changed the Los
+  Angeles signature from `40` labels/`18` controls to `30` labels/`15`
+  controls and shifted the bbox from
+  `[-118.5240391,33.9302354,-118.2193825,34.1184628]` to
+  `[-118.5248485,33.9310984,-118.2191939,34.1196242]`. That is a modest
+  latency win bought by weaker georeference support, so it fails the
+  no-regressions bar.
+- Rejected a style-specific bright-blue 1200px OCR cap. The env-only probe
+  `out/probe-brightblue-maxdim1200-slow5-20260602/stress-summary.json` cut
+  repeat p95 to `0.477s`, but failed `2` of `5` cases: Houston dropped to `7`
+  controls, below the required `8`, and Miami inferred a generic map area
+  instead of the expected city `Miami`. This reinforces the older global OCR
+  cap findings: lower-resolution OCR can look faster and still lose the exact
+  labels needed for arbitrary no-catalog georeference. Keep bright-blue scale,
+  rescue, and box-count caps at current defaults unless a future validator can
+  prove same-signature support or trigger a cheap correction path.
