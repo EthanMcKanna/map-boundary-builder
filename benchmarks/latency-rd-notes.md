@@ -14915,3 +14915,31 @@ with zero failures in 0.531s.
   service-area screenshots completed. The new SVG-disguised row itself completed
   in `0.522s` with source `catalog-shape-match`, while the existing slowest
   primary row remained `robotaxi-austin` at `0.973s`.
+- Added a no-catalog positive stress row for the small Bay Area Waymo JPEG at
+  `/Users/ethanmckanna/Downloads/input.jpg` (`bay-area-waymo-jpeg-small`) after
+  a fresh-cache CLI probe completed via `ocr-georeference:nominatim-label-fit`
+  with `14` control points, confidence `0.873`, bbox
+  `[-122.5000691,37.311372,-121.8572994,37.8058701]`, `33` OCR event labels,
+  and subsecond runtime. During validation, the hard stress gate exposed noisy
+  RapidOCR profile attribution from overlapping executor work and gray-fill
+  OCR tails. The accepted runtime changes make RapidOCR profiling context-local
+  across executor submissions, cap gray-fill OCR at `800px`, and reject
+  non-map app UI evidence from gray-fill route-UI shortcut labels before a
+  full-detail retry. Focused Bay Area stress passed at
+  `out/bay-area-jpeg-focused-after-profile-context-seq-20260602/stress-summary.json`:
+  `1/1` expected, primary `0.564006s`, repeat `3/3` subsecond, repeat p95
+  `0.265s`. The SVG-plus-Austin leak regression passed at
+  `out/profile-context-svg-robotaxi-pair-seq-20260602/stress-summary.json`:
+  `2/2` expected, SVG rows kept `0` OCR calls, Austin had exactly `1` OCR call,
+  primary max `0.969111s`, repeat p95 `0.792s`. The gray-fill focused gate
+  passed at `out/gray-fill-cap-800-focused-20260602/stress-summary.json`:
+  `3/3` expected, Robotaxi Austin `0.311s` with `12` controls, Tesla Sync
+  non-map UI `0.663s`, Houston gray `0.184s`, repeat `15/15` subsecond,
+  repeat p95 `0.452s`. Final full real-screenshot hard gate passed at
+  `out/final-gray800-full27-hard-20260602/stress-summary.json`: `27/27`
+  expected, statuses `{"complete":16,"failed":11}`, primary max `0.780177s`,
+  repeat `54/54` subsecond, repeat max `0.710s`, repeat p95 `0.599s`, no
+  full-detail OCR retries, and all `16` valid service-area screenshots still
+  completed. Validation also passed `jq empty` on
+  `benchmarks/real-screenshot-stress.json`, `git diff --check`, and
+  `PYTHONPATH=. .venv/bin/python -m pytest` (`599 passed`).

@@ -1365,6 +1365,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_side_len"], 256)
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_type"], "max")
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_gray_fill_max_dimension"], 800)
         self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_max_dimension"], 1600)
         self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_detector_limit_side_len"], 208)
         self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_warm_sample_max_dimension"], 1400)

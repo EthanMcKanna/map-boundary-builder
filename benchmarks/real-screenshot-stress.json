@@ -285,6 +285,22 @@
       }
     },
     {
+      "slug": "bay-area-waymo-jpeg-small",
+      "image": "/Users/ethanmckanna/Downloads/input.jpg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "min_control_points": 12,
+        "min_ocr_labels": 30,
+        "min_combined_confidence": 0.85,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-122.5000691, 37.311372, -121.8572994, 37.8058701],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "los-angeles-waymo",
       "image": "/Users/ethanmckanna/Downloads/LA.png",
       "no_catalog": true,

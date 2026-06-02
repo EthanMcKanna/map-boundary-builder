@@ -2,6 +2,7 @@ import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -1100,6 +1101,31 @@ class OcrGroupingTests(unittest.TestCase):
         detail = summary["calls_detail"][0]
         self.assertEqual(detail["label_confidence_p50"], 72.0)
         self.assertEqual(detail["label_confidence_p90"], 91.2)
+
+    def test_rapidocr_profile_context_isolates_delayed_executor_records(self) -> None:
+        release = Event()
+
+        def record_after_release() -> None:
+            release.wait(timeout=2)
+            ocr_module.record_rapidocr_profile({"total_s": 1.0, "raw_box_count": 1})
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with ocr_module.collect_rapidocr_profiles() as first_events:
+                future = ocr_module.submit_with_rapidocr_profile_context(executor, record_after_release)
+
+            with ocr_module.collect_rapidocr_profiles() as second_events:
+                ocr_module.record_rapidocr_profile({"total_s": 2.0, "raw_box_count": 2})
+                release.set()
+                future.result(timeout=2)
+
+        first_summary = ocr_module.summarize_rapidocr_profile_events(first_events)
+        second_summary = ocr_module.summarize_rapidocr_profile_events(second_events)
+        self.assertEqual(first_summary["calls"], 1)
+        self.assertEqual(first_summary["total_s"], 1.0)
+        self.assertEqual(first_summary["raw_box_count"], 1)
+        self.assertEqual(second_summary["calls"], 1)
+        self.assertEqual(second_summary["total_s"], 2.0)
+        self.assertEqual(second_summary["raw_box_count"], 2)
 
     def test_rapidocr_header_region_filter_keeps_title_and_wide_header_context(self) -> None:
         title = rapidocr_test_box(20.0, 40.0, 520.0, 44.0)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar, copy_context
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -136,33 +137,37 @@ _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
 _RAPIDOCR_PROFILE_LOCK = threading.RLock()
-_RAPIDOCR_PROFILE_EVENTS: list[dict[str, Any]] | None = None
+_RAPIDOCR_PROFILE_EVENTS: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "rapidocr_profile_events",
+    default=None,
+)
 
 
 @contextmanager
 def collect_rapidocr_profiles():
-    global _RAPIDOCR_PROFILE_EVENTS
     events: list[dict[str, Any]] = []
-    with _RAPIDOCR_PROFILE_LOCK:
-        previous = _RAPIDOCR_PROFILE_EVENTS
-        _RAPIDOCR_PROFILE_EVENTS = events
+    token = _RAPIDOCR_PROFILE_EVENTS.set(events)
     try:
         yield events
     finally:
-        with _RAPIDOCR_PROFILE_LOCK:
-            _RAPIDOCR_PROFILE_EVENTS = previous
+        _RAPIDOCR_PROFILE_EVENTS.reset(token)
+
+
+def submit_with_rapidocr_profile_context(executor: ThreadPoolExecutor, fn, *args, **kwargs):
+    context = copy_context()
+    return executor.submit(context.run, fn, *args, **kwargs)
 
 
 def rapidocr_profile_enabled() -> bool:
-    with _RAPIDOCR_PROFILE_LOCK:
-        return _RAPIDOCR_PROFILE_EVENTS is not None
+    return _RAPIDOCR_PROFILE_EVENTS.get() is not None
 
 
 def record_rapidocr_profile(profile: dict[str, Any]) -> None:
+    events = _RAPIDOCR_PROFILE_EVENTS.get()
+    if events is None:
+        return
     with _RAPIDOCR_PROFILE_LOCK:
-        if _RAPIDOCR_PROFILE_EVENTS is None:
-            return
-        _RAPIDOCR_PROFILE_EVENTS.append(sanitize_rapidocr_profile(profile))
+        events.append(sanitize_rapidocr_profile(profile))
 
 
 def summarize_rapidocr_profile_events(events: list[dict[str, Any]] | None) -> dict[str, Any]:

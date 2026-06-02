@@ -61,7 +61,7 @@ from .georeference import (
 from .georef_transform import lonlat_to_mercator
 from .geojson import feature_collection, write_geojson
 from .image_io import is_svg_image, normalize_image_for_processing
-from .ocr import OcrLabel, extract_ocr_labels_from_rgb
+from .ocr import OcrLabel, extract_ocr_labels_from_rgb, submit_with_rapidocr_profile_context
 from .osm_roads import image_feature_distance
 from .runtime_config import (
     BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
@@ -81,6 +81,7 @@ from .runtime_config import (
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION,
+    RAPIDOCR_GRAY_FILL_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
@@ -520,7 +521,8 @@ def build_boundary(
                 if rapidocr_recognition_profile is not None:
                     ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
                 add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
-                labels_future = ocr_executor.submit(
+                labels_future = submit_with_rapidocr_profile_context(
+                    ocr_executor,
                     extract_ocr_labels_from_rgb,
                     str(image_path),
                     rgb,
@@ -582,7 +584,8 @@ def build_boundary(
             if rapidocr_recognition_profile is not None:
                 ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
             add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
-            labels_future = ocr_executor.submit(
+            labels_future = submit_with_rapidocr_profile_context(
+                ocr_executor,
                 extract_ocr_labels_from_rgb,
                 str(image_path),
                 rgb,
@@ -856,7 +859,8 @@ def build_boundary(
                     and provider_ui_fast_ocr_max_dimension is not None
                     and PROVIDER_UI_CROP_OCR_MAX_DIMENSION <= 0
                 ):
-                    provider_ui_labels_future = ocr_executor.submit(
+                    provider_ui_labels_future = submit_with_rapidocr_profile_context(
+                        ocr_executor,
                         extract_provider_ui_labels_from_rgb,
                         str(image_path),
                         rgb,
@@ -1268,6 +1272,19 @@ def build_boundary(
         labels_future_route_ui_shortcut = False
     route_ui_evidence = ride_route_ui_reject_evidence(labels) if labels_future_route_ui_shortcut else None
     if labels_future_route_ui_shortcut and route_ui_evidence is None:
+        non_map_app_ui_evidence = non_map_app_ui_reject_evidence(extraction, labels, width=width, height=height)
+        if non_map_app_ui_evidence is not None:
+            emit_progress(
+                progress,
+                stage="georeference",
+                message="Rejecting non-map app UI",
+                percent=48,
+                details=non_map_app_ui_evidence,
+            )
+            raise ValueError(
+                "Could not infer a service-area boundary from non-map app UI. "
+                "Upload a service-area coverage map crop with readable place labels."
+            )
         emit_progress(
             progress,
             stage="ocr",
@@ -1789,7 +1806,8 @@ def submit_ocr_labels_from_rgb(
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
-    return executor.submit(
+    return submit_with_rapidocr_profile_context(
+        executor,
         extract_ocr_labels_from_rgb,
         str(image_path),
         rgb,
@@ -1945,7 +1963,7 @@ def focus_georef_ocr_enabled(extraction, *, rgb, city_input: str | None) -> bool
 
 def focus_georef_ocr_max_dimension_for_style(style: str | None) -> int | None:
     if style not in FOCUS_GEOREF_OCR_STYLES:
-        return rapidocr_max_dimension_for_extraction_style(style)
+        return None
     if FOCUS_GEOREF_OCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
         return rapidocr_max_dimension_for_extraction_style(style)
     if FOCUS_GEOREF_OCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
@@ -2237,6 +2255,8 @@ def rapidocr_max_dimension_for_ocr_style(
             return RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION
         if style == "bright-blue":
             return capped_rapidocr_max_dimension(RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION)
+        if style == "gray-fill":
+            return capped_rapidocr_max_dimension(RAPIDOCR_GRAY_FILL_MAX_DIMENSION)
         if style == "dark-teal" and dark_teal_wide_ocr_image(width=width, height=height):
             return capped_rapidocr_max_dimension(RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION)
         return None

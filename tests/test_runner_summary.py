@@ -270,6 +270,7 @@ def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark
     assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=1280, height=1012) == 1400
     assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=734, height=1596) is None
     assert runner.rapidocr_max_dimension_for_ocr_style("purple-fill", width=1400, height=933) == 800
+    assert runner.rapidocr_max_dimension_for_ocr_style("gray-fill", width=1200, height=1014) == 800
     assert runner.rapidocr_rec_batch_num_for_ocr_style("bright-blue") is None
     assert runner.rapidocr_rec_batch_num_for_ocr_style("dark-teal") == 16
 
@@ -987,6 +988,54 @@ def test_non_map_app_ui_reject_evidence_requires_tiny_coverage_and_ui_categories
     }
     assert runner.non_map_app_ui_reject_evidence(SimpleNamespace(coverage_ratio=0.08), labels) is None
     assert runner.non_map_app_ui_reject_evidence(extraction, labels[:4]) is None
+
+
+def test_route_ui_shortcut_rejects_non_map_app_ui_without_full_retry(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "tall-gray-app-ui.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (1206, 2622), (22, 22, 22)).save(image_path)
+    rgb = np.zeros((2622, 1206, 3), dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((2622, 1206), dtype=bool),
+        style="gray-fill",
+        pixel_geometry=Polygon([(520, 320), (680, 320), (680, 360), (520, 360)]),
+        coverage_ratio=0.0017,
+        contour_count=1,
+        confidence=1.0,
+    )
+    labels = [
+        OcrLabel("Tesla Sync", x=80, y=260, width=140, height=28, confidence=98),
+        OcrLabel("Continuous Sync", x=120, y=420, width=180, height=24, confidence=96),
+        OcrLabel("Import your robotaxi ride history", x=120, y=520, width=320, height=24, confidence=95),
+        OcrLabel("Secure&Private", x=120, y=620, width=190, height=24, confidence=96),
+        OcrLabel("Track Progress Miles trips and community stats", x=120, y=720, width=420, height=24, confidence=95),
+        OcrLabel("Totals vehicles and monthly history", x=120, y=820, width=330, height=24, confidence=95),
+        OcrLabel("OAuth tokens stored in", x=120, y=920, width=230, height=24, confidence=95),
+        OcrLabel("Disconnect Tesla Account", x=120, y=1020, width=260, height=24, confidence=95),
+    ]
+    events: list[dict] = []
+
+    monkeypatch.setattr(runner, "classify_style_for_ocr", lambda _rgb: "gray-fill")
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: labels)
+    monkeypatch.setattr(
+        runner,
+        "extract_full_ocr_labels_for_style",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full OCR should not run")),
+    )
+
+    with pytest.raises(ValueError, match="non-map app UI"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, filename_hint="upload.png"),
+            progress=events.append,
+        )
+
+    assert any(event.get("message") == "Rejecting non-map app UI" for event in events)
+    assert not any(event.get("message") == "Full-detail map labels read" for event in events)
 
 
 def test_non_map_app_ui_reject_evidence_catches_tall_profile_app_screen() -> None:
