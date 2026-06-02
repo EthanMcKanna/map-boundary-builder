@@ -24,6 +24,7 @@ from .ocr import (
 )
 from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, RUNNER_OCR_CACHE_ENV, build_boundary
+from .runtime_config import generation_env_config, ocr_runtime_config
 
 
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
@@ -302,6 +303,10 @@ def run_stress_benchmark(
         if repeat_profile_runs
         else None
     )
+    runtime_config = stress_runtime_config(
+        runner_ocr_cache=runner_ocr_cache,
+        extraction_cache=extraction_cache,
+    )
     report = {
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
@@ -311,6 +316,7 @@ def run_stress_benchmark(
         "execution": execution,
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
+        "runtime_config": runtime_config,
         "summary": summarize_rows(rows),
         "rows": rows,
     }
@@ -332,6 +338,15 @@ def run_stress_benchmark(
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
+
+
+def stress_runtime_config(*, runner_ocr_cache: bool, extraction_cache: bool) -> dict[str, Any]:
+    with temporary_cache_env(runner_ocr_cache=runner_ocr_cache, extraction_cache=extraction_cache):
+        return {
+            "pipeline_version": get_pipeline_version(),
+            "ocr": ocr_runtime_config(),
+            "generation_env": generation_env_config(),
+        }
 
 
 def select_cases(cases: list[dict[str, Any]], only_slugs: list[str]) -> list[dict[str, Any]]:

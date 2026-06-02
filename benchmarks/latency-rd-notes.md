@@ -13858,3 +13858,48 @@ with zero failures in 0.531s.
   duration `0.608555s`, repeat OCR `total_s` p95 `0.299727s`, and repeat
   `selected_box_count` p95 `7` under budgets (`total_s=1.0`,
   `selected_box_count=20`).
+- Re-anchored the bright-blue OCR hot path against production-shaped no-debug
+  output before trying more runtime filters. The diagnostic ordinary benchmark
+  with debug previews enabled
+  `out/repeat-ocr-slow-real4-20260602/full-report.json` made Los Angeles look
+  slow on the primary scored row (`1.279092s`) because export/debug artifact
+  work and first-pass extraction noise dominated the non-production path, while
+  the repeat profile was already stable (`p95=0.675272s`, OCR `total_s`
+  `p95=0.474430s`, `selected_box_count=30`). Re-running the same focused set
+  with production-shaped no-debug output and smoke coverage for drifted
+  Houston/Miami passed at
+  `out/repeat-ocr-prodpath-real4-smoke-20260602/full-report.json`: active
+  primary max `0.817574s`, smoked primary max `0.908416s`, analyzed repeat p95
+  `0.494730s`, OCR `total_s` p95 `0.445423s`, and
+  `selected_box_count` p95 `30` with stable signatures. A matching stress
+  manifest hard gate also passed at
+  `out/stress-prodpath-real4-ocrbudget-20260602/stress-summary.json` for
+  Los Angeles, Houston, Orlando, and Miami: `4/4` expected, primary max
+  `0.900860s`, repeat p95 `0.486004s`, repeat OCR `total_s` p95 `0.436581s`,
+  and selected-box p95/max `30` under explicit budgets (`primary<=1.0s`,
+  `repeat_p95<=0.75s`, OCR `total_s<=0.55s`, selected boxes `<=30`). No
+  runtime change was shipped from this pass; the evidence says further
+  bright-blue filtering needs a true production-path win, not a debug-preview
+  timing artifact.
+- Added stress-report runtime config snapshots so hard-gate artifacts now carry
+  the same reproduction context as ordinary benchmark reports: pipeline
+  version, OCR runtime config, and the shared generation env map. The shared
+  env snapshot now includes `MAP_BOUNDARY_EXTRACTION_CACHE`, so stress runs
+  with `--disable-extraction-cache` are explicitly recorded instead of only
+  implied by CLI flags. Focused validation passed
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest
+  tests/test_stress_benchmark.py tests/test_benchmark.py -q` (`128` tests) and
+  compileall for the touched harness/config/test files. A live focused stress
+  smoke with both OCR and extraction caches disabled first failed the strict
+  subsecond primary budget at
+  `out/stress-runtime-config-real4-20260602/stress-summary.json`: LA completed
+  but hit `1.143427s`, while the new `runtime_config.generation_env` correctly
+  recorded `MAP_BOUNDARY_RUNNER_OCR_CACHE=0` and
+  `MAP_BOUNDARY_EXTRACTION_CACHE=0`. Re-running the same four-case stress set
+  with a `1.25s` primary budget passed at
+  `out/stress-runtime-config-real4-budget125-20260602/stress-summary.json`:
+  `4/4` expected, primary max `0.957916s`, repeat p95 `0.535470s`, repeat OCR
+  `total_s` p95 `0.474982s`, selected-box p95 `28.05`, and the runtime config
+  again recorded both cache switches as `0`. The strict failure is useful
+  evidence that fresh-extraction first-pass LA still has occasional subsecond
+  headroom risk; no runtime filter was changed in this patch.

@@ -634,6 +634,12 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
             }
         )
     )
+    monkeypatch.setattr(stress_module, "get_pipeline_version", lambda: "pipeline-test")
+    monkeypatch.setattr(
+        stress_module,
+        "ocr_runtime_config",
+        lambda: {"rapidocr_max_dimension": 1600},
+    )
 
     def fake_run_case(
         case,
@@ -681,6 +687,82 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["ocr_engine_stage_max_rows"] == {}
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
+    assert saved["runtime_config"]["pipeline_version"] == "pipeline-test"
+    assert saved["runtime_config"]["ocr"] == {"rapidocr_max_dimension": 1600}
+    assert saved["runtime_config"]["generation_env"][RUNNER_OCR_CACHE_ENV] == "1"
+    assert saved["runtime_config"]["generation_env"][EXTRACTION_CACHE_ENV] == "1"
+
+
+def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(stress_module, "get_pipeline_version", lambda: "pipeline-test")
+    monkeypatch.setattr(
+        stress_module,
+        "ocr_runtime_config",
+        lambda: {"rapidocr_max_dimension": 1400},
+    )
+    monkeypatch.delenv(RUNNER_OCR_CACHE_ENV, raising=False)
+    monkeypatch.delenv(EXTRACTION_CACHE_ENV, raising=False)
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        assert runner_ocr_cache is False
+        assert extraction_cache is False
+        assert RUNNER_OCR_CACHE_ENV not in os.environ
+        assert EXTRACTION_CACHE_ENV not in os.environ
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": 0.5,
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        runner_ocr_cache=False,
+        extraction_cache=False,
+        python_executable="python",
+    )
+
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    runtime_config = saved["runtime_config"]
+    assert report["runtime_config"] == runtime_config
+    assert runtime_config["pipeline_version"] == "pipeline-test"
+    assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1400}
+    assert runtime_config["generation_env"][RUNNER_OCR_CACHE_ENV] == "0"
+    assert runtime_config["generation_env"][EXTRACTION_CACHE_ENV] == "0"
+    assert os.environ.get(RUNNER_OCR_CACHE_ENV) is None
+    assert os.environ.get(EXTRACTION_CACHE_ENV) is None
 
 
 def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypatch) -> None:
