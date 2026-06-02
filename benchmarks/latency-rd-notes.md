@@ -13462,3 +13462,23 @@ with zero failures in 0.531s.
   repeat median `0.355s`, repeat p95 `0.560s`, repeat max `0.610s`,
   RapidOCR total p95 `0.494s`, and recognizer p95 `0.236s`; all completed
   primary rows had zero expectation issues under the new confidence floors.
+- Added explicit per-fixture `max_total_elapsed_s=1.0` expectations to all
+  completed real-screenshot stress cases. The expected sparse-label Las Vegas
+  failures already had the same cap, so the manifest now enforces the
+  subsecond target for every row even when a run omits the global
+  `--max-total-elapsed-s` latency flag. Focused validation:
+  `jq empty` on `benchmarks/real-screenshot-stress.json` passed,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `40` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `530` tests plus `30` subtests. The no-global-budget primary
+  proof `out/manifest-subsecond-primary-actual-20260602/stress-summary.json`
+  passed `16/16` expectations with statuses `{"complete":14,"failed":2}` and
+  primary max `0.717386s`, showing the manifest-level budget is active by
+  itself. The full actual-code hard gate
+  `out/manifest-subsecond-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, confidence-inclusive stable signatures
+  for all `16` cases, `48/48` subsecond repeats, primary max `0.743756s`,
+  repeat median `0.344s`, repeat p95 `0.551s`, repeat max `0.586s`,
+  RapidOCR total p95 `0.477s`, and recognizer p95 `0.231s`.

@@ -13,7 +13,8 @@
         "city_equals": "Ann Arbor",
         "min_control_points": 3,
         "min_ocr_labels": 16,
-        "min_combined_confidence": 0.80
+        "min_combined_confidence": 0.80,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -27,7 +28,8 @@
         "city_equals": "Grand Rapids",
         "min_control_points": 5,
         "min_ocr_labels": 16,
-        "min_combined_confidence": 0.74
+        "min_combined_confidence": 0.74,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -63,7 +65,8 @@
         "city_equals": "Dallas",
         "min_control_points": 5,
         "min_ocr_labels": 20,
-        "min_combined_confidence": 0.90
+        "min_combined_confidence": 0.90,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -77,7 +80,8 @@
         "city_equals": "Austin",
         "min_control_points": 8,
         "min_ocr_labels": 30,
-        "min_combined_confidence": 0.94
+        "min_combined_confidence": 0.94,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -91,7 +95,8 @@
         "city_equals": "Dallas",
         "min_control_points": 3,
         "min_ocr_labels": 30,
-        "min_combined_confidence": 0.72
+        "min_combined_confidence": 0.72,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -105,7 +110,8 @@
         "city_equals": "San Francisco",
         "min_control_points": 10,
         "min_ocr_labels": 18,
-        "min_combined_confidence": 0.90
+        "min_combined_confidence": 0.90,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -118,7 +124,8 @@
         "source_prefix": "ocr-georeference:",
         "city_equals": "Dallas",
         "min_control_points": 2,
-        "min_combined_confidence": 0.78
+        "min_combined_confidence": 0.78,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -132,6 +139,7 @@
         "min_control_points": 16,
         "min_ocr_labels": 30,
         "min_combined_confidence": 0.82,
+        "max_total_elapsed_s": 1.0,
         "bbox_approx": [-122.5053058, 37.3057357, -121.8559714, 37.8082677],
         "max_bbox_error_m": 1000
       }
@@ -148,6 +156,7 @@
         "min_control_points": 18,
         "min_ocr_labels": 36,
         "min_combined_confidence": 0.83,
+        "max_total_elapsed_s": 1.0,
         "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
         "max_bbox_error_m": 1000
       }
@@ -164,6 +173,7 @@
         "min_control_points": 10,
         "min_ocr_labels": 18,
         "min_combined_confidence": 0.83,
+        "max_total_elapsed_s": 1.0,
         "bbox_approx": [-95.432149, 29.6688021, -95.2875061, 29.820507],
         "max_bbox_error_m": 1000
       }
@@ -180,6 +190,7 @@
         "min_control_points": 5,
         "min_ocr_labels": 20,
         "min_combined_confidence": 0.81,
+        "max_total_elapsed_s": 1.0,
         "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
         "max_bbox_error_m": 1000
       }
@@ -195,7 +206,8 @@
         "city_equals": "Nashville",
         "min_control_points": 3,
         "min_ocr_labels": 14,
-        "min_combined_confidence": 0.70
+        "min_combined_confidence": 0.70,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -208,7 +220,8 @@
         "source_prefix": "ocr-georeference:",
         "city_equals": "Houston",
         "min_control_points": 3,
-        "min_combined_confidence": 0.81
+        "min_combined_confidence": 0.81,
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -223,6 +236,7 @@
         "min_control_points": 5,
         "min_ocr_labels": 18,
         "min_combined_confidence": 0.70,
+        "max_total_elapsed_s": 1.0,
         "bbox_approx": [-80.3388012, 25.6886035, -80.1116863, 25.9830147],
         "max_bbox_error_m": 1000
       }

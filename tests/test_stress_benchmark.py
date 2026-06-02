@@ -449,6 +449,26 @@ def test_check_expectations_rejects_slow_expected_failure() -> None:
     assert issues == ["total_elapsed_s 1.2 above 1.0"]
 
 
+def test_check_expectations_rejects_slow_complete() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Bay Area",
+            "control_points": 16,
+            "total_elapsed_s": 1.01,
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "min_control_points": 16,
+            "max_total_elapsed_s": 1.0,
+        },
+    )
+
+    assert issues == ["total_elapsed_s 1.01 above 1.0"]
+
+
 def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> None:
     image = tmp_path / "zoox.png"
     image.write_bytes(b"not a real image")
