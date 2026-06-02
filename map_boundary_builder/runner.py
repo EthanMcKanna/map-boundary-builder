@@ -314,6 +314,14 @@ class BoundaryBuildResult:
     overlay_path: Path | None = None
 
 
+@dataclass(frozen=True)
+class SvgServicePathCandidate:
+    extraction: Any
+    width: int
+    height: int
+    rgb: Any
+
+
 def emit_progress(
     progress: ProgressCallback | None,
     *,
@@ -431,6 +439,41 @@ def try_svg_catalog_shape_shortcut(
 ) -> BoundaryBuildResult | None:
     if not allow_pre_ocr_catalog:
         return None
+    candidate = extract_svg_service_path_candidate(
+        image_path,
+        opts=opts,
+        progress=progress,
+    )
+    if candidate is None:
+        return None
+    catalog_match, catalog_match_source = match_svg_service_path_candidate_catalog(
+        candidate,
+        city_input=city_input,
+    )
+    if catalog_match is None:
+        return None
+    return finish_catalog_boundary_result(
+        candidate.extraction,
+        catalog_match,
+        width=candidate.width,
+        height=candidate.height,
+        image_path=image_path,
+        city_input=city_input or "Auto",
+        output_path=output_path,
+        debug_path=debug_path,
+        opts=opts,
+        rgb=candidate.rgb,
+        progress=progress,
+        georeference_source=catalog_match_source or "catalog-shape-match",
+    )
+
+
+def extract_svg_service_path_candidate(
+    image_path: Path,
+    *,
+    opts: BoundaryBuildOptions,
+    progress: ProgressCallback | None,
+) -> SvgServicePathCandidate | None:
     try:
         svg_document = svg_catalog_service_path_document(read_svg_bytes(image_path))
     except Exception:
@@ -478,28 +521,50 @@ def try_svg_catalog_shape_shortcut(
             )
             if not catalog_style_supported(extraction.style):
                 return None
-            catalog_match, catalog_match_source = hinted_catalog_shape_match(
-                extraction.pixel_geometry,
-                style=extraction.style,
-                city_input=city_input,
+            return SvgServicePathCandidate(
+                extraction=extraction,
+                width=width,
+                height=height,
+                rgb=rgb,
             )
-            if catalog_match is None:
-                return None
     except Exception:
         return None
-    return finish_catalog_boundary_result(
-        extraction,
-        catalog_match,
+
+
+def match_svg_service_path_candidate_catalog(
+    candidate: SvgServicePathCandidate,
+    *,
+    city_input: str | None,
+) -> tuple[ServiceAreaCatalogMatch | None, str | None]:
+    return hinted_catalog_shape_match(
+        candidate.extraction.pixel_geometry,
+        style=candidate.extraction.style,
+        city_input=city_input,
+    )
+
+
+def svg_service_path_extraction_for_raster(
+    candidate: SvgServicePathCandidate | None,
+    *,
+    width: int,
+    height: int,
+) -> Any | None:
+    if candidate is None:
+        return None
+    if candidate.width == width and candidate.height == height:
+        return candidate.extraction
+    if candidate.width <= 0 or candidate.height <= 0 or width <= 0 or height <= 0:
+        return None
+    scale_x = candidate.width / float(width)
+    scale_y = candidate.height / float(height)
+    if abs(scale_x - scale_y) > 0.005:
+        return None
+    scale = (scale_x + scale_y) / 2.0
+    return rescale_extraction_result(
+        candidate.extraction,
         width=width,
         height=height,
-        image_path=image_path,
-        city_input=city_input or "Auto",
-        output_path=output_path,
-        debug_path=debug_path,
-        opts=opts,
-        rgb=rgb,
-        progress=progress,
-        georeference_source=catalog_match_source or "catalog-shape-match",
+        scale=scale,
     )
 
 
@@ -533,19 +598,34 @@ def build_boundary(
     allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
     upload_is_svg = is_svg_image(image_path)
     source_is_svg = upload_is_svg or opts.source_was_svg
+    svg_service_path_candidate: SvgServicePathCandidate | None = None
 
     if upload_is_svg:
-        svg_catalog_result = try_svg_catalog_shape_shortcut(
+        svg_service_path_candidate = extract_svg_service_path_candidate(
             image_path,
-            city_input=city_input,
-            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
-            output_path=output_path,
-            debug_path=debug_path,
             opts=opts,
             progress=progress,
         )
-        if svg_catalog_result is not None:
-            return svg_catalog_result
+        if svg_service_path_candidate is not None and allow_pre_ocr_catalog:
+            catalog_match, catalog_match_source = match_svg_service_path_candidate_catalog(
+                svg_service_path_candidate,
+                city_input=city_input,
+            )
+            if catalog_match is not None:
+                return finish_catalog_boundary_result(
+                    svg_service_path_candidate.extraction,
+                    catalog_match,
+                    width=svg_service_path_candidate.width,
+                    height=svg_service_path_candidate.height,
+                    image_path=image_path,
+                    city_input=city_input or "Auto",
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    rgb=svg_service_path_candidate.rgb,
+                    progress=progress,
+                    georeference_source=catalog_match_source or "catalog-shape-match",
+                )
 
     emit_progress(
         progress,
@@ -561,6 +641,11 @@ def build_boundary(
     )
     with Image.open(image_path) as img:
         width, height = img.size
+    svg_service_path_extraction = svg_service_path_extraction_for_raster(
+        svg_service_path_candidate,
+        width=width,
+        height=height,
+    )
 
     labels_future: Future[list[Any]] | None = None
     labels: list[Any] | None = None
@@ -589,25 +674,34 @@ def build_boundary(
         emit_progress(
             progress,
             stage="extract",
-            message="Extracting service-area pixels",
+            message=(
+                "Using SVG service-area path"
+                if svg_service_path_extraction is not None
+                else "Extracting service-area pixels"
+            ),
             percent=18,
             details={"width": width, "height": height},
         )
-        low_res_catalog_rgb = should_load_low_res_catalog_rgb(
-            city_input=city_input,
-            filename_hint=filename_hint,
-            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
-        )
-        catalog_extract_max_dimension = initial_catalog_extract_max_dimension(
-            city_input=city_input,
-            filename_hint=filename_hint,
-            allow_pre_ocr_catalog=allow_pre_ocr_catalog,
-        )
-        rgb = (
-            load_rgb_at_max_dimension(image_path, catalog_extract_max_dimension)
-            if low_res_catalog_rgb
-            else load_rgb(image_path)
-        )
+        if svg_service_path_extraction is not None:
+            low_res_catalog_rgb = False
+            catalog_extract_max_dimension = 0
+            rgb = load_rgb(image_path)
+        else:
+            low_res_catalog_rgb = should_load_low_res_catalog_rgb(
+                city_input=city_input,
+                filename_hint=filename_hint,
+                allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+            )
+            catalog_extract_max_dimension = initial_catalog_extract_max_dimension(
+                city_input=city_input,
+                filename_hint=filename_hint,
+                allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+            )
+            rgb = (
+                load_rgb_at_max_dimension(image_path, catalog_extract_max_dimension)
+                if low_res_catalog_rgb
+                else load_rgb(image_path)
+            )
         low_res_catalog_scale = (
             max(rgb.shape[1] / max(width, 1), rgb.shape[0] / max(height, 1))
             if low_res_catalog_rgb
@@ -762,16 +856,20 @@ def build_boundary(
             CATALOG_MISS_REFINE_MAX_DIMENSION if skip_redundant_probe else GENERAL_EXTRACT_MAX_DIMENSION
         )
         used_catalog_scaled_extraction = (
-            allow_pre_ocr_catalog
+            svg_service_path_extraction is None
+            and allow_pre_ocr_catalog
             and (low_res_catalog_rgb or extraction_scale_factor(rgb, extraction_max_dimension) < 1.0)
         )
-        extraction = extract_service_area(
-            image_path,
-            simplify_px=opts.simplify_px * low_res_catalog_scale if low_res_catalog_rgb else opts.simplify_px,
-            rgb=rgb,
-            max_dimension=0 if low_res_catalog_rgb else extraction_max_dimension,
-            cache=not allow_pre_ocr_catalog,
-        )
+        if svg_service_path_extraction is not None:
+            extraction = svg_service_path_extraction
+        else:
+            extraction = extract_service_area(
+                image_path,
+                simplify_px=opts.simplify_px * low_res_catalog_scale if low_res_catalog_rgb else opts.simplify_px,
+                rgb=rgb,
+                max_dimension=0 if low_res_catalog_rgb else extraction_max_dimension,
+                cache=not allow_pre_ocr_catalog,
+            )
         if low_res_catalog_rgb:
             extraction = rescale_extraction_result(
                 extraction,

@@ -105,8 +105,8 @@ def rasterize_svg_bytes_to_png(
 ) -> None:
     output_size = capped_svg_output_size(svg_bytes, max_dimension=max_dimension)
     rasterizers: tuple[tuple[str, Callable[..., None]], ...] = (
-        ("CairoSVG", rasterize_svg_with_cairosvg),
         ("resvg-py", rasterize_svg_with_resvg),
+        ("CairoSVG", rasterize_svg_with_cairosvg),
     )
     errors: list[str] = []
     for rasterizer_name, rasterizer in rasterizers:
@@ -185,12 +185,12 @@ def svg_rasterizer_diagnostics() -> dict[str, Any]:
         "cairosvg": probe_svg_rasterizer("CairoSVG", rasterize_svg_with_cairosvg),
         "resvg_py": probe_svg_rasterizer("resvg-py", rasterize_svg_with_resvg),
     }
-    if diagnostics["cairosvg"]["ok"]:
-        diagnostics["ok"] = True
-        diagnostics["preferred"] = "cairosvg"
-    elif diagnostics["resvg_py"]["ok"]:
+    if diagnostics["resvg_py"]["ok"]:
         diagnostics["ok"] = True
         diagnostics["preferred"] = "resvg-py"
+    elif diagnostics["cairosvg"]["ok"]:
+        diagnostics["ok"] = True
+        diagnostics["preferred"] = "cairosvg"
     return diagnostics
 
 

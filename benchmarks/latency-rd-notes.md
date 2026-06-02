@@ -15113,3 +15113,38 @@ with zero failures in 0.531s.
   after spending `2.379596s`; the promising next experiment is to reuse the
   extracted SVG path as candidate geometry for catalog misses while still
   georeferencing through the existing OCR/map-label path.
+- Shipped that SVG catalog-miss candidate as a guarded fallback and paired it
+  with a rasterizer-order speedup. The runner now keeps a successfully rendered
+  single `#07f` SVG service path as candidate geometry after strict catalog
+  matching misses, then reuses it only if the full SVG raster shares the same
+  coordinate frame; otherwise the old full-raster extraction path remains. On
+  `/Users/ethanmckanna/Downloads/mi.svg` with generic `upload.png` filename
+  hint, the current pre-patch path failed in `2.321567s` after extracting the
+  slim path and then failing full-SVG color extraction with zero OCR calls.
+  Candidate reuse alone completed the same artifact in `3.150291s`, proving
+  robustness but exposing full SVG rasterization as the remaining cost. A
+  direct rasterizer benchmark on the full Miami SVG at the `1600px` cap showed
+  CairoSVG at `1.978975s`-`2.0514s` and `resvg-py` at
+  `0.688754s`-`0.736219s`, so SVG rasterization now prefers `resvg-py` with
+  CairoSVG retained as fallback. With both changes, the same `mi.svg` command
+  completed in `1.556411s` via `catalog-shape-match:provider-ui-label` with
+  `catalog_slug=miami-waymo`, `catalog_shape_iou=0.611715`, `12` useful OCR
+  labels, and `bbox=[-80.3461737,25.6799742,-80.1149101,25.976257]`. A lower
+  `1000px` SVG cap plus lower Tesseract fallback threshold got as low as
+  `1.081855s`, but that is not shipped because the threshold change is global
+  and needs broader OCR validation. Focused tests passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py tests/test_image_io.py -q`
+  (`118 passed`), including a new unit test that proves catalog-miss SVGs reuse
+  the path candidate instead of re-running full-raster color extraction. The
+  focused SVG stress slice passed at
+  `out/svg-path-candidate-resvg-fast-fixtures-20260602/stress-summary.json`:
+  `3/3` expected, max total `0.151580s`, zero OCR calls, Austin `0.152s`,
+  Houston `0.098s`, and Nashville `0.083s`. The full no-cache hard gate passed
+  at `out/svg-path-candidate-resvg-full29-hard-20260602/stress-summary.json`:
+  `29/29` expected, statuses `{"complete":18,"failed":11}`, primary max
+  `0.864249s`, repeat `58/58` subsecond, repeat p95 `0.571684s`, repeat max
+  `0.610984s`, and OCR calls unchanged at `26`. The accepted SVG catalog rows
+  stayed strict and faster under `resvg-py`: Austin `0.083235s` with
+  `catalog_shape_iou=0.974266`, Houston `0.071137s` with
+  `catalog_shape_iou=0.98105`, and Nashville `0.071310s` with
+  `catalog_shape_iou=0.983962`.

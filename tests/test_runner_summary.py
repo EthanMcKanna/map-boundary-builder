@@ -1395,6 +1395,89 @@ def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, 
     assert finish_calls[0]["height"] == 80
 
 
+def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<rect fill="#fff" width="100" height="80"/>
+<path class="st2" d="M10 10h60v40H10z"/>
+</svg>""",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+    mask = np.zeros((80, 100), dtype=bool)
+    mask[10:50, 10:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    extract_calls: list[Path] = []
+    events: list[dict] = []
+    full_raster_path = tmp_path / "unknown.raster.png"
+    fake_match = SimpleNamespace(iou=0.61, entry=SimpleNamespace(slug="miami-waymo"))
+
+    def fake_rasterize(_svg_bytes, target_path, **_kwargs):
+        Image.fromarray(rgb).save(target_path)
+
+    def fake_normalize_image_for_processing(_path, **_kwargs):
+        Image.fromarray(rgb).save(full_raster_path)
+        return full_raster_path
+
+    def fake_extract_service_area(path, **_kwargs):
+        extract_calls.append(Path(path))
+        if not Path(path).name.endswith(".catalog-path.png"):
+            raise AssertionError("full SVG raster extraction should reuse the path candidate")
+        return extraction
+
+    def fake_finish_catalog_boundary_result(*_args, **kwargs):
+        return BoundaryBuildResult(
+            geojson={"type": "FeatureCollection", "features": []},
+            summary={
+                "status": "complete",
+                "catalog_slug": fake_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
+    monkeypatch.setattr(runner, "normalize_image_for_processing", fake_normalize_image_for_processing)
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_near_hit_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_avride_light_fill_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "should_overlap_ocr_with_extraction", lambda **_kwargs: False)
+    monkeypatch.setattr(runner, "should_overlap_probe_miss_ocr", lambda **_kwargs: False)
+    monkeypatch.setattr(runner, "provider_ui_fast_ocr_max_dimension_for_style", lambda *_args, **_kwargs: 900)
+    monkeypatch.setattr(runner, "provider_ui_focus_crop_enabled", lambda _extraction: False)
+    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(filename_hint="upload.png", write_mask_artifact=False),
+        progress=events.append,
+    )
+
+    assert result.summary["catalog_slug"] == "miami-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:provider-ui-label"
+    assert len(extract_calls) == 1
+    assert extract_calls[0].name.endswith(".catalog-path.png")
+    assert any(event["message"] == "Using SVG service-area path" for event in events)
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 

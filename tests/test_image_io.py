@@ -114,7 +114,7 @@ class SvgImageIoTests(unittest.TestCase):
 
             self.assertEqual(rgb.shape, (8, 12, 3))
 
-    def test_svg_rasterization_falls_back_to_resvg_when_cairosvg_unavailable(self) -> None:
+    def test_svg_rasterization_prefers_resvg_when_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             svg_path = workdir / "input.svg"
@@ -130,12 +130,12 @@ class SvgImageIoTests(unittest.TestCase):
             calls: list[dict[str, object]] = []
 
             def fake_import_module(name: str):
-                if name == "cairosvg":
-                    raise OSError("libcairo missing")
                 if name == "resvg_py":
                     return SimpleNamespace(
                         svg_to_bytes=lambda **kwargs: calls.append(kwargs) or png_bytes,
                     )
+                if name == "cairosvg":
+                    raise AssertionError("resvg-py should be tried before CairoSVG")
                 raise AssertionError(name)
 
             with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
@@ -152,6 +152,48 @@ class SvgImageIoTests(unittest.TestCase):
             self.assertEqual(calls[0]["width"], 1000)
             self.assertEqual(calls[0]["height"], 500)
             self.assertEqual(calls[0]["resources_dir"], str(workdir))
+            self.assertGreater(int(rgb[:, :, 2].max()), 200)
+
+    def test_svg_rasterization_falls_back_to_cairosvg_when_resvg_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            svg_path = workdir / "input.svg"
+            svg_path.write_text(
+                """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4000 2000">
+<rect width="4000" height="2000" fill="#ffffff"/>
+<rect x="1000" y="500" width="2000" height="1000" fill="#00a6ff"/>
+</svg>
+""",
+                encoding="utf-8",
+            )
+            calls: list[dict[str, object]] = []
+            png_bytes = png_fixture_bytes((1000, 500), rect=(250, 125, 750, 375))
+
+            def fake_svg2png(**kwargs):
+                calls.append(kwargs)
+                Path(kwargs["write_to"]).write_bytes(png_bytes)
+
+            def fake_import_module(name: str):
+                if name == "resvg_py":
+                    raise OSError("resvg unavailable")
+                if name == "cairosvg":
+                    return SimpleNamespace(svg2png=fake_svg2png)
+                raise AssertionError(name)
+
+            with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
+                image_path = normalize_image_for_processing(
+                    svg_path,
+                    output_dir=workdir,
+                    svg_max_dimension=1000,
+                )
+
+            rgb = load_rgb(image_path)
+
+            self.assertEqual(image_path.name, "input.raster.png")
+            self.assertEqual(rgb.shape, (500, 1000, 3))
+            self.assertEqual(calls[0]["output_width"], 1000)
+            self.assertEqual(calls[0]["output_height"], 500)
+            self.assertEqual(calls[0]["write_to"], str(image_path))
             self.assertGreater(int(rgb[:, :, 2].max()), 200)
 
     def test_svg_rasterizer_diagnostics_prefers_resvg_when_cairo_fails(self) -> None:
