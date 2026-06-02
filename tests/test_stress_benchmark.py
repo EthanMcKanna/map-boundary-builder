@@ -4,6 +4,8 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import map_boundary_builder.stress_benchmark as stress_module
 from map_boundary_builder.extract import EXTRACTION_CACHE_ENV
 from map_boundary_builder.runner import RUNNER_OCR_CACHE_ENV
@@ -758,6 +760,135 @@ def test_repeat_profile_flags_output_signature_drift() -> None:
     assert stability["stable"] is False
     assert stability["unique_signatures"] == 2
     assert [signature["count"] for signature in stability["signatures"]] == [1, 1]
+
+
+def test_repeat_profile_signature_drift_cases_reads_summary() -> None:
+    assert stress_module.repeat_profile_signature_drift_cases(
+        {"repeat_profile": {"summary": {"unstable_signature_cases": ["drifty", 42]}}}
+    ) == ["drifty", "42"]
+    assert stress_module.repeat_profile_signature_drift_cases({}) == []
+    assert stress_module.repeat_profile_signature_drift_cases(
+        {"repeat_profile": {"summary": {"unstable_signature_cases": "drifty"}}}
+    ) == []
+
+
+def test_main_requires_repeat_runs_for_repeat_signature_drift_gate(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run without repeat samples")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--fail-on-repeat-signature-drift"])
+
+    assert exc.value.code == 2
+
+
+def test_main_fails_when_repeat_signature_drift_is_detected(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["repeat_profile_runs"] == 2
+        assert kwargs["repeat_profile_warmups"] == 1
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.7,
+            },
+            "rows": [
+                {
+                    "slug": "drifty-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.7,
+                }
+            ],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 1,
+                    "expectation_passed_samples": 1,
+                    "subsecond_samples": 1,
+                    "median_total_elapsed_s": 0.72,
+                    "p95_total_elapsed_s": 0.72,
+                    "max_total_elapsed_s": 0.72,
+                    "unstable_signature_cases": ["drifty-map"],
+                }
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--repeat-profile-runs",
+            "2",
+            "--repeat-profile-warmups",
+            "1",
+            "--fail-on-repeat-signature-drift",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_main_passes_repeat_signature_drift_gate_when_stable(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["repeat_profile_runs"] == 1
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.6,
+                }
+            ],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 1,
+                    "expectation_passed_samples": 1,
+                    "subsecond_samples": 1,
+                    "median_total_elapsed_s": 0.62,
+                    "p95_total_elapsed_s": 0.62,
+                    "max_total_elapsed_s": 0.62,
+                    "unstable_signature_cases": [],
+                }
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--repeat-profile-runs",
+            "1",
+            "--fail-on-repeat-signature-drift",
+        ]
+    )
+
+    assert exit_code == 0
 
 
 def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> None:

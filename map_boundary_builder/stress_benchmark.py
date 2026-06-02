@@ -59,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero when any non-missing case violates manifest expectations.",
     )
     parser.add_argument(
+        "--fail-on-repeat-signature-drift",
+        action="store_true",
+        help="Exit non-zero when analyzed repeat-profile samples produce different output signatures.",
+    )
+    parser.add_argument(
         "--profile-ocr-engine",
         action="store_true",
         help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
@@ -112,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat-profile-runs must be non-negative")
     if args.repeat_profile_warmups < 0:
         parser.error("--repeat-profile-warmups must be non-negative")
+    if args.fail_on_repeat_signature_drift and args.repeat_profile_runs == 0:
+        parser.error("--fail-on-repeat-signature-drift requires --repeat-profile-runs")
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
     report = run_stress_benchmark(
@@ -131,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
     if isinstance(latency_budget, dict) and latency_budget.get("passed") is False:
+        return 1
+    if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
         return 1
     if args.fail_on_unexpected and report["summary"]["unexpected"]:
         return 1
@@ -997,6 +1006,19 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
         "error": sample.get("error"),
     }
+
+
+def repeat_profile_signature_drift_cases(report: dict[str, Any]) -> list[str]:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return []
+    summary = repeat_profile.get("summary")
+    if not isinstance(summary, dict):
+        return []
+    unstable_cases = summary.get("unstable_signature_cases")
+    if not isinstance(unstable_cases, list):
+        return []
+    return [str(slug) for slug in unstable_cases]
 
 
 def build_latency_budget_summary(

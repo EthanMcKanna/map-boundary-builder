@@ -12568,3 +12568,22 @@ with zero failures in 0.531s.
   each made Grand Rapids fail as sparse OCR in the primary row and all three
   analyzed repeats, scoring only `12/15` analyzed repeat expectations despite
   stable signatures. Keep `RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=16`.
+- Added `--fail-on-repeat-signature-drift` to the stress harness so future
+  speed probes can make repeat-output signature stability a hard gate instead
+  of a manual report check. The flag requires `--repeat-profile-runs`, exits
+  non-zero when `repeat_profile.summary.unstable_signature_cases` is non-empty,
+  and leaves ordinary exploratory runs unchanged. This is diagnostic-only and
+  does not change generation, OCR inputs, labels, georeferencing, cache keys,
+  or deployed runtime behavior. Focused harness coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`19 passed`), and the full suite passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`499 passed, 30 subtests passed`). A real no-cache in-process gate smoke,
+  `out/stress-signature-drift-gate-smoke-20260602/stress-summary.json`,
+  preserved `2/2` expectations across Grand Rapids and Zoox tall, kept all
+  `4/4` analyzed repeat samples subsecond, and reported
+  `stable_signature_cases=2`, `unstable_signature_cases=[]`,
+  median total `0.782773s`, p95 total `0.830315s`, and max total `0.830758s`.
+  Grand Rapids stayed stable at `city=Grand Rapids`, `control_points=5`, and
+  `ocr_label_count=56`; Zoox tall stayed stable in its expected fail-closed
+  sparse-OCR signature with `ocr_label_count=62`.
