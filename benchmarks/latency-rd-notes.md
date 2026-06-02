@@ -11609,3 +11609,20 @@ with zero failures in 0.531s.
   `out/ocr-label-report-evidence-20260602/full-report.json`. Focused benchmark
   tests passed (`49 passed`), the full suite passed (`447 passed`), and
   `git diff --check` passed.
+- Accepted the follow-on OCR label-loss regression gate. The benchmark CLI now
+  exposes optional baseline-report budgets `--max-ocr-label-count-drop` and
+  `--min-ocr-top-label-retention`, backed by normalized top-label set
+  comparison and explicit failure rows for missing candidate OCR evidence. This
+  is intentionally opt-in so older/extraction reports remain usable, but it
+  lets future speed sweeps fail on the exact failure mode that repeatedly
+  invalidated aggressive OCR downscale and detector-limit probes: critical map
+  labels disappear while the rest of the pipeline can still look superficially
+  plausible. Validation covered synthetic pass/fail/missing-evidence unit
+  cases, table output for overnight logs, and a real in-process no-catalog
+  benchmark comparison against the prior OCR-evidence report. That live probe
+  passed with `8/8` scored fixtures, average IoU `0.967842`, min IoU
+  `0.942536`, active total `5.612038s`, and a passing regression check that
+  compared OCR label counts and top-label sets for all `8` active fixtures
+  (`out/ocr-label-regression-gate-pass-20260602/full-report.json`). Focused
+  benchmark tests passed (`52 passed`), the full suite passed (`450 passed`),
+  and `git diff --check` passed.

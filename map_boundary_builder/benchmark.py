@@ -354,6 +354,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allowed absolute per-fixture duration increase before ratio checks fail.",
     )
     parser.add_argument(
+        "--max-ocr-label-count-drop",
+        type=int,
+        default=None,
+        help=(
+            "Optional maximum per-fixture OCR label-count drop against --baseline-report. "
+            "Useful for rejecting speed probes that lose map text before geometry fully collapses."
+        ),
+    )
+    parser.add_argument(
+        "--min-ocr-top-label-retention",
+        type=float,
+        default=None,
+        help=(
+            "Optional minimum fraction of baseline OCR top-label texts that must remain "
+            "in each candidate fixture when --baseline-report is provided."
+        ),
+    )
+    parser.add_argument(
         "--max-total-duration-increase-ratio",
         type=float,
         default=None,
@@ -510,6 +528,8 @@ def main(argv: list[str] | None = None) -> int:
             max_mean_iou_drop=args.max_mean_iou_drop,
             max_duration_increase_ratio=args.max_duration_increase_ratio,
             max_duration_increase_s=args.max_duration_increase_s,
+            max_ocr_label_count_drop=args.max_ocr_label_count_drop,
+            min_ocr_top_label_retention=args.min_ocr_top_label_retention,
             max_total_duration_increase_ratio=args.max_total_duration_increase_ratio,
             max_total_duration_increase_s=args.max_total_duration_increase_s,
             max_evaluated_duration_increase_ratio=args.max_evaluated_duration_increase_ratio,
@@ -1759,6 +1779,8 @@ def compare_report_regressions(
     max_mean_iou_drop: float = 0.0,
     max_duration_increase_ratio: float | None = None,
     max_duration_increase_s: float = 0.0,
+    max_ocr_label_count_drop: int | None = None,
+    min_ocr_top_label_retention: float | None = None,
     max_total_duration_increase_ratio: float | None = None,
     max_total_duration_increase_s: float = 0.0,
     max_evaluated_duration_increase_ratio: float | None = None,
@@ -1780,8 +1802,20 @@ def compare_report_regressions(
         else max(0.0, float(max_duration_increase_ratio))
     )
     duration_tolerance_s = max(0.0, float(max_duration_increase_s))
+    ocr_label_count_tolerance = (
+        None
+        if max_ocr_label_count_drop is None
+        else max(0, int(max_ocr_label_count_drop))
+    )
+    ocr_top_label_retention_floor = (
+        None
+        if min_ocr_top_label_retention is None
+        else min(1.0, max(0.0, float(min_ocr_top_label_retention)))
+    )
     compared_iou_pairs: list[tuple[float, float]] = []
     omitted_baseline_slugs: list[str] = []
+    compared_ocr_label_counts = 0
+    compared_ocr_top_label_sets = 0
     for slug, baseline_score in sorted(baseline_scores.items()):
         candidate_score = candidate_scores.get(slug)
         if candidate_score is None:
@@ -1827,6 +1861,61 @@ def compare_report_regressions(
                             "increase_ratio": round(increase_ratio, 6),
                         }
                     )
+        if ocr_label_count_tolerance is not None:
+            baseline_label_count = parse_report_label_count(baseline_score.get("ocr_label_count"))
+            candidate_label_count = parse_report_label_count(candidate_score.get("ocr_label_count"))
+            if baseline_label_count is not None:
+                if candidate_label_count is None:
+                    issues.append(
+                        {
+                            "slug": slug,
+                            "kind": "missing_candidate_ocr_label_count",
+                            "baseline_ocr_label_count": baseline_label_count,
+                        }
+                    )
+                else:
+                    compared_ocr_label_counts += 1
+                    label_count_drop = baseline_label_count - candidate_label_count
+                    if label_count_drop > ocr_label_count_tolerance:
+                        issues.append(
+                            {
+                                "slug": slug,
+                                "kind": "ocr_label_count_drop",
+                                "baseline_ocr_label_count": baseline_label_count,
+                                "candidate_ocr_label_count": candidate_label_count,
+                                "drop": label_count_drop,
+                                "max_drop": ocr_label_count_tolerance,
+                            }
+                        )
+        if ocr_top_label_retention_floor is not None:
+            baseline_top_labels = normalized_report_label_set(baseline_score.get("ocr_top_labels"))
+            candidate_top_labels = normalized_report_label_set(candidate_score.get("ocr_top_labels"))
+            if baseline_top_labels:
+                if not candidate_top_labels:
+                    issues.append(
+                        {
+                            "slug": slug,
+                            "kind": "missing_candidate_ocr_top_labels",
+                            "baseline_ocr_top_label_count": len(baseline_top_labels),
+                        }
+                    )
+                else:
+                    compared_ocr_top_label_sets += 1
+                    retained = baseline_top_labels & candidate_top_labels
+                    retention = len(retained) / len(baseline_top_labels)
+                    if retention < ocr_top_label_retention_floor:
+                        issues.append(
+                            {
+                                "slug": slug,
+                                "kind": "ocr_top_label_retention_drop",
+                                "baseline_ocr_top_label_count": len(baseline_top_labels),
+                                "candidate_ocr_top_label_count": len(candidate_top_labels),
+                                "retained_ocr_top_label_count": len(retained),
+                                "retention": round(retention, 6),
+                                "min_retention": ocr_top_label_retention_floor,
+                                "missing_ocr_top_labels": sorted(baseline_top_labels - candidate_top_labels)[:8],
+                            }
+                        )
 
     compared_baseline_fixtures = len(baseline_scores) - len(omitted_baseline_slugs)
     baseline_mean = (
@@ -1968,6 +2057,8 @@ def compare_report_regressions(
         "max_mean_iou_drop": mean_tolerance,
         "max_duration_increase_ratio": duration_tolerance,
         "max_duration_increase_s": duration_tolerance_s,
+        "max_ocr_label_count_drop": ocr_label_count_tolerance,
+        "min_ocr_top_label_retention": ocr_top_label_retention_floor,
         "max_total_duration_increase_ratio": total_duration_tolerance,
         "max_total_duration_increase_s": total_duration_tolerance_s,
         "max_evaluated_duration_increase_ratio": evaluated_duration_tolerance,
@@ -1983,6 +2074,8 @@ def compare_report_regressions(
         "omitted_baseline_fixtures": len(omitted_baseline_slugs),
         "omitted_baseline_slugs": omitted_baseline_slugs,
         "compared_evaluated_stage_durations": compared_evaluated_stage_durations,
+        "compared_ocr_label_counts": compared_ocr_label_counts,
+        "compared_ocr_top_label_sets": compared_ocr_top_label_sets,
         "baseline_average_iou": round(baseline_mean, 6),
         "candidate_average_iou": round(candidate_mean, 6),
         "average_iou_scope": "compared_fixtures",
@@ -2387,6 +2480,29 @@ def parse_report_duration(value: Any) -> float | None:
     return duration if duration >= 0.0 else None
 
 
+def parse_report_label_count(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        label_count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return label_count if label_count >= 0 else None
+
+
+def normalized_report_label_set(value: Any) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    labels: set[str] = set()
+    for raw_label in value:
+        if not isinstance(raw_label, str):
+            continue
+        label = normalized_words(raw_label)
+        if label:
+            labels.add(label)
+    return labels
+
+
 def report_evaluated_duration(report: dict[str, Any]) -> float | None:
     summary = report.get("summary", {})
     if not isinstance(summary, dict):
@@ -2529,6 +2645,22 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"{issue['candidate_evaluated_road_match_elapsed_s']:.3f}s "
                     f"(+{issue['increase_s']:.3f}s, ratio {issue['increase_ratio']:.3f})"
                 )
+            elif issue["kind"] == "ocr_label_count_drop":
+                print(
+                    f"       {issue['slug']}: OCR labels "
+                    f"{issue['baseline_ocr_label_count']} -> "
+                    f"{issue['candidate_ocr_label_count']} "
+                    f"(drop {issue['drop']}, max {issue['max_drop']})"
+                )
+            elif issue["kind"] == "ocr_top_label_retention_drop":
+                print(
+                    f"       {issue['slug']}: OCR top-label retention "
+                    f"{issue['retention']:.3f} < {issue['min_retention']:.3f}"
+                )
+            elif issue["kind"] == "missing_candidate_ocr_label_count":
+                print(f"       {issue['slug']}: missing candidate OCR label count")
+            elif issue["kind"] == "missing_candidate_ocr_top_labels":
+                print(f"       {issue['slug']}: missing candidate OCR top labels")
             elif issue["kind"] == "missing_candidate_score":
                 print(f"       {issue['slug']}: missing candidate score")
             else:

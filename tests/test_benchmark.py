@@ -1270,6 +1270,156 @@ def test_report_regression_check_can_flag_duration_increase() -> None:
     ]
 
 
+def test_report_regression_check_can_flag_ocr_label_loss() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {
+                "slug": "phoenix-waymo",
+                "status": "active",
+                "iou": 0.98332,
+                "ocr_label_count": 74,
+                "ocr_top_labels": [
+                    "Scottsdale",
+                    "International",
+                    "Fashion Park",
+                    "School Park",
+                ],
+            }
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {
+                "slug": "phoenix-waymo",
+                "status": "active",
+                "iou": 0.98332,
+                "ocr_label_count": 50,
+                "ocr_top_labels": ["Scottsdale", "Tempe"],
+            }
+        ],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_ocr_label_count_drop=10,
+        min_ocr_top_label_retention=0.75,
+    )
+
+    assert check["passed"] is False
+    assert check["max_ocr_label_count_drop"] == 10
+    assert check["min_ocr_top_label_retention"] == 0.75
+    assert check["compared_ocr_label_counts"] == 1
+    assert check["compared_ocr_top_label_sets"] == 1
+    assert check["issues"] == [
+        {
+            "slug": "phoenix-waymo",
+            "kind": "ocr_label_count_drop",
+            "baseline_ocr_label_count": 74,
+            "candidate_ocr_label_count": 50,
+            "drop": 24,
+            "max_drop": 10,
+        },
+        {
+            "slug": "phoenix-waymo",
+            "kind": "ocr_top_label_retention_drop",
+            "baseline_ocr_top_label_count": 4,
+            "candidate_ocr_top_label_count": 2,
+            "retained_ocr_top_label_count": 1,
+            "retention": 0.25,
+            "min_retention": 0.75,
+            "missing_ocr_top_labels": [
+                "fashion park",
+                "international",
+                "school park",
+            ],
+        },
+    ]
+
+
+def test_report_regression_check_allows_configured_ocr_label_tolerance() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {
+                "slug": "nashville-waymo",
+                "status": "active",
+                "iou": 0.986282,
+                "ocr_label_count": 19,
+                "ocr_top_labels": ["Nashville", "Edgefield", "Inglewood", "South Nashville"],
+            }
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {
+                "slug": "nashville-waymo",
+                "status": "active",
+                "iou": 0.986282,
+                "ocr_label_count": 17,
+                "ocr_top_labels": ["Nashville", "Edgefield", "Inglewood"],
+            }
+        ],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_ocr_label_count_drop=2,
+        min_ocr_top_label_retention=0.75,
+    )
+
+    assert check["passed"] is True
+    assert check["compared_ocr_label_counts"] == 1
+    assert check["compared_ocr_top_label_sets"] == 1
+    assert check["issues"] == []
+
+
+def test_report_regression_check_flags_missing_candidate_ocr_evidence() -> None:
+    baseline = {
+        "summary": {"average_iou": 0.95},
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "iou": 0.95701,
+                "ocr_label_count": 11,
+                "ocr_top_labels": ["Deep Ellum", "Highland Park", "Dallas"],
+            }
+        ],
+    }
+    candidate = {
+        "summary": {"average_iou": 0.95},
+        "scores": [{"slug": "dallas-waymo", "status": "active", "iou": 0.95701}],
+    }
+
+    check = compare_report_regressions(
+        candidate,
+        baseline,
+        max_ocr_label_count_drop=0,
+        min_ocr_top_label_retention=1.0,
+    )
+
+    assert check["passed"] is False
+    assert check["compared_ocr_label_counts"] == 0
+    assert check["compared_ocr_top_label_sets"] == 0
+    assert check["issues"] == [
+        {
+            "slug": "dallas-waymo",
+            "kind": "missing_candidate_ocr_label_count",
+            "baseline_ocr_label_count": 11,
+        },
+        {
+            "slug": "dallas-waymo",
+            "kind": "missing_candidate_ocr_top_labels",
+            "baseline_ocr_top_label_count": 3,
+        },
+    ]
+
+
 def test_report_regression_check_can_flag_evaluated_duration_increase() -> None:
     baseline = {
         "summary": {
@@ -1390,6 +1540,20 @@ def test_print_table_reports_aggregate_road_match_regression(capsys, tmp_path: P
                     "slug": "nashville-waymo",
                     "baseline_iou": 0.986282,
                 },
+                {
+                    "slug": "phoenix-waymo",
+                    "kind": "ocr_label_count_drop",
+                    "baseline_ocr_label_count": 74,
+                    "candidate_ocr_label_count": 50,
+                    "drop": 24,
+                    "max_drop": 10,
+                },
+                {
+                    "slug": "phoenix-waymo",
+                    "kind": "ocr_top_label_retention_drop",
+                    "retention": 0.25,
+                    "min_retention": 0.75,
+                },
             ],
         },
     }
@@ -1399,6 +1563,8 @@ def test_print_table_reports_aggregate_road_match_regression(capsys, tmp_path: P
     output = capsys.readouterr().out
     assert "evaluated road-match duration 0.400s -> 0.700s" in output
     assert "nashville-waymo: missing candidate score" in output
+    assert "phoenix-waymo: OCR labels 74 -> 50" in output
+    assert "phoenix-waymo: OCR top-label retention 0.250 < 0.750" in output
 
 
 def test_report_regression_check_can_flag_evaluated_stage_duration_increase() -> None:
