@@ -174,6 +174,37 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert [row["slug"] for row in report["rows"]] == ["kept"]
     assert saved["summary"]["expectation_passed"] == 1
     assert saved["summary"]["sources"] == {"ocr-georeference:nominatim-label-fit": 1}
+    assert saved["summary"]["stage_duration_s"] == {}
+    assert saved["summary"]["stage_max_rows"] == {}
+
+
+def test_summarize_rows_records_stage_totals_and_max_cases() -> None:
+    summary = stress_module.summarize_rows(
+        [
+            {
+                "slug": "ann-arbor",
+                "observed_status": "complete",
+                "expectation_passed": True,
+                "source": "ocr-georeference:nominatim-label-fit",
+                "total_elapsed_s": 1.3,
+                "stages": {"ocr": 0.9, "extract": 0.3},
+            },
+            {
+                "slug": "bay-area",
+                "observed_status": "complete",
+                "expectation_passed": True,
+                "source": "ocr-georeference:nominatim-label-fit",
+                "total_elapsed_s": 1.5,
+                "stages": {"ocr": 1.1, "extract": 0.2},
+            },
+        ]
+    )
+
+    assert summary["stage_duration_s"] == {"extract": 0.5, "ocr": 2.0}
+    assert summary["stage_max_rows"] == {
+        "extract": {"slug": "ann-arbor", "elapsed_s": 0.3},
+        "ocr": {"slug": "bay-area", "elapsed_s": 1.1},
+    }
 
 
 def test_select_cases_rejects_unknown_slug() -> None:

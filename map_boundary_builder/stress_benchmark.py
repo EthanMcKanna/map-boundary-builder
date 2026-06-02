@@ -300,12 +300,26 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     unexpected = [row["slug"] for row in rows if not row.get("expectation_passed")]
     statuses: dict[str, int] = {}
     sources: dict[str, int] = {}
+    stage_totals: dict[str, float] = {}
+    stage_max_rows: dict[str, dict[str, Any]] = {}
     for row in rows:
         status = str(row.get("observed_status"))
         statuses[status] = statuses.get(status, 0) + 1
         source = row.get("source")
         if isinstance(source, str) and source:
             sources[source] = sources.get(source, 0) + 1
+        stages = row.get("stages")
+        if isinstance(stages, dict):
+            for stage, elapsed_s in stages.items():
+                if not isinstance(stage, str) or not isinstance(elapsed_s, (int, float)):
+                    continue
+                stage_totals[stage] = stage_totals.get(stage, 0.0) + float(elapsed_s)
+                prior = stage_max_rows.get(stage)
+                if prior is None or float(elapsed_s) > float(prior["elapsed_s"]):
+                    stage_max_rows[stage] = {
+                        "slug": row.get("slug"),
+                        "elapsed_s": round(float(elapsed_s), 6),
+                    }
     elapsed_values = [row.get("total_elapsed_s") for row in rows if isinstance(row.get("total_elapsed_s"), (int, float))]
     return {
         "total": len(rows),
@@ -314,6 +328,8 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "statuses": dict(sorted(statuses.items())),
         "sources": dict(sorted(sources.items())),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
+        "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
+        "stage_max_rows": dict(sorted(stage_max_rows.items())),
     }
 
 
@@ -325,6 +341,16 @@ def print_stress_table(report: dict[str, Any]) -> None:
         f"statuses={summary['statuses']}, "
         f"max_total_elapsed_s={summary['max_total_elapsed_s']}"
     )
+    if summary.get("stage_duration_s"):
+        stage_total_text = ", ".join(
+            f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()
+        )
+        print(f"stage totals: {stage_total_text}")
+    if summary.get("stage_max_rows"):
+        stage_max_text = ", ".join(
+            f"{stage}={row['elapsed_s']:.3f}s@{row['slug']}" for stage, row in summary["stage_max_rows"].items()
+        )
+        print(f"stage max: {stage_max_text}")
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
         elapsed = row.get("total_elapsed_s")

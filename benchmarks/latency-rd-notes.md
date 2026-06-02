@@ -11832,3 +11832,18 @@ with zero failures in 0.531s.
   the expected sparse-OCR reliability error instead of emitting the old wrong
   Las Vegas polygon. Vercel CLI was still `54.3.0` during this deploy check;
   upgrade to `54.7.1` or newer before the next longer Vercel workflow.
+- Accepted stress-runner stage-tail reporting so real-screenshot probes now
+  record `stage_duration_s` totals and `stage_max_rows` in
+  `stress-summary.json`, plus matching compact CLI lines. This is a
+  benchmark-harness reliability improvement for the remaining sub-second work:
+  a pre-change current run
+  `out/real-screenshot-stress-stageprobe-20260602/stress-summary.json` still
+  passed `12/12` expectations but had max internal `1.856757s`, OCR total
+  `9.352765s`, extract total `4.510697s`, and OCR max `1.034904s` on
+  `bay-area-waymo`. After adding the reporter, the rerun
+  `out/real-screenshot-stress-stages-20260602/stress-summary.json` passed
+  `12/12` expectations with max internal `1.470377s`, statuses
+  `{complete: 10, failed: 2}`, stage totals `ocr=6.731731s`,
+  `extract=3.572181s`, `georeference=0.392866s`, and max rows naming
+  `ann-arbor-may-mobility-avif` as the OCR (`0.878299s`) and extract
+  (`0.533763s`) tail. Focused stress-runner tests passed (`6 passed`).
