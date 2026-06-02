@@ -13180,3 +13180,37 @@ with zero failures in 0.531s.
   `0.279017s`. Keep the current default batch `12` and the existing
   dark-teal-specific override `16`; the remaining LA tail is not improved by
   batching alone.
+- Rejected a dense fast-text geometry cap as a runtime change, but accepted the
+  reliability lesson into the stress manifest. A monkeypatched LA-only
+  `top24` selected-box cap
+  (`out/probe-la-dense-top24-area-20260602/stress-summary.json`) reduced LA
+  repeat p95 to `0.519s`, but dropped support from `18` controls and `40`
+  labels to `13` controls and `27` labels while shifting the bbox slightly. A
+  gentler `top28` cap
+  (`out/probe-la-dense-top28-area-20260602/stress-summary.json`) preserved the
+  current LA bbox and top labels and reduced LA repeat p95 to `0.536s`, but
+  still dropped support to `16` controls and `34` labels. Across the six-case
+  slow gate (`out/probe-dense-top28-area-slow6-20260602/stress-summary.json`),
+  `top28` was effectively noise-level overall: repeat p95 moved from the
+  current `0.573583s` to `0.571049s`, max worsened from `0.580637s` to
+  `0.609057s`, and RapidOCR total p95 rose from `0.510749s` to `0.515045s`.
+  Do not ship a geometry-only dense cap without a stronger support-preserving
+  validator.
+- Tightened the real-screenshot stress manifest so future bright-blue speed
+  probes cannot pass while silently reducing known hard-case georeference
+  support. Bay Area now requires `16` controls instead of `8`, Los Angeles
+  requires `18` instead of `10`, and Houston requires `10` instead of `8`.
+  The negative-control monkeypatch
+  `out/probe-la-dense-top28-area-strict-20260602/stress-summary.json` now fails
+  as intended with `control_points 16 below 18`. The actual code path passes
+  the stricter slow-six gate
+  `out/strict-support-slow6-actual-20260602/stress-summary.json` with `6/6`
+  primary expectations, `24/24` analyzed repeat expectations, stable
+  signatures for all six cases, `24/24` subsecond repeats, primary max
+  `0.920060s`, repeat median `0.495s`, repeat p95 `0.624s`, and repeat max
+  `0.710s`. The broader hard gate
+  `out/strict-support-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, `48/48` analyzed repeat expectations, stable
+  signatures for all `16` cases, `48/48` subsecond repeats, primary max
+  `0.973704s`, repeat median `0.352s`, repeat p95 `0.625s`, repeat max
+  `0.658s`, RapidOCR total p95 `0.564s`, and recognizer p95 `0.239s`.
