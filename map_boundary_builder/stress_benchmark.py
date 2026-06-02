@@ -983,6 +983,7 @@ def summarize_repeat_profile_samples(
             "unstable_signature_cases": unstable_signature_cases,
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+            "slowest_samples": repeat_profile_slowest_samples(analyzed_samples),
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
             "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
             "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
@@ -1041,6 +1042,98 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
         "error": sample.get("error"),
     }
+
+
+def repeat_profile_slowest_samples(
+    samples: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for sample in samples:
+        total_elapsed_s = parse_nonnegative_float(sample.get("total_elapsed_s"))
+        if total_elapsed_s is None:
+            continue
+        ranked.append((total_elapsed_s, sample))
+    ranked.sort(
+        key=lambda item: (
+            -item[0],
+            str(item[1].get("slug") or ""),
+            int(item[1].get("repeat_index") or 0),
+        )
+    )
+    return [
+        repeat_profile_slowest_sample_summary(sample, total_elapsed_s)
+        for total_elapsed_s, sample in ranked[: max(0, limit)]
+    ]
+
+
+def repeat_profile_slowest_sample_summary(
+    sample: dict[str, Any],
+    total_elapsed_s: float,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "slug": sample.get("slug"),
+        "repeat_index": sample.get("repeat_index"),
+        "total_elapsed_s": round(total_elapsed_s, 6),
+        "observed_status": sample.get("observed_status"),
+        "expectation_passed": sample.get("expectation_passed"),
+    }
+    top_stage = slowest_stage_summary(sample)
+    if top_stage is not None:
+        summary["top_stage"] = top_stage
+    ocr_label_count = sample.get("ocr_label_count")
+    if isinstance(ocr_label_count, (int, float)) and not isinstance(ocr_label_count, bool):
+        summary["ocr_label_count"] = int(ocr_label_count)
+    ocr_label_event = sample.get("ocr_label_event")
+    if isinstance(ocr_label_event, str) and ocr_label_event:
+        summary["ocr_label_event"] = ocr_label_event
+    ocr_top_labels = sample.get("ocr_top_labels")
+    if isinstance(ocr_top_labels, list):
+        summary["ocr_top_labels"] = ocr_top_labels[:5]
+    ocr_engine = slowest_sample_ocr_engine_summary(sample)
+    if ocr_engine:
+        summary["ocr_engine"] = ocr_engine
+    return summary
+
+
+def slowest_stage_summary(sample: dict[str, Any]) -> dict[str, Any] | None:
+    stages = sample.get("stages")
+    if not isinstance(stages, dict):
+        return None
+    best_name: str | None = None
+    best_elapsed: float | None = None
+    for stage, raw_elapsed_s in stages.items():
+        if not isinstance(stage, str) or not stage:
+            continue
+        elapsed_s = parse_nonnegative_float(raw_elapsed_s)
+        if elapsed_s is None:
+            continue
+        if best_elapsed is None or elapsed_s > best_elapsed:
+            best_name = stage
+            best_elapsed = elapsed_s
+    if best_name is None or best_elapsed is None:
+        return None
+    return {"stage": best_name, "elapsed_s": round(best_elapsed, 6)}
+
+
+def slowest_sample_ocr_engine_summary(sample: dict[str, Any]) -> dict[str, Any]:
+    ocr_engine_profile = sample.get("ocr_engine_profile")
+    if not isinstance(ocr_engine_profile, dict):
+        return {}
+    summary: dict[str, Any] = {}
+    for key in OCR_ENGINE_STAGE_MAX_KEYS:
+        elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
+        if elapsed_s is not None:
+            summary[key] = round(elapsed_s, 6)
+    calls = ocr_engine_profile.get("calls")
+    if isinstance(calls, int):
+        summary["calls"] = calls
+    for key in ("raw_box_count", "selected_box_count", "result_count", "label_count", "useful_label_count"):
+        value = ocr_engine_profile.get(key)
+        if isinstance(value, int):
+            summary[key] = value
+    return summary
 
 
 def repeat_profile_signature_drift_cases(report: dict[str, Any]) -> list[str]:
@@ -1529,6 +1622,15 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
                 f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
             )
+            slowest_samples = repeat_summary.get("slowest_samples")
+            if isinstance(slowest_samples, list) and slowest_samples:
+                slow_text = ", ".join(
+                    repeat_profile_slow_sample_text(sample)
+                    for sample in slowest_samples[:5]
+                    if isinstance(sample, dict)
+                )
+                if slow_text:
+                    print(f"repeat slowest: {slow_text}")
             unstable_signature_cases = repeat_summary.get("unstable_signature_cases")
             if isinstance(unstable_signature_cases, list) and unstable_signature_cases:
                 print(
@@ -1568,6 +1670,34 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         for issue in row.get("expectation_issues", []):
             print(f"   - {issue}")
+
+
+def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
+    slug = sample.get("slug") or "-"
+    repeat_index = sample.get("repeat_index")
+    repeat_text = f"#{repeat_index}" if isinstance(repeat_index, int) else "#?"
+    elapsed_s = parse_nonnegative_float(sample.get("total_elapsed_s"))
+    elapsed_text = f"{elapsed_s:.3f}s" if elapsed_s is not None else "-"
+    top_stage = sample.get("top_stage")
+    stage_text = ""
+    if isinstance(top_stage, dict):
+        stage = top_stage.get("stage")
+        stage_elapsed = parse_nonnegative_float(top_stage.get("elapsed_s"))
+        if isinstance(stage, str) and stage and stage_elapsed is not None:
+            stage_text = f" {stage}={stage_elapsed:.3f}s"
+    ocr_engine = sample.get("ocr_engine")
+    ocr_text = ""
+    if isinstance(ocr_engine, dict):
+        rec_elapsed_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
+        total_elapsed_s = parse_nonnegative_float(ocr_engine.get("total_s"))
+        parts = []
+        if rec_elapsed_s is not None:
+            parts.append(f"rec={rec_elapsed_s:.3f}s")
+        if total_elapsed_s is not None:
+            parts.append(f"ocr_total={total_elapsed_s:.3f}s")
+        if parts:
+            ocr_text = " " + " ".join(parts)
+    return f"{slug}{repeat_text}={elapsed_text}{stage_text}{ocr_text}"
 
 
 def parse_summary(stdout: str | bytes | None) -> tuple[dict[str, Any], str | None]:

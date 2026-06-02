@@ -616,6 +616,23 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "max_duration_s": 0.4,
         }
     }
+    assert repeat_profile["summary"]["slowest_samples"] == [
+        {
+            "slug": "kept",
+            "repeat_index": 2,
+            "total_elapsed_s": 0.8,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
+            "ocr_engine": {
+                "det_elapsed_s": 0.08,
+                "rec_elapsed_s": 0.16,
+                "total_s": 0.2,
+                "calls": 1,
+                "raw_box_count": 3,
+            },
+        }
+    ]
     assert repeat_profile["summary"]["ocr_engine_profile"] == {
         "fixtures": 1,
         "calls": 1,
@@ -1394,6 +1411,66 @@ def test_repeat_profile_duration_stats_record_tail_percentiles() -> None:
         "p95_duration_s": 0.38,
         "max_duration_s": 0.4,
     }
+
+
+def test_repeat_profile_slowest_samples_summarizes_actionable_context() -> None:
+    samples = [
+        {
+            "slug": "fast",
+            "repeat_index": 1,
+            "total_elapsed_s": 0.31,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "stages": {"ocr": 0.12, "extract": 0.08},
+        },
+        {
+            "slug": "slow",
+            "repeat_index": 2,
+            "total_elapsed_s": 0.91,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "stages": {"ocr": 0.74, "extract": 0.05},
+            "ocr_label_count": 37,
+            "ocr_label_event": "Map labels read",
+            "ocr_top_labels": ["Zoox", "Las Vegas", "Paradise", "Airport", "Strip", "Extra"],
+            "ocr_engine_profile": {
+                "calls": 1,
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": 0.45,
+                "total_s": 0.72,
+                "selected_box_count": 37,
+                "useful_label_count": 18,
+            },
+        },
+    ]
+
+    slowest = stress_module.repeat_profile_slowest_samples(samples, limit=1)
+
+    assert slowest == [
+        {
+            "slug": "slow",
+            "repeat_index": 2,
+            "total_elapsed_s": 0.91,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.74},
+            "ocr_label_count": 37,
+            "ocr_label_event": "Map labels read",
+            "ocr_top_labels": ["Zoox", "Las Vegas", "Paradise", "Airport", "Strip"],
+            "ocr_engine": {
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": 0.45,
+                "total_s": 0.72,
+                "calls": 1,
+                "selected_box_count": 37,
+                "useful_label_count": 18,
+            },
+        }
+    ]
+    assert (
+        stress_module.repeat_profile_slow_sample_text(slowest[0])
+        == "slow#2=0.910s ocr=0.740s rec=0.450s ocr_total=0.720s"
+    )
 
 
 def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatch) -> None:

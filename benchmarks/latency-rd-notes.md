@@ -12773,3 +12773,33 @@ with zero failures in 0.531s.
   probe on this lane unless upstream publishes a genuinely new release/backend
   or a hybrid validator can prove equivalence before fallback. This checkpoint
   intentionally makes no runtime code change and needs no deploy.
+- Added slowest analyzed repeat-sample attribution to the real-screenshot
+  stress repeat profile. The harness now records the top slow analyzed repeats
+  with slug, repeat index, total time, slowest pipeline stage, OCR label
+  context, and profiled OCR engine totals, and prints the same compact summary
+  in the CLI table. This is diagnostic-only and does not change generation,
+  OCR inputs, georeferencing, cache keys, or runtime behavior, but it makes
+  future subsecond probes safer because a p95/max regression now points at the
+  concrete repeat sample rather than only a distribution aggregate. Focused
+  validation passed with `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_stress_benchmark.py -q` (`31 passed`) and `py_compile` passed for
+  the edited harness/test files; full validation passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` (`514 passed, 30 subtests
+  passed`), and `git diff --check` passed. A real dark-teal/Zoox-tail smoke,
+  `out/stress-slowest-repeat-smoke-20260602/stress-summary.json`, used
+  Grand Rapids May Mobility plus expected fail-closed Zoox Las Vegas mobile
+  tall, in-process execution, disabled OCR/extraction caches, OCR-engine
+  profiling, `--repeat-profile-runs 3`, `--repeat-profile-warmups 1`,
+  `--fail-on-unexpected`, `--fail-on-repeat-signature-drift`,
+  `--max-total-elapsed-s 1.5`, `--max-repeat-profile-p95-duration-s 1.05`,
+  and OCR-engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It passed `2/2`
+  primary expectations and `4/4` analyzed repeat expectations, kept `4/4`
+  analyzed repeats subsecond, and passed the total/OCR-engine p95 budgets with
+  repeat p95 `0.845s`, max `0.846s`, recognizer p95 `0.577s`, and RapidOCR
+  total p95 `0.729s`. The new slow-sample evidence shows both slowest analyzed
+  repeats were `zoox-las-vegas-mobile-tall` (`0.846s` and `0.834s`), both were
+  OCR-stage dominated, and both selected 51 OCR boxes with recognizer time
+  around `0.57s`; Grand Rapids followed at `0.658s`/`0.650s` with 34 selected
+  boxes and recognizer time around `0.43s`. Keep the next OCR-tail experiment
+  focused on Zoox tall recognition volume/semantics rather than another broad
+  backend swap. No deploy is needed.
