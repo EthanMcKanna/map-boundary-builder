@@ -1303,12 +1303,17 @@ class ApiRunCacheTests(unittest.TestCase):
             {"default", "en-ppocrv5"},
         )
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
+        self.assertEqual(cold["ocr"]["rapidocr_dark_teal_rec_batch_num"], 16)
         self.assertEqual(cold["ocr"]["current_catalog_label_ocr_max_dimension"], 875)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
         self.assertEqual(
             cold["ocr"]["rapidocr_warm_engine_keys"],
-            [[608, "default", "default"], [256, "en-ppocrv5", "max"]],
+            [
+                [608, "default", "default", 12],
+                [256, "en-ppocrv5", "max", 12],
+                [608, "default", "default", 16],
+            ],
         )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)
         self.assertTrue(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])

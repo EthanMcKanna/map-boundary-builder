@@ -552,6 +552,7 @@ class OcrGroupingTests(unittest.TestCase):
                 rapidocr_detector_limit_side_len=None,
                 rapidocr_detector_limit_type=None,
                 rapidocr_recognition_profile=None,
+                rapidocr_rec_batch_num=None,
             ):
                 calls.append(Path(image_path).name)
                 return [OcrLabel("Dallas", x=10, y=8, width=6, height=5, confidence=99)]
@@ -808,11 +809,31 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertNotEqual(key_default, key_max)
 
+    def test_ocr_cache_key_depends_on_rapidocr_rec_batch_num(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            key_default = ocr_cache_key(image_path, use_tesseract=False)
+            key_override = ocr_cache_key(
+                image_path,
+                use_tesseract=False,
+                rapidocr_rec_batch_num=16,
+            )
+
+        self.assertNotEqual(key_default, key_override)
+
     def test_rapidocr_engine_kwargs_applies_detector_limit_type(self) -> None:
         kwargs = ocr_module.rapidocr_engine_kwargs(480, detector_limit_type="max")
 
         self.assertEqual(kwargs["det_limit_side_len"], 480)
         self.assertEqual(kwargs["det_limit_type"], "max")
+
+    def test_rapidocr_engine_kwargs_applies_rec_batch_override(self) -> None:
+        kwargs = ocr_module.rapidocr_engine_kwargs(480, rec_batch_num=16)
+
+        self.assertEqual(kwargs["det_limit_side_len"], 480)
+        self.assertEqual(kwargs["rec_batch_num"], 16)
 
     def test_rapidocr_recognition_profile_kwargs_selects_v5_english_assets(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -1195,6 +1216,7 @@ class OcrGroupingTests(unittest.TestCase):
             640,
             ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
             ocr_module.RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+            ocr_module.RAPIDOCR_REC_BATCH_NUM,
         )
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
@@ -1223,6 +1245,7 @@ class OcrGroupingTests(unittest.TestCase):
             512,
             ocr_module.RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
             ocr_module.RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+            ocr_module.RAPIDOCR_REC_BATCH_NUM,
         )
         self.assertEqual([label.text for label in labels], ["Orlando", "Southchase"])
 
@@ -1302,6 +1325,7 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1600),
                 patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 608),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+                patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ):
                 self.assertTrue(warm_rapidocr_runtime())
         finally:
@@ -1325,6 +1349,7 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1200),
                 patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 0),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+                patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ):
                 self.assertTrue(warm_rapidocr_runtime())
         finally:
@@ -1338,14 +1363,15 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
+            patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
         ):
             keys = ocr_module.rapidocr_warm_engine_keys()
 
         self.assertEqual(
             keys,
             [
-                (608, "default", "default"),
-                (448, "en-ppocrv5", "max"),
+                (608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+                (448, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ],
         )
 
@@ -1355,14 +1381,34 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+            patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
         ):
             keys = ocr_module.rapidocr_warm_engine_keys()
 
         self.assertEqual(
             keys,
             [
-                (608, "default", "default"),
-                (448, "default", "max"),
+                (608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+                (448, "default", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+            ],
+        )
+
+    def test_rapidocr_warm_engine_keys_include_dark_teal_rec_batch_override(self) -> None:
+        with (
+            patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 608),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "default"),
+            patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+            patch.object(ocr_module, "RAPIDOCR_REC_BATCH_NUM", 12),
+            patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", 16),
+        ):
+            keys = ocr_module.rapidocr_warm_engine_keys()
+
+        self.assertEqual(
+            keys,
+            [
+                (608, "default", "default", 12),
+                (608, "default", "default", 16),
             ],
         )
 

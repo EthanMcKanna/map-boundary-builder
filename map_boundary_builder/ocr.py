@@ -33,6 +33,7 @@ from .runtime_config import (
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
     RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
     RAPIDOCR_CLS_BATCH_NUM,
+    RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
     RAPIDOCR_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
@@ -221,6 +222,7 @@ def extract_ocr_labels(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
     allow_tesseract_fallback: bool = True,
     cache: bool = True,
@@ -256,6 +258,7 @@ def extract_ocr_labels(
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
             rapidocr_recognition_profile=rapidocr_recognition_profile,
+            rapidocr_rec_batch_num=rapidocr_rec_batch_num,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if use_raw_cache_key
@@ -285,6 +288,7 @@ def extract_ocr_labels(
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
             rapidocr_recognition_profile=rapidocr_recognition_profile,
+            rapidocr_rec_batch_num=rapidocr_rec_batch_num,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if visual_cache_key is not None and visual_cache_key != cache_key:
@@ -301,6 +305,7 @@ def extract_ocr_labels(
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
             rapidocr_recognition_profile=rapidocr_recognition_profile,
+            rapidocr_rec_batch_num=rapidocr_rec_batch_num,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         canonical_trimmed = canonical_ocr_bgr_trimmed(prepared_bgr, canonical_bgr, canonical_origin)
@@ -325,6 +330,7 @@ def extract_ocr_labels(
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
             rapidocr_recognition_profile=rapidocr_recognition_profile,
+            rapidocr_rec_batch_num=rapidocr_rec_batch_num,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if near_visual_cache_key is not None and near_visual_cache_key not in {cache_key, visual_cache_key}:
@@ -343,6 +349,7 @@ def extract_ocr_labels(
             rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
             rapidocr_detector_limit_type=rapidocr_detector_limit_type,
             rapidocr_recognition_profile=rapidocr_recognition_profile,
+            rapidocr_rec_batch_num=rapidocr_rec_batch_num,
             rapidocr_min_text_area=rapidocr_min_text_area,
         )
         if coarse_visual_cache_key is not None and coarse_visual_cache_key not in {
@@ -395,6 +402,7 @@ def extract_ocr_labels(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         **rapidocr_kwargs,
     )
     words: list[OcrLabel] = list(rapid_words)
@@ -458,6 +466,7 @@ def extract_ocr_labels_from_rgb(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
     allow_tesseract_fallback: bool = True,
     cache: bool = True,
@@ -469,6 +478,7 @@ def extract_ocr_labels_from_rgb(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
         allow_tesseract_fallback=allow_tesseract_fallback,
         cache=cache,
@@ -503,6 +513,7 @@ def ocr_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     try:
@@ -517,6 +528,7 @@ def ocr_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -529,6 +541,7 @@ def ocr_visual_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     if bgr is None:
@@ -545,6 +558,7 @@ def ocr_visual_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -557,6 +571,7 @@ def ocr_near_visual_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
@@ -566,6 +581,7 @@ def ocr_near_visual_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
         mask=OCR_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr6-sha256",
@@ -581,6 +597,7 @@ def ocr_coarse_visual_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     return ocr_quantized_visual_cache_key(
@@ -590,6 +607,7 @@ def ocr_coarse_visual_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
         mask=OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK,
         digest_kind="visual-bgr5-sha256",
@@ -605,6 +623,7 @@ def ocr_quantized_visual_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
     mask: int,
     digest_kind: str,
@@ -625,6 +644,7 @@ def ocr_quantized_visual_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -637,6 +657,7 @@ def ocr_canonical_visual_cache_key(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str | None:
     if bgr is None:
@@ -653,6 +674,7 @@ def ocr_canonical_visual_cache_key(
         rapidocr_detector_limit_side_len=rapidocr_detector_limit_side_len,
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
+        rapidocr_rec_batch_num=rapidocr_rec_batch_num,
         rapidocr_min_text_area=rapidocr_min_text_area,
     )
 
@@ -771,6 +793,12 @@ def normalized_rapidocr_recognition_profile(rapidocr_recognition_profile: str | 
     return RAPIDOCR_RECOGNITION_PROFILE_DEFAULT
 
 
+def effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num: int | None = None) -> int:
+    if rapidocr_rec_batch_num is None:
+        return RAPIDOCR_REC_BATCH_NUM
+    return max(1, int(rapidocr_rec_batch_num))
+
+
 def ocr_cache_key_for_digest(
     digest_kind: str,
     digest: str,
@@ -780,12 +808,14 @@ def ocr_cache_key_for_digest(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> str:
     engine = "tesseract" if use_tesseract else "rapidocr"
     effective_max_dimension = effective_rapidocr_max_dimension(rapidocr_max_dimension)
     effective_detector_limit_type = normalized_rapidocr_detector_limit_type(rapidocr_detector_limit_type)
     effective_recognition_profile = normalized_rapidocr_recognition_profile(rapidocr_recognition_profile)
+    effective_rec_batch_num = effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num)
     return hashlib.sha256(
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={effective_max_dimension}:"
@@ -799,7 +829,7 @@ def ocr_cache_key_for_digest(
             f"rapidocr-large-det-min={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION}:"
             f"rapidocr-native-array-min={RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION}:"
             f"rapidocr-cls-batch={RAPIDOCR_CLS_BATCH_NUM}:"
-            f"rapidocr-rec-batch={RAPIDOCR_REC_BATCH_NUM}:"
+            f"rapidocr-rec-batch={effective_rec_batch_num}:"
             f"rapidocr-cls-retry-min={RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS}:"
             f"fast-text-rescue-area={round(float(FAST_TEXT_OCR_RESCUE_MIN_AREA), 4)}:"
             f"fast-text-rescue-aspect={round(float(FAST_TEXT_OCR_RESCUE_MIN_ASPECT), 4)}:"
@@ -944,6 +974,7 @@ def run_rapidocr_words(
     rapidocr_detector_limit_side_len: int | None = None,
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
+    rapidocr_rec_batch_num: int | None = None,
     rapidocr_min_text_area: float | None = None,
 ) -> list[OcrLabel]:
     profile_enabled = rapidocr_profile_enabled()
@@ -964,6 +995,7 @@ def run_rapidocr_words(
     min_text_area = max(0.0, float(rapidocr_min_text_area or 0.0))
     recognition_profile = normalized_rapidocr_recognition_profile(rapidocr_recognition_profile)
     detector_limit_type = normalized_rapidocr_detector_limit_type(rapidocr_detector_limit_type)
+    rec_batch_num = effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num)
     profile: dict[str, Any] | None = None
     if profile_enabled:
         profile = {
@@ -975,11 +1007,12 @@ def run_rapidocr_words(
             "detector_limit": detector_limit,
             "detector_limit_type": detector_limit_type,
             "recognition_profile": recognition_profile,
+            "rec_batch_num": rec_batch_num,
             "min_text_area": min_text_area,
             "classifier_retry": False,
         }
     try:
-        engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type)
+        engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
         if profile_enabled:
             result, engine_profile = run_rapidocr_profiled_items(
                 engine,
@@ -1008,6 +1041,7 @@ def run_rapidocr_words(
             detector_limit,
             recognition_profile,
             detector_limit_type,
+            rec_batch_num,
         )(ocr_input, use_cls=True)
         if profile is not None:
             profile["classifier_retry"] = True
@@ -1195,22 +1229,23 @@ def rapidocr_detector_limit_for_input(
 def warm_rapidocr_runtime() -> bool:
     try:
         sample = rapidocr_warm_sample()
-        for detector_limit, recognition_profile, detector_limit_type in rapidocr_warm_engine_keys():
-            engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type)
+        for detector_limit, recognition_profile, detector_limit_type, rec_batch_num in rapidocr_warm_engine_keys():
+            engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
             engine(sample, use_cls=False)
     except Exception:
         return False
     return True
 
 
-def rapidocr_warm_engine_keys() -> list[tuple[int, str, str]]:
-    keys: list[tuple[int, str, str]] = []
+def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:
+    keys: list[tuple[int, str, str, int]] = []
     generic_detector_limits = rapidocr_warm_detector_limits()
     for detector_limit in generic_detector_limits:
         key = (
             detector_limit,
             RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
             RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+            RAPIDOCR_REC_BATCH_NUM,
         )
         if detector_limit > 0 and key not in keys:
             keys.append(key)
@@ -1225,9 +1260,20 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str]]:
             RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             bright_blue_profile,
             bright_blue_detector_type,
+            RAPIDOCR_REC_BATCH_NUM,
         )
         if key not in keys:
             keys.append(key)
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM > 0 and RAPIDOCR_DARK_TEAL_REC_BATCH_NUM != RAPIDOCR_REC_BATCH_NUM:
+        for detector_limit in generic_detector_limits:
+            key = (
+                detector_limit,
+                RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
+                RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+                RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+            )
+            if detector_limit > 0 and key not in keys:
+                keys.append(key)
     return keys
 
 
@@ -1379,36 +1425,44 @@ def rapidocr_input_image(
     return Path(tmp_path), scale, scale
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def rapidocr_engine(
     det_limit_side_len: int | None = None,
     recognition_profile: str | None = None,
     detector_limit_type: str | None = None,
+    rec_batch_num: int | None = None,
 ):
     configure_rapidocr_onnxruntime_session_options()
     return rapidocr_engine_without_classifier(
-        **rapidocr_engine_kwargs(det_limit_side_len, recognition_profile, detector_limit_type)
+        **rapidocr_engine_kwargs(det_limit_side_len, recognition_profile, detector_limit_type, rec_batch_num)
     )
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def rapidocr_classifier_engine(
     det_limit_side_len: int | None = None,
     recognition_profile: str | None = None,
     detector_limit_type: str | None = None,
+    rec_batch_num: int | None = None,
 ):
     configure_rapidocr_onnxruntime_session_options()
     from rapidocr_onnxruntime import RapidOCR
 
-    return RapidOCR(**rapidocr_engine_kwargs(det_limit_side_len, recognition_profile, detector_limit_type))
+    return RapidOCR(
+        **rapidocr_engine_kwargs(det_limit_side_len, recognition_profile, detector_limit_type, rec_batch_num)
+    )
 
 
 def rapidocr_engine_kwargs(
     det_limit_side_len: int | None = None,
     recognition_profile: str | None = None,
     detector_limit_type: str | None = None,
+    rec_batch_num: int | None = None,
 ) -> dict[str, object]:
-    kwargs = {"cls_batch_num": RAPIDOCR_CLS_BATCH_NUM, "rec_batch_num": RAPIDOCR_REC_BATCH_NUM}
+    kwargs = {
+        "cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
+        "rec_batch_num": effective_rapidocr_rec_batch_num(rec_batch_num),
+    }
     det_limit = RAPIDOCR_DET_LIMIT_SIDE_LEN if det_limit_side_len is None else max(0, int(det_limit_side_len))
     if det_limit > 0:
         kwargs["det_limit_side_len"] = det_limit

@@ -98,6 +98,11 @@ RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION = env_int(
 )
 RAPIDOCR_CLS_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_CLS_BATCH_NUM", 24, minimum=1)
 RAPIDOCR_REC_BATCH_NUM = env_int("MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM", 12, minimum=1)
+RAPIDOCR_DARK_TEAL_REC_BATCH_NUM = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_REC_BATCH_NUM",
+    16,
+    minimum=0,
+)
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = env_int(
     "MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS",
     2,
@@ -155,7 +160,7 @@ def rapidocr_warm_engine_keys_config() -> list[list[int | str]]:
     keys: list[list[int | str]] = []
     generic_detector_limits = rapidocr_warm_detector_limits()
     for detector_limit in generic_detector_limits:
-        key: list[int | str] = [detector_limit, "default", "default"]
+        key: list[int | str] = [detector_limit, "default", "default", RAPIDOCR_REC_BATCH_NUM]
         if detector_limit > 0 and key not in keys:
             keys.append(key)
 
@@ -174,9 +179,20 @@ def rapidocr_warm_engine_keys_config() -> list[list[int | str]]:
             RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             bright_blue_profile,
             bright_blue_detector_type,
+            RAPIDOCR_REC_BATCH_NUM,
         ]
         if key not in keys:
             keys.append(key)
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM > 0 and RAPIDOCR_DARK_TEAL_REC_BATCH_NUM != RAPIDOCR_REC_BATCH_NUM:
+        for detector_limit in generic_detector_limits:
+            key = [
+                detector_limit,
+                "default",
+                "default",
+                RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+            ]
+            if detector_limit > 0 and key not in keys:
+                keys.append(key)
     return keys
 
 
@@ -269,6 +285,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,
+        "rapidocr_dark_teal_rec_batch_num": RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),

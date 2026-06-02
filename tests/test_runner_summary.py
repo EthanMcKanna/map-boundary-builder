@@ -261,6 +261,8 @@ def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark
     assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=1280, height=1012) == 1400
     assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=734, height=1596) is None
     assert runner.rapidocr_max_dimension_for_ocr_style("purple-fill", width=1400, height=933) == 800
+    assert runner.rapidocr_rec_batch_num_for_ocr_style("bright-blue") is None
+    assert runner.rapidocr_rec_batch_num_for_ocr_style("dark-teal") == 16
 
 
 def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
@@ -341,6 +343,7 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
             "rapidocr_detector_limit_side_len": 416,
             "rapidocr_max_dimension": 550,
             "rapidocr_min_text_area": 500.0,
+            "rapidocr_rec_batch_num": 16,
         },
     }
 

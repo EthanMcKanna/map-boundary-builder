@@ -12415,3 +12415,38 @@ with zero failures in 0.531s.
   to `0.925149`, lost Phoenix/Los Angeles OCR labels, and failed strict
   top-label retention. Keep `RAPIDOCR_REC_BATCH_NUM=12`; stress-only latency
   wins that alter OCR evidence are not acceptable defaults.
+- Accepted a dark-teal-only RapidOCR recognition batch override after it kept
+  the global default at `12`, isolated the override in OCR cache keys and
+  engine cache keys, and applied `RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=16` only
+  from dark-teal runner OCR paths. This keeps bright-blue/current-reference OCR
+  away from the global shortcut that was rejected above, while targeting the
+  dark-teal stress tail that dominated the four-repeat no-cache run. Focused
+  tests passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_ocr_georeference.py
+  tests/test_runner_summary.py
+  tests/test_api_cache.py::ApiRunCacheTests::test_health_payload_can_prewarm_generation_runtime
+  -q` (`206 passed`), and full tests passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` (`494 passed, 30 subtests
+  passed`). The strict saved current-reference baseline
+  `out/nocatalog-source-subsecond-20260602/full-report.json` is now stale
+  relative to clean `HEAD`: a temporary archive control produced the same
+  Nashville sparse-label failure and the same Phoenix/Los Angeles lower IoUs
+  as the candidate in
+  `out/head-currentref-control-20260602/full-report.json`. Direct JSON
+  comparison between that fresh `HEAD` control and
+  `out/darkteal-recbatch16-currentref-strict-20260602/full-report.json` showed
+  no active-fixture changes in status, source, IoU, OCR label count, or error
+  text.
+- The accepted proof run
+  `out/stress-expanded16-darkteal-recbatch16-repeat4-20260602/stress-summary.json`
+  disabled OCR and extraction caches, enforced `--max-total-elapsed-s 1.0`,
+  and preserved all stress expectations: primary `16/16` expected with max
+  total `0.951187s`, and repeat profile `48/48` analyzed expectations,
+  `48/48` subsecond, median `0.431607s`, p90 `0.638992s`, p95 `0.775566s`,
+  and max `0.858593s`. OCR remains the largest stage, but the repeat OCR tail
+  improved sharply versus
+  `out/stress-expanded16-stylecap-budget-repeat4-20260602/stress-summary.json`:
+  OCR median `0.265390s` vs `0.791872s`, OCR p95 `0.661882s` vs `2.421938s`,
+  and OCR max `0.747008s` vs `2.667230s`. This is a runtime change worth
+  shipping because it improves the broad no-cache stress tail without changing
+  fresh `HEAD` current-reference outputs.

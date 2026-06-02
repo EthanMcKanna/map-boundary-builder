@@ -71,11 +71,13 @@ from .runtime_config import (
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
     RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
+    RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
     RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION,
     RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
+    RAPIDOCR_REC_BATCH_NUM,
 )
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -420,6 +422,7 @@ def build_boundary(
                 rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
                 if rapidocr_recognition_profile is not None:
                     ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+                add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
                 labels_future = ocr_executor.submit(
                     extract_ocr_labels_from_rgb,
                     str(image_path),
@@ -465,6 +468,7 @@ def build_boundary(
             rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
             if rapidocr_recognition_profile is not None:
                 ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+            add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
             labels_future = ocr_executor.submit(
                 extract_ocr_labels_from_rgb,
                 str(image_path),
@@ -1489,6 +1493,7 @@ def submit_ocr_labels_from_rgb(
         kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+    add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
     return executor.submit(
         extract_ocr_labels_from_rgb,
         str(image_path),
@@ -1513,12 +1518,12 @@ def extract_provider_ui_labels_from_rgb(
         extraction.style,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
-    labels = extract_ocr_labels_from_rgb(
-        str(image_path),
-        crop,
-        rapidocr_max_dimension=crop_max_dimension,
-        cache=runner_ocr_cache_enabled(),
-    )
+    ocr_kwargs: dict[str, Any] = {
+        "rapidocr_max_dimension": crop_max_dimension,
+        "cache": runner_ocr_cache_enabled(),
+    }
+    add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, extraction.style)
+    labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
         return labels
     return [
@@ -1591,7 +1596,24 @@ def ocr_kwargs_for_style(
     rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+    add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
     return kwargs
+
+
+def rapidocr_rec_batch_num_for_ocr_style(style: str | None) -> int | None:
+    if style != "dark-teal":
+        return None
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM <= 0:
+        return None
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM == RAPIDOCR_REC_BATCH_NUM:
+        return None
+    return RAPIDOCR_DARK_TEAL_REC_BATCH_NUM
+
+
+def add_rapidocr_rec_batch_num_for_ocr_style(kwargs: dict[str, Any], style: str | None) -> None:
+    rapidocr_rec_batch_num = rapidocr_rec_batch_num_for_ocr_style(style)
+    if rapidocr_rec_batch_num is not None:
+        kwargs["rapidocr_rec_batch_num"] = rapidocr_rec_batch_num
 
 
 def focus_georef_ocr_enabled(extraction, *, rgb, city_input: str | None) -> bool:
@@ -1718,6 +1740,7 @@ def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str
     rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
     if rapidocr_detector_limit_type is not None:
         ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+    add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, style)
     if rapidocr_max_dimension is None:
         if rapidocr_detector_limit is not None:
             ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
