@@ -12823,7 +12823,7 @@ with zero failures in 0.531s.
   RapidOCR total p95 `0.763s`. The new area evidence showed
   `zoox-las-vegas-mobile-tall` still selects 51 boxes with selected area
   min/p25/p50/p75/p90/max `374/1638/2829/4491/7290/19140` px^2 and only
-  10 boxes below 1300 px², while `grand-rapids-may-mobility` selects 34 boxes
+  10 boxes below 1300 px^2, while `grand-rapids-may-mobility` selects 34 boxes
   with selected area min/p25/p50/p75/p90/max `390/1080/1889/2421/3434/33232`
   px^2 and 11 boxes below 1300 px^2. A runtime monkeypatch that applied a
   dark-teal `rapidocr_min_text_area=1300` candidate
@@ -12834,3 +12834,33 @@ with zero failures in 0.531s.
   `1.05s` budget at `1.244s`. Do not add a dark-teal area filter unless a
   future selector avoids Grand Rapids retries and proves the full dark-teal
   stress subset under the repeat/signature/p95 gates. No deploy is needed.
+- Ran the full current dark-teal box-area control after the rejected
+  `rapidocr_min_text_area=1300` probe to check whether the accepted
+  `RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=16` path still has a simple selected-area
+  cutoff hiding in the tail. The real-screenshot stress run
+  `out/stress-darkteal-box-area-full-20260602/stress-summary.json` covered
+  `ann-arbor-may-mobility-avif`, `grand-rapids-may-mobility`,
+  `zoox-las-vegas-mobile`, `zoox-las-vegas-mobile-tall`, and `zoox-sf` with
+  in-process execution, disabled OCR/extraction caches, OCR-engine profiling,
+  `--repeat-profile-runs 3`, `--repeat-profile-warmups 1`,
+  `--fail-on-unexpected`, `--fail-on-repeat-signature-drift`,
+  `--max-total-elapsed-s 1.5`, `--max-repeat-profile-p95-duration-s 1.05`,
+  and OCR-engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It passed all
+  `5/5` primary expectations, including the two expected Zoox sparse failures,
+  with primary max total `0.929s`, analyzed repeat `10/10` expected, `10/10`
+  subsecond, stable signatures, repeat p95 `0.846s`, max `0.848s`,
+  recognizer p95 `0.587s`, and RapidOCR total p95 `0.741s`. The slow repeats
+  remain recognition dominated, led by `zoox-las-vegas-mobile-tall` at
+  `0.848s`/`0.843s` with 51 selected boxes, selected area p50 `2829` px^2,
+  10 boxes below 1300 px^2, and recognizer time around `0.58s`-`0.59s`;
+  `grand-rapids-may-mobility` followed at `0.668s`/`0.647s` with 34 selected
+  boxes, selected area p50 `1889` px^2, 11 boxes below 1300 px^2, and
+  recognizer time around `0.43s`; `ann-arbor-may-mobility-avif` selected only
+  13 boxes but all 13 were below 1300 px^2, and `zoox-sf` had 14 of 17 below
+  1300 px^2. This rejects another pass at pure area thresholds: successful
+  compact/bright-but-dark-teal cases overlap heavily with the small-box bins,
+  while the Zoox-tall tail is driven by total selected text volume and semantic
+  relevance rather than tiny boxes alone. Keep future Zoox-tail work aimed at a
+  semantic/provider-UI/label-quality selector or crop strategy, not broad
+  batch-size changes or dark-teal min-area gates. This is notes-only evidence;
+  no runtime change or deploy is needed.
