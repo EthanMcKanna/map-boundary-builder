@@ -114,6 +114,8 @@ PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
 PRE_EXTRACTION_FOCUS_OCR_STYLES = {"dark-teal"}
 PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT = 1200
 PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO = 1.35
+# Keep below the Ann Arbor focused-success crop's 19 labels; this only catches sparse portrait app crops.
+FOCUSED_SPARSE_FAST_FAIL_MAX_LABELS = 14
 FOCUSED_ADMIN_DISPLAY_PLACE_TYPES = {"city", "municipality", "town", "village"}
 PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
     0,
@@ -327,6 +329,7 @@ def build_boundary(
     labels_future_filtered = False
     labels_future_current_catalog_shortcut = False
     labels_from_focus_georef_ocr = False
+    focused_sparse_ocr_failure = False
     provider_ui_labels_future: Future[list[Any]] | None = None
     provider_ui_fast_ocr_max_dimension: int | None = None
     ocr_executor: ThreadPoolExecutor | None = None
@@ -869,7 +872,7 @@ def build_boundary(
         if (
             labels is None
             and labels_future is None
-            and provider_ui_fast_ocr_max_dimension is None
+            and (provider_ui_fast_ocr_max_dimension is None or not allow_catalog)
             and focus_georef_ocr_enabled(extraction, rgb=rgb, city_input=city_input)
         ):
             ensure_georeference_resource_preload()
@@ -1239,7 +1242,18 @@ def build_boundary(
     )
     if labels_from_focus_georef_ocr:
         georef = focused_georef_with_admin_control_city(georef)
-    if should_fallback_focus_georef_ocr(labels_from_focus_georef_ocr, georef):
+    if should_fast_fail_focused_sparse_ocr(
+        labels_from_focus_georef_ocr,
+        georef,
+        labels,
+        style=extraction.style,
+        allow_catalog=allow_catalog,
+        width=width,
+        height=height,
+        provider_ui_fast_ocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+    ):
+        focused_sparse_ocr_failure = True
+    elif should_fallback_focus_georef_ocr(labels_from_focus_georef_ocr, georef):
         emit_progress(
             progress,
             stage="ocr",
@@ -1322,6 +1336,11 @@ def build_boundary(
             progress=progress,
         )
     if georef is None:
+        if focused_sparse_ocr_failure:
+            raise ValueError(
+                "Could not infer a reliable map location and georeference from sparse OCR labels. "
+                "Provide a higher-resolution map crop with more readable place labels."
+            )
         raise ValueError(
             "Could not infer a reliable map location and georeference from OCR/geocoded map labels. "
             "Provide a higher-resolution map crop with readable city or neighborhood labels."
@@ -1765,6 +1784,28 @@ def should_fallback_focus_georef_ocr(focused: bool, georef) -> bool:
     if not focused:
         return False
     return not is_credible_context_hint_georeference(georef)
+
+
+def should_fast_fail_focused_sparse_ocr(
+    focused: bool,
+    georef,
+    labels: list[Any],
+    *,
+    style: str | None,
+    allow_catalog: bool,
+    width: int,
+    height: int,
+    provider_ui_fast_ocr_max_dimension: int | None,
+) -> bool:
+    if not focused or georef is not None or allow_catalog:
+        return False
+    if style not in FOCUS_GEOREF_OCR_STYLES:
+        return False
+    if provider_ui_fast_ocr_max_dimension is None:
+        return False
+    if width <= 0 or height < width * PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO:
+        return False
+    return len(labels) <= FOCUSED_SPARSE_FAST_FAIL_MAX_LABELS
 
 
 def focused_georef_with_admin_control_city(georef):

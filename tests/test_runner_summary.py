@@ -304,6 +304,61 @@ def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     assert runner.focus_georef_ocr_min_text_area_for_style("gray-fill") == 1500.0
 
 
+def test_focused_sparse_fast_fail_requires_no_catalog_tall_provider_ui() -> None:
+    labels = [OcrLabel("Las Vegas", x=10, y=10, width=80, height=20, confidence=95)]
+
+    assert runner.should_fast_fail_focused_sparse_ocr(
+        True,
+        None,
+        labels,
+        style="dark-teal",
+        allow_catalog=False,
+        width=734,
+        height=1596,
+        provider_ui_fast_ocr_max_dimension=1200,
+    )
+    assert not runner.should_fast_fail_focused_sparse_ocr(
+        True,
+        object(),
+        labels,
+        style="dark-teal",
+        allow_catalog=False,
+        width=734,
+        height=1596,
+        provider_ui_fast_ocr_max_dimension=1200,
+    )
+    assert not runner.should_fast_fail_focused_sparse_ocr(
+        True,
+        None,
+        labels,
+        style="dark-teal",
+        allow_catalog=True,
+        width=734,
+        height=1596,
+        provider_ui_fast_ocr_max_dimension=1200,
+    )
+    assert not runner.should_fast_fail_focused_sparse_ocr(
+        True,
+        None,
+        labels,
+        style="dark-teal",
+        allow_catalog=False,
+        width=1696,
+        height=1365,
+        provider_ui_fast_ocr_max_dimension=None,
+    )
+    assert not runner.should_fast_fail_focused_sparse_ocr(
+        True,
+        None,
+        [OcrLabel(str(index), x=10, y=10, width=80, height=20, confidence=95) for index in range(15)],
+        style="dark-teal",
+        allow_catalog=False,
+        width=734,
+        height=1596,
+        provider_ui_fast_ocr_max_dimension=1200,
+    )
+
+
 def test_provider_ui_crop_ocr_max_dimension_uses_gray_fill_cap() -> None:
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("gray-fill", rapidocr_max_dimension=1200) == 450
     assert runner.provider_ui_crop_ocr_max_dimension_for_style("dark-teal", rapidocr_max_dimension=1200) == 750
@@ -2423,6 +2478,44 @@ def test_no_catalog_dark_teal_defers_pre_extraction_ocr_only_for_large_near_squa
         )
         is False
     )
+
+
+def test_no_catalog_tall_dark_teal_focus_can_fail_sparse_without_full_retry(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "tall-zoox-like.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (734, 1596), (18, 65, 70)).save(image_path)
+    rgb = np.full((1596, 734, 3), 40, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((1596, 734), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(80, 420), (680, 420), (680, 900), (80, 900)]),
+        coverage_ratio=0.18,
+        contour_count=1,
+        confidence=1.0,
+    )
+    focus_labels = [
+        OcrLabel("Las Vegas", x=130, y=500, width=90, height=24, confidence=96),
+        OcrLabel("Paradise", x=160, y=560, width=80, height=22, confidence=94),
+    ]
+
+    monkeypatch.setattr(runner, "classify_style_for_ocr", lambda _rgb: "dark-teal")
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_focus_georef_labels_from_rgb", lambda *_args, **_kwargs: focus_labels)
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        runner,
+        "extract_full_ocr_labels_for_style",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full OCR should not run")),
+    )
+
+    with pytest.raises(ValueError, match="sparse OCR labels"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+        )
 
 
 def test_focused_georef_display_city_prefers_exact_admin_control() -> None:

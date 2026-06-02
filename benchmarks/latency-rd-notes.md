@@ -12864,3 +12864,52 @@ with zero failures in 0.531s.
   semantic/provider-UI/label-quality selector or crop strategy, not broad
   batch-size changes or dark-teal min-area gates. This is notes-only evidence;
   no runtime change or deploy is needed.
+- Accepted a narrow focused sparse-fail shortcut for no-catalog tall dark-teal
+  provider-UI-shaped screenshots. Current `HEAD` already qualified the two
+  Zoox Las Vegas portrait failures for focused georef OCR, but the
+  catalog-oriented provider-UI fast-OCR knob blocked that path when catalog
+  matching was disabled, so both screenshots paid full-frame OCR only to reach
+  the same sparse-label failure. The runner now allows no-catalog focused OCR
+  despite that provider-UI knob, and skips the full-detail retry only when the
+  focused crop produced a small label set (`<= 14` labels), catalog matching is
+  disabled, the image is tall dark-teal/provider-UI shaped, and georeference
+  still has no credible fit. The sparse-OCR error contract is preserved. The
+  label cap is intentionally below the accepted Ann Arbor focused-success crop
+  (`19` labels), so successful compact dark-teal crops continue through the
+  normal focused georeference path, while Grand Rapids still uses full OCR.
+  Focused unit coverage passed with `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_runner_summary.py -q` (`76 passed`), full validation passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`517 passed, 30 subtests passed`), `compileall` over
+  `map_boundary_builder` and `tests` passed, and `git diff --check` passed.
+  The target dark-teal stress gate
+  `out/focused-sparse-fastfail-darkteal-20260602/stress-summary.json` used
+  Ann Arbor May Mobility, Grand Rapids May Mobility, both Zoox Las Vegas
+  portrait screenshots, and Zoox SF with in-process execution, disabled
+  OCR/extraction caches, OCR-engine profiling, `--repeat-profile-runs 3`,
+  `--repeat-profile-warmups 1`, `--fail-on-unexpected`,
+  `--fail-on-repeat-signature-drift`, `--max-total-elapsed-s 1.5`,
+  `--max-repeat-profile-p95-duration-s 1.05`, and OCR-engine p95 budgets
+  `rec_elapsed_s=0.9,total_s=1.2`. It passed `5/5` primary expectations,
+  `10/10` analyzed repeats, stable signatures, `10/10` subsecond repeats,
+  primary max `0.809s`, repeat p95 `0.631s`, repeat max `0.636s`,
+  recognizer p95 `0.417s`, RapidOCR total p95 `0.588s`, and reported zero
+  full-detail OCR retries. The previous same-subset control was primary max
+  `0.929s`, repeat p95 `0.846s`, recognizer p95 `0.587s`, and RapidOCR total
+  p95 `0.741s`, so this removes the Zoox portrait tail instead of only moving
+  noise around. The full 16-case real-screenshot stress gate
+  `out/focused-sparse-fastfail-expanded16-20260602/stress-summary.json`
+  passed `16/16` primary expectations, `32/32` analyzed repeat expectations,
+  `32/32` subsecond repeats, stable signatures for all 16 cases, primary max
+  `0.987s`, repeat p95 `0.604s`, repeat max `0.723s`, recognizer p95
+  `0.328s`, RapidOCR total p95 `0.545s`, and zero full-detail OCR retries.
+  The two Zoox portrait rows now fail closed in `0.157s` and `0.351s` with
+  focused labels only and the expected sparse-OCR error. A current-reference
+  fixture comparison command,
+  `out/focused-sparse-fastfail-currentref-gate-20260602/full-report.json`, is
+  not an acceptance/rejection signal for this change: that proof surface scored
+  only `8/15` default active fixtures, repeated the known Nashville
+  block-network sparse-label failure, and then reported missing candidate
+  scores against an older 15-fixture baseline. Keep using the dark-teal/full
+  real-screenshot stress gates for this branch unless the current-reference
+  gate is first refreshed to the same fixture/scoring mode.
