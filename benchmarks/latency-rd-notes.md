@@ -14165,3 +14165,26 @@ with zero failures in 0.531s.
   full-detail fallback; the remaining over-subsecond active Nashville path is
   an OCR double-pass cost, while the real-screenshot hard stress set remains
   subsecond.
+- Rechecked the current real-screenshot slow tail after the Nashville fallback
+  work and rejected reopening the bright-blue detector-cap lane. The fresh
+  slow-five repeat control
+  `out/current-slow5-repeat-20260602/stress-summary.json` covered Bay Area,
+  Los Angeles, Houston, Miami, and Grand Rapids with production prewarm,
+  disabled OCR/extraction caches, OCR-engine profiling, `5` repeat runs, and
+  strict signature/latency budgets. It passed `5/5` primary expectations,
+  `20/20` analyzed repeats, stable signatures, primary max `0.691s`, repeat
+  p95 `0.643s`, repeat max `0.681s`, RapidOCR total p95 `0.585s`, detector
+  p95 `0.269s`, and recognizer p95 `0.237s`; LA is now the steady slow tail,
+  while Grand Rapids stayed controlled by the accepted dark-teal header
+  selector. A current-code `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN=240`
+  slow-five probe
+  `out/probe-brightblue-det240-current-slow5-repeat-20260602/stress-summary.json`
+  looked promising on that subset with repeat p95 `0.568s`, but the full
+  16-case candidate
+  `out/probe-brightblue-det240-full16-current-20260602/stress-summary.json`
+  only improved repeat p95 by noise-level margin (`0.550s`) while worsening
+  primary max to `0.789s` and Bay Area OCR max to `0.647s`. The matched
+  full-16 control `out/current-full16-control-repeat-20260602/stress-summary.json`
+  passed the same hard budgets with primary max `0.634s`, repeat p95 `0.555s`,
+  repeat max `0.579s`, and RapidOCR total p95 `0.482s`. Keep the bright-blue
+  detector at `256/max`; the `240px` cap is still not a safe default.
