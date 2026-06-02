@@ -12104,3 +12104,22 @@ with zero failures in 0.531s.
   georeference sources. Absolute stress and fixture timings in these runs were
   cold/noisy (`ocr=97.333876s` total in stress, max total `17.616529s`; active
   fixture total `32.90s`), so do not treat them as a new latency baseline.
+- Rejected three adjacent OCR-tail/runtime probes after the focused-georef
+  fallback hardening. A dark-teal full-image `rapidocr_min_text_area` sweep over
+  Ann Arbor, Grand Rapids, both Zoox Las Vegas portrait screenshots, and Zoox
+  SF did not produce a safe trim: Zoox tall only dropped from `51` selected OCR
+  boxes to `49` at area `500`, `44` at `800`, and `41` at `1200`, while elapsed
+  time was noisy or worse (`2.2508s` current, `2.2571s` at `500`, `2.953s` at
+  `800`, `4.72s` at `1200`) and valid Zoox SF labels started falling from `24`
+  to `21`/`17`. Keep dark-teal full-image OCR unfiltered until a more selective
+  signal exists. Also rejected changing ONNX Runtime session defaults on the
+  current two-tail profiled stress subset (`zoox-las-vegas-mobile-tall` plus
+  `houston-waymo`). `MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING=0` preserved
+  `2/2` expectations but regressed to max total `2.292373s`, OCR max
+  `1.884s@zoox-las-vegas-mobile-tall`, and OCR-engine totals
+  `det_elapsed_s=1.252s`, `rec_elapsed_s=1.121s`. Disabling the CPU memory arena
+  likewise preserved `2/2` expectations but stayed slower than the clean current
+  evidence, with max total `2.138822s`, OCR max
+  `1.883s@zoox-las-vegas-mobile-tall`, and OCR-engine totals
+  `det_elapsed_s=1.308s`, `rec_elapsed_s=1.106s`. Leave both ONNX Runtime
+  defaults unchanged.
