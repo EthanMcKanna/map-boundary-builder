@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 
 import map_boundary_builder.cli as cli_module
 from map_boundary_builder.cli import stage_elapsed_seconds
@@ -72,6 +73,49 @@ def test_print_summary_failure_includes_profile_events(tmp_path, monkeypatch, ca
         "georeference",
     ]
     assert "map-boundary-builder: error: could not infer a reliable map location" in captured.err
+
+
+def test_print_summary_failure_can_include_ocr_engine_profile(tmp_path, monkeypatch, capsys) -> None:
+    image_path = tmp_path / "bad-map.png"
+    output_path = tmp_path / "boundary.geojson"
+    image_path.write_bytes(b"not a real image")
+
+    @contextmanager
+    def fake_collect_rapidocr_profiles():
+        yield [
+            {
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": 0.3,
+                "raw_box_count": 4,
+                "selected_box_count": 2,
+            }
+        ]
+
+    def fake_build_boundary(image, city, output, *, debug_dir, options, progress):
+        raise RuntimeError("could not infer a reliable map location")
+
+    monkeypatch.setattr(cli_module, "collect_rapidocr_profiles", fake_collect_rapidocr_profiles)
+    monkeypatch.setattr(cli_module, "build_boundary", fake_build_boundary)
+
+    exit_code = cli_module.main(
+        [
+            "--image",
+            str(image_path),
+            "--output",
+            str(output_path),
+            "--print-summary",
+            "--profile-ocr-engine",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    summary = json.loads(captured.out)
+    assert exit_code == 1
+    assert summary["ocr_engine_profile"]["calls"] == 1
+    assert summary["ocr_engine_profile"]["det_elapsed_s"] == 0.2
+    assert summary["ocr_engine_profile"]["rec_elapsed_s"] == 0.3
+    assert summary["ocr_engine_profile"]["raw_box_count"] == 4
+    assert summary["ocr_engine_profile"]["selected_box_count"] == 2
 
 
 def test_filename_hint_override_reaches_runner(tmp_path, monkeypatch) -> None:

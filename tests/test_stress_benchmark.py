@@ -98,6 +98,66 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["ocr_full_detail_retry"] is False
 
 
+def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "stress.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "profiled-map",
+                        "image": str(image),
+                        "expect": {"status": "failed", "error_contains": "sparse OCR labels"},
+                    }
+                ]
+            }
+        )
+    )
+
+    def fake_run(command, *, text, capture_output, timeout, check):
+        assert "--profile-ocr-engine" in command
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout=json.dumps(
+                {
+                    "status": "failed",
+                    "error": "Could not infer a reliable map location from sparse OCR labels.",
+                    "ocr_engine_profile": {
+                        "calls": 1,
+                        "det_elapsed_s": 0.2,
+                        "rec_elapsed_s": 0.3,
+                        "raw_box_count": 4,
+                    },
+                    "event_profile": {"total_elapsed_s": 0.7, "stage_elapsed_s": {"ocr": 0.6}},
+                }
+            ),
+            stderr="map-boundary-builder: error",
+        )
+
+    monkeypatch.setattr(stress_module.subprocess, "run", fake_run)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        profile_ocr_engine=True,
+        python_executable="python",
+    )
+
+    row = report["rows"][0]
+    assert row["expectation_passed"] is True
+    assert row["ocr_engine_profile"]["det_elapsed_s"] == 0.2
+    assert report["summary"]["ocr_engine_profile"] == {
+        "fixtures": 1,
+        "calls": 1,
+        "det_elapsed_s": 0.2,
+        "rec_elapsed_s": 0.3,
+        "raw_box_count": 4,
+    }
+
+
 def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")
@@ -279,7 +339,16 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
         )
     )
 
-    def fake_run_case(case, out_dir, *, timeout_seconds, write_debug, python_executable):
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        python_executable,
+    ):
+        assert profile_ocr_engine is False
         return {
             "slug": case["slug"],
             "image": case["image"],

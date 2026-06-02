@@ -79,6 +79,25 @@ OCR_CACHE_DEPENDENCY_PACKAGES = (
 RAPIDOCR_RECOGNITION_PROFILE_DEFAULT = "default"
 RAPIDOCR_RECOGNITION_PROFILE_EN_PPOCRV5 = "en-ppocrv5"
 RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT = "default"
+RAPIDOCR_PROFILE_DURATION_KEYS = (
+    "input_s",
+    "load_img_s",
+    "preprocess_s",
+    "det_elapsed_s",
+    "crop_s",
+    "rec_elapsed_s",
+    "final_s",
+    "profiled_total_s",
+    "classifier_total_s",
+    "total_s",
+)
+RAPIDOCR_PROFILE_COUNT_KEYS = (
+    "raw_box_count",
+    "selected_box_count",
+    "result_count",
+    "label_count",
+    "useful_label_count",
+)
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
@@ -110,6 +129,71 @@ def record_rapidocr_profile(profile: dict[str, Any]) -> None:
         if _RAPIDOCR_PROFILE_EVENTS is None:
             return
         _RAPIDOCR_PROFILE_EVENTS.append(sanitize_rapidocr_profile(profile))
+
+
+def summarize_rapidocr_profile_events(events: list[dict[str, Any]] | None) -> dict[str, Any]:
+    calls = events or []
+    summary: dict[str, Any] = {"calls": len(calls)}
+    for key in RAPIDOCR_PROFILE_DURATION_KEYS:
+        total = sum_rapidocr_profile_number(call.get(key) for call in calls)
+        if total is not None:
+            summary[key] = round(total, 6)
+    for key in RAPIDOCR_PROFILE_COUNT_KEYS:
+        total = sum_rapidocr_profile_int(call.get(key) for call in calls)
+        if total is not None:
+            summary[key] = total
+    summary["calls_detail"] = calls
+    return summary
+
+
+def summarize_rapidocr_profile_summaries(profiles: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not profiles:
+        return None
+    summary: dict[str, Any] = {
+        "fixtures": len(profiles),
+        "calls": sum_rapidocr_profile_int(profile.get("calls") for profile in profiles) or 0,
+    }
+    for key in RAPIDOCR_PROFILE_DURATION_KEYS:
+        total = sum_rapidocr_profile_number(profile.get(key) for profile in profiles)
+        if total is not None:
+            summary[key] = round(total, 6)
+    for key in RAPIDOCR_PROFILE_COUNT_KEYS:
+        total = sum_rapidocr_profile_int(profile.get(key) for profile in profiles)
+        if total is not None:
+            summary[key] = total
+    return summary
+
+
+def sum_rapidocr_profile_number(values) -> float | None:
+    total = 0.0
+    seen = False
+    for value in values:
+        if value is None:
+            continue
+        try:
+            duration = float(value)
+        except (TypeError, ValueError):
+            continue
+        if duration < 0.0:
+            continue
+        total += duration
+        seen = True
+    return total if seen else None
+
+
+def sum_rapidocr_profile_int(values) -> int | None:
+    total = 0
+    seen = False
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        total += max(0, parsed)
+        seen = True
+    return total if seen else None
 
 
 def sanitize_rapidocr_profile(profile: dict[str, Any]) -> dict[str, Any]:

@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .ocr import summarize_rapidocr_profile_summaries
+
 
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
@@ -43,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exit non-zero when any non-missing case violates manifest expectations.",
     )
+    parser.add_argument(
+        "--profile-ocr-engine",
+        action="store_true",
+        help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
+    )
     return parser
 
 
@@ -54,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         only_slugs=args.only,
         timeout_seconds=args.timeout_seconds,
         write_debug=args.write_debug,
+        profile_ocr_engine=args.profile_ocr_engine,
     )
     print_stress_table(report)
     if args.fail_on_unexpected and report["summary"]["unexpected"]:
@@ -77,6 +85,7 @@ def run_stress_benchmark(
     only_slugs: list[str] | None = None,
     timeout_seconds: float = 30.0,
     write_debug: bool = False,
+    profile_ocr_engine: bool = False,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     manifest = load_manifest(manifest_path)
@@ -89,6 +98,7 @@ def run_stress_benchmark(
             out_dir,
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
+            profile_ocr_engine=profile_ocr_engine,
             python_executable=python_executable,
         )
         for case in cases
@@ -96,6 +106,7 @@ def run_stress_benchmark(
     report = {
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
+        "profile_ocr_engine": profile_ocr_engine,
         "summary": summarize_rows(rows),
         "rows": rows,
     }
@@ -120,6 +131,7 @@ def run_stress_case(
     *,
     timeout_seconds: float,
     write_debug: bool,
+    profile_ocr_engine: bool = False,
     python_executable: str,
 ) -> dict[str, Any]:
     slug = require_string(case, "slug")
@@ -134,7 +146,15 @@ def run_stress_case(
         return row
 
     output_path = out_dir / f"{slug}.geojson"
-    command = build_cli_command(case, image, output_path, out_dir, write_debug, python_executable)
+    command = build_cli_command(
+        case,
+        image,
+        output_path,
+        out_dir,
+        write_debug,
+        profile_ocr_engine,
+        python_executable,
+    )
     started = time.perf_counter()
     try:
         completed = subprocess.run(
@@ -183,6 +203,7 @@ def build_cli_command(
     output_path: Path,
     out_dir: Path,
     write_debug: bool,
+    profile_ocr_engine: bool,
     python_executable: str,
 ) -> list[str]:
     command = [
@@ -207,6 +228,8 @@ def build_cli_command(
     command.extend(["--filename-hint", filename_hint])
     if write_debug:
         command.extend(["--debug-dir", str(out_dir / f"{case['slug']}-debug")])
+    if profile_ocr_engine:
+        command.append("--profile-ocr-engine")
     return command
 
 
@@ -228,6 +251,8 @@ def row_from_process(
     complete_details = latest_event_details(events, stage="complete")
     ocr_details, ocr_label_event = latest_ocr_label_details(events)
     ocr_label_events = ocr_label_event_summaries(events)
+    raw_ocr_engine_profile = summary.get("ocr_engine_profile")
+    ocr_engine_profile = raw_ocr_engine_profile if isinstance(raw_ocr_engine_profile, dict) else None
     row = base_row(case, expected_status=expected_status, observed_status=observed_status)
     row.update(
         {
@@ -259,14 +284,21 @@ def row_from_process(
             ),
             "contour_count": first_present_number(extraction_details.get("contour_count")),
             "ocr_label_count": first_present_number(ocr_details.get("label_count")),
-            "ocr_top_labels": ocr_details.get("top_labels") if isinstance(ocr_details.get("top_labels"), list) else None,
+            "ocr_top_labels": (
+                ocr_details.get("top_labels") if isinstance(ocr_details.get("top_labels"), list) else None
+            ),
             "ocr_label_event": ocr_label_event,
             "ocr_label_events": ocr_label_events,
             "ocr_full_detail_retry": any(
                 event.get("message") == "Full-detail map labels read" for event in ocr_label_events
             ),
+            "ocr_engine_profile": ocr_engine_profile,
             "total_elapsed_s": event_profile.get("total_elapsed_s"),
-            "stages": event_profile.get("stage_elapsed_s") if isinstance(event_profile.get("stage_elapsed_s"), dict) else {},
+            "stages": (
+                event_profile.get("stage_elapsed_s")
+                if isinstance(event_profile.get("stage_elapsed_s"), dict)
+                else {}
+            ),
             "error": summary.get("error"),
             "stdout_json_error": parse_error,
             "stderr": truncate_text(completed.stderr),
@@ -402,6 +434,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     sources: dict[str, int] = {}
     ocr_label_event_counts: dict[str, int] = {}
     ocr_full_detail_retry_rows: list[str] = []
+    ocr_engine_profiles: list[dict[str, Any]] = []
     stage_totals: dict[str, float] = {}
     stage_max_rows: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -420,6 +453,9 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                     ocr_label_event_counts[message] = ocr_label_event_counts.get(message, 0) + 1
         if row.get("ocr_full_detail_retry"):
             ocr_full_detail_retry_rows.append(str(row.get("slug")))
+        ocr_engine_profile = row.get("ocr_engine_profile")
+        if isinstance(ocr_engine_profile, dict):
+            ocr_engine_profiles.append(ocr_engine_profile)
         stages = row.get("stages")
         if isinstance(stages, dict):
             for stage, elapsed_s in stages.items():
@@ -432,7 +468,11 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                         "slug": row.get("slug"),
                         "elapsed_s": round(float(elapsed_s), 6),
                     }
-    elapsed_values = [row.get("total_elapsed_s") for row in rows if isinstance(row.get("total_elapsed_s"), (int, float))]
+    elapsed_values = [
+        row.get("total_elapsed_s")
+        for row in rows
+        if isinstance(row.get("total_elapsed_s"), (int, float))
+    ]
     return {
         "total": len(rows),
         "expectation_passed": len(rows) - len(unexpected),
@@ -442,6 +482,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_label_event_counts": dict(sorted(ocr_label_event_counts.items())),
         "ocr_full_detail_retry_count": len(ocr_full_detail_retry_rows),
         "ocr_full_detail_retry_rows": ocr_full_detail_retry_rows,
+        "ocr_engine_profile": summarize_rapidocr_profile_summaries(ocr_engine_profiles),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
@@ -469,6 +510,16 @@ def print_stress_table(report: dict[str, Any]) -> None:
     if summary.get("ocr_full_detail_retry_count"):
         retry_rows = ", ".join(summary.get("ocr_full_detail_retry_rows", []))
         print(f"ocr full-detail retries: {summary['ocr_full_detail_retry_count']} ({retry_rows})")
+    if summary.get("ocr_engine_profile"):
+        if report.get("profile_ocr_engine"):
+            print("note: OCR engine profiling is enabled; case durations include profiling overhead")
+        profile = summary["ocr_engine_profile"]
+        print(
+            "ocr engine: "
+            f"calls={profile.get('calls', 0)}, "
+            f"det={float(profile.get('det_elapsed_s', 0.0)):.3f}s, "
+            f"rec={float(profile.get('rec_elapsed_s', 0.0)):.3f}s"
+        )
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
         elapsed = row.get("total_elapsed_s")

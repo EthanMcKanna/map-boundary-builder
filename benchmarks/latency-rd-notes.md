@@ -12031,3 +12031,26 @@ with zero failures in 0.531s.
   `ocr=0.67s@phoenix-waymo`, `extract=0.22s@dallas-waymo`, and
   `georeference=0.08s@los-angeles-waymo`; OCR events were
   `{"Map labels read": 8}` with `active_ocr_full_detail_retry_count=0`.
+- Accepted opt-in RapidOCR engine profiling in the CLI and real-screenshot
+  stress harness so arbitrary-upload stress tails can be split into detector
+  and recognizer cost without a one-off import script. The new
+  `--profile-ocr-engine` flag adds an `ocr_engine_profile` summary on both
+  successful and failed CLI runs, and the stress harness now aggregates those
+  profiles while marking profiled reports because case durations include
+  profiling overhead. Focused CLI/stress tests passed (`13 passed`), and the
+  current two-tail proof
+  `out/stress-ocr-engine-profile-tail-current-20260602/stress-summary.json`
+  passed `2/2` expectations with `profile_ocr_engine=true`,
+  `ocr_engine_profile.calls=2`, `det_elapsed_s=0.597460s`,
+  `rec_elapsed_s=0.689857s`, OCR max
+  `0.973296s@zoox-las-vegas-mobile-tall`, and extract max
+  `0.348573s@houston-waymo`. A broader profiled stress pass
+  `out/real-screenshot-stress-ocr-engine-profile-20260602/stress-summary.json`
+  passed `12/12` expectations with max internal `1.086533s`, stage totals
+  `ocr=6.337804s`, `extract=2.801848s`, `georeference=0.339092s`, and
+  OCR-engine totals `det_elapsed_s=2.740252s`, `rec_elapsed_s=2.892977s` across
+  12 calls. This points future runtime probes at two distinct lanes: reducing
+  bright-blue detector cost on square map inputs without repeating the rejected
+  Phoenix label-retention regression, and reducing recognition volume on
+  portrait dark-teal fail-closed screenshots without broadly failing valid
+  mobile map crops.

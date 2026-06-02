@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .extract import DEFAULT_SIMPLIFY_PX
+from .ocr import collect_rapidocr_profiles, summarize_rapidocr_profile_events
 from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, build_boundary
 
@@ -49,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include progress events and per-stage elapsed seconds in the printed summary.",
     )
+    parser.add_argument(
+        "--profile-ocr-engine",
+        action="store_true",
+        help="Include RapidOCR detector/recognizer timing details in the printed summary.",
+    )
     return parser
 
 
@@ -70,8 +76,10 @@ def main(argv: list[str] | None = None) -> int:
     def progress(event: dict[str, Any]) -> None:
         events.append({"elapsed_s": round(time.perf_counter() - started, 6), **event})
 
-    try:
-        result = build_boundary(
+    ocr_engine_events: list[dict[str, Any]] | None = None
+
+    def run_build_boundary():
+        return build_boundary(
             image_path,
             args.city,
             args.output,
@@ -88,6 +96,14 @@ def main(argv: list[str] | None = None) -> int:
             progress=progress if args.profile_events else None,
         )
 
+    try:
+        if args.profile_ocr_engine:
+            with collect_rapidocr_profiles() as collected:
+                ocr_engine_events = collected
+                result = run_build_boundary()
+        else:
+            result = run_build_boundary()
+
         if args.print_summary:
             summary = dict(result.summary)
             summary["pipeline_version"] = get_pipeline_version()
@@ -97,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
                     "stage_elapsed_s": stage_elapsed_seconds(events),
                     "events": events,
                 }
+            if args.profile_ocr_engine:
+                summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
             print(json.dumps(summary, indent=2))
         return 0
     except Exception as exc:
@@ -112,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
                     "stage_elapsed_s": stage_elapsed_seconds(events),
                     "events": events,
                 }
+            if args.profile_ocr_engine:
+                summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
             print(json.dumps(summary, indent=2))
         print(f"map-boundary-builder: error: {exc}", file=sys.stderr)
         return 1
