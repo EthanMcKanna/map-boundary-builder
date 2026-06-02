@@ -11355,3 +11355,58 @@ with zero failures in 0.531s.
   production Dallas smoke from `3.041293s` before send / `1.915033s` OCR to
   `2.029828s` before send / `1.352873s` OCR
   (`out/prod-recbatch12-dallas-upload-20260601.json`).
+- Re-ran the accepted recbatch12 default through an explicit no-catalog
+  subsecond budget gate. The production-like in-process run passed 15/15 with
+  unchanged avg/min IoU `0.952958`/`0.843889`, no strict regression issues
+  against `out/recbatch12-default-currentref-20260601/full-report.json`, and
+  `--max-duration-s 1.0` satisfied at `0.986751s` max fixture duration
+  (`out/recbatch12-subsecond-budget-currentref-20260601/full-report.json`).
+  Total active duration was `8.986713s` with `6.641100s` OCR; the tail fixtures
+  were Dallas Waymo at `0.986751s` (`0.716824s` OCR), Phoenix Waymo at
+  `0.954643s` (`0.763500s` OCR), and Houston Waymo at `0.930328s`
+  (`0.711263s` OCR). This gives the current default a concrete subsecond gate,
+  though still with little headroom on Dallas/Phoenix.
+- Rejected simple OCR downscale knobs below the current 1600px default. Focused
+  tail probes with `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1550`, `1500`, and
+  `1450` all failed strict current-reference regression. The 1550 probe was
+  already unsafe despite small average drift, dropping Dallas by `0.001813` IoU
+  and Phoenix by `0.002858` IoU with max duration `1.464221s`
+  (`out/ocrmax1550-recbatch12-tail-probe-20260601/full-report.json`). The
+  1500 probe dropped Dallas by `0.044611` and Phoenix by `0.017058`
+  (`out/ocrmax1500-recbatch12-tail-probe-20260601/full-report.json`), while
+  the 1450 probe dropped Houston by `0.006899`, Los Angeles by `0.018903`, and
+  Phoenix by `0.140070`
+  (`out/ocrmax1450-recbatch12-tail-probe-20260601/full-report.json`). Keep the
+  no-catalog OCR dimension at 1600 until a fallback or drift detector can cover
+  the label-loss cases.
+- Rejected simple extraction downscale knobs below the current 1600px general
+  extractor default. Focused tail probes at 1500/1400/1300/1200px reduced
+  extraction cost but changed boundaries enough to fail the strict reference
+  gate. The regressions were small at 1500 (`0.000683` Dallas, `0.000806`
+  Phoenix; `out/extractmax1500-recbatch12-tail-probe-20260601/full-report.json`)
+  and 1400 (`0.000732` Houston, `0.000356` Phoenix;
+  `out/extractmax1400-recbatch12-tail-probe-20260601/full-report.json`), but
+  they stayed nonzero through 1300 (`0.000189` Dallas, `0.001706` Phoenix;
+  `out/extractmax1300-recbatch12-tail-probe-20260601/full-report.json`) and
+  1200 (`0.000644` Dallas, `0.000223` Houston, `0.002730` Phoenix;
+  `out/extractmax1200-recbatch12-tail-probe-20260601/full-report.json`). The
+  extraction budget is tempting, but blind downsampling is not a clean default.
+- Rejected disabling ONNX Runtime CPU memory arenas as a default despite one
+  attractive environment-only run. `MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA=0`
+  preserved compared tail IoUs and cut the four-fixture OCR total to
+  `2.091155s` with max duration `0.792097s`
+  (`out/onnx-MAP_BOUNDARY_ONNXRUNTIME_ENABLE_CPU_MEM_ARENA-0-tail-probe-20260601/full-report.json`),
+  and a full env-only run passed with total `7.911116s`, OCR `5.832620s`, and
+  max `0.885300s` (`out/onnx-noarena-currentref-20260601/full-report.json`).
+  After changing the code default, two full repeats were slower than the
+  accepted baseline: `9.534367s` total / `7.323408s` OCR / `1.094335s` max in
+  `out/noarena-default-currentref-20260601/full-report.json`, then
+  `11.796308s` total / `9.163722s` OCR / `1.313565s` max in
+  `out/noarena-default-currentref-repeat-20260601/full-report.json`. The code
+  default remains `onnxruntime_enable_cpu_mem_arena: true`.
+- Tried to reproduce the reported Grand Rapids / May Mobility weak-label crop
+  failure from the local artifact set, but no matching `grand`, `rapids`,
+  `may mob`, or `mobility` file was present under `/Users/ethanmckanna/Downloads`
+  at max depth 3. Keep this as an open stress-fixture gap until the original
+  screenshot is available; the suspected failure mode is a crop that contains
+  the polygon but too little readable map text for OCR/georeference.
