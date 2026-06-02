@@ -3756,6 +3756,15 @@ def should_try_road_refinement(
     ):
         return False
     image_area = max(float(width * height), 1.0)
+    if (
+        meters_per_pixel >= 25.0
+        and inlier_count == 4
+        and residual_median_m <= 700.0
+        and residual_p90_m <= 1800.0
+        and spread <= image_area * 0.06
+        and geocode_bbox_span_m(city_context.center) >= 70000.0
+    ):
+        return False
     if inlier_count >= 6 and residual_median_m <= 900.0 and residual_p90_m <= 1200.0:
         return False
     if (

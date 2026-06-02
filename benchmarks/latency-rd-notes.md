@@ -15504,3 +15504,48 @@ with zero failures in 0.531s.
   against `out/waymo-sanantonio-full34-hard-20260602/stress-summary.json`
   showed zero changes for status, source, city, bbox, geometry hash,
   coordinate count, confidence, or control count.
+- Investigated the previously rejected Phoenix Waymo candidate as a targeted
+  speed probe. The unprofiled no-catalog benchmark at
+  `out/phoenix-waymo-unprofiled-benchmark-20260602/full-report.json` produced
+  the same acceptable geometry score as the earlier candidate, IoU `0.853339`,
+  area ratio `1.145121`, centroid distance `1026.4m`, 59 OCR labels,
+  confidence `0.79`, source `ocr-georeference:nominatim-label-fit`, and no
+  accepted road match, but failed the subsecond latency gate at `1.509134s`.
+  Stage timing showed `0.741673s` in georeference after `0.550239s` OCR. A
+  cProfile trace and guard-input probe found the extra work was a rejected OSM
+  road search on a broad four-control city fit: Phoenix had `30.831` meters per
+  pixel, four controls, median residual `514.8m`, p90 residual `1550.5m`,
+  spread `275219.3` pixels, spread ratio `0.0478`, and a geocoder bbox span
+  near `83.9km`; Nashville still needed road refinement with three controls,
+  while Miami was already skipped by the six-control moderate-residual guard.
+  Added a narrow skip for broad, low-resolution, four-control, low-residual
+  regional fits when local road data exists but the city bbox span is at least
+  `70km`. The post-change Phoenix benchmark at
+  `out/phoenix-roadskip-benchmark-20260602/full-report.json` kept the exact
+  same GeoJSON hash `4afa6f0c60c2cc60008d776f4518e2b06d4cf7ce36b6a9bbeefc9ee59d7bf196`,
+  IoU/source/bbox/labels/confidence, reduced georeference to `0.012715s`, and
+  passed the latency gate at `0.787196s`. The stricter profiled repeat
+  benchmark at
+  `out/phoenix-roadskip-repeat-benchmark-20260602/full-report.json` passed
+  with primary `0.834867s`, repeat `4/4` analyzed samples subsecond, repeat
+  median `0.663477s`, repeat p95 `0.717293s`, repeat max `0.723467s`, stable
+  output signature, and OCR engine p95 `0.595385s`. Phoenix remains a speed
+  probe rather than a tracked stress fixture because its IoU is below the
+  suite-level active mean target, even though the row itself passes its scored
+  fixture and latency gates.
+- Regression checks for the broad-fit road skip stayed clean. The focused
+  Nashville/Miami hard gate at
+  `out/phoenix-roadskip-focused-hard-20260602/stress-summary.json` passed both
+  cases with primary max `0.795305s`, repeat `6/6` analyzed samples subsecond,
+  repeat p95 `0.493s`, no repeat signature drift, Nashville still on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, and Miami still on
+  `ocr-georeference:nominatim-label-fit`. The full 36-row hard gate at
+  `out/phoenix-roadskip-full36-hard-20260602/stress-summary.json` passed
+  `36/36` expected rows, statuses `{"complete":25,"failed":11}`, primary max
+  `0.7743s`, repeat `36/36` subsecond, repeat p95 `0.520s`, repeat max
+  `0.593s`, and no repeat signature drift. Comparing all 36 common rows
+  against `out/tesla-service-full36-hard-20260602/stress-summary.json` showed
+  zero changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, control count, OCR label count, or top labels. The full Python
+  suite also passed: `612 passed, 31 subtests passed in 7.88s`, plus
+  `compileall` and `git diff --check`.

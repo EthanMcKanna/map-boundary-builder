@@ -3377,6 +3377,35 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 )
             )
 
+    def test_broad_four_control_label_fit_skips_road_refinement(self) -> None:
+        context = CityContext(
+            query="Phoenix",
+            center=GeocodeResult(
+                label="Phoenix",
+                lon=-112.074,
+                lat=33.448,
+                display_name="Phoenix, Maricopa County, Arizona, United States",
+                bbox=(-112.33, 33.29, -111.78, 33.92),
+                importance=0.73,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertFalse(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=30.83,
+                    inlier_count=4,
+                    residual_median_m=514.8,
+                    residual_p90_m=1550.5,
+                    spread=275219.0,
+                    width=2400,
+                    height=2400,
+                )
+            )
+
     def test_sparse_rotated_fit_requires_road_or_stronger_label_evidence(self) -> None:
         self.assertTrue(
             sparse_rotated_fit_without_road_evidence(
