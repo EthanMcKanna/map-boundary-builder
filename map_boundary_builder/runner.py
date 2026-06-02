@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import hypot
 import os
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 import cv2
@@ -114,6 +115,21 @@ PROVIDER_UI_LABEL_MIN_IOU = 0.50
 PROVIDER_UI_LABEL_MIN_AREA_RATIO = 0.55
 PROVIDER_UI_LABEL_MAX_AREA_RATIO = 2.20
 PROVIDER_UI_LABEL_CONFIDENCE = 0.72
+RIDE_ROUTE_UI_LABEL_MIN_CONFIDENCE = 80.0
+RIDE_ROUTE_UI_MIN_CATEGORIES = 3
+RIDE_ROUTE_UI_CATEGORY_PATTERNS = {
+    "pickup": ("pickup",),
+    "dropoff": ("dropoff", "drop off"),
+    "ride": ("ride is", "cancel ride", "ride away"),
+    "plate": ("plate", "license plate"),
+    "receipt": ("tips", "payment", "trip fare", "report issue", "lost item"),
+    "battery": ("phone battery low",),
+    "edit": ("tap to edit",),
+}
+RIDE_ROUTE_UI_METRIC_RE = re.compile(
+    r"(?:\b\d+(?:\.\d+)?\s*(?:mi|ft)\b|\b\d+\s*min(?:ute)?s?\b|\b\d{1,2}:\d{2}\s*(?:am|pm)?\b)",
+    re.IGNORECASE,
+)
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
 PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
@@ -1277,6 +1293,19 @@ def build_boundary(
                 catalog_label_hints=high_confidence_label_texts(labels)[:5],
                 shape_match=False,
             )
+    route_ui_evidence = ride_route_ui_reject_evidence(labels)
+    if route_ui_evidence is not None:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Rejecting ride-route UI",
+            percent=48,
+            details=route_ui_evidence,
+        )
+        raise ValueError(
+            "Could not infer a service-area boundary from ride-route UI. "
+            "Upload a service-area coverage map crop instead of a trip route or receipt screenshot."
+        )
     wait_future_result(georef_resource_future)
     georef = fit_georeference(
         labels,
@@ -2886,6 +2915,32 @@ def label_near_extracted_geometry(label: Any, bounds: tuple[float, float, float,
     pad_x = max(60.0, width * 0.35)
     pad_y = max(60.0, height * 0.35)
     return (min_x - pad_x) <= label.x <= (max_x + pad_x) and (min_y - pad_y) <= label.y <= (max_y + pad_y)
+
+
+def ride_route_ui_reject_evidence(labels: list[Any]) -> dict[str, Any] | None:
+    categories: set[str] = set()
+    metric_labels: list[str] = []
+    for label in labels:
+        if getattr(label, "confidence", 0.0) < RIDE_ROUTE_UI_LABEL_MIN_CONFIDENCE:
+            continue
+        text = normalize_route_ui_text(getattr(label, "text", ""))
+        if not text:
+            continue
+        for category, patterns in RIDE_ROUTE_UI_CATEGORY_PATTERNS.items():
+            if any(pattern in text for pattern in patterns):
+                categories.add(category)
+        if RIDE_ROUTE_UI_METRIC_RE.search(text):
+            metric_labels.append(getattr(label, "text", ""))
+    if len(categories) < RIDE_ROUTE_UI_MIN_CATEGORIES or not metric_labels:
+        return None
+    return {
+        "route_ui_categories": sorted(categories),
+        "route_metric_labels": metric_labels[:3],
+    }
+
+
+def normalize_route_ui_text(text: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9:.]+", " ", text.lower()).split())
 
 
 def sparse_low_res_label_catalog_match(

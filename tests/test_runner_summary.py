@@ -865,6 +865,75 @@ def test_build_boundary_fails_closed_for_sparse_unsupported_georeference(tmp_pat
         )
 
 
+def test_ride_route_ui_reject_evidence_requires_route_ui_and_metric() -> None:
+    labels = [
+        OcrLabel("Pickup", x=80, y=320, width=80, height=24, confidence=98),
+        OcrLabel("Dropoff", x=640, y=850, width=100, height=24, confidence=98),
+        OcrLabel("Ride is 16 min away", x=120, y=1260, width=220, height=28, confidence=98),
+        OcrLabel("Plate: XFY5940", x=120, y=1350, width=180, height=24, confidence=96),
+        OcrLabel("Austin", x=540, y=420, width=100, height=30, confidence=99),
+    ]
+
+    evidence = runner.ride_route_ui_reject_evidence(labels)
+
+    assert evidence == {
+        "route_ui_categories": ["dropoff", "pickup", "plate", "ride"],
+        "route_metric_labels": ["Ride is 16 min away"],
+    }
+    assert runner.ride_route_ui_reject_evidence(labels[:2]) is None
+    assert runner.ride_route_ui_reject_evidence(
+        [
+            OcrLabel("Pickup", x=80, y=320, width=80, height=24, confidence=98),
+            OcrLabel("Austin", x=540, y=420, width=100, height=30, confidence=99),
+            OcrLabel("South Congress", x=500, y=650, width=140, height=24, confidence=98),
+        ]
+    ) is None
+
+
+def test_ride_route_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "route.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (1206, 2622), (244, 244, 244)).save(image_path)
+    rgb = np.full((2622, 1206, 3), 244, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((120, 80), dtype=bool),
+        style="light-fill",
+        pixel_geometry=Polygon([(120, 300), (880, 300), (880, 1700), (120, 1700)]),
+        coverage_ratio=0.25,
+        contour_count=1,
+        confidence=1.0,
+    )
+    labels = [
+        OcrLabel("Pickup", x=420, y=360, width=80, height=24, confidence=98),
+        OcrLabel("Dropoff", x=680, y=880, width=110, height=24, confidence=98),
+        OcrLabel("Ride is 16 min away", x=120, y=1270, width=240, height=28, confidence=98),
+        OcrLabel("Plate: XFY5940", x=120, y=1350, width=180, height=24, confidence=97),
+        OcrLabel("Austin", x=520, y=420, width=100, height=30, confidence=99),
+        OcrLabel("Bouldin", x=420, y=620, width=100, height=24, confidence=96),
+    ]
+    events: list[dict] = []
+
+    def unexpected_fit_georeference(*_args, **_kwargs):
+        raise AssertionError("route UI should fail before georeference")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: labels)
+    monkeypatch.setattr(runner, "fit_georeference", unexpected_fit_georeference)
+
+    with pytest.raises(ValueError, match="ride-route UI"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+            progress=events.append,
+        )
+
+    assert events[-1]["message"] == "Rejecting ride-route UI"
+    assert events[-1]["details"]["route_ui_categories"] == ["dropoff", "pickup", "plate", "ride"]
+
+
 def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None:
     monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 512)
     monkeypatch.setattr(runner, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208)

@@ -14542,3 +14542,31 @@ with zero failures in 0.531s.
   Dallas Tesla with IoU `0.984721` and saved the same dependency map. This is
   a reliability/evidence improvement only; no runtime generation path changed
   and no deploy is needed.
+- Accepted a route-receipt fail-fast guard after probing unmanifested local
+  Austin Tesla ride screenshots. `/Users/ethanmckanna/Downloads/IMG_0084.PNG`
+  is a route/receipt UI, not a service-area boundary map: before the guard it
+  failed closed only after an expensive no-catalog georeference attempt, with
+  `event_profile.total_elapsed_s=19.893747`, `extract=0.271s`, `ocr=1.455s`,
+  `georeference=12.682s`, `64` initial labels, a full-detail retry to `73`
+  labels, and top labels dominated by route UI (`Pickup`, `Tips`, `Oracle`,
+  `Ride is 16 min away`). The new guard rejects high-confidence ride-route UI
+  only when multiple route/receipt categories and a route metric are present,
+  and it runs after catalog label/shape rescue opportunities but before ranked
+  georeference search. The screenshot is now a locked negative stress case,
+  `tesla-austin-route-receipt`, expecting the specific `ride-route UI` error,
+  at least `30` OCR labels, and `max_total_elapsed_s=1.5`. Fresh in-process
+  stress with OCR/extraction caches disabled passed at
+  `out/route-ui-reject-stress-20260602/stress-summary.json`: `1/1` expected,
+  failed closed in `1.121901s`, no full-detail retry, OCR `0.715s`, extract
+  `0.385s`, `64` labels, and zero expectation issues. The default subprocess
+  smoke `out/route-ui-reject-subprocess-20260602/stress-summary.json` passed
+  in `0.928608s`. The full actual-code 17-case hard gate
+  `out/route-ui-reject-full17-hard-20260602/stress-summary.json` passed
+  `17/17` expectations with statuses `{"complete":14,"failed":3}`, primary
+  max `0.654520s`, `34/34` analyzed repeats subsecond, repeat p95 `0.102s`,
+  no full-detail retries, and the new route negative failed in `0.654520s`
+  while all `14` valid service-area screenshots still completed. Focused tests
+  passed `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`143 passed`), compileall over
+  `map_boundary_builder`, `api`, and `tests` passed, `git diff --check` was
+  clean, and the full suite passed `589` tests plus `30` subtests.
