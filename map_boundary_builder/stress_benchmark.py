@@ -875,6 +875,7 @@ def base_row(case: dict[str, Any], *, expected_status: str, observed_status: str
         "image": case.get("image"),
         "expected_status": expected_status,
         "observed_status": observed_status,
+        "status": observed_status,
     }
 
 

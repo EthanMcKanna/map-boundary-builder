@@ -86,6 +86,7 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     )
 
     assert row["observed_status"] == "complete"
+    assert row["status"] == "complete"
     assert row["expectation_passed"] is True
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
     assert row["total_elapsed_s"] == 0.612345
@@ -155,6 +156,8 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
     )
 
     row = report["rows"][0]
+    assert row["observed_status"] == "failed"
+    assert row["status"] == "failed"
     assert row["expectation_passed"] is True
     assert row["ocr_engine_profile"]["det_elapsed_s"] == 0.2
     assert report["summary"]["ocr_engine_profile"] == {
@@ -604,6 +607,7 @@ def test_run_stress_case_reports_missing_without_subprocess(tmp_path, monkeypatc
     )
 
     assert row["observed_status"] == "missing"
+    assert row["status"] == "missing"
     assert row["expectation_passed"] is False
     assert row["expectation_issues"] == ["expected complete, got missing"]
 

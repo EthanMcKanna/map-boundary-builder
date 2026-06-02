@@ -13611,3 +13611,30 @@ with zero failures in 0.531s.
   `48/48` subsecond repeats, primary max `0.885088s`, repeat median `0.355s`,
   repeat p95 `0.545s`, repeat max `0.575s`, RapidOCR total p95 `0.479s`,
   detector p95 `0.251s`, and recognizer p95 `0.237s`.
+- Rechecked the bright-blue recognition-profile axis on the current slow six
+  hard-tail fixtures after the focused detector change. The default recognizer
+  is still rejected: `out/brightblue-recprofile-default-slow6-20260602/stress-summary.json`
+  passed only `4/6` primary expectations, pushed Bay Area to `1.313228s`, and
+  dropped Houston to `9` controls below the manifest floor of `10`; analyzed
+  repeats were `10/12` expected because Houston stayed under-supported. The
+  current `en-ppocrv5` control
+  `out/brightblue-recprofile-en-ppocrv5-slow6-20260602/stress-summary.json`
+  preserved `6/6` primary expectations and `12/12` analyzed repeats, with
+  stable signatures, primary max `0.798941s`, repeat p95 `0.607s`, and OCR
+  total p95 `0.549s`. Keep the accepted bright-blue recognizer profile.
+- Hardened the real-screenshot stress summary row schema with a `status` alias
+  for `observed_status`. This does not change expectations or repeat
+  signatures, but it makes ad hoc candidate-analysis scripts less likely to
+  treat completed rows as missing status values while preserving the existing
+  explicit `observed_status` field. Focused validation:
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `43` tests, and
+  `out/status-alias-primary-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations with no row alias mismatches. The full hard
+  gate `out/status-alias-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.781688s`, repeat median `0.380s`,
+  repeat p95 `0.564s`, repeat max `0.611s`, RapidOCR total p95 `0.506s`,
+  detector p95 `0.268s`, recognizer p95 `0.238s`, and no `status` alias
+  mismatches across `16` primary rows or `64` repeat samples.
