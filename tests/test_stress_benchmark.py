@@ -1587,7 +1587,7 @@ def test_main_passes_repeat_profile_p95_budget_to_runner(tmp_path, monkeypatch) 
 
 def test_parse_metric_duration_budgets_accepts_repeated_and_comma_values() -> None:
     assert stress_module.parse_metric_duration_budgets(
-        ["det_elapsed_s=0.3, rec_elapsed_s=0.6", "total_s=0.9"]
+        ["det_elapsed_s=0.3, rec_elapsed_s=0.6", "total_elapsed_s=0.9"]
     ) == {
         "det_elapsed_s": 0.3,
         "rec_elapsed_s": 0.6,
@@ -1600,6 +1600,8 @@ def test_parse_metric_duration_budgets_rejects_invalid_values() -> None:
         stress_module.parse_metric_duration_budgets(["rec_elapsed_s:0.6"])
     with pytest.raises(ValueError, match="positive"):
         stress_module.parse_metric_duration_budgets(["rec_elapsed_s=0"])
+    with pytest.raises(ValueError, match="Unknown OCR engine duration metric"):
+        stress_module.parse_metric_duration_budgets(["unknown_elapsed_s=0.6"])
 
 
 def test_latency_budget_flags_repeat_ocr_engine_p95_excess_and_missing() -> None:
@@ -1769,7 +1771,7 @@ def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatc
             "--repeat-profile-runs",
             "2",
             "--max-repeat-ocr-engine-p95-duration-s",
-            "rec_elapsed_s=0.6,total_s=0.8",
+            "rec_elapsed_s=0.6,total_elapsed_s=0.8",
         ]
     )
 

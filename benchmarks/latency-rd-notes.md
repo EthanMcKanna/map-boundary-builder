@@ -13730,3 +13730,27 @@ with zero failures in 0.531s.
   hard gate, all GeoJSON geometry hashes stayed identical; Miami improved from
   `5` to `6` controls and confidence `0.73` to `0.788`, while repeat median,
   p90, p95, OCR-total p95, detector p95, and recognizer p95 all improved.
+- Re-ran the remaining bright-blue OCR tail probes after the `2300.0`
+  threshold landed and rejected both smaller detector limits and tighter rescue
+  filters for shipping. A focused slow-five sweep over Bay Area, Los Angeles,
+  Houston, Orlando, and Miami showed detector limit `224` as the only plausible
+  candidate, but the full hard gate
+  `out/brightblue-det224-full16-hard-candidate2-20260602/stress-summary.json`
+  only reduced repeat p95 from `0.546s` to `0.542s` while worsening repeat
+  median (`0.327s` to `0.345s`), detector p95 (`0.264s` to `0.270s`), and Bay
+  Area primary latency (`0.706s` to `0.966s`), so it is rejected as noise rather
+  than a safe improvement. Recognition batch sizes `16` and `24`, detector
+  limits `192` and `288`, and bright-blue thresholds above `2300` were also
+  rejected on the focused sweep. Tightening the fast-text rescue exception was
+  not safe: `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_AREA=1100` dropped LA and
+  Houston support on the focused set, and the narrow `1000` candidate failed the
+  full hard gate
+  `out/rescue-area1000-full16-hard-candidate-20260602/stress-summary.json` by
+  dropping Nashville below its `14` OCR-label expectation. The only accepted
+  change from this pass is stress-harness reliability: the OCR engine p95 budget
+  parser now normalizes the common `total_elapsed_s` alias to RapidOCR's
+  `total_s` metric and rejects unknown metric names before a long run starts.
+  Focused validation passed with `PYTHONPATH=. .venv/bin/uv run --with pytest
+  python -m pytest tests/test_stress_benchmark.py -q` (`43` tests) and
+  `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder/stress_benchmark.py tests/test_stress_benchmark.py`.

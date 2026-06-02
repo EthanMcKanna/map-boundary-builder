@@ -30,6 +30,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
+OCR_ENGINE_STAGE_METRIC_ALIASES = {
+    "total_elapsed_s": "total_s",
+}
 OCR_ENGINE_BOX_AREA_KEYS = (
     "raw_box_area_min",
     "raw_box_area_p25",
@@ -145,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="METRIC=SECONDS",
         help=(
             "Fail when a profiled repeat OCR engine metric p95 exceeds this budget. "
-            "Repeat or comma-separate entries such as det_elapsed_s=0.3,rec_elapsed_s=0.6."
+            "Repeat or comma-separate entries such as det_elapsed_s=0.3,rec_elapsed_s=0.6,total_s=0.9."
         ),
     )
     return parser
@@ -1568,9 +1571,10 @@ def parse_metric_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
                 continue
             if "=" not in entry:
                 raise ValueError(f"OCR engine budget must use METRIC=SECONDS: {entry}")
-            metric, raw_value = (part.strip() for part in entry.split("=", 1))
-            if not metric:
+            raw_metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not raw_metric:
                 raise ValueError(f"OCR engine budget is missing a metric name: {entry}")
+            metric = normalize_ocr_engine_duration_metric(raw_metric)
             try:
                 value = float(raw_value)
             except ValueError as exc:
@@ -1579,6 +1583,14 @@ def parse_metric_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
                 raise ValueError(f"OCR engine budget seconds must be positive: {entry}")
             budgets[metric] = value
     return dict(sorted(budgets.items()))
+
+
+def normalize_ocr_engine_duration_metric(metric: str) -> str:
+    normalized = OCR_ENGINE_STAGE_METRIC_ALIASES.get(metric, metric)
+    if normalized not in OCR_ENGINE_STAGE_MAX_KEYS:
+        expected = ", ".join(OCR_ENGINE_STAGE_MAX_KEYS)
+        raise ValueError(f"Unknown OCR engine duration metric {metric!r}; expected one of: {expected}")
+    return normalized
 
 
 def repeat_ocr_engine_p95_budget_violations(
