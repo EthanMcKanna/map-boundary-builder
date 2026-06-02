@@ -409,6 +409,8 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
     assert repeat_profile["summary"]["passed_samples"] == 1
     assert repeat_profile["summary"]["subsecond_samples"] == 1
     assert repeat_profile["summary"]["subsecond_fixture_min_duration_count"] == 1
+    assert repeat_profile["summary"]["stable_signature_fixtures"] == 1
+    assert repeat_profile["summary"]["unstable_signature_fixtures"] == []
     assert repeat_profile["summary"]["min_duration_s"] == 0.8
     assert repeat_profile["summary"]["stage_duration_s"] == {
         "ocr": {
@@ -420,9 +422,69 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
         }
     }
     assert repeat_profile["fixtures"]["phoenix-waymo"]["min_iou"] == 0.99
+    assert repeat_profile["fixtures"]["phoenix-waymo"]["signature_stability"]["stable"] is True
+    assert repeat_profile["fixtures"]["phoenix-waymo"]["signature_stability"]["unique_signatures"] == 1
     assert repeat_profile["fixtures"]["phoenix-waymo"]["stage_duration_s"]["ocr"]["max_duration_s"] == 0.4
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
+
+
+def test_repeat_profile_flags_output_signature_drift() -> None:
+    repeat_profile = benchmark_module.summarize_repeat_profile_samples(
+        [
+            {
+                "slug": "phoenix-waymo",
+                "repeat_index": 1,
+                "warmup": False,
+                "passed": True,
+                "status": "active",
+                "iou": 0.91,
+                "area_ratio": 1.0,
+                "centroid_distance_m": 12.0,
+                "vertices": 42,
+                "style": "bright-blue",
+                "duration_s": 0.52,
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "combined_confidence": 0.88,
+                "catalog_slug": None,
+                "road_match_score": 0.7,
+                "ocr_label_count": 56,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Phoenix", "Waymo"],
+            },
+            {
+                "slug": "phoenix-waymo",
+                "repeat_index": 2,
+                "warmup": False,
+                "passed": True,
+                "status": "active",
+                "iou": 0.91,
+                "area_ratio": 1.0,
+                "centroid_distance_m": 12.0,
+                "vertices": 42,
+                "style": "bright-blue",
+                "duration_s": 0.48,
+                "georeference_source": "catalog-shape-match",
+                "combined_confidence": 0.94,
+                "catalog_slug": "phoenix-waymo",
+                "road_match_score": None,
+                "ocr_label_count": 20,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Phoenix"],
+            },
+        ],
+        runs_per_fixture=2,
+        warmup_runs_per_fixture=0,
+    )
+
+    assert repeat_profile["summary"]["stable_signature_fixtures"] == 0
+    assert repeat_profile["summary"]["unstable_signature_fixtures"] == ["phoenix-waymo"]
+    stability = repeat_profile["fixtures"]["phoenix-waymo"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert [signature["count"] for signature in stability["signatures"]] == [1, 1]
 
 
 def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
@@ -2581,6 +2643,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
                 "analyzed_samples": 4,
                 "passed_samples": 4,
                 "subsecond_samples": 3,
+                "unstable_signature_fixtures": [],
                 "max_duration_s": 0.98,
                 "median_duration_s": 0.7,
                 "stage_duration_s": {
@@ -2597,6 +2660,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
         max_repeat_profile_stage_duration_s={"ocr": 0.8},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
+        fail_on_repeat_profile_signature_drift=True,
     )
 
     assert check["passed"] is True
@@ -2606,6 +2670,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     assert check["repeat_profile_stage_duration_s"] == {"ocr": 0.72}
     assert check["repeat_profile_pass_ratio"] == 1.0
     assert check["repeat_profile_subsecond_ratio"] == 0.75
+    assert check["repeat_profile_signature_drift_fixtures"] == []
     assert check["issues"] == []
 
 
@@ -2660,6 +2725,36 @@ def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> N
             "min_repeat_profile_subsecond_ratio": 0.75,
             "shortfall": 0.25,
         },
+    ]
+
+
+def test_report_latency_budget_check_flags_repeat_profile_signature_drift() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "scores": [{"slug": "phoenix-waymo", "status": "active", "duration_s": 0.7}],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "passed_samples": 4,
+                "subsecond_samples": 4,
+                "unstable_signature_fixtures": ["phoenix-waymo"],
+            }
+        },
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        fail_on_repeat_profile_signature_drift=True,
+    )
+
+    assert check["passed"] is False
+    assert check["fail_on_repeat_profile_signature_drift"] is True
+    assert check["repeat_profile_signature_drift_fixtures"] == ["phoenix-waymo"]
+    assert check["issues"] == [
+        {
+            "kind": "repeat_profile_signature_drift",
+            "unstable_signature_fixtures": ["phoenix-waymo"],
+        }
     ]
 
 

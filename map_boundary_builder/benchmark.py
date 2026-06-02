@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 import json
 import os
@@ -337,6 +338,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional minimum ratio of analyzed repeat-profile samples under one second.",
     )
     parser.add_argument(
+        "--fail-on-repeat-profile-signature-drift",
+        action="store_true",
+        help=(
+            "Fail when analyzed repeat-profile samples for a fixture produce different "
+            "output signatures."
+        ),
+    )
+    parser.add_argument(
         "--profile-ocr-engine",
         action="store_true",
         help=(
@@ -546,6 +555,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat-profile-runs requires --mode full")
     if args.repeat_profile_runs and args.execution != "in-process":
         parser.error("--repeat-profile-runs requires --execution in-process")
+    if args.fail_on_repeat_profile_signature_drift and args.repeat_profile_runs == 0:
+        parser.error("--fail-on-repeat-profile-signature-drift requires --repeat-profile-runs")
     if args.profile_ocr_engine and args.mode != "full":
         parser.error("--profile-ocr-engine requires --mode full")
     if args.profile_ocr_engine and args.execution != "in-process":
@@ -621,6 +632,7 @@ def main(argv: list[str] | None = None) -> int:
         or bool(max_repeat_profile_stage_duration_s)
         or args.min_repeat_profile_pass_ratio is not None
         or args.min_repeat_profile_subsecond_ratio is not None
+        or args.fail_on_repeat_profile_signature_drift
     ):
         latency_budget_check = check_report_latency_budgets(
             report,
@@ -635,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
             max_repeat_profile_stage_duration_s=max_repeat_profile_stage_duration_s,
             min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
             min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
+            fail_on_repeat_profile_signature_drift=args.fail_on_repeat_profile_signature_drift,
         )
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
@@ -1014,6 +1027,11 @@ def summarize_repeat_profile_samples(
         slug: summarize_repeat_profile_sample_group(slug_samples)
         for slug, slug_samples in sorted(fixture_samples.items())
     }
+    unstable_signature_fixtures = [
+        slug
+        for slug, fixture_summary in fixture_summaries.items()
+        if not fixture_summary.get("signature_stability", {}).get("stable", True)
+    ]
     analyzed_samples = repeat_profile_analyzed_samples(samples)
     subsecond_fixture_count = sum(
         1
@@ -1032,6 +1050,8 @@ def summarize_repeat_profile_samples(
             "failed_samples": len(analyzed_samples) - count_passed_samples(analyzed_samples),
             "subsecond_samples": count_subsecond_samples(analyzed_samples),
             "subsecond_fixture_min_duration_count": subsecond_fixture_count,
+            "stable_signature_fixtures": len(fixture_summaries) - len(unstable_signature_fixtures),
+            "unstable_signature_fixtures": unstable_signature_fixtures,
             **repeat_profile_duration_stats(analyzed_samples),
             **repeat_profile_iou_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
@@ -1049,6 +1069,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "passed_samples": count_passed_samples(analyzed_samples),
         "failed_samples": len(analyzed_samples) - count_passed_samples(analyzed_samples),
         "subsecond_samples": count_subsecond_samples(analyzed_samples),
+        "signature_stability": repeat_profile_signature_stability(analyzed_samples),
         **repeat_profile_duration_stats(analyzed_samples),
         **repeat_profile_iou_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
@@ -1068,6 +1089,44 @@ def count_subsecond_samples(samples: list[dict[str, Any]]) -> int:
         duration is not None and duration < 1.0
         for duration in (parse_report_duration(sample.get("duration_s")) for sample in samples)
     )
+
+
+def repeat_profile_signature_stability(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    signatures = [repeat_profile_output_signature(sample) for sample in samples]
+    counts = Counter(json.dumps(signature, sort_keys=True) for signature in signatures)
+    return {
+        "samples": len(signatures),
+        "stable": len(counts) <= 1,
+        "unique_signatures": len(counts),
+        "signatures": [
+            {"count": count, **json.loads(encoded)}
+            for encoded, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+    }
+
+
+def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
+    top_labels = sample.get("ocr_top_labels")
+    return {
+        "passed": sample.get("passed"),
+        "status": sample.get("status"),
+        "iou": sample.get("iou"),
+        "area_ratio": sample.get("area_ratio"),
+        "centroid_distance_m": sample.get("centroid_distance_m"),
+        "vertices": sample.get("vertices"),
+        "style": sample.get("style"),
+        "georeference_source": sample.get("georeference_source"),
+        "combined_confidence": sample.get("combined_confidence"),
+        "catalog_slug": sample.get("catalog_slug"),
+        "catalog_shape_iou": sample.get("catalog_shape_iou"),
+        "catalog_area_ratio": sample.get("catalog_area_ratio"),
+        "road_match_score": sample.get("road_match_score"),
+        "ocr_label_count": sample.get("ocr_label_count"),
+        "ocr_label_event": sample.get("ocr_label_event"),
+        "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
+        "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
+        "error": sample.get("error"),
+    }
 
 
 def repeat_profile_duration_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
@@ -2448,6 +2507,7 @@ def check_report_latency_budgets(
     max_repeat_profile_stage_duration_s: dict[str, float] | None = None,
     min_repeat_profile_pass_ratio: float | None = None,
     min_repeat_profile_subsecond_ratio: float | None = None,
+    fail_on_repeat_profile_signature_drift: bool = False,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
@@ -2519,6 +2579,7 @@ def check_report_latency_budgets(
         repeat_profile_summary,
         "subsecond_samples",
     )
+    repeat_profile_signature_drift_fixtures = report_repeat_profile_signature_drift_fixtures(report)
     issues: list[dict[str, Any]] = []
     if duration_budget is not None:
         for row in report.get("scores", []):
@@ -2622,7 +2683,7 @@ def check_report_latency_budgets(
             repeat_profile_pass_ratio_budget,
             repeat_profile_subsecond_ratio_budget,
         )
-    )
+    ) or fail_on_repeat_profile_signature_drift
     if repeat_profile_budget_requested and repeat_profile_summary is None:
         issues.append({"kind": "repeat_profile_missing"})
     elif repeat_profile_budget_requested and repeat_profile_analyzed_samples <= 0:
@@ -2725,6 +2786,14 @@ def check_report_latency_budgets(
                     ),
                 }
             )
+    if fail_on_repeat_profile_signature_drift and has_repeat_profile_samples:
+        if repeat_profile_signature_drift_fixtures:
+            issues.append(
+                {
+                    "kind": "repeat_profile_signature_drift",
+                    "unstable_signature_fixtures": repeat_profile_signature_drift_fixtures,
+                }
+            )
     return {
         "passed": not issues,
         "max_duration_s": duration_budget,
@@ -2738,6 +2807,7 @@ def check_report_latency_budgets(
         "max_repeat_profile_stage_duration_s": repeat_profile_stage_budgets,
         "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
         "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
+        "fail_on_repeat_profile_signature_drift": fail_on_repeat_profile_signature_drift,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
@@ -2768,6 +2838,7 @@ def check_report_latency_budgets(
             if repeat_profile_subsecond_ratio is not None
             else None
         ),
+        "repeat_profile_signature_drift_fixtures": repeat_profile_signature_drift_fixtures,
         "issues": issues,
     }
 
@@ -2906,6 +2977,16 @@ def report_repeat_profile_sample_ratio(summary: dict[str, Any] | None, key: str)
     except (TypeError, ValueError):
         return None
     return min(1.0, count / analyzed_samples)
+
+
+def report_repeat_profile_signature_drift_fixtures(report: dict[str, Any]) -> list[str]:
+    summary = report_repeat_profile_summary(report)
+    if not isinstance(summary, dict):
+        return []
+    raw_fixtures = summary.get("unstable_signature_fixtures")
+    if not isinstance(raw_fixtures, list):
+        return []
+    return [str(slug) for slug in raw_fixtures]
 
 
 def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -3225,6 +3306,9 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(f"       {issue['metric']}: missing evaluated OCR engine profile")
             elif issue["kind"] == "evaluated_ocr_engine_duration_missing":
                 print(f"       {issue['metric']}: missing evaluated OCR engine duration")
+            elif issue["kind"] == "repeat_profile_signature_drift":
+                fixtures = ", ".join(issue.get("unstable_signature_fixtures", []))
+                print(f"       repeat profile signature drift: {fixtures}")
     source_requirement_check = report.get("source_requirement_check")
     if source_requirement_check:
         print("")

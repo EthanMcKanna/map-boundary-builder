@@ -12607,3 +12607,34 @@ with zero failures in 0.531s.
   expected and `4/4` subsecond, and reported `unexpected_samples=0`,
   `stable_signature_cases=2`, `unstable_signature_cases=[]`, median total
   `0.730768s`, p95 total `0.837784s`, and max total `0.838158s`.
+- Added repeat-output signature stability to the main fixture benchmark repeat
+  profile and exposed `--fail-on-repeat-profile-signature-drift` through the
+  existing latency-budget check. The per-fixture signature tracks benchmark
+  output fields that matter for accepting speed candidates: pass/status, IoU,
+  area ratio, centroid distance, vertices, style, georeference source,
+  confidence, catalog path, road-match score, OCR label count/event/top labels,
+  full-detail retry status, and error text, while ignoring duration. This is
+  diagnostic-only and does not change generation, OCR inputs, georeferencing,
+  cache keys, or deployed runtime behavior. Focused benchmark tests passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_benchmark.py -q`
+  (`71 passed`), and the full suite passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`503 passed, 30 subtests passed`). A real no-catalog Phoenix fixture smoke,
+  `out/benchmark-repeat-signature-gate-smoke-pass-20260602/full-report.json`,
+  ran the focused no-catalog command with `--mode full`,
+  `--execution in-process`, `--only phoenix`, `--no-catalog`,
+  `--mean-iou 0.80`, `--repeat-profile-runs 3`,
+  `--repeat-profile-warmups 1`,
+  `--fail-on-repeat-profile-signature-drift`,
+  `--min-repeat-profile-pass-ratio 1.0`, and
+  `--min-repeat-profile-subsecond-ratio 1.0`, passed end to end, and reported
+  `2/2` analyzed repeats passing, `2/2` subsecond, no signature-drift fixtures,
+  repeat min/median/max `0.421457s`/`0.435874s`/`0.450291s`, and stable
+  no-catalog OCR/georeference output at IoU `0.853339`,
+  `georeference_source=ocr-georeference:nominatim-label-fit`,
+  `ocr_label_count=59`, and the same eight top labels across analyzed repeats.
+  A same-command default-threshold smoke without the focused `--mean-iou 0.80`
+  also showed the gate itself passed but the single no-catalog Phoenix run is
+  below the default benchmark mean-IoU threshold (`0.853 < 0.90`), so use the
+  focused threshold when the purpose is gate validation rather than full-suite
+  acceptance.
