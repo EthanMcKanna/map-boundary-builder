@@ -69,6 +69,7 @@ from .runtime_config import (
     FAST_TEXT_OCR_MIN_AREA,
     FAST_TEXT_OCR_STYLES,
     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
+    LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
     RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
@@ -136,6 +137,9 @@ RIDE_ROUTE_UI_COMPACT_METRIC_RE = re.compile(
     r"\d+(?:\d+)?(?:mi|ft|min)(?:walk|away|topickup)?",
     re.IGNORECASE,
 )
+LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT = 1800
+LIGHT_FILL_ROUTE_UI_OCR_MAX_WIDTH = 1300
+LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.8
 NON_MAP_APP_UI_LABEL_MIN_CONFIDENCE = 80.0
 NON_MAP_APP_UI_MAX_COVERAGE_RATIO = 0.01
 NON_MAP_APP_UI_MIN_LABELS = 8
@@ -371,6 +375,7 @@ def build_boundary(
     labels: list[Any] | None = None
     labels_future_filtered = False
     labels_future_current_catalog_shortcut = False
+    labels_future_route_ui_shortcut = False
     labels_from_focus_georef_ocr = False
     focused_sparse_ocr_failure = False
     provider_ui_labels_future: Future[list[Any]] | None = None
@@ -453,7 +458,12 @@ def build_boundary(
                     ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                     labels_future_current_catalog_shortcut = True
                 else:
-                    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+                    route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
+                        early_ocr_style,
+                        width=width,
+                        height=height,
+                    )
+                    rapidocr_max_dimension = route_ui_ocr_max_dimension or rapidocr_max_dimension_for_ocr_style(
                         early_ocr_style,
                         width=width,
                         height=height,
@@ -461,6 +471,7 @@ def build_boundary(
                     )
                     if rapidocr_max_dimension is not None:
                         ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+                    labels_future_route_ui_shortcut = route_ui_ocr_max_dimension is not None
                 if rapidocr_min_text_area is not None:
                     ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
                 rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
@@ -509,7 +520,12 @@ def build_boundary(
                 ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                 labels_future_current_catalog_shortcut = True
             else:
-                rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+                route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
+                    early_ocr_style,
+                    width=width,
+                    height=height,
+                )
+                rapidocr_max_dimension = route_ui_ocr_max_dimension or rapidocr_max_dimension_for_ocr_style(
                     early_ocr_style,
                     width=width,
                     height=height,
@@ -517,6 +533,7 @@ def build_boundary(
                 )
                 if rapidocr_max_dimension is not None:
                     ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+                labels_future_route_ui_shortcut = route_ui_ocr_max_dimension is not None
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
@@ -833,6 +850,11 @@ def build_boundary(
                         allow_catalog=allow_catalog,
                         skip_redundant_probe=skip_redundant_probe,
                     )
+                    route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
+                        extraction.style,
+                        width=width,
+                        height=height,
+                    )
                     labels_future = submit_ocr_labels_from_rgb(
                         ocr_executor,
                         image_path,
@@ -842,10 +864,12 @@ def build_boundary(
                         height=height,
                         rapidocr_max_dimension_override=(
                             CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION if shortcut_ocr else None
-                        ),
+                        )
+                        or route_ui_ocr_max_dimension,
                         source_is_svg=source_is_svg,
                     )
                     labels_future_current_catalog_shortcut = shortcut_ocr
+                    labels_future_route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
                     ensure_georeference_resource_preload()
             emit_progress(
                 progress,
@@ -1088,6 +1112,16 @@ def build_boundary(
                 )
                 is not None
             )
+            shortcut_ocr = current_catalog_label_shape_shortcut_enabled(
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                skip_redundant_probe=skip_redundant_probe,
+            )
+            route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
+                extraction.style,
+                width=width,
+                height=height,
+            )
             labels_future = submit_ocr_labels_from_rgb(
                 ocr_executor,
                 image_path,
@@ -1097,20 +1131,13 @@ def build_boundary(
                 height=height,
                 rapidocr_max_dimension_override=(
                     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
-                    if current_catalog_label_shape_shortcut_enabled(
-                        city_input=city_input,
-                        allow_catalog=allow_catalog,
-                        skip_redundant_probe=skip_redundant_probe,
-                    )
-                    else None
+                    if shortcut_ocr
+                    else route_ui_ocr_max_dimension
                 ),
                 source_is_svg=source_is_svg,
             )
-            labels_future_current_catalog_shortcut = current_catalog_label_shape_shortcut_enabled(
-                city_input=city_input,
-                allow_catalog=allow_catalog,
-                skip_redundant_probe=skip_redundant_probe,
-            )
+            labels_future_current_catalog_shortcut = shortcut_ocr
+            labels_future_route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
             ensure_georeference_resource_preload()
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
@@ -1154,6 +1181,33 @@ def build_boundary(
             source_is_svg=source_is_svg,
         )
         labels_future_filtered = False
+        labels_future_route_ui_shortcut = False
+    route_ui_evidence = ride_route_ui_reject_evidence(labels) if labels_future_route_ui_shortcut else None
+    if labels_future_route_ui_shortcut and route_ui_evidence is None:
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Retrying map labels at full detail",
+            percent=47,
+        )
+        labels = extract_full_ocr_labels_for_style(
+            image_path,
+            rgb,
+            style=extraction.style,
+            source_is_svg=source_is_svg,
+        )
+        labels_future_filtered = False
+        labels_future_route_ui_shortcut = False
+        emit_progress(
+            progress,
+            stage="ocr",
+            message="Full-detail map labels read",
+            percent=48,
+            details={
+                "label_count": len(labels),
+                "top_labels": [label.text for label in labels[:8]],
+            },
+        )
     if city_input is None and allow_catalog:
         label_shape_match = current_catalog_label_shape_match(extraction, labels)
         if label_shape_match is not None:
@@ -1310,7 +1364,7 @@ def build_boundary(
                 catalog_label_hints=high_confidence_label_texts(labels)[:5],
                 shape_match=False,
             )
-    route_ui_evidence = ride_route_ui_reject_evidence(labels)
+    route_ui_evidence = route_ui_evidence or ride_route_ui_reject_evidence(labels)
     if route_ui_evidence is not None:
         emit_progress(
             progress,
@@ -2092,6 +2146,25 @@ def rapidocr_max_dimension_for_ocr_style(
             return capped_rapidocr_max_dimension(RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION)
         return None
     return capped_rapidocr_max_dimension(RAPIDOCR_PURPLE_FILL_MAX_DIMENSION)
+
+
+def route_ui_fast_ocr_max_dimension_for_style(
+    style: str | None,
+    *,
+    width: int | None,
+    height: int | None,
+) -> int | None:
+    if style != "light-fill" or LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION <= 0:
+        return None
+    if width is None or height is None or width <= 0 or height <= 0:
+        return None
+    if width > LIGHT_FILL_ROUTE_UI_OCR_MAX_WIDTH:
+        return None
+    if height < LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT:
+        return None
+    if height < width * LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO:
+        return None
+    return capped_rapidocr_max_dimension(LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION)
 
 
 def capped_rapidocr_max_dimension(style_max_dimension: int) -> int | None:

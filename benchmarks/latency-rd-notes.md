@@ -14681,3 +14681,34 @@ with zero failures in 0.531s.
   `ocr-georeference:nominatim-label-fit`, confidence `0.825`, bbox
   `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=0.138441`.
+- Added a narrow tall light-fill route-receipt OCR shortcut after following up
+  on `/Users/ethanmckanna/Downloads/IMG_0083.PNG`, the receipt-style Tesla
+  route screenshot that already failed as `ride-route UI` but took `1.890153s`
+  in the first cold one-off probe and `1.090073s` on a current profiled rerun.
+  Isolated max-dimension probes showed the global RapidOCR cap is still unsafe
+  from earlier benchmark evidence, but a targeted tall light-fill receipt lane
+  can read just enough route/receipt evidence at `1000px`: the patched run
+  `out/route-receipt-fastcap-img0083-20260602/` failed with the exact
+  `ride-route UI` error in `0.906601s`, OCR `0.548560s`, `29` event labels,
+  detector `0.193475s`, recognizer `0.350194s`, and route evidence
+  `dropoff`/`plate`/`receipt` plus `8 08mi 32min License Plate XFY5869`.
+  The shortcut only applies to light-fill phone-shaped screenshots
+  (`height >= 1800`, `width <= 1300`, `height/width >= 1.8`) and falls back to
+  full-detail OCR before catalog/georeference if it does not produce route UI
+  evidence, so valid tall light-fill maps are not forced through partial OCR.
+  The new locked negative stress row is `tesla-austin-route-receipt-long`;
+  active route negative label floors were adjusted from `30` to `20` because
+  the cheaper OCR path intentionally reads fewer labels while preserving the
+  route category/metric proof. Focused route-negative stress passed at
+  `out/route-ui-fastcap-stress-20260602/stress-summary.json`: `5/5` expected
+  failures, primary max `0.651421s`, repeat `10/10` subsecond, repeat p95
+  `0.550s`. The full real-screenshot hard gate passed at
+  `out/route-ui-fastcap-full22-hard-rerun-20260602/stress-summary.json`:
+  `22/22` expected, statuses `{"complete":14,"failed":8}`, primary max
+  `0.752332s`, repeat `44/44` subsecond, repeat p95 `0.562s`, and all `14`
+  valid service-area screenshots still completed. Validation passed `jq empty` on
+  `benchmarks/real-screenshot-stress.json`,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`146 passed`), compileall over
+  `map_boundary_builder`, `api`, and `tests`, `git diff --check`, and the full
+  suite (`592 passed`, `30` subtests).

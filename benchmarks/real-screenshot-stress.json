@@ -80,7 +80,7 @@
       "expect": {
         "status": "failed",
         "error_contains": "ride-route UI",
-        "min_ocr_labels": 30,
+        "min_ocr_labels": 20,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -92,8 +92,20 @@
       "expect": {
         "status": "failed",
         "error_contains": "ride-route UI",
-        "min_ocr_labels": 30,
+        "min_ocr_labels": 20,
         "max_total_elapsed_s": 1.5
+      }
+    },
+    {
+      "slug": "tesla-austin-route-receipt-long",
+      "image": "/Users/ethanmckanna/Downloads/IMG_0083.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "ride-route UI",
+        "min_ocr_labels": 20,
+        "max_total_elapsed_s": 1.0
       }
     },
     {

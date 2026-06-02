@@ -29,6 +29,7 @@ GENERATION_ENV_DEFAULTS = {
     "MAP_BOUNDARY_GEOCODE_BATCH_SIZE": "12",
     "MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD": "3",
     "MAP_BOUNDARY_GEOCODE_WORKERS": "6",
+    "MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION": "1000",
     "MAP_BOUNDARY_NOMINATIM_TIMEOUT_SECONDS": "4.0",
     "MAP_BOUNDARY_OCR_DISK_CACHE": "",
     "MAP_BOUNDARY_PLACE_BEFORE_LIVE_TIMEOUT_SECONDS": "1.0",
@@ -176,6 +177,10 @@ RAPIDOCR_DARK_TEAL_REC_BATCH_NUM = env_int(
     "MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_REC_BATCH_NUM",
     16,
     minimum=0,
+)
+LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION = env_int(
+    "MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
+    1000,
 )
 RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS = env_int(
     "MAP_BOUNDARY_RAPIDOCR_CLS_RETRY_MIN_LABELS",
@@ -459,6 +464,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,
         "rapidocr_dark_teal_rec_batch_num": RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+        "light_fill_route_ui_ocr_max_dimension": LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
         "tesseract_fallback_min_useful_labels": TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
         "rapidocr_warm_detector_limit": rapidocr_warm_detector_limit(),
