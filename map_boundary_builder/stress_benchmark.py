@@ -227,6 +227,7 @@ def row_from_process(
     extract_start_details = latest_event_details(events, stage="extract", required_key="width")
     complete_details = latest_event_details(events, stage="complete")
     ocr_details, ocr_label_event = latest_ocr_label_details(events)
+    ocr_label_events = ocr_label_event_summaries(events)
     row = base_row(case, expected_status=expected_status, observed_status=observed_status)
     row.update(
         {
@@ -260,6 +261,10 @@ def row_from_process(
             "ocr_label_count": first_present_number(ocr_details.get("label_count")),
             "ocr_top_labels": ocr_details.get("top_labels") if isinstance(ocr_details.get("top_labels"), list) else None,
             "ocr_label_event": ocr_label_event,
+            "ocr_label_events": ocr_label_events,
+            "ocr_full_detail_retry": any(
+                event.get("message") == "Full-detail map labels read" for event in ocr_label_events
+            ),
             "total_elapsed_s": event_profile.get("total_elapsed_s"),
             "stages": event_profile.get("stage_elapsed_s") if isinstance(event_profile.get("stage_elapsed_s"), dict) else {},
             "error": summary.get("error"),
@@ -306,6 +311,26 @@ def latest_ocr_label_details(events: list[dict[str, Any]]) -> tuple[dict[str, An
         message = event.get("message")
         return details, message if isinstance(message, str) else None
     return {}, None
+
+
+def ocr_label_event_summaries(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("stage") != "ocr":
+            continue
+        details = event.get("details")
+        if not isinstance(details, dict) or "label_count" not in details:
+            continue
+        message = event.get("message")
+        summary: dict[str, Any] = {
+            "message": message if isinstance(message, str) else None,
+            "label_count": details.get("label_count"),
+        }
+        top_labels = details.get("top_labels")
+        if isinstance(top_labels, list):
+            summary["top_labels"] = top_labels
+        summaries.append(summary)
+    return summaries
 
 
 def first_present_number(*values: Any) -> int | float | None:

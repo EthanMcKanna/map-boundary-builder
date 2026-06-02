@@ -92,6 +92,10 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["ocr_label_count"] == 8
     assert row["ocr_top_labels"] == ["Dallas", "Deep Ellum"]
     assert row["ocr_label_event"] == "Map labels read"
+    assert row["ocr_label_events"] == [
+        {"message": "Map labels read", "label_count": 8, "top_labels": ["Dallas", "Deep Ellum"]}
+    ]
+    assert row["ocr_full_detail_retry"] is False
 
 
 def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
@@ -168,10 +172,26 @@ def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> 
                             },
                             {
                                 "stage": "ocr",
+                                "message": "Focused map labels read",
+                                "details": {
+                                    "label_count": 2,
+                                    "top_labels": ["Las Vegas", "Enterprise"],
+                                },
+                            },
+                            {
+                                "stage": "ocr",
                                 "message": "Map labels read",
                                 "details": {
                                     "label_count": 2,
-                                    "top_labels": ["Zoox", "Las Vegas"],
+                                    "top_labels": ["Las Vegas", "Enterprise"],
+                                },
+                            },
+                            {
+                                "stage": "ocr",
+                                "message": "Full-detail map labels read",
+                                "details": {
+                                    "label_count": 5,
+                                    "top_labels": ["Help", "Zoox", "Las Vegas"],
                                 },
                             },
                         ],
@@ -202,8 +222,15 @@ def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> 
     assert row["image_width"] == 734
     assert row["image_height"] == 1596
     assert row["coverage_ratio"] == 0.152668
-    assert row["ocr_label_count"] == 2
-    assert row["ocr_top_labels"] == ["Zoox", "Las Vegas"]
+    assert row["ocr_label_count"] == 5
+    assert row["ocr_top_labels"] == ["Help", "Zoox", "Las Vegas"]
+    assert row["ocr_label_event"] == "Full-detail map labels read"
+    assert row["ocr_label_events"] == [
+        {"message": "Focused map labels read", "label_count": 2, "top_labels": ["Las Vegas", "Enterprise"]},
+        {"message": "Map labels read", "label_count": 2, "top_labels": ["Las Vegas", "Enterprise"]},
+        {"message": "Full-detail map labels read", "label_count": 5, "top_labels": ["Help", "Zoox", "Las Vegas"]},
+    ]
+    assert row["ocr_full_detail_retry"] is True
 
 
 def test_run_stress_case_reports_missing_without_subprocess(tmp_path, monkeypatch) -> None:

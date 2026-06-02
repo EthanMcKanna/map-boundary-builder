@@ -11905,7 +11905,8 @@ with zero failures in 0.531s.
   `--print-summary` now includes the local `pipeline_version`, and the stress
   report lifts extraction/label evidence from profiled events into each row:
   image dimensions, extraction style, coverage ratio, contour count, OCR label
-  count, top OCR labels, and the label event name. This is especially useful
+  count, top OCR labels, the OCR label-event sequence, and a full-detail retry
+  flag. This is especially useful
   for expected fail-closed rows, which previously lost the extraction/OCR
   fingerprint behind a generic failure. A two-case real smoke
   `out/stress-evidence-fields-smoke-20260602/stress-summary.json` passed 2/2
@@ -11918,4 +11919,28 @@ with zero failures in 0.531s.
   `georeference=0.368161s`, and the OCR tail correctly attributed to
   `zoox-las-vegas-mobile-tall` (`0.929847s`, 62 OCR labels). Focused
   stress-runner tests passed (`7 passed`) and `py_compile` passed before the
-  broader regression suite.
+  broader regression suite. A follow-up two-case smoke
+  `out/stress-ocr-events-smoke-20260602/stress-summary.json` passed 2/2 on the
+  restored runtime and proved the event sequence field: Ann Arbor recorded
+  `Focused map labels read` followed by `Map labels read`, while the restored
+  Zoox tall failure recorded only one full-frame `Map labels read` event and
+  `ocr_full_detail_retry=false`. The full follow-up stress run
+  `out/real-screenshot-stress-ocr-events-20260602/stress-summary.json` passed
+  `12/12` expectations with max internal `1.215661s`; all rows reported
+  `ocr_full_detail_retry=false`, and the sequence field now distinguishes the
+  focused Ann Arbor path from normal full-frame OCR rows.
+- Rejected letting no-catalog dark-teal uploads use focused georeference OCR
+  when `provider_ui_fast_ocr_max_dimension` is set. The idea was to make
+  portrait provider screenshots share the focused crop path rather than
+  starting full-frame OCR, but the five-case stress candidate
+  `out/focus-nocatalog-providerfast-candidate-20260602/stress-summary.json`
+  made the two expected Zoox mobile fail-closed cases far slower while
+  preserving no additional useful output: `zoox-las-vegas-mobile` rose to
+  `11.470920s` total with `9.281091s` in georeference, and
+  `zoox-las-vegas-mobile-tall` rose to `18.328199s` total with `16.904150s`
+  in georeference. The enriched stress rows showed both ended on
+  `Full-detail map labels read`, meaning the focused attempt still paid for a
+  full-detail retry and then entered slow context search before the same sparse
+  OCR failure. Ann Arbor, Grand Rapids, and Zoox SF still met expectations, but
+  the latency regression is decisive; keep the existing
+  `provider_ui_fast_ocr_max_dimension is None` guard for focused georef OCR.
