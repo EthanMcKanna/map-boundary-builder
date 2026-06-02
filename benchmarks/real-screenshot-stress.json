@@ -9,7 +9,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Ann Arbor",
         "min_control_points": 3,
         "min_ocr_labels": 16,
@@ -24,7 +24,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Grand Rapids",
         "min_control_points": 5,
         "min_ocr_labels": 16,
@@ -61,7 +61,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Dallas",
         "min_control_points": 5,
         "min_ocr_labels": 20,
@@ -76,7 +76,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Austin",
         "min_control_points": 8,
         "min_ocr_labels": 30,
@@ -91,7 +91,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Dallas",
         "min_control_points": 3,
         "min_ocr_labels": 30,
@@ -106,7 +106,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "San Francisco",
         "min_control_points": 10,
         "min_ocr_labels": 18,
@@ -121,7 +121,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Dallas",
         "min_control_points": 2,
         "min_combined_confidence": 0.78,
@@ -135,7 +135,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "min_control_points": 16,
         "min_ocr_labels": 30,
         "min_combined_confidence": 0.82,
@@ -151,7 +151,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Los Angeles",
         "min_control_points": 18,
         "min_ocr_labels": 36,
@@ -168,7 +168,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Houston",
         "min_control_points": 10,
         "min_ocr_labels": 18,
@@ -185,7 +185,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Orlando",
         "min_control_points": 5,
         "min_ocr_labels": 20,
@@ -202,7 +202,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit+osm-road-refine",
         "city_equals": "Nashville",
         "min_control_points": 3,
         "min_ocr_labels": 14,
@@ -217,7 +217,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Houston",
         "min_control_points": 3,
         "min_combined_confidence": 0.81,
@@ -231,7 +231,7 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_prefix": "ocr-georeference:",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
         "city_equals": "Miami",
         "min_control_points": 5,
         "min_ocr_labels": 18,

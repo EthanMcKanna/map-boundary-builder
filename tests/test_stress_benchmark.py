@@ -340,6 +340,29 @@ def test_check_expectations_accepts_bbox_within_meter_tolerance() -> None:
     assert issues == []
 
 
+def test_check_expectations_rejects_source_equals_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Nashville",
+            "control_points": 3,
+        },
+        {
+            "status": "complete",
+            "source_equals": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Nashville",
+            "min_control_points": 3,
+        },
+    )
+
+    assert issues == [
+        "source 'ocr-georeference:nominatim-label-fit' did not equal "
+        "'ocr-georeference:nominatim-label-fit+osm-road-refine'"
+    ]
+
+
 def test_check_expectations_rejects_low_ocr_label_count() -> None:
     issues = stress_module.check_expectations(
         {

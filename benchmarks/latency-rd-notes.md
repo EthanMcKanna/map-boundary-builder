@@ -13482,3 +13482,22 @@ with zero failures in 0.531s.
   for all `16` cases, `48/48` subsecond repeats, primary max `0.743756s`,
   repeat median `0.344s`, repeat p95 `0.551s`, repeat max `0.586s`,
   RapidOCR total p95 `0.477s`, and recognizer p95 `0.231s`.
+- Added exact `source_equals` stress expectations for the completed no-catalog
+  real screenshots after checking seven recent full hard-gate reports. Every
+  completed case used a single stable source across those reports:
+  `ocr-georeference:nominatim-label-fit` for 13 completed rows and
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` for Nashville. This
+  keeps future speed probes from silently dropping the Nashville road-refine
+  path or otherwise changing the georeference route while still passing the
+  broader `ocr-georeference:` prefix guard. Focused validation:
+  `jq empty` on `benchmarks/real-screenshot-stress.json` passed,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `41` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `531` tests plus `30` subtests. The full actual-code hard gate
+  `out/source-equals-full16-hard-rerun-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable source-inclusive signatures for
+  all `16` cases, `48/48` subsecond repeats, primary max `0.769288s`, repeat
+  median `0.357s`, repeat p95 `0.564s`, repeat max `0.605s`, RapidOCR engine
+  total p95 `0.499s`, detector p95 `0.255s`, and recognizer p95 `0.233s`.

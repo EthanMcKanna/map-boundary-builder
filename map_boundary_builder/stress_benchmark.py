@@ -789,9 +789,12 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         append_total_elapsed_expectation_issue(row, expect, issues)
         return issues
 
+    source_equals = expect.get("source_equals")
     source_prefix = expect.get("source_prefix")
     source = row.get("source") or ""
-    if isinstance(source_prefix, str) and not str(source).startswith(source_prefix):
+    if isinstance(source_equals, str) and str(source) != source_equals:
+        issues.append(f"source {source!r} did not equal {source_equals!r}")
+    elif isinstance(source_prefix, str) and not str(source).startswith(source_prefix):
         issues.append(f"source {source!r} did not start with {source_prefix!r}")
 
     city_equals = expect.get("city_equals")
