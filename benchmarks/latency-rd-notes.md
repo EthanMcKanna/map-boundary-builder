@@ -13367,3 +13367,31 @@ with zero failures in 0.531s.
   subsecond repeats, primary max `0.700489s`, repeat median `0.343s`, repeat
   p95 `0.541s`, repeat max `0.562s`, RapidOCR total p95 `0.478s`, detector p95
   `0.240s`, and recognizer p95 `0.235s`.
+- Added `min_ocr_labels` support to the stress manifest and set conservative
+  label-support floors on the stable label-rich completed rows. This guards the
+  next round of OCR speed probes against preserving city/control/bbox checks
+  while silently starving georeference context. The first floors are below the
+  accepted bbox-signature hard-gate signatures: Ann Arbor `16` labels (current
+  `19`), Grand Rapids `16` (`18`), Avride Dallas map `20` (`25`), Robotaxi
+  Austin `30` (`36`), Avride Dallas web `30` (`36`), Zoox SF `18` (`21`), Bay
+  Area `30` (`34`), Los Angeles `36` (`40`), Houston Waymo `18` (`20`),
+  Orlando `20` (`23`), Nashville `14` (`16`), and Miami `18` (`20`). Tesla
+  Dallas and Houston Robotaxi gray are intentionally left on their existing
+  low-label control checks. Validation: `jq empty` on
+  `benchmarks/real-screenshot-stress.json` passed,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `36` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `526` tests plus `30` subtests. The targeted strict slow-six
+  gate `out/min-ocr-labels-slow6-actual-20260602/stress-summary.json` passed
+  `6/6` primary expectations, `24/24` analyzed repeats, stable bbox-inclusive
+  signatures for all six cases, `24/24` subsecond repeats, primary max
+  `0.846710s`, repeat median `0.467s`, repeat p95 `0.544s`, repeat max
+  `0.584s`, RapidOCR total p95 `0.489s`, and recognizer p95 `0.242s`. The
+  full actual-code hard gate
+  `out/min-ocr-labels-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeats, stable bbox-inclusive signatures for all `16`
+  cases, `48/48` subsecond repeats, primary max `0.771357s`, repeat median
+  `0.364s`, repeat p95 `0.544s`, repeat max `0.588s`, RapidOCR total p95
+  `0.473s`, detector p95 `0.250s`, and recognizer p95 `0.232s`.

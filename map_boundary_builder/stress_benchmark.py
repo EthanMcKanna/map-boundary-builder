@@ -803,6 +803,12 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         if not isinstance(control_points, int) or control_points < min_control_points:
             issues.append(f"control_points {control_points!r} below {min_control_points}")
 
+    min_ocr_labels = expect.get("min_ocr_labels")
+    if isinstance(min_ocr_labels, int):
+        ocr_label_count = row.get("ocr_label_count")
+        if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
+            issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
+
     max_total_elapsed_s = expect.get("max_total_elapsed_s")
     if isinstance(max_total_elapsed_s, (int, float)):
         total_elapsed_s = row.get("total_elapsed_s")

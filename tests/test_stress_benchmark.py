@@ -340,6 +340,27 @@ def test_check_expectations_accepts_bbox_within_meter_tolerance() -> None:
     assert issues == []
 
 
+def test_check_expectations_rejects_low_ocr_label_count() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "city": "Miami",
+            "control_points": 5,
+            "ocr_label_count": 17,
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "city_equals": "Miami",
+            "min_control_points": 5,
+            "min_ocr_labels": 18,
+        },
+    )
+
+    assert issues == ["ocr_label_count 17 below 18"]
+
+
 def test_check_expectations_rejects_bbox_outside_meter_tolerance() -> None:
     issues = stress_module.check_expectations(
         {
