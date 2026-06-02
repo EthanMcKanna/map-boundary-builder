@@ -12638,3 +12638,26 @@ with zero failures in 0.531s.
   below the default benchmark mean-IoU threshold (`0.853 < 0.90`), so use the
   focused threshold when the purpose is gate validation rather than full-suite
   acceptance.
+- Added p90/p95 tail reporting to the main fixture benchmark repeat profile
+  and exposed `--max-repeat-profile-p95-duration-s` as an optional latency
+  budget. This closes a measurement gap where fixture repeat profiles had
+  min/median/average/max but no percentile tail comparable to the stress
+  harness, making it harder to evaluate noisy speed candidates that are usually
+  fast but have repeat tails. The distribution helper now records p90/p95 for
+  total repeat durations and per-stage repeat durations; the new budget only
+  affects pass/fail when requested. This is diagnostic-only and does not change
+  generation, OCR inputs, georeferencing, cache keys, or deployed runtime
+  behavior. Focused benchmark coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_benchmark.py -q`
+  (`72 passed`), and the full suite passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`504 passed, 30 subtests passed`). A real no-catalog Phoenix fixture smoke,
+  `out/benchmark-repeat-p95-gate-smoke-20260602/full-report.json`, ran with
+  the repeat signature gate, pass-ratio gate, subsecond-ratio gate, and
+  `--max-repeat-profile-p95-duration-s 0.8`; it passed end to end with `2/2`
+  analyzed repeats passing, `2/2` subsecond, no signature-drift fixtures, and
+  repeat min/median/p90/p95/max
+  `0.429509s`/`0.431067s`/`0.432312s`/`0.432468s`/`0.432624s`. Per-stage
+  repeat p95s were export `0.254259s`, extract `0.112584s`, georeference
+  `0.070173s`, inspect `0.000094s`, and OCR `0.000103s`, confirming this
+  warm no-catalog repeat path is stable and comfortably below the p95 gate.

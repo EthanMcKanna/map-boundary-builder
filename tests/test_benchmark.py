@@ -418,6 +418,8 @@ def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path
             "min_duration_s": 0.4,
             "median_duration_s": 0.4,
             "average_duration_s": 0.4,
+            "p90_duration_s": 0.4,
+            "p95_duration_s": 0.4,
             "max_duration_s": 0.4,
         }
     }
@@ -485,6 +487,19 @@ def test_repeat_profile_flags_output_signature_drift() -> None:
     assert stability["stable"] is False
     assert stability["unique_signatures"] == 2
     assert [signature["count"] for signature in stability["signatures"]] == [1, 1]
+
+
+def test_repeat_profile_duration_stats_record_tail_percentiles() -> None:
+    stats = benchmark_module.duration_distribution_stats([1.0, 2.0, 4.0])
+
+    assert stats == {
+        "min_duration_s": 1.0,
+        "median_duration_s": 2.0,
+        "average_duration_s": 2.333333,
+        "p90_duration_s": 3.6,
+        "p95_duration_s": 3.8,
+        "max_duration_s": 4.0,
+    }
 
 
 def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
@@ -2646,6 +2661,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
                 "unstable_signature_fixtures": [],
                 "max_duration_s": 0.98,
                 "median_duration_s": 0.7,
+                "p95_duration_s": 0.94,
                 "stage_duration_s": {
                     "ocr": {"max_duration_s": 0.72},
                 },
@@ -2657,6 +2673,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
         report,
         max_repeat_profile_duration_s=1.0,
         max_repeat_profile_median_duration_s=0.8,
+        max_repeat_profile_p95_duration_s=1.0,
         max_repeat_profile_stage_duration_s={"ocr": 0.8},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
@@ -2667,6 +2684,7 @@ def test_report_latency_budget_check_passes_repeat_profile_budgets() -> None:
     assert check["repeat_profile_analyzed_samples"] == 4
     assert check["repeat_profile_max_duration_s"] == 0.98
     assert check["repeat_profile_median_duration_s"] == 0.7
+    assert check["repeat_profile_p95_duration_s"] == 0.94
     assert check["repeat_profile_stage_duration_s"] == {"ocr": 0.72}
     assert check["repeat_profile_pass_ratio"] == 1.0
     assert check["repeat_profile_subsecond_ratio"] == 0.75
@@ -2685,6 +2703,7 @@ def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> N
                 "subsecond_samples": 2,
                 "max_duration_s": 1.2,
                 "median_duration_s": 0.9,
+                "p95_duration_s": 1.15,
             }
         },
     }
@@ -2693,6 +2712,7 @@ def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> N
         report,
         max_repeat_profile_duration_s=1.0,
         max_repeat_profile_median_duration_s=0.8,
+        max_repeat_profile_p95_duration_s=1.0,
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
     )
@@ -2712,6 +2732,12 @@ def test_report_latency_budget_check_flags_repeat_profile_budget_failures() -> N
             "repeat_profile_median_duration_s": 0.9,
             "max_repeat_profile_median_duration_s": 0.8,
             "excess_s": 0.1,
+        },
+        {
+            "kind": "repeat_profile_p95_duration_budget_exceeded",
+            "repeat_profile_p95_duration_s": 1.15,
+            "max_repeat_profile_p95_duration_s": 1.0,
+            "excess_s": 0.15,
         },
         {
             "kind": "repeat_profile_pass_ratio_below_min",
@@ -2823,6 +2849,7 @@ def test_report_latency_budget_check_flags_incomplete_repeat_profile_metrics() -
         report,
         max_repeat_profile_duration_s=1.0,
         max_repeat_profile_median_duration_s=0.8,
+        max_repeat_profile_p95_duration_s=1.0,
         max_repeat_profile_stage_duration_s={"ocr": 0.8},
         min_repeat_profile_pass_ratio=1.0,
         min_repeat_profile_subsecond_ratio=0.75,
@@ -2837,6 +2864,10 @@ def test_report_latency_budget_check_flags_incomplete_repeat_profile_metrics() -
         {
             "kind": "repeat_profile_median_duration_missing",
             "max_repeat_profile_median_duration_s": 0.8,
+        },
+        {
+            "kind": "repeat_profile_p95_duration_missing",
+            "max_repeat_profile_p95_duration_s": 1.0,
         },
         {
             "stage": "ocr",

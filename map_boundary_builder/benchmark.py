@@ -316,6 +316,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum analyzed repeat-profile median duration budget.",
     )
     parser.add_argument(
+        "--max-repeat-profile-p95-duration-s",
+        type=float,
+        default=None,
+        help="Optional maximum analyzed repeat-profile p95 duration budget.",
+    )
+    parser.add_argument(
         "--max-repeat-profile-stage-duration-s",
         action="append",
         default=[],
@@ -629,6 +635,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_evaluated_road_match_s is not None
         or args.max_repeat_profile_duration_s is not None
         or args.max_repeat_profile_median_duration_s is not None
+        or args.max_repeat_profile_p95_duration_s is not None
         or bool(max_repeat_profile_stage_duration_s)
         or args.min_repeat_profile_pass_ratio is not None
         or args.min_repeat_profile_subsecond_ratio is not None
@@ -644,6 +651,7 @@ def main(argv: list[str] | None = None) -> int:
             max_evaluated_road_match_s=args.max_evaluated_road_match_s,
             max_repeat_profile_duration_s=args.max_repeat_profile_duration_s,
             max_repeat_profile_median_duration_s=args.max_repeat_profile_median_duration_s,
+            max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
             max_repeat_profile_stage_duration_s=max_repeat_profile_stage_duration_s,
             min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
             min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
@@ -1183,14 +1191,34 @@ def duration_distribution_stats(durations: list[float]) -> dict[str, float | Non
             "min_duration_s": None,
             "median_duration_s": None,
             "average_duration_s": None,
+            "p90_duration_s": None,
+            "p95_duration_s": None,
             "max_duration_s": None,
         }
     return {
         "min_duration_s": round(min(durations), 6),
         "median_duration_s": round(float(median(durations)), 6),
         "average_duration_s": round(float(mean(durations)), 6),
+        "p90_duration_s": round(duration_percentile(durations, 90.0), 6),
+        "p95_duration_s": round(duration_percentile(durations, 95.0), 6),
         "max_duration_s": round(max(durations), 6),
     }
+
+
+def duration_percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        raise ValueError("values must be non-empty")
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    clamped_percentile = min(100.0, max(0.0, float(percentile)))
+    rank = (clamped_percentile / 100.0) * (len(ordered) - 1)
+    lower_index = int(rank)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    if lower_index == upper_index:
+        return ordered[lower_index]
+    weight = rank - lower_index
+    return ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * weight
 
 
 def benchmark_runtime_config() -> dict[str, Any]:
@@ -2504,6 +2532,7 @@ def check_report_latency_budgets(
     max_evaluated_road_match_s: float | None = None,
     max_repeat_profile_duration_s: float | None = None,
     max_repeat_profile_median_duration_s: float | None = None,
+    max_repeat_profile_p95_duration_s: float | None = None,
     max_repeat_profile_stage_duration_s: dict[str, float] | None = None,
     min_repeat_profile_pass_ratio: float | None = None,
     min_repeat_profile_subsecond_ratio: float | None = None,
@@ -2539,6 +2568,11 @@ def check_report_latency_budgets(
         if max_repeat_profile_median_duration_s is None
         else max(0.0, float(max_repeat_profile_median_duration_s))
     )
+    repeat_profile_p95_duration_budget = (
+        None
+        if max_repeat_profile_p95_duration_s is None
+        else max(0.0, float(max_repeat_profile_p95_duration_s))
+    )
     repeat_profile_stage_budgets = {
         stage: max(0.0, float(duration))
         for stage, duration in (max_repeat_profile_stage_duration_s or {}).items()
@@ -2569,6 +2603,10 @@ def check_report_latency_budgets(
     repeat_profile_median_duration = report_repeat_profile_duration(
         repeat_profile_summary,
         "median_duration_s",
+    )
+    repeat_profile_p95_duration = report_repeat_profile_duration(
+        repeat_profile_summary,
+        "p95_duration_s",
     )
     repeat_profile_stage_durations = report_repeat_profile_stage_durations(repeat_profile_summary)
     repeat_profile_pass_ratio = report_repeat_profile_sample_ratio(
@@ -2679,6 +2717,7 @@ def check_report_latency_budgets(
         for budget in (
             repeat_profile_duration_budget,
             repeat_profile_median_duration_budget,
+            repeat_profile_p95_duration_budget,
             repeat_profile_stage_budgets if repeat_profile_stage_budgets else None,
             repeat_profile_pass_ratio_budget,
             repeat_profile_subsecond_ratio_budget,
@@ -2722,6 +2761,26 @@ def check_report_latency_budgets(
                     "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
                     "excess_s": round(
                         repeat_profile_median_duration - repeat_profile_median_duration_budget,
+                        6,
+                    ),
+                }
+            )
+    if repeat_profile_p95_duration_budget is not None and has_repeat_profile_samples:
+        if repeat_profile_p95_duration is None:
+            issues.append(
+                {
+                    "kind": "repeat_profile_p95_duration_missing",
+                    "max_repeat_profile_p95_duration_s": repeat_profile_p95_duration_budget,
+                }
+            )
+        elif repeat_profile_p95_duration > repeat_profile_p95_duration_budget:
+            issues.append(
+                {
+                    "kind": "repeat_profile_p95_duration_budget_exceeded",
+                    "repeat_profile_p95_duration_s": round(repeat_profile_p95_duration, 6),
+                    "max_repeat_profile_p95_duration_s": repeat_profile_p95_duration_budget,
+                    "excess_s": round(
+                        repeat_profile_p95_duration - repeat_profile_p95_duration_budget,
                         6,
                     ),
                 }
@@ -2804,6 +2863,7 @@ def check_report_latency_budgets(
         "max_evaluated_road_match_s": evaluated_road_match_budget,
         "max_repeat_profile_duration_s": repeat_profile_duration_budget,
         "max_repeat_profile_median_duration_s": repeat_profile_median_duration_budget,
+        "max_repeat_profile_p95_duration_s": repeat_profile_p95_duration_budget,
         "max_repeat_profile_stage_duration_s": repeat_profile_stage_budgets,
         "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
         "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
@@ -2825,6 +2885,11 @@ def check_report_latency_budgets(
         "repeat_profile_median_duration_s": (
             round(repeat_profile_median_duration, 6)
             if repeat_profile_median_duration is not None
+            else None
+        ),
+        "repeat_profile_p95_duration_s": (
+            round(repeat_profile_p95_duration, 6)
+            if repeat_profile_p95_duration is not None
             else None
         ),
         "repeat_profile_stage_duration_s": repeat_profile_stage_durations,
@@ -3306,6 +3371,15 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                 print(f"       {issue['metric']}: missing evaluated OCR engine profile")
             elif issue["kind"] == "evaluated_ocr_engine_duration_missing":
                 print(f"       {issue['metric']}: missing evaluated OCR engine duration")
+            elif issue["kind"] == "repeat_profile_p95_duration_budget_exceeded":
+                print(
+                    f"       repeat profile p95 duration "
+                    f"{issue['repeat_profile_p95_duration_s']:.3f}s "
+                    f"> budget {issue['max_repeat_profile_p95_duration_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "repeat_profile_p95_duration_missing":
+                print("       missing repeat profile p95 duration")
             elif issue["kind"] == "repeat_profile_signature_drift":
                 fixtures = ", ".join(issue.get("unstable_signature_fixtures", []))
                 print(f"       repeat profile signature drift: {fixtures}")
