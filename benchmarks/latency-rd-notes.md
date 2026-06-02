@@ -12054,3 +12054,27 @@ with zero failures in 0.531s.
   Phoenix label-retention regression, and reducing recognition volume on
   portrait dark-teal fail-closed screenshots without broadly failing valid
   mobile map crops.
+- Rejected two follow-up runtime lanes after first-principles probes on the new
+  OCR-engine evidence. First, focused/provider dark-teal crop OCR looked
+  attractive in isolation: the Zoox Las Vegas tall focus crop read a 526x550
+  input with RapidOCR engine time around `0.168s` and 14 postprocessed labels,
+  versus the full-frame profile's roughly one-second OCR tail. Direct focused
+  georeference without fallback showed why this should not ship: valid Ann
+  Arbor and Zoox SF still fit, but the Zoox portrait failure rows entered slow
+  regional context search (`zoox-las-vegas-mobile` `1.509216s` georef after
+  `1.798635s` focused OCR; `zoox-las-vegas-mobile-tall` `6.250338s` georef
+  after `0.400383s` focused OCR). Second, a control-flow prototype stopped
+  deferring early full-frame OCR for tall provider-UI dark-teal screenshots so
+  full OCR could overlap extraction when the focused path would be blocked. The
+  target stress run
+  `out/darkteal-deferral-guard-target-20260602/stress-summary.json` preserved
+  `3/3` expectations but regressed badly: max internal `21.332321s`, OCR total
+  `42.398s`, and the Zoox tall row at `21.332s`; the code was reverted. A
+  restored-runtime rerun
+  `out/darkteal-deferral-restored-20260602/stress-summary.json` remained
+  cold-noisy but confirmed this lane is not a clean win (`3/3` expectations,
+  max `17.812170s`). Also rejected a coverage-gated bright-blue detector-cap
+  idea before editing: fixture extraction coverage did not isolate Phoenix
+  from other high-coverage Waymo maps (`phoenix-waymo` `0.237119`, Orlando
+  `0.238254`, San Antonio `0.262704`, Houston `0.273855`, Miami `0.264005`),
+  so it would likely repeat the earlier Phoenix label-retention failure.
