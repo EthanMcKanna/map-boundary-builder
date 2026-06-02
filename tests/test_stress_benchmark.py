@@ -765,6 +765,68 @@ def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monk
     assert os.environ.get(EXTRACTION_CACHE_ENV) is None
 
 
+def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+    prewarm_calls = []
+
+    def fake_prewarm(*, runner_ocr_cache, extraction_cache):
+        prewarm_calls.append((runner_ocr_cache, extraction_cache))
+        return {"status": "ok", "rapidocr_inference_warmed": True, "total_s": 0.12}
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": 0.5,
+        }
+
+    monkeypatch.setattr(stress_module, "run_generation_prewarm", fake_prewarm)
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        prewarm_runtime=True,
+        runner_ocr_cache=False,
+        extraction_cache=False,
+        python_executable="python",
+    )
+
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    assert prewarm_calls == [(False, False)]
+    assert report["prewarm_runtime"] is True
+    assert saved["prewarm"] == {"status": "ok", "rapidocr_inference_warmed": True, "total_s": 0.12}
+
+
 def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")
@@ -1467,6 +1529,84 @@ def test_main_passes_repeat_signature_drift_gate_when_stable(tmp_path, monkeypat
             "--repeat-profile-runs",
             "1",
             "--fail-on-repeat-signature-drift",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_main_fails_when_requested_prewarm_fails(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["prewarm_runtime"] is True
+        return {
+            "prewarm": {"status": "error", "error": "warmup failed"},
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.6,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--prewarm-runtime",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_main_accepts_successful_requested_prewarm(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["prewarm_runtime"] is True
+        return {
+            "prewarm": {"status": "ok", "total_s": 0.1},
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.6,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--prewarm-runtime",
         ]
     )
 

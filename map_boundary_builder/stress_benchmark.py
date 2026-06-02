@@ -24,6 +24,7 @@ from .ocr import (
 )
 from .pipeline_version import get_pipeline_version
 from .runner import BoundaryBuildOptions, RUNNER_OCR_CACHE_ENV, build_boundary
+from .runtime_warmup import prewarm_generation_runtime
 from .runtime_config import generation_env_config, ocr_runtime_config
 
 
@@ -125,6 +126,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--prewarm-runtime",
+        action="store_true",
+        help=(
+            "Run the same generation prewarm used by /api/health?warm=ocr before primary "
+            "stress rows. Useful for production-warm latency gates."
+        ),
+    )
+    parser.add_argument(
         "--repeat-profile-runs",
         type=int,
         default=0,
@@ -208,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         runner_ocr_cache=not args.disable_ocr_cache,
         extraction_cache=not args.disable_extraction_cache,
         execution=args.execution,
+        prewarm_runtime=args.prewarm_runtime,
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
         max_total_elapsed_s=args.max_total_elapsed_s,
@@ -218,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
     if isinstance(latency_budget, dict) and latency_budget.get("passed") is False:
+        return 1
+    if args.prewarm_runtime and not prewarm_runtime_ok(report.get("prewarm")):
         return 1
     if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
         return 1
@@ -248,6 +260,7 @@ def run_stress_benchmark(
     runner_ocr_cache: bool = True,
     extraction_cache: bool = True,
     execution: str = "subprocess",
+    prewarm_runtime: bool = False,
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
     max_total_elapsed_s: float | None = None,
@@ -271,6 +284,14 @@ def run_stress_benchmark(
     manifest = load_manifest(manifest_path)
     cases = select_cases(manifest["cases"], only_slugs or [])
     out_dir.mkdir(parents=True, exist_ok=True)
+    prewarm = (
+        run_generation_prewarm(
+            runner_ocr_cache=runner_ocr_cache,
+            extraction_cache=extraction_cache,
+        )
+        if prewarm_runtime
+        else None
+    )
 
     rows = [
         run_stress_case(
@@ -314,12 +335,15 @@ def run_stress_benchmark(
         "runner_ocr_cache": runner_ocr_cache,
         "extraction_cache": extraction_cache,
         "execution": execution,
+        "prewarm_runtime": prewarm_runtime,
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
         "runtime_config": runtime_config,
         "summary": summarize_rows(rows),
         "rows": rows,
     }
+    if prewarm is not None:
+        report["prewarm"] = prewarm
     if repeat_profile is not None:
         report["repeat_profile"] = repeat_profile
     if (
@@ -338,6 +362,15 @@ def run_stress_benchmark(
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
+
+
+def run_generation_prewarm(*, runner_ocr_cache: bool, extraction_cache: bool) -> dict[str, Any]:
+    with temporary_cache_env(runner_ocr_cache=runner_ocr_cache, extraction_cache=extraction_cache):
+        return prewarm_generation_runtime()
+
+
+def prewarm_runtime_ok(payload: Any) -> bool:
+    return isinstance(payload, dict) and payload.get("status") == "ok"
 
 
 def stress_runtime_config(*, runner_ocr_cache: bool, extraction_cache: bool) -> dict[str, Any]:
@@ -2045,6 +2078,12 @@ def print_stress_table(report: dict[str, Any]) -> None:
         print("note: runner OCR cache is disabled; repeat samples keep paying OCR cost")
     if report.get("extraction_cache") is False:
         print("note: extraction cache is disabled; repeat samples keep paying extraction cost")
+    if report.get("prewarm_runtime"):
+        prewarm = report.get("prewarm") if isinstance(report.get("prewarm"), dict) else {}
+        status = prewarm.get("status", "missing")
+        total_s = prewarm.get("total_s")
+        total_text = f", total={float(total_s):.3f}s" if isinstance(total_s, (int, float)) else ""
+        print(f"note: generation runtime prewarm status={status}{total_text}")
     latency_budget = report.get("latency_budget")
     if isinstance(latency_budget, dict):
         budget = latency_budget.get("max_total_elapsed_s")

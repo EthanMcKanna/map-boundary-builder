@@ -13903,3 +13903,22 @@ with zero failures in 0.531s.
   again recorded both cache switches as `0`. The strict failure is useful
   evidence that fresh-extraction first-pass LA still has occasional subsecond
   headroom risk; no runtime filter was changed in this patch.
+- Added a stress-harness `--prewarm-runtime` mode to make cold first-call gates
+  and production-prewarmed gates explicit instead of conflating them. The flag
+  runs the same `prewarm_generation_runtime()` path used by
+  `/api/health?warm=ocr`, records the prewarm payload in `stress-summary.json`,
+  prints the prewarm status/time in the compact table, and makes the CLI exit
+  non-zero if a requested prewarm reports failure. Focused validation passed
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest
+  tests/test_stress_benchmark.py tests/test_runtime_warmup.py -q` (`52`
+  tests), the targeted RapidOCR warm test passed, compileall passed, and
+  `git diff --check` passed. The new production-prewarmed strict gate
+  `out/stress-prewarm-runtime-real4-strict-20260602/stress-summary.json`
+  passed with OCR and extraction caches disabled: prewarm `status=ok`, prewarm
+  total `0.785704s`, `4/4` expected, primary max `0.865527s`, LA primary
+  `0.865527s`, repeat p95 `0.513450s`, repeat OCR `total_s` p95 `0.455014s`,
+  and selected-box p95 `28.05` under strict budgets (`primary<=1.0s`,
+  `repeat_p95<=0.8s`, OCR `total_s<=0.6s`, selected boxes `<=30`). This does
+  not erase the prior cold strict failure; it gives future R&D a clean switch
+  for measuring cold upload risk separately from production-warmed instance
+  latency.
