@@ -620,6 +620,35 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         "total_s": 0.2,
         "raw_box_count": 3,
     }
+    assert repeat_profile["summary"]["ocr_engine_stage_duration_s"] == {
+        "det_elapsed_s": {
+            "samples": 1,
+            "min_duration_s": 0.08,
+            "median_duration_s": 0.08,
+            "average_duration_s": 0.08,
+            "p90_duration_s": 0.08,
+            "p95_duration_s": 0.08,
+            "max_duration_s": 0.08,
+        },
+        "rec_elapsed_s": {
+            "samples": 1,
+            "min_duration_s": 0.16,
+            "median_duration_s": 0.16,
+            "average_duration_s": 0.16,
+            "p90_duration_s": 0.16,
+            "p95_duration_s": 0.16,
+            "max_duration_s": 0.16,
+        },
+        "total_s": {
+            "samples": 1,
+            "min_duration_s": 0.2,
+            "median_duration_s": 0.2,
+            "average_duration_s": 0.2,
+            "p90_duration_s": 0.2,
+            "p95_duration_s": 0.2,
+            "max_duration_s": 0.2,
+        },
+    }
     assert repeat_profile["summary"]["ocr_engine_stage_max_rows"] == {
         "det_elapsed_s": {
             "slug": "kept",

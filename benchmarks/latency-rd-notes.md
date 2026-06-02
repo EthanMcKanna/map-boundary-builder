@@ -12488,3 +12488,45 @@ with zero failures in 0.531s.
   reported `PASS full benchmark: 1/1 scored fixtures`, active total `0.85s`,
   IoU `0.958`, and the JSON score row now includes `image_width=2400` and
   `image_height=2400`.
+- Rejected dark-teal fast-text OCR filtering as a default despite its appeal
+  for Zoox recognition tails. Adding dark-teal to the fast-text min-area path
+  with `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA`-equivalent thresholds of `500`,
+  `900`, and `1300` preserved the five focused dark-teal expectations but
+  triggered full-detail retries and missed the subsecond repeat budget:
+  `out/stress-darkteal-minarea500-20260602/stress-summary.json` reached repeat
+  p95 `1.516s`, `out/stress-darkteal-minarea900-20260602/stress-summary.json`
+  reached repeat p95 `1.337s`, and
+  `out/stress-darkteal-minarea1300-20260602/stress-summary.json` reached repeat
+  p95 `1.305s`. Disabling the fallback made the budget look good but broke
+  correctness: `out/stress-darkteal-minarea900-no-fallback-20260602/stress-summary.json`
+  and `out/stress-darkteal-minarea1300-no-fallback-20260602/stress-summary.json`
+  each failed Grand Rapids (`4/5` expectations). Keep dark-teal full OCR
+  unfiltered unless a future validator can preserve Grand Rapids without the
+  retry tax.
+- Rejected lowering `PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT` for dark-teal
+  near-square screenshots. Probes at `900`, `1000`, and `1100` all preserved
+  five focused dark-teal expectations and stayed subsecond
+  (`out/stress-darkteal-focus-minheight900-20260602/stress-summary.json`,
+  `out/stress-darkteal-focus-minheight1000-20260602/stress-summary.json`,
+  and `out/stress-darkteal-focus-minheight1100-20260602/stress-summary.json`),
+  but Grand Rapids did not actually use focused OCR; the focus crop-area guard
+  rejected it and the run fell back to ordinary full OCR after extraction. A
+  same-moment default control,
+  `out/stress-darkteal-default-control-20260602/stress-summary.json`, also
+  preserved `5/5` expectations with repeat p95 `0.851s`, effectively matching
+  the candidate p95s. Do not ship this as a speedup; the observed difference is
+  timing noise, not a proven algorithmic win.
+- Added RapidOCR engine stage distributions to stress repeat profiles so future
+  OCR-tail probes can compare detector and recognizer p95/max directly instead
+  of reconstructing them from per-sample JSON. This is diagnostic-only and does
+  not change generation, OCR inputs, labels, georeferencing, or cache keys.
+  Unit coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`14 passed`). A real profiled tail smoke,
+  `out/stress-profile-tail-engine-distribution-20260602/stress-summary.json`,
+  preserved `4/4` expectations with `8/8` analyzed repeat samples subsecond and
+  now reports repeat OCR engine distributions: detector p95 `0.254453s`,
+  recognizer p95 `0.594267s`, and RapidOCR total p95 `0.748877s`. The run
+  confirms the remaining tail is mostly recognizer-heavy on
+  `zoox-las-vegas-mobile-tall` (recognizer p95 `0.602424s`) and still worth
+  treating separately from bright-blue detector work.

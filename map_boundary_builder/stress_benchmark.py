@@ -932,6 +932,7 @@ def summarize_repeat_profile_samples(
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+            "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
             "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
         },
         "cases": case_summaries,
@@ -951,6 +952,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         **repeat_profile_total_elapsed_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
         "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+        "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
     }
 
@@ -1109,6 +1111,31 @@ def summarize_repeat_profile_ocr_engine(samples: list[dict[str, Any]]) -> dict[s
     return summarize_rapidocr_profile_summaries(profiles)
 
 
+def repeat_profile_ocr_engine_stage_duration_stats(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    durations: dict[str, list[float]] = {}
+    for sample in samples:
+        ocr_engine_profile = sample.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        calls = ocr_engine_profile.get("calls_detail")
+        call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+        if not call_profiles:
+            call_profiles = [ocr_engine_profile]
+        for call in call_profiles:
+            for key in OCR_ENGINE_STAGE_MAX_KEYS:
+                elapsed_s = parse_nonnegative_float(call.get(key))
+                if elapsed_s is None:
+                    continue
+                durations.setdefault(key, []).append(elapsed_s)
+    return {
+        key: {
+            "samples": len(values),
+            **repeat_profile_stage_duration_distribution(values),
+        }
+        for key, values in sorted(durations.items())
+    }
+
+
 def parse_nonnegative_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -1198,6 +1225,22 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
                 f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
             )
+            ocr_engine_stage_duration = repeat_summary.get("ocr_engine_stage_duration_s")
+            if isinstance(ocr_engine_stage_duration, dict) and ocr_engine_stage_duration:
+                labels = {
+                    "det_elapsed_s": "det",
+                    "rec_elapsed_s": "rec",
+                    "total_s": "total",
+                }
+                stage_text = ", ".join(
+                    f"{labels.get(key, key)}=p95 {stats['p95_duration_s']:.3f}s max {stats['max_duration_s']:.3f}s"
+                    for key, stats in ocr_engine_stage_duration.items()
+                    if isinstance(stats, dict)
+                    and isinstance(stats.get("p95_duration_s"), (int, float))
+                    and isinstance(stats.get("max_duration_s"), (int, float))
+                )
+                if stage_text:
+                    print(f"repeat ocr engine: {stage_text}")
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
         elapsed = row.get("total_elapsed_s")
