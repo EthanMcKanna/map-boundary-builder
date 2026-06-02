@@ -11779,3 +11779,39 @@ with zero failures in 0.531s.
   Los Angeles over one second, so compact benchmark output now warns that OCR
   engine profiling makes fixture durations attribution-only rather than the
   production-shaped latency proof.
+- Accepted a real-screenshot stress harness plus two no-catalog reliability
+  fixes found by that harness. The new `map-boundary-stress` runner and
+  `benchmarks/real-screenshot-stress.json` manifest make the previous ad hoc
+  Downloads probes reproducible: it records CLI status, source, control count,
+  stage timings, and expected fail-closed cases for arbitrary screenshots
+  including Ann Arbor/Grand Rapids May Mobility, Zoox mobile, Avride Dallas,
+  Tesla Dallas, and current Waymo/Zoox web maps. The first enforced stress run
+  exposed three useful discrepancies: Grand Rapids May Mobility had regressed
+  to a failed inference, the taller Zoox mobile screenshot emitted a
+  confidence-plausible but wrong 5-control Las Vegas polygon, and Tesla Dallas
+  was a valid 2-control completion. The runtime fixes are narrow: road-like OCR
+  labels such as `Lake Michigan Dr NW` no longer win direct/broad map-context
+  inference, strong exact city-title contexts can survive unrelated noisy
+  competitors, and a strong exact named-city fit stops georeference context
+  search before weak single-token contexts can trigger live geocoder fanout.
+  The sparse OCR guard also now fails closed on inferred regional OCR fits with
+  5-or-fewer controls and no road support, which catches the Zoox tall false
+  positive that scored only `0.013549` IoU against `las-vegas-zoox` despite
+  confidence `0.873`. A cold-cache San Antonio CLI reproduction improved from
+  a prior `28.471143s` run labeled `Alamo Heights High School` to
+  `1.144222s` total with `0.020701s` georeference and city `San Antonio`
+  (`out/road-context-filter-currentref-20260602/san-antonio-direct-freshcache-after2-summary.json`).
+  Final validation passed: the stress manifest
+  `out/real-screenshot-stress-final2-20260602/stress-summary.json` hit `12/12`
+  expectations with 10 completions, 2 fail-closed Zoox mobile cases, and max
+  internal generation `1.169164s`; the no-catalog current-reference gate
+  `out/road-context-filter-currentref-final2-20260602/full-report.json` passed
+  15/15 with avg/min IoU `0.953085`/`0.843889`, active total `9.23s`, max
+  fixture `1.90s`, San Antonio `0.58s`, exact regression check clean against
+  `out/focus-georef-ocr-cap550-currentref-20260601/full-report.json`, and `0`
+  latency-budget issues; the catalog gate
+  `out/road-context-filter-catalog-final-20260602/full-report.json` passed
+  15/15 with avg/min IoU `0.996223`/`0.943345`, active total `0.95s`, and `0`
+  latency-budget issues. Focused OCR/georeference/runner/stress tests passed
+  (`201 passed`), the full suite passed (`473 passed`), and `git diff --check`
+  passed.

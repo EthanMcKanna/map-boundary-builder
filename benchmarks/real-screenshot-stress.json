@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "description": "Local real-download stress screenshots used to catch arbitrary upload failures outside the curated service-area fixture benchmark. Missing images are reported but do not fail unless expectation enforcement is requested.",
+  "cases": [
+    {
+      "slug": "ann-arbor-may-mobility-avif",
+      "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 3
+      }
+    },
+    {
+      "slug": "grand-rapids-may-mobility",
+      "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 5
+      }
+    },
+    {
+      "slug": "zoox-las-vegas-mobile",
+      "image": "/Users/ethanmckanna/Downloads/IMG_0071.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "sparse OCR labels"
+      }
+    },
+    {
+      "slug": "zoox-las-vegas-mobile-tall",
+      "image": "/Users/ethanmckanna/Downloads/IMG_0226.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "sparse OCR labels"
+      }
+    },
+    {
+      "slug": "avride-dallas-map",
+      "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 5
+      }
+    },
+    {
+      "slug": "robotaxi-austin",
+      "image": "/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 8
+      }
+    },
+    {
+      "slug": "avride-dallas-web",
+      "image": "/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 3
+      }
+    },
+    {
+      "slug": "zoox-sf",
+      "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 10
+      }
+    },
+    {
+      "slug": "tesla-dallas-jpeg",
+      "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 2
+      }
+    },
+    {
+      "slug": "bay-area-waymo",
+      "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 8
+      }
+    },
+    {
+      "slug": "houston-waymo",
+      "image": "/Users/ethanmckanna/Downloads/h-waymo.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 8
+      }
+    },
+    {
+      "slug": "miami-waymo",
+      "image": "/Users/ethanmckanna/Downloads/miami.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_control_points": 5
+      }
+    }
+  ]
+}

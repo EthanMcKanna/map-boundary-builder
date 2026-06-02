@@ -2467,7 +2467,61 @@ class RoadContextRankingTests(unittest.TestCase):
         self.assertEqual("Mountain View Los Altos Union High School District", ranked[-1])
 
 
+def control_points_for_context(label_prefix: str, count: int) -> list[ControlPoint]:
+    return [
+        ControlPoint(
+            label=OcrLabel(
+                f"{label_prefix} {index}",
+                x=float(index * 10),
+                y=float(index * 8),
+                width=20,
+                height=10,
+                confidence=95,
+            ),
+            geocode=GeocodeResult(
+                label=f"{label_prefix} {index}",
+                lon=-98.5 + index * 0.001,
+                lat=29.4 + index * 0.001,
+                display_name=f"{label_prefix} {index}",
+                bbox=None,
+                importance=0.1,
+                place_type="neighbourhood",
+            ),
+        )
+        for index in range(count)
+    ]
+
+
 class GeoreferenceFallbackTests(unittest.TestCase):
+    def test_city_context_inference_does_not_promote_road_label_as_broad_context(self) -> None:
+        contexts = infer_city_contexts(
+            [
+                OcrLabel("Lake Michigan Dr NW", x=420, y=320, width=150, height=22, confidence=99),
+                OcrLabel("Grand Rapids MI", x=300, y=58, width=520, height=60, confidence=94),
+                OcrLabel("CITY OF GRAND RAPIDS", x=860, y=58, width=220, height=30, confidence=96),
+            ]
+        )
+
+        self.assertTrue(contexts)
+        self.assertEqual(contexts[0].query, "Grand Rapids")
+
+    def test_strong_direct_city_context_survives_noisy_competitors(self) -> None:
+        contexts = direct_city_contexts_from_labels(
+            [
+                OcrLabel("Five Points", x=1000, y=1463, width=105, height=86, confidence=99),
+                OcrLabel("Southtown", x=1099, y=1744, width=172, height=46, confidence=98),
+                OcrLabel("Dellview", x=759, y=739, width=135, height=44, confidence=99),
+                OcrLabel("San Antonio", x=1062, y=1643, width=423, height=74, confidence=100),
+                OcrLabel("Alamo Heights", x=1339, y=950, width=224, height=40, confidence=100),
+                OcrLabel("Monte Vista", x=1061, y=1264, width=184, height=44, confidence=100),
+                OcrLabel("Olmos Park", x=1126, y=1105, width=182, height=40, confidence=100),
+            ],
+            allow_network=False,
+        )
+
+        self.assertTrue(contexts)
+        self.assertEqual(contexts[0].query, "San Antonio")
+
     def test_header_filtered_street_retry_expands_controls_after_miss(self) -> None:
         context = CityContext(
             query="Grand Rapids",
@@ -2531,6 +2585,108 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertTrue(calls[0][1])
         self.assertEqual([label.text for label in calls[0][0]], [label.text for label in labels[2:]])
+
+    def test_exact_city_fit_stops_before_weak_later_contexts(self) -> None:
+        region = CityContext(
+            query="Bexar",
+            center=GeocodeResult(
+                label="Bexar",
+                lon=-98.5,
+                lat=29.42,
+                display_name="Bexar County, Texas, United States",
+                bbox=(-98.9, 29.1, -98.1, 29.8),
+                importance=0.5,
+                place_type="region",
+            ),
+            inferred=True,
+            evidence=("San Antonio", "Alamo Heights"),
+        )
+        city = CityContext(
+            query="San Antonio",
+            center=GeocodeResult(
+                label="San Antonio",
+                lon=-98.49,
+                lat=29.42,
+                display_name="San Antonio, Bexar, Texas, United States",
+                bbox=(-98.8, 29.1, -98.2, 29.7),
+                importance=0.65,
+                place_type="city",
+            ),
+            inferred=True,
+            evidence=("San Antonio",),
+        )
+        weak = CityContext(
+            query="Beacon",
+            center=GeocodeResult(
+                label="Beacon",
+                lon=-73.96,
+                lat=41.5,
+                display_name="Beacon, Dutchess, New York, United States",
+                bbox=(-74.0, 41.4, -73.9, 41.6),
+                importance=0.35,
+                place_type="town",
+            ),
+            inferred=True,
+            evidence=("Beacon",),
+        )
+        region_result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="Bexar",
+                lon=-98.5,
+                lat=29.42,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=11.0,
+                rotation_radians=0.0,
+                confidence=0.91,
+                source="ocr-georeference:nominatim-label-fit",
+            ),
+            control_points=control_points_for_context("Bexar", 8),
+            residual_median_m=650.0,
+            residual_p90_m=1300.0,
+        )
+        city_result = GeoreferenceResult(
+            transform=GeoreferenceTransform(
+                city="San Antonio",
+                lon=-98.49,
+                lat=29.42,
+                origin_x_ratio=0.0,
+                origin_y_ratio=0.0,
+                meters_per_pixel=11.2,
+                rotation_radians=0.0,
+                confidence=0.945,
+                source="ocr-georeference:nominatim-label-fit",
+            ),
+            control_points=control_points_for_context("San Antonio", 11),
+            residual_median_m=290.0,
+            residual_p90_m=960.0,
+        )
+        calls: list[str] = []
+
+        def fake_label_context(_labels, _image_path, city_context, *_args, **_kwargs):
+            calls.append(city_context.query)
+            if city_context.query == "Bexar":
+                return region_result
+            if city_context.query == "San Antonio":
+                return city_result
+            raise AssertionError("weak context should not be tried")
+
+        with (
+            patch("map_boundary_builder.georeference.resolve_city_contexts", return_value=[region, city, weak]),
+            patch("map_boundary_builder.georeference.georeference_from_label_context", side_effect=fake_label_context),
+        ):
+            result = georeference_from_labels(
+                [OcrLabel("San Antonio", x=100, y=100, width=120, height=24, confidence=98)],
+                "san-antonio.png",
+                None,
+                1000,
+                1000,
+                min_control_points=3,
+                anchor_marker_dots=False,
+            )
+
+        self.assertIs(result, city_result)
+        self.assertEqual(calls, ["Bexar", "San Antonio"])
 
     def test_ready_place_controls_skip_live_geocoded_control_lookup(self) -> None:
         center = GeocodeResult(

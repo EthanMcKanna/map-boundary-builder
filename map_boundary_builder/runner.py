@@ -2968,6 +2968,12 @@ def sparse_ocr_georeference_lacks_support(georef, *, width: int, height: int) ->
         return True
     if control_count <= 3 and georef.road_match is None and georef.transform.confidence < 0.75:
         return True
+    if (
+        control_count <= 5
+        and georef.road_match is None
+        and georef.transform.city == "Inferred map area"
+    ):
+        return True
     return low_res_two_control_regional_fit_without_road_evidence(
         control_count,
         georef.transform.meters_per_pixel,

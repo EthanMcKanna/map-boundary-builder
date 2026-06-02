@@ -614,7 +614,10 @@ def georeference_from_labels(
                 score = georeference_result_score(result)
                 if best is None or score > best[0]:
                     best = (score, result, city_context)
-                if is_decisive_georeference_result(result):
+                if is_decisive_georeference_result(result) or is_decisive_exact_admin_context_result(
+                    city_context,
+                    result,
+                ):
                     break
             if best is not None:
                 return best[1]
@@ -644,7 +647,10 @@ def georeference_from_labels(
                 or should_prefer_specific_context_over_sparse_region(city_context, result, best)
             ):
                 best = (score, result, city_context)
-            if is_decisive_georeference_result(result):
+            if is_decisive_georeference_result(result) or is_decisive_exact_admin_context_result(
+                city_context,
+                result,
+            ):
                 break
     if best is None and label_y_min is None and not tried_header_street_retry:
         header_filtered_labels = header_filtered_street_control_labels(control_labels, width, height)
@@ -672,7 +678,10 @@ def georeference_from_labels(
                 score = georeference_result_score(result)
                 if best is None or score > best[0]:
                     best = (score, result, city_context)
-                if is_decisive_georeference_result(result):
+                if is_decisive_georeference_result(result) or is_decisive_exact_admin_context_result(
+                    city_context,
+                    result,
+                ):
                     break
     return best[1] if best is not None else None
 
@@ -899,6 +908,26 @@ def is_decisive_georeference_result(result: GeoreferenceResult) -> bool:
         and len(result.control_points) >= 6
         and result.residual_p90_m <= 500
     )
+
+
+def is_decisive_exact_admin_context_result(context: CityContext, result: GeoreferenceResult) -> bool:
+    if not is_exact_evidence_admin_context(context):
+        return False
+    return (
+        result.transform.confidence >= 0.90
+        and len(result.control_points) >= 8
+        and result.residual_median_m <= 900.0
+        and result.residual_p90_m <= 1600.0
+    )
+
+
+def is_exact_evidence_admin_context(context: CityContext) -> bool:
+    if context.center.place_type.lower() not in {"city", "municipality", "town", "village"}:
+        return False
+    query_tokens = place_tokens(context.query)
+    if not query_tokens:
+        return False
+    return any(place_tokens(evidence) == query_tokens for evidence in context.evidence)
 
 
 def is_credible_context_hint_georeference(result: GeoreferenceResult | None) -> bool:
@@ -1503,6 +1532,8 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel], *, allow_network: b
     for label in labels[:MAX_CITY_INFERENCE_LABELS]:
         query = place_query_text(label.text)
         tokens = place_tokens(query)
+        if ROAD_CONTEXT_CUE_RE.search(label.text) and not ({"bay", "area"} <= tokens):
+            continue
         if len(tokens) != 1:
             continue
         token = next(iter(tokens))
@@ -1516,6 +1547,8 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel], *, allow_network: b
         query = place_query_text(label.text)
         tokens = place_tokens(query)
         if not tokens or tokens & CITY_INFERENCE_STOP_TOKENS:
+            continue
+        if ROAD_CONTEXT_CUE_RE.search(label.text) and not ({"bay", "area"} <= tokens):
             continue
         if len(tokens) > 4:
             continue
@@ -1574,10 +1607,15 @@ def direct_city_contexts_from_labels(labels: list[OcrLabel], *, allow_network: b
         return []
     scored_contexts.sort(key=lambda item: item[0], reverse=True)
     top_score, top_context = scored_contexts[0]
-    if top_score < 160.0 and not is_strong_direct_admin_context(top_score, top_context):
+    top_is_strong_admin = is_strong_direct_admin_context(top_score, top_context)
+    if top_score < 160.0 and not top_is_strong_admin:
         return []
     close_competitors = [context for score, context in scored_contexts[1:] if score >= top_score * 0.62]
-    if close_competitors and not all(context_covers_context(top_context, competitor) for competitor in close_competitors):
+    if (
+        close_competitors
+        and not top_is_strong_admin
+        and not all(context_covers_context(top_context, competitor) for competitor in close_competitors)
+    ):
         return []
     return [top_context]
 
@@ -1652,7 +1690,7 @@ def is_strong_direct_admin_context(score: float, context: CityContext) -> bool:
         return False
     if context.center.importance < 0.58:
         return False
-    if geocode_bbox_span_m(context.center) < 24000.0:
+    if geocode_bbox_span_m(context.center) < 20000.0:
         return False
     evidence_tokens = [place_tokens(place_query_text(evidence)) for evidence in context.evidence]
     return any(tokens == tokens_from_evidence for tokens_from_evidence in evidence_tokens)
@@ -1697,6 +1735,8 @@ def broad_direct_context_from_labels(labels: list[OcrLabel], *, allow_network: b
         if len(tokens) != 2 or tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
         if is_noisy_poi_query(tokens):
+            continue
+        if ROAD_CONTEXT_CUE_RE.search(label.text) and not ({"bay", "area"} <= tokens):
             continue
         if tokens <= GENERIC_SINGLE_TOKENS and not ({"bay", "area"} <= tokens):
             continue
