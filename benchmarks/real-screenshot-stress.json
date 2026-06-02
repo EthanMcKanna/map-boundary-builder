@@ -351,6 +351,40 @@
       }
     },
     {
+      "slug": "austin-tesla-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Austin",
+        "min_control_points": 2,
+        "min_ocr_labels": 3,
+        "min_combined_confidence": 0.80,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-97.8699676, 30.1433799, -97.5541363, 30.425308],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "dallas-tesla-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Dallas.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Dallas",
+        "min_control_points": 2,
+        "min_ocr_labels": 3,
+        "min_combined_confidence": 0.80,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8587006, 32.7624432, -96.7552405, 32.8728894],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "dallas-waymo",
       "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
       "no_catalog": true,

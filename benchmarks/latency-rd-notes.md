@@ -15481,3 +15481,26 @@ with zero failures in 0.531s.
   against `out/waymo-dallas-full33-hard-20260602/stress-summary.json` showed
   zero changes for status, source, city, bbox, geometry hash, coordinate count,
   confidence, or control count.
+- Screened uncovered gray-fill Tesla service-area screenshots with neutral
+  filenames and catalog matching disabled. The scored benchmark at
+  `out/candidate-tesla-service-benchmark-20260602/full-report.json` passed the
+  active Austin and Dallas Tesla fixtures with profiling enabled: Dallas scored
+  IoU `0.974679`, area ratio `1.019951`, centroid distance `47.9m`, confidence
+  `0.825`, and duration `0.104067s`; Austin scored IoU `0.977460`, area ratio
+  `1.017187`, centroid distance `188.4m`, confidence `0.825`, and duration
+  `0.138756s`. Bay Area and Houston Tesla remained skipped as
+  `reference_mismatch` data debt. A stricter two-case temporary stress gate at
+  `out/candidate-tesla-service-stress-20260602/stress-summary.json` passed
+  with primary max `0.151589s`, repeat p95 `0.136s`, repeat max `0.142s`,
+  stable output signatures, OCR engine p95 `0.116s`, three selected boxes per
+  row, and zero labels below 80 confidence. After adding both rows to the
+  tracked manifest, focused validation at
+  `out/tesla-service-tracked-focused-20260602/stress-summary.json` passed with
+  primary max `0.143015s` and repeat p95 `0.113s`. The expanded hard gate at
+  `out/tesla-service-full36-hard-20260602/stress-summary.json` passed `36/36`
+  expected rows, statuses `{"complete":25,"failed":11}`, primary max
+  `0.862084s`, repeat `36/36` subsecond, repeat p95 `0.544258s`, repeat max
+  `0.640869s`, and no repeat signature drift. Comparing all 34 common rows
+  against `out/waymo-sanantonio-full34-hard-20260602/stress-summary.json`
+  showed zero changes for status, source, city, bbox, geometry hash,
+  coordinate count, confidence, or control count.
