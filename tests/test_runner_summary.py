@@ -989,6 +989,60 @@ def test_non_map_app_ui_reject_evidence_requires_tiny_coverage_and_ui_categories
     assert runner.non_map_app_ui_reject_evidence(extraction, labels[:4]) is None
 
 
+def test_non_map_app_ui_reject_evidence_catches_tall_profile_app_screen() -> None:
+    extraction = SimpleNamespace(
+        coverage_ratio=0.108,
+        contour_count=4,
+        style="dark-teal",
+    )
+    labels = [
+        OcrLabel("Top Rated", x=120, y=320, width=120, height=28, confidence=98),
+        OcrLabel("Following", x=360, y=320, width=120, height=28, confidence=98),
+        OcrLabel("Followers Following", x=220, y=430, width=230, height=28, confidence=97),
+        OcrLabel("Followers", x=220, y=510, width=130, height=28, confidence=98),
+        OcrLabel("Followers Following Shows", x=220, y=610, width=320, height=28, confidence=96),
+        OcrLabel("Young Hearts", x=220, y=760, width=170, height=28, confidence=98),
+        OcrLabel("Young Sherlock", x=220, y=860, width=190, height=28, confidence=97),
+        OcrLabel("Crin", x=220, y=960, width=70, height=28, confidence=99),
+    ]
+
+    evidence = runner.non_map_app_ui_reject_evidence(extraction, labels, width=1179, height=2556)
+
+    assert runner.profile_app_ui_screen_ocr_candidate(extraction, width=1179, height=2556) is True
+    assert evidence == {
+        "non_map_ui_categories": ["followers", "following", "media"],
+        "non_map_ui_labels": [
+            "Top Rated",
+            "Following",
+            "Followers Following",
+            "Followers",
+            "Followers Following Shows",
+        ],
+    }
+    assert runner.non_map_app_ui_reject_evidence(extraction, labels) is None
+    assert runner.non_map_app_ui_reject_evidence(
+        SimpleNamespace(coverage_ratio=0.214, contour_count=1, style="dark-teal"),
+        labels,
+        width=1206,
+        height=2622,
+    ) is None
+    assert runner.non_map_app_ui_reject_evidence(
+        extraction,
+        [
+            OcrLabel("Las Vegas", x=130, y=500, width=90, height=24, confidence=96),
+            OcrLabel("Paradise", x=160, y=560, width=80, height=22, confidence=94),
+            OcrLabel("Spring Mountain Rd", x=180, y=620, width=180, height=22, confidence=95),
+            OcrLabel("Flamingo Rd", x=190, y=680, width=120, height=22, confidence=95),
+            OcrLabel("Cameron St", x=210, y=740, width=110, height=22, confidence=94),
+            OcrLabel("Request a ride", x=220, y=840, width=120, height=22, confidence=96),
+            OcrLabel("Help", x=240, y=920, width=60, height=22, confidence=96),
+            OcrLabel("Area on the map", x=260, y=1020, width=150, height=22, confidence=96),
+        ],
+        width=1179,
+        height=2556,
+    ) is None
+
+
 def test_non_map_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "settings.png"
     output_path = tmp_path / "boundary.geojson"
@@ -1045,6 +1099,53 @@ def test_non_map_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None
         "stats",
         "sync",
     ]
+
+
+def test_profile_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "profile.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (1179, 2556), (250, 250, 250)).save(image_path)
+    rgb = np.full((2556, 1179, 3), 250, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((120, 80), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(120, 260), (780, 260), (780, 1800), (120, 1800)]),
+        coverage_ratio=0.108,
+        contour_count=4,
+        confidence=0.98,
+    )
+    labels = [
+        OcrLabel("Top Rated", x=120, y=320, width=120, height=28, confidence=98),
+        OcrLabel("Following", x=360, y=320, width=120, height=28, confidence=98),
+        OcrLabel("Followers Following", x=220, y=430, width=230, height=28, confidence=97),
+        OcrLabel("Followers", x=220, y=510, width=130, height=28, confidence=98),
+        OcrLabel("Followers Following Shows", x=220, y=610, width=320, height=28, confidence=96),
+        OcrLabel("Young Hearts", x=220, y=760, width=170, height=28, confidence=98),
+        OcrLabel("Young Sherlock", x=220, y=860, width=190, height=28, confidence=97),
+        OcrLabel("Crin", x=220, y=960, width=70, height=28, confidence=99),
+    ]
+    events: list[dict] = []
+
+    def unexpected_fit_georeference(*_args, **_kwargs):
+        raise AssertionError("profile app UI should fail before georeference")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "classify_style_for_ocr", lambda _rgb: "dark-teal")
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: labels)
+    monkeypatch.setattr(runner, "fit_georeference", unexpected_fit_georeference)
+
+    with pytest.raises(ValueError, match="non-map app UI"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+            progress=events.append,
+        )
+
+    assert events[-1]["message"] == "Rejecting non-map app UI"
+    assert events[-1]["details"]["non_map_ui_categories"] == ["followers", "following", "media"]
 
 
 def test_thematic_map_fails_before_georeference_and_full_detail_retry(tmp_path, monkeypatch) -> None:

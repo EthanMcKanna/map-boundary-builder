@@ -14839,3 +14839,37 @@ with zero failures in 0.531s.
   confidence `0.825`, bbox
   `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=0.066790`.
+- Added a narrow profile-app UI pre-screen after probing
+  `/Users/ethanmckanna/Downloads/Simulator Screenshot - iPhone 16 - 2026-03-24 at 01.43.34.png`,
+  a tall phone profile screen that was visually map-shaped enough to extract a
+  dark-teal polygon but not a service-area map. The current no-catalog probe
+  failed correctly only after `2.499063s`, reading `38` event labels and then
+  spending the tail in georeference/resource work with profile UI labels like
+  `Followers`, `Following`, and `Shows`. A blanket `1000px` OCR cap for tall
+  dark-teal screenshots was rejected because it changed the Zoox tall sparse
+  negative away from the expected `sparse OCR labels` error and pushed two
+  sparse-map negatives above the `1.0s` budget. The accepted path instead
+  defers pre-extraction OCR only for no-catalog tall dark-teal phone screenshots,
+  then runs a capped `1000px` profile-app UI OCR pre-screen only when extraction
+  is low-coverage (`<= 0.12`) and multi-contour (`>= 2`), rejecting solely on
+  high-confidence `Followers`/`Following`/media-app label evidence. The patched
+  real screenshot rejected as `non-map app UI` in `0.858866s`, with one OCR
+  call, `44` event labels, `25` OCR-profile labels, `0.707949s` OCR total,
+  categories `followers`/`following`/`media`, and no georeference attempt. The
+  new locked stress row is `profile-app-non-map-ui`. Focused stress passed at
+  `out/profile-ui-focused-stress-20260602/stress-summary.json`: `4/4`
+  expected failures across the profile UI, Zoox mobile/tall sparse negatives,
+  and the dark Tesla route negative; primary max `0.668464s`, repeat `8/8`
+  subsecond, repeat p95 `0.567s`, and the Zoox sparse-map failure reasons stayed
+  stable. The full real-screenshot hard gate passed at
+  `out/profile-ui-full25-hard-20260602/stress-summary.json`: `25/25` expected,
+  statuses `{"complete":14,"failed":11}`, primary max `0.905654s`, repeat
+  `50/50` subsecond, repeat p95 `0.594s`, and all `14` valid service-area
+  screenshots still completed. Validation passed `jq empty` on
+  `benchmarks/real-screenshot-stress.json`,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`151 passed`),
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runtime_warmup.py
+  tests/test_web_handler.py tests/test_pipeline_version.py -q` (`12 passed`),
+  compileall over `map_boundary_builder`, `api`, and `tests`, and
+  `git diff --check`.

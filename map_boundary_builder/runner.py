@@ -155,6 +155,19 @@ NON_MAP_APP_UI_CATEGORY_PATTERNS = {
     "stats": ("monthly history", "community stats", "track progress", "totals vehicles"),
     "sync": ("sync", "disconnect"),
 }
+PROFILE_APP_UI_OCR_MAX_DIMENSION = 1000
+PROFILE_APP_UI_MIN_HEIGHT = 1800
+PROFILE_APP_UI_MAX_WIDTH = 1400
+PROFILE_APP_UI_MIN_HEIGHT_WIDTH_RATIO = 1.8
+PROFILE_APP_UI_MAX_COVERAGE_RATIO = 0.12
+PROFILE_APP_UI_MIN_CONTOURS = 2
+PROFILE_APP_UI_MIN_LABELS = 8
+PROFILE_APP_UI_MIN_CATEGORIES = 3
+PROFILE_APP_UI_CATEGORY_PATTERNS = {
+    "followers": ("followers",),
+    "following": ("following",),
+    "media": ("shows", "top rated", "watchlist", "movies", "series"),
+}
 NON_SERVICE_THEMATIC_MAP_LABEL_MIN_CONFIDENCE = 80.0
 NON_SERVICE_THEMATIC_MAP_PATTERNS = (
     "vulnerability index",
@@ -448,6 +461,12 @@ def build_boundary(
         ):
             early_ocr_style = classify_style_for_ocr(rgb)
             if not should_defer_pre_extraction_ocr_for_focus(
+                early_ocr_style,
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                width=width,
+                height=height,
+            ) and not should_defer_pre_extraction_ocr_for_profile_app_ui_screen(
                 early_ocr_style,
                 city_input=city_input,
                 allow_catalog=allow_catalog,
@@ -974,6 +993,47 @@ def build_boundary(
             if extraction.style == "gray-fill"
             else None
         )
+        if labels is None and labels_future is None and profile_app_ui_screen_ocr_candidate(
+            extraction,
+            width=width,
+            height=height,
+        ):
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Reading profile app UI labels",
+                percent=43,
+                details={"rapidocr_max_dimension": PROFILE_APP_UI_OCR_MAX_DIMENSION},
+            )
+            profile_app_labels = extract_profile_app_ui_labels_from_rgb(str(image_path), rgb, extraction=extraction)
+            emit_progress(
+                progress,
+                stage="ocr",
+                message="Profile app UI labels read",
+                percent=47,
+                details={
+                    "label_count": len(profile_app_labels),
+                    "top_labels": [label.text for label in profile_app_labels[:8]],
+                },
+            )
+            non_map_app_ui_evidence = non_map_app_ui_reject_evidence(
+                extraction,
+                profile_app_labels,
+                width=width,
+                height=height,
+            )
+            if non_map_app_ui_evidence is not None:
+                emit_progress(
+                    progress,
+                    stage="georeference",
+                    message="Rejecting non-map app UI",
+                    percent=48,
+                    details=non_map_app_ui_evidence,
+                )
+                raise ValueError(
+                    "Could not infer a service-area boundary from non-map app UI. "
+                    "Upload a service-area coverage map crop with readable place labels."
+                )
         if (
             labels is None
             and labels_future is None
@@ -1401,7 +1461,7 @@ def build_boundary(
             "Could not infer a service-area boundary from ride-route UI. "
             "Upload a service-area coverage map crop instead of a trip route or receipt screenshot."
         )
-    non_map_app_ui_evidence = non_map_app_ui_reject_evidence(extraction, labels)
+    non_map_app_ui_evidence = non_map_app_ui_reject_evidence(extraction, labels, width=width, height=height)
     if non_map_app_ui_evidence is not None:
         emit_progress(
             progress,
@@ -1772,6 +1832,17 @@ def extract_provider_ui_labels_from_rgb(
         )
         for label in labels
     ]
+
+
+def extract_profile_app_ui_labels_from_rgb(
+    image_path: str | Path,
+    rgb,
+    *,
+    extraction,
+) -> list[Any]:
+    ocr_kwargs = ocr_kwargs_for_style(extraction.style, cache=runner_ocr_cache_enabled())
+    ocr_kwargs["rapidocr_max_dimension"] = PROFILE_APP_UI_OCR_MAX_DIMENSION
+    return extract_ocr_labels_from_rgb(str(image_path), rgb, **ocr_kwargs)
 
 
 def extract_focus_georef_labels_from_rgb(
@@ -2462,6 +2533,39 @@ def should_defer_pre_extraction_ocr_for_focus(
     return aspect_ratio <= PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO
 
 
+def should_defer_pre_extraction_ocr_for_profile_app_ui_screen(
+    style: str | None,
+    *,
+    city_input: str | None,
+    allow_catalog: bool,
+    width: int,
+    height: int,
+) -> bool:
+    if allow_catalog or city_input is not None or style != "dark-teal":
+        return False
+    if PROFILE_APP_UI_OCR_MAX_DIMENSION <= 0:
+        return False
+    if width <= 0 or height <= 0:
+        return False
+    if width > PROFILE_APP_UI_MAX_WIDTH or height < PROFILE_APP_UI_MIN_HEIGHT:
+        return False
+    return height >= width * PROFILE_APP_UI_MIN_HEIGHT_WIDTH_RATIO
+
+
+def profile_app_ui_screen_ocr_candidate(extraction, *, width: int, height: int) -> bool:
+    if not should_defer_pre_extraction_ocr_for_profile_app_ui_screen(
+        getattr(extraction, "style", None),
+        city_input=None,
+        allow_catalog=False,
+        width=width,
+        height=height,
+    ):
+        return False
+    if getattr(extraction, "coverage_ratio", 1.0) > PROFILE_APP_UI_MAX_COVERAGE_RATIO:
+        return False
+    return getattr(extraction, "contour_count", 0) >= PROFILE_APP_UI_MIN_CONTOURS
+
+
 def should_overlap_probe_miss_ocr(
     *,
     skip_redundant_probe: bool,
@@ -3099,9 +3203,13 @@ def route_ui_pattern_matches(text: str, compact_text: str, pattern: str) -> bool
     )
 
 
-def non_map_app_ui_reject_evidence(extraction, labels: list[Any]) -> dict[str, Any] | None:
-    if getattr(extraction, "coverage_ratio", 1.0) > NON_MAP_APP_UI_MAX_COVERAGE_RATIO:
-        return None
+def non_map_app_ui_reject_evidence(
+    extraction,
+    labels: list[Any],
+    *,
+    width: int | None = None,
+    height: int | None = None,
+) -> dict[str, Any] | None:
     high_confidence_labels = [
         label
         for label in labels
@@ -3111,22 +3219,79 @@ def non_map_app_ui_reject_evidence(extraction, labels: list[Any]) -> dict[str, A
     if len(high_confidence_labels) < NON_MAP_APP_UI_MIN_LABELS:
         return None
 
+    coverage_ratio = getattr(extraction, "coverage_ratio", 1.0)
     categories: set[str] = set()
     evidence_labels: list[str] = []
-    for label in high_confidence_labels:
-        text = normalize_route_ui_text(getattr(label, "text", ""))
-        compact_text = compact_route_ui_text(getattr(label, "text", ""))
-        for category, patterns in NON_MAP_APP_UI_CATEGORY_PATTERNS.items():
-            if any(route_ui_pattern_matches(text, compact_text, pattern) for pattern in patterns):
-                categories.add(category)
-                evidence_labels.append(getattr(label, "text", ""))
-                break
-    if len(categories) < NON_MAP_APP_UI_MIN_CATEGORIES:
+    if coverage_ratio <= NON_MAP_APP_UI_MAX_COVERAGE_RATIO:
+        categories, evidence_labels = non_map_app_ui_label_categories(
+            high_confidence_labels,
+            NON_MAP_APP_UI_CATEGORY_PATTERNS,
+        )
+        if len(categories) >= NON_MAP_APP_UI_MIN_CATEGORIES:
+            return {
+                "non_map_ui_categories": sorted(categories),
+                "non_map_ui_labels": evidence_labels[:5],
+            }
+
+    profile_app_evidence = profile_app_ui_reject_evidence(
+        extraction,
+        high_confidence_labels,
+        width=width,
+        height=height,
+    )
+    if profile_app_evidence is not None:
+        return profile_app_evidence
+    return None
+
+
+def profile_app_ui_reject_evidence(
+    extraction,
+    high_confidence_labels: list[Any],
+    *,
+    width: int | None,
+    height: int | None,
+) -> dict[str, Any] | None:
+    if width is None or height is None:
+        return None
+    if len(high_confidence_labels) < PROFILE_APP_UI_MIN_LABELS:
+        return None
+    if getattr(extraction, "coverage_ratio", 1.0) > PROFILE_APP_UI_MAX_COVERAGE_RATIO:
+        return None
+    if not should_defer_pre_extraction_ocr_for_profile_app_ui_screen(
+        getattr(extraction, "style", None),
+        city_input=None,
+        allow_catalog=False,
+        width=width,
+        height=height,
+    ):
+        return None
+    categories, evidence_labels = non_map_app_ui_label_categories(
+        high_confidence_labels,
+        PROFILE_APP_UI_CATEGORY_PATTERNS,
+    )
+    if len(categories) < PROFILE_APP_UI_MIN_CATEGORIES:
         return None
     return {
         "non_map_ui_categories": sorted(categories),
         "non_map_ui_labels": evidence_labels[:5],
     }
+
+
+def non_map_app_ui_label_categories(
+    labels: list[Any],
+    category_patterns: dict[str, tuple[str, ...]],
+) -> tuple[set[str], list[str]]:
+    categories: set[str] = set()
+    evidence_labels: list[str] = []
+    for label in labels:
+        text = normalize_route_ui_text(getattr(label, "text", ""))
+        compact_text = compact_route_ui_text(getattr(label, "text", ""))
+        for category, patterns in category_patterns.items():
+            if any(route_ui_pattern_matches(text, compact_text, pattern) for pattern in patterns):
+                categories.add(category)
+                evidence_labels.append(getattr(label, "text", ""))
+                break
+    return categories, evidence_labels
 
 
 def non_service_thematic_map_reject_evidence(labels: list[Any]) -> dict[str, Any] | None:
