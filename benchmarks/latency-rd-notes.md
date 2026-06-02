@@ -14943,3 +14943,25 @@ with zero failures in 0.531s.
   completed. Validation also passed `jq empty` on
   `benchmarks/real-screenshot-stress.json`, `git diff --check`, and
   `PYTHONPATH=. .venv/bin/python -m pytest` (`599 passed`).
+  Production deploy proof: commit `8ea480e` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `PATH="$PWD/.venv/bin:$PATH" vercel deploy --prebuilt --prod --yes` as
+  `dpl_35SMECzPnmP3PTnNWTZtQcjyHjB9`, aliased to `https://mapboundary.app`
+  and `https://map-boundary-builder-hdv99rj6f-ethanmckannas-projects.vercel.app`.
+  Live health reported `pipeline-265234195cb9c517`, warm status `ok`, and
+  `ocr.rapidocr_gray_fill_max_dimension=800`. Profiled live upload smokes with
+  `no_catalog=1`, `include_overlay=0`, and `normalized_cache_lookup=0` returned
+  Austin Robotaxi complete via `ocr-georeference:nominatim-label-fit` with
+  `13` controls, confidence `0.99`, bbox
+  `[-97.8096521,30.2102006,-97.6775825,30.274975]`, one OCR call at input shape
+  `[676,800]`, and `build_boundary_s=1.101467`; Tesla Sync failed with the
+  exact non-map app UI error, one OCR call at `[1000,460]`, fast-path
+  `Rejecting non-map app UI` evidence for categories
+  `account`/`import`/`privacy`/`stats`/`sync`, and
+  `build_boundary_s=1.412124`; Bay Area JPEG completed as `Inferred map area`
+  via `ocr-georeference:nominatim-label-fit` with `14` controls, confidence
+  `0.873`, bbox `[-122.5000691,37.311372,-121.8572994,37.8058701]`, one OCR
+  call at `[888,1057]`, and `build_boundary_s=0.800563`. The live profiled
+  smokes validate deployed behavior, while
+  `out/final-gray800-full27-hard-20260602/stress-summary.json` remains the
+  local no-cache subsecond speed gate.
