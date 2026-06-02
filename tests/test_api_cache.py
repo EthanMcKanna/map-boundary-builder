@@ -1308,6 +1308,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["current_catalog_label_ocr_max_dimension"], 875)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
+        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_warm_sample_max_dimension"], 1400)
         self.assertEqual(
             cold["ocr"]["rapidocr_warm_engine_keys"],
             [

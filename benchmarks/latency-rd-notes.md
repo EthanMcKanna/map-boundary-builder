@@ -13942,3 +13942,38 @@ with zero failures in 0.531s.
   behavior; it tightens the gate around the current OCR tail so future speed
   probes cannot pass by hiding a primary OCR regression behind aggregate
   subsecond totals.
+- Probed RapidOCR warm-shape strategies now that primary OCR-tail budgets are
+  enforceable. A six-case tail control with the existing 608px warm sample
+  (`out/probe-warm-sample-control-tail6-20260602/stress-summary.json`) failed
+  only the new tight primary OCR guard because Bay Area hit OCR engine
+  `total_s=0.650s`; analyzed repeat p95 was `0.694s`. Warming every RapidOCR
+  engine with a 1400px sample improved that tail set
+  (`out/probe-warm-sample1400-tail6-20260602/stress-summary.json`, primary max
+  `0.620938s`, OCR max `0.493s`, repeat p95 `0.551s`) but the full 16-case
+  run was not clean enough to ship (`out/probe-warm-sample1400-full16-20260602`
+  had prewarm total `1.214s`, primary max `0.711690s`, OCR max `0.601s`). A
+  1200px full warm was also rejected
+  (`out/probe-warm-sample1200-full16-20260602`) because repeat p95 widened to
+  `0.577s`. A narrower bright-blue detector limit of `240`
+  (`out/probe-brightblue-det240-full16-20260602`) preserved correctness but
+  worsened primary max to `0.777926s`, so no detector change was shipped.
+- Shipped the useful warm-shape variant: keep the generic and dark-teal
+  RapidOCR warm pass at 608px, then add one extra 1400px synthetic warm only
+  for the bright-blue `256/max/en-ppocrv5` engine. A one-off targeted probe
+  (`out/probe-targeted-brightblue-largewarm-full16-20260602`) first showed the
+  shape-specific idea could pass the full 16-case hard gate with custom prewarm
+  total `1.090501s`, primary max `0.597205s`, primary OCR engine max `0.482s`,
+  repeat p95 `0.484s`, and stable signatures for all `16` cases. After
+  implementing it as the default
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION=1400`, the
+  actual full production-prewarmed gate
+  `out/targeted-brightblue-largewarm-full16-actual-20260602/stress-summary.json`
+  passed with OCR and extraction caches disabled: prewarm `status=ok`, prewarm
+  total `1.256146s`, `16/16` expected, primary max `0.631871s`, primary OCR
+  engine max `0.500796s`, repeat p95 `0.536319s`, repeat OCR `total_s` p95
+  `0.451778s`, selected-box p95 `26.25`, and stable signatures for all `16`
+  cases. Compared with the prior committed full gate
+  `out/stress-prewarm-runtime-full16-primaryocr-20260602`, this trades a slower
+  health/runtime prewarm (`~1.26s` vs `~0.76s`) for a lower first scored
+  generation tail (`0.632s` vs `0.675s`) and lower primary OCR-engine tail
+  (`0.501s` vs `0.562s`) without correctness regressions.

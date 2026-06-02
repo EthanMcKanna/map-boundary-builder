@@ -31,6 +31,7 @@ from .runtime_config import (
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
+    RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
     RAPIDOCR_CLS_BATCH_NUM,
     RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
@@ -1428,6 +1429,11 @@ def warm_rapidocr_runtime() -> bool:
         for detector_limit, recognition_profile, detector_limit_type, rec_batch_num in rapidocr_warm_engine_keys():
             engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
             engine(sample, use_cls=False)
+        bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side()
+        if bright_blue_warm_side > 0:
+            detector_limit, recognition_profile, detector_limit_type, rec_batch_num = rapidocr_bright_blue_warm_key()
+            engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
+            engine(rapidocr_warm_sample_for_side(bright_blue_warm_side), use_cls=False)
     except Exception:
         return False
     return True
@@ -1474,12 +1480,44 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:
 
 
 def rapidocr_warm_sample() -> np.ndarray:
+    return rapidocr_warm_sample_for_side(rapidocr_generic_warm_sample_side())
+
+
+def rapidocr_generic_warm_sample_side() -> int:
     warm_side = RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION
     if warm_side <= 0:
         warm_side = effective_rapidocr_max_dimension()
     if warm_side <= 0:
         warm_side = 1600
-    warm_side = max(384, min(1600, warm_side))
+    return bounded_rapidocr_warm_sample_side(warm_side)
+
+
+def rapidocr_bright_blue_large_warm_sample_side() -> int:
+    if RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION <= 0:
+        return 0
+    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+        return 0
+    warm_side = bounded_rapidocr_warm_sample_side(RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION)
+    if warm_side <= rapidocr_generic_warm_sample_side():
+        return 0
+    return warm_side
+
+
+def rapidocr_bright_blue_warm_key() -> tuple[int, str, str, int]:
+    return (
+        RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+        normalized_rapidocr_recognition_profile(RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE),
+        normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE),
+        RAPIDOCR_REC_BATCH_NUM,
+    )
+
+
+def bounded_rapidocr_warm_sample_side(warm_side: int) -> int:
+    return max(384, min(1600, int(warm_side)))
+
+
+def rapidocr_warm_sample_for_side(warm_side: int) -> np.ndarray:
+    warm_side = bounded_rapidocr_warm_sample_side(warm_side)
     sample = np.full((warm_side, warm_side, 3), 255, dtype=np.uint8)
     font_scale = max(1.0, warm_side / 400.0)
     thickness = max(2, round(warm_side / 200))

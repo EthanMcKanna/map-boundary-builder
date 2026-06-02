@@ -1439,6 +1439,7 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1600),
                 patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 608),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 608),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
                 patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ):
@@ -1463,6 +1464,7 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
                 patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1200),
                 patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 0),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1200),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
                 patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ):
@@ -1471,6 +1473,46 @@ class OcrGroupingTests(unittest.TestCase):
             warm_rapidocr_runtime.cache_clear()
 
         self.assertEqual(calls, [((1200, 1200, 3), False), ((1200, 1200, 3), False)])
+
+    def test_warm_rapidocr_runtime_adds_large_bright_blue_shape(self) -> None:
+        calls = []
+
+        class FakeWarmEngine:
+            def __init__(self, key):
+                self.key = key
+
+            def __call__(self, image, *, use_cls=None):
+                calls.append((self.key, image.shape, use_cls))
+                return [], 0.0
+
+        def fake_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num):
+            return FakeWarmEngine((detector_limit, recognition_profile, detector_limit_type, rec_batch_num))
+
+        try:
+            warm_rapidocr_runtime.cache_clear()
+            with (
+                patch.object(ocr_module, "rapidocr_engine", side_effect=fake_engine),
+                patch.object(ocr_module, "rapidocr_warm_detector_limits", return_value=[608]),
+                patch.object(ocr_module, "RAPIDOCR_MAX_DIMENSION", 1600),
+                patch.object(ocr_module, "RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION", 608),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 256),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
+                patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
+                patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+            ):
+                self.assertTrue(warm_rapidocr_runtime())
+        finally:
+            warm_rapidocr_runtime.cache_clear()
+
+        self.assertEqual(
+            calls,
+            [
+                ((608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM), (608, 608, 3), False),
+                ((256, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (608, 608, 3), False),
+                ((256, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (1400, 1400, 3), False),
+            ],
+        )
 
     def test_rapidocr_warm_engine_keys_skip_unused_default_bright_blue_limit(self) -> None:
         with (
@@ -1559,7 +1601,7 @@ class OcrGroupingTests(unittest.TestCase):
                 self.assertTrue(warm_rapidocr_runtime())
                 self.assertTrue(warm_rapidocr_runtime())
 
-            expected_keys = ocr_module.rapidocr_warm_engine_keys()
+            expected_keys = ocr_module.rapidocr_warm_engine_keys() + [ocr_module.rapidocr_bright_blue_warm_key()]
             self.assertEqual(
                 [call.args for call in rapidocr.call_args_list],
                 expected_keys,
