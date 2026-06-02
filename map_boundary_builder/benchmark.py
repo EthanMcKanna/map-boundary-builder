@@ -847,6 +847,9 @@ def run_benchmark(
     active_stage_duration = summarize_stage_durations(scored)
     smoke_stage_duration = summarize_stage_durations(smoke_validated)
     evaluated_stage_duration = combine_stage_durations(active_stage_duration, smoke_stage_duration)
+    active_stage_max_rows = summarize_stage_max_rows(scored)
+    smoke_stage_max_rows = summarize_stage_max_rows(smoke_validated)
+    evaluated_stage_max_rows = summarize_stage_max_rows([*scored, *smoke_validated])
     active_georeference_sources = summarize_georeference_sources(scored)
     smoke_georeference_sources = summarize_georeference_sources(smoke_validated)
     evaluated_georeference_sources = summarize_georeference_sources([*scored, *smoke_validated])
@@ -904,18 +907,21 @@ def run_benchmark(
             "active_total_duration_s": round(active_total_duration, 6),
             "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
             "active_stage_duration_s": active_stage_duration,
+            "active_stage_max_rows": active_stage_max_rows,
             "active_georeference_sources": active_georeference_sources,
             "active_ocr_label_event_counts": active_ocr_label_events["event_counts"],
             "active_ocr_full_detail_retry_count": active_ocr_label_events["full_detail_retry_count"],
             "active_ocr_full_detail_retry_rows": active_ocr_label_events["full_detail_retry_rows"],
             "active_ocr_engine_profile": summarize_ocr_engine_profiles(scored),
             "smoked_skipped_stage_duration_s": smoke_stage_duration,
+            "smoked_skipped_stage_max_rows": smoke_stage_max_rows,
             "smoked_skipped_georeference_sources": smoke_georeference_sources,
             "smoked_skipped_ocr_label_event_counts": smoke_ocr_label_events["event_counts"],
             "smoked_skipped_ocr_full_detail_retry_count": smoke_ocr_label_events["full_detail_retry_count"],
             "smoked_skipped_ocr_full_detail_retry_rows": smoke_ocr_label_events["full_detail_retry_rows"],
             "smoked_skipped_ocr_engine_profile": summarize_ocr_engine_profiles(smoke_validated),
             "evaluated_stage_duration_s": evaluated_stage_duration,
+            "evaluated_stage_max_rows": evaluated_stage_max_rows,
             "evaluated_georeference_sources": evaluated_georeference_sources,
             "evaluated_ocr_label_event_counts": evaluated_ocr_label_events["event_counts"],
             "evaluated_ocr_full_detail_retry_count": evaluated_ocr_label_events["full_detail_retry_count"],
@@ -1894,6 +1900,26 @@ def summarize_stage_durations(scores: list[BenchmarkScore]) -> dict[str, float]:
                 continue
             totals[stage] = totals.get(stage, 0.0) + parsed_duration
     return {stage: round(total, 6) for stage, total in sorted(totals.items())}
+
+
+def summarize_stage_max_rows(scores: list[BenchmarkScore]) -> dict[str, dict[str, Any]]:
+    max_rows: dict[str, dict[str, Any]] = {}
+    for score in scores:
+        if not score.stage_elapsed_s:
+            continue
+        for stage, duration in score.stage_elapsed_s.items():
+            if not isinstance(stage, str) or not stage:
+                continue
+            parsed_duration = parse_report_duration(duration)
+            if parsed_duration is None:
+                continue
+            prior = max_rows.get(stage)
+            if prior is None or parsed_duration > float(prior["duration_s"]):
+                max_rows[stage] = {
+                    "slug": score.slug,
+                    "duration_s": round(parsed_duration, 6),
+                }
+    return dict(sorted(max_rows.items()))
 
 
 def summarize_georeference_sources(scores: list[BenchmarkScore]) -> dict[str, int]:

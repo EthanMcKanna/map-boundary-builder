@@ -21,6 +21,7 @@ from map_boundary_builder.benchmark import (
     score_full_fixture_in_process,
     summarize_georeference_sources,
     summarize_ocr_label_events,
+    summarize_stage_max_rows,
 )
 
 
@@ -138,6 +139,40 @@ def test_summarize_georeference_sources_counts_missing_sources() -> None:
     }
 
 
+def test_summarize_stage_max_rows_records_stage_tails() -> None:
+    scores = [
+        BenchmarkScore(
+            slug="phoenix-waymo",
+            image="Waymo Phoenix.png",
+            mode="full",
+            passed=True,
+            iou=0.98,
+            area_ratio=1.0,
+            centroid_distance_m=2.0,
+            vertices=42,
+            style="bright-blue",
+            stage_elapsed_s={"ocr": 1.2345678, "extract": 0.2},
+        ),
+        BenchmarkScore(
+            slug="dallas-waymo",
+            image="Waymo Dallas.png",
+            mode="full",
+            passed=True,
+            iou=0.96,
+            area_ratio=1.0,
+            centroid_distance_m=1.0,
+            vertices=20,
+            style="bright-blue",
+            stage_elapsed_s={"ocr": 0.8, "extract": 0.3456789},
+        ),
+    ]
+
+    assert summarize_stage_max_rows(scores) == {
+        "extract": {"slug": "dallas-waymo", "duration_s": 0.345679},
+        "ocr": {"slug": "phoenix-waymo", "duration_s": 1.234568},
+    }
+
+
 def test_summarize_ocr_label_events_counts_retries() -> None:
     scores = [
         BenchmarkScore(
@@ -249,6 +284,7 @@ def test_run_benchmark_summary_includes_georeference_source_counts(
             style="blue-fill",
             duration_s=0.12,
             georeference_source="catalog-shape-match",
+            stage_elapsed_s={"ocr": 0.08, "extract": 0.03},
             ocr_label_events=[
                 {"message": "Map labels read", "label_count": 8},
                 {"message": "Full-detail map labels read", "label_count": 12},
@@ -273,6 +309,16 @@ def test_run_benchmark_summary_includes_georeference_source_counts(
     )
 
     assert report["summary"]["active_georeference_sources"] == {"catalog-shape-match": 1}
+    assert report["summary"]["active_stage_duration_s"] == {"extract": 0.03, "ocr": 0.08}
+    assert report["summary"]["active_stage_max_rows"] == {
+        "extract": {"slug": "dallas-waymo", "duration_s": 0.03},
+        "ocr": {"slug": "dallas-waymo", "duration_s": 0.08},
+    }
+    assert report["summary"]["smoked_skipped_stage_max_rows"] == {}
+    assert report["summary"]["evaluated_stage_max_rows"] == {
+        "extract": {"slug": "dallas-waymo", "duration_s": 0.03},
+        "ocr": {"slug": "dallas-waymo", "duration_s": 0.08},
+    }
     assert report["summary"]["smoked_skipped_georeference_sources"] == {}
     assert report["summary"]["evaluated_georeference_sources"] == {"catalog-shape-match": 1}
     assert report["summary"]["active_ocr_label_event_counts"] == {

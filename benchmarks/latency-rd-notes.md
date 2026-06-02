@@ -12008,3 +12008,13 @@ with zero failures in 0.531s.
   `{"Full-detail map labels read": 1, "Map labels read": 1}`,
   `active_ocr_full_detail_retry_count=1`, and
   `active_ocr_full_detail_retry_rows=["phoenix-waymo"]`.
+- Accepted fixture-benchmark stage max-row reporting so broad full-benchmark
+  summaries identify the row responsible for each stage tail, matching the
+  stress harness' `stage_max_rows` diagnostic. This is useful for speed R&D
+  because stage totals alone show OCR or extraction drift but not which
+  screenshot to profile next. Focused benchmark tests passed (`68 passed`),
+  and the real Phoenix smoke
+  `out/benchmark-stage-max-smoke-20260602/full-report.json` passed `1/1` with
+  `active_stage_max_rows` and `evaluated_stage_max_rows` attributing inspect,
+  extract, OCR, georeference, and export tails to `phoenix-waymo`; the same
+  summary still surfaced `active_ocr_full_detail_retry_rows=["phoenix-waymo"]`.
