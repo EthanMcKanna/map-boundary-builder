@@ -646,6 +646,11 @@ def build_boundary(
         width=width,
         height=height,
     )
+    defer_full_ocr_for_svg_provider_match = (
+        svg_service_path_extraction is not None
+        and city_input is None
+        and allow_catalog
+    )
 
     labels_future: Future[list[Any]] | None = None
     labels: list[Any] | None = None
@@ -715,10 +720,13 @@ def build_boundary(
                 low_res_catalog_rgb = False
 
         early_ocr_style: str | None = None
-        if should_overlap_ocr_with_extraction(
-            city_input=city_input,
-            allow_catalog=allow_catalog,
-            filename_hint=filename_hint,
+        if (
+            not defer_full_ocr_for_svg_provider_match
+            and should_overlap_ocr_with_extraction(
+                city_input=city_input,
+                allow_catalog=allow_catalog,
+                filename_hint=filename_hint,
+            )
         ):
             early_ocr_style = classify_style_for_ocr(rgb)
             if not should_defer_pre_extraction_ocr_for_focus(
@@ -789,11 +797,15 @@ def build_boundary(
                     **ocr_kwargs,
                 )
                 ensure_georeference_resource_preload()
-        if labels_future is None and should_overlap_probe_miss_ocr(
-            skip_redundant_probe=skip_redundant_probe,
-            city_input=city_input,
-            filename_hint=filename_hint,
-            catalog_probe_miss_low_iou=catalog_probe_miss_low_iou_enabled(opts),
+        if (
+            labels_future is None
+            and not defer_full_ocr_for_svg_provider_match
+            and should_overlap_probe_miss_ocr(
+                skip_redundant_probe=skip_redundant_probe,
+                city_input=city_input,
+                filename_hint=filename_hint,
+                catalog_probe_miss_low_iou=catalog_probe_miss_low_iou_enabled(opts),
+            )
         ):
             if early_ocr_style is None:
                 early_ocr_style = classify_style_for_ocr(rgb)
@@ -887,10 +899,11 @@ def build_boundary(
         )
 
         catalog_style_can_match = catalog_style_supported(extraction.style)
-        provider_ui_fast_ocr_max_dimension = provider_ui_fast_ocr_max_dimension_for_style(
+        provider_ui_fast_ocr_max_dimension = provider_ui_fast_ocr_max_dimension_for_context(
             extraction.style,
             width=width,
             height=height,
+            svg_service_path_candidate=defer_full_ocr_for_svg_provider_match,
         )
         if allow_pre_ocr_catalog and catalog_style_can_match:
             catalog_match, catalog_match_source = hinted_catalog_shape_match(
@@ -1130,6 +1143,7 @@ def build_boundary(
                         rgb,
                         extraction=extraction,
                         rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                        source_is_svg=source_is_svg,
                     )
                 elif provider_ui_crop_after_refine:
                     pass
@@ -1362,6 +1376,7 @@ def build_boundary(
                     extraction=extraction,
                     rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
                     focus=True,
+                    source_is_svg=source_is_svg,
                 )
                 provider_ui_match = provider_ui_label_catalog_match(extraction, provider_ui_labels)
                 emit_progress(
@@ -1409,6 +1424,7 @@ def build_boundary(
                     rgb,
                     extraction=extraction,
                     rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+                    source_is_svg=source_is_svg,
                 )
             else:
                 provider_ui_labels = provider_ui_labels_future.result()
@@ -2086,6 +2102,7 @@ def extract_provider_ui_labels_from_rgb(
     extraction,
     rapidocr_max_dimension: int | None,
     focus: bool = False,
+    source_is_svg: bool = False,
 ) -> list[Any]:
     if focus:
         crop, offset_x, offset_y = provider_ui_focus_ocr_crop(rgb, extraction.pixel_geometry.bounds)
@@ -2099,6 +2116,22 @@ def extract_provider_ui_labels_from_rgb(
         "rapidocr_max_dimension": crop_max_dimension,
         "cache": runner_ocr_cache_enabled(),
     }
+    if source_is_svg and extraction.style == "bright-blue":
+        rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(extraction.style, source_is_svg=True)
+        if rapidocr_detector_limit is not None:
+            ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+        rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+            extraction.style,
+            source_is_svg=True,
+        )
+        if rapidocr_detector_limit_type is not None:
+            ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+        rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(extraction.style)
+        if rapidocr_recognition_profile is not None:
+            ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+        rapidocr_min_text_area = fast_text_ocr_min_area_for_style(extraction.style, source_is_svg=True)
+        if rapidocr_min_text_area is not None:
+            ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, extraction.style)
     labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
@@ -2630,6 +2663,31 @@ def provider_ui_fast_ocr_max_dimension_for_style(style: str, *, width: int, heig
     if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
         return None
     if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+        return None
+    return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+
+
+def provider_ui_fast_ocr_max_dimension_for_context(
+    style: str,
+    *,
+    width: int,
+    height: int,
+    svg_service_path_candidate: bool = False,
+) -> int | None:
+    max_dimension = provider_ui_fast_ocr_max_dimension_for_style(
+        style,
+        width=width,
+        height=height,
+    )
+    if max_dimension is not None:
+        return max_dimension
+    if not svg_service_path_candidate or style != "bright-blue":
+        return None
+    if unique_catalog_provider_for_style(style) != "waymo":
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0:
         return None
     return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
 

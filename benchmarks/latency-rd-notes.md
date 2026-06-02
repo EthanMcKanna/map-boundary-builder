@@ -15148,3 +15148,35 @@ with zero failures in 0.531s.
   `catalog_shape_iou=0.974266`, Houston `0.071137s` with
   `catalog_shape_iou=0.98105`, and Nashville `0.071310s` with
   `catalog_shape_iou=0.983962`.
+- Cropped SVG catalog-miss OCR to the provider-area path instead of starting
+  generic full-frame OCR for that one branch. The guard is intentionally narrow:
+  it only applies when a single SVG service-area path candidate exists, no city
+  was supplied, catalog matching is allowed, and the extracted style is
+  `bright-blue` with a unique Waymo provider mapping. The earlier prototype
+  proved that generic OCR still woke up unless the SVG path candidate explicitly
+  deferred both early OCR launch sites. The shipped version then lets the
+  provider-area label crop run with SVG bright-blue OCR knobs
+  (`detector_limit=208`, `detector_limit_type=max`, `recognition_profile=en-ppocrv5`,
+  `min_text_area=300`) and leaves the broader full-map OCR path unchanged.
+  A real no-cache smoke on `/Users/ethanmckanna/Downloads/mi.svg` as generic
+  `upload.png` wrote `out/svg-mi-provider-crop-verified-20260602.geojson`,
+  completed via `catalog-shape-match:provider-ui-label`, preserved
+  `catalog_slug=miami-waymo`, `catalog_shape_iou=0.611715`,
+  `catalog_area_ratio=0.731256`, and `bbox=[-80.3461737,25.6799742,-80.1149101,25.976257]`.
+  Its total was `1.485954s`, with `0.841987s` inspect/rasterization,
+  `0.068469s` extraction, `0.534237s` OCR, one cropped OCR call, nine useful
+  labels, and provider-label events instead of `Reading map labels on server`.
+  This is still not subsecond on the cold Miami SVG miss; the evidence points
+  to full SVG rasterization plus cropped OCR overhead as the remaining cost.
+  The lower `1000px` SVG cap and the lower Tesseract fallback threshold remain
+  non-shipped because they were either noisy or too global for the validation
+  gathered so far. Validation passed focused runner coverage
+  (`16 passed, 79 deselected`), the broader runner/image/stress unit slice
+  (`183 passed`), full `pytest -q` (`606 passed, 30 subtests passed`), the
+  strict SVG stress slice at
+  `out/svg-provider-crop-fast-fixtures-20260602/stress-summary.json`
+  (`3/3` expected, max `0.096334s`, zero OCR calls), and the full hard gate at
+  `out/svg-provider-crop-full29-hard-20260602/stress-summary.json`: `29/29`
+  expected, statuses `{"complete":18,"failed":11}`, primary max `0.755536s`,
+  repeat `58/58` subsecond, repeat p95 `0.530s`, repeat max `0.618s`, and OCR
+  calls unchanged at `26`.

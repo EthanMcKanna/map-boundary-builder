@@ -256,6 +256,31 @@ def test_provider_ui_fast_ocr_allows_gray_fill_non_tall_screens() -> None:
     assert runner.provider_ui_fast_ocr_max_dimension_for_style("dark-teal", width=1200, height=1014) is None
 
 
+def test_provider_ui_fast_ocr_context_allows_svg_bright_blue_provider_crop(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "PROVIDER_UI_RAPIDOCR_MAX_DIMENSION", 900)
+    monkeypatch.setattr(runner, "RAPIDOCR_MAX_DIMENSION", 1600)
+
+    assert (
+        runner.provider_ui_fast_ocr_max_dimension_for_context(
+            "bright-blue",
+            width=3840,
+            height=2055,
+            svg_service_path_candidate=True,
+        )
+        == 900
+    )
+    assert (
+        runner.provider_ui_fast_ocr_max_dimension_for_context(
+            "bright-blue",
+            width=3840,
+            height=2055,
+            svg_service_path_candidate=False,
+        )
+        is None
+    )
+    assert runner.provider_ui_fast_ocr_max_dimension_for_context("gray-fill", width=1200, height=1014) == 900
+
+
 def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark_teal() -> None:
     assert runner.rapidocr_max_dimension_for_ocr_style("bright-blue", width=2400, height=2400) == 1400
     assert (
@@ -1300,6 +1325,46 @@ def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None
     assert runner.rapidocr_detector_limit_type_for_ocr_style(None) is None
 
 
+def test_svg_bright_blue_provider_ui_ocr_uses_svg_specific_kwargs(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(runner, "PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 900)
+    monkeypatch.setattr(runner, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208)
+    monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max")
+    monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5")
+    monkeypatch.setattr(runner, "SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA", 300.0)
+    rgb = np.zeros((1000, 500, 3), dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.zeros((1000, 500), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(100, 200), (400, 200), (400, 600), (100, 600), (100, 200)]),
+        coverage_ratio=0.24,
+        contour_count=1,
+        confidence=1.0,
+    )
+    calls: list[dict] = []
+
+    def fake_extract_ocr_labels_from_rgb(path, crop, **kwargs):
+        calls.append({"path": path, "shape": crop.shape, "kwargs": kwargs})
+        return [OcrLabel("Miami", x=1, y=2, width=30, height=10, confidence=99)]
+
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+
+    labels = runner.extract_provider_ui_labels_from_rgb(
+        tmp_path / "map.svg",
+        rgb,
+        extraction=extraction,
+        rapidocr_max_dimension=1200,
+        source_is_svg=True,
+    )
+
+    assert calls[0]["kwargs"]["rapidocr_max_dimension"] == 900
+    assert calls[0]["kwargs"]["rapidocr_detector_limit_side_len"] == 208
+    assert calls[0]["kwargs"]["rapidocr_detector_limit_type"] == "max"
+    assert calls[0]["kwargs"]["rapidocr_recognition_profile"] == "en-ppocrv5"
+    assert calls[0]["kwargs"]["rapidocr_min_text_area"] == 300.0
+    assert labels[0].x == 21.0
+    assert labels[0].y == 102.0
+
+
 def test_svg_catalog_service_path_document_extracts_single_blue_class_path() -> None:
     svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
 <defs><style>.st1{fill:#fff}.st2{fill:#07f}</style></defs>
@@ -1418,6 +1483,8 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
         confidence=1.0,
     )
     extract_calls: list[Path] = []
+    generic_ocr_calls: list[dict] = []
+    provider_ocr_calls: list[dict] = []
     events: list[dict] = []
     full_raster_path = tmp_path / "unknown.raster.png"
     fake_match = SimpleNamespace(iou=0.61, entry=SimpleNamespace(slug="miami-waymo"))
@@ -1446,20 +1513,26 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
             output_path=output_path,
         )
 
+    def fake_extract_ocr_labels_from_rgb(*args, **kwargs):
+        generic_ocr_calls.append({"args": args, "kwargs": kwargs})
+        return []
+
+    def fake_extract_provider_ui_labels_from_rgb(*args, **kwargs):
+        provider_ocr_calls.append({"args": args, "kwargs": kwargs})
+        return [OcrLabel("Miami", x=10, y=10, width=60, height=18, confidence=99)]
+
     monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
     monkeypatch.setattr(runner, "normalize_image_for_processing", fake_normalize_image_for_processing)
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
     monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "filename_hinted_current_catalog_near_hit_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "filename_hinted_avride_light_fill_catalog_match", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runner, "should_overlap_ocr_with_extraction", lambda **_kwargs: False)
-    monkeypatch.setattr(runner, "should_overlap_probe_miss_ocr", lambda **_kwargs: False)
-    monkeypatch.setattr(runner, "provider_ui_fast_ocr_max_dimension_for_style", lambda *_args, **_kwargs: 900)
     monkeypatch.setattr(runner, "provider_ui_focus_crop_enabled", lambda _extraction: False)
-    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", fake_extract_provider_ui_labels_from_rgb)
     monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
     monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
 
@@ -1475,7 +1548,12 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
     assert result.summary["georeference_source"] == "catalog-shape-match:provider-ui-label"
     assert len(extract_calls) == 1
     assert extract_calls[0].name.endswith(".catalog-path.png")
+    assert generic_ocr_calls == []
+    assert len(provider_ocr_calls) == 1
+    assert provider_ocr_calls[0]["kwargs"]["source_is_svg"] is True
+    assert provider_ocr_calls[0]["kwargs"]["rapidocr_max_dimension"] == runner.PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
     assert any(event["message"] == "Using SVG service-area path" for event in events)
+    assert any(event["message"] == "Reading provider area labels" for event in events)
 
 
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
