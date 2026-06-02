@@ -14873,3 +14873,24 @@ with zero failures in 0.531s.
   tests/test_web_handler.py tests/test_pipeline_version.py -q` (`12 passed`),
   compileall over `map_boundary_builder`, `api`, and `tests`, and
   `git diff --check`.
+  Production deploy proof: commit `a7a07d3` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_CPrjtoJCkKNDVszUSysotixcSVxZ`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-22d1d43e559590a2`,
+  `gray_fill_route_ui_ocr_max_dimension=1000`,
+  `light_fill_route_ui_ocr_max_dimension=1000`, and warm status `ok`. A
+  profiled live upload of the profile UI screenshot with `no_catalog=1`,
+  `include_overlay=0`, and `normalized_cache_lookup=0` returned HTTP `422`,
+  exact `non-map app UI`, one OCR call, `44` event labels,
+  categories `followers`/`following`/`media`,
+  `build_stage_elapsed_s.georeference=0.000028`, and
+  `cache_hit=miss`. A one-pixel mutated unprofiled cache-miss upload of the
+  same screenshot returned HTTP `422`, exact `non-map app UI`,
+  `build_boundary_s=0.196743`, `build_stage_elapsed_s.ocr=0.050316`,
+  `build_stage_elapsed_s.georeference=0.000012`, and the same UI evidence. A
+  cache-busted warmed Dallas no-catalog positive smoke with
+  `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg` returned HTTP `201`, city
+  `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
+  bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`,
+  `cache_hit=miss`, and `build_boundary_s=1.358150`.
