@@ -11339,3 +11339,19 @@ with zero failures in 0.531s.
   `0.733175s` OCR, both with identical IoU. The catalog gate also passed 15/15
   with unchanged avg/min IoU `0.996223`/`0.943345`, total `1.055138s`, and max
   `0.118112s` (`out/recbatch12-default-catalog-20260601/full-report.json`).
+- Deployed the recognition-batch default change to production as
+  `dpl_HcSkJuEwj5Bpe2oA1EuihTLaEpPg`, aliased to `https://mapboundary.app`.
+  Production `/api/health` reports pipeline `pipeline-c803a2a2103076b6`,
+  `rapidocr_rec_batch_num: 12`, bright-blue detector cap `256`, and warm engine
+  keys `[[608, default, default], [256, en-ppocrv5, max]]`
+  (`out/prod-recbatch12-health-20260601.json`). `/api/health?warm=ocr`
+  returned `ok` with `rapidocr_inference_warmed: true`, `rapidocr_s=1.426586s`,
+  and total warm time `1.876663s`
+  (`out/prod-recbatch12-health-warm-20260601.json`). A fresh no-catalog Dallas
+  upload with a neutral filename was a cache miss, returned the same stable
+  6-control Dallas fit (`confidence=0.946`, median/p90 residual
+  `271.0m`/`465.1m`, bbox
+  `[-96.8748943,32.7334002,-96.729715,32.86549]`), and improved the previous
+  production Dallas smoke from `3.041293s` before send / `1.915033s` OCR to
+  `2.029828s` before send / `1.352873s` OCR
+  (`out/prod-recbatch12-dallas-upload-20260601.json`).
