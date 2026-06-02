@@ -44,6 +44,7 @@
       "expect": {
         "status": "failed",
         "error_contains": "sparse OCR labels",
+        "min_ocr_labels": 3,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -55,6 +56,7 @@
       "expect": {
         "status": "failed",
         "error_contains": "sparse OCR labels",
+        "min_ocr_labels": 12,
         "max_total_elapsed_s": 1.0
       }
     },

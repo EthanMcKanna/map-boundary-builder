@@ -14007,3 +14007,29 @@ with zero failures in 0.531s.
   `[[608,"default","default",12,608],[608,"default","default",16,608],
   [256,"en-ppocrv5","max",12,1400]]`, making future prewarm regressions easier
   to reproduce from a saved report.
+- Hardened the real-screenshot negative controls so expected fail-closed rows
+  can also enforce `min_ocr_labels`. The two Zoox Las Vegas mobile screenshots
+  should continue refusing under `--no-catalog`, but a future OCR regression
+  should no longer be able to pass simply by finding almost no readable map
+  context. The manifest now requires at least `3` labels on
+  `zoox-las-vegas-mobile` and `12` labels on `zoox-las-vegas-mobile-tall`.
+  Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py`
+  (`54` tests) and `jq empty benchmarks/real-screenshot-stress.json`.
+  The full current real-screenshot hard gate
+  `out/real-screenshot-fail-ocr-floor-full16-20260602/stress-summary.json`
+  passed with in-process production prewarm, OCR/extraction caches disabled,
+  primary and repeat OCR budgets enabled, and signature drift checks:
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `32/32` analyzed repeat expectations, stable signatures, primary max
+  `0.683746s`, primary OCR engine max `0.544s`, repeat p95 `0.525s`, repeat
+  OCR total p95 `0.448s`, and repeat selected-box p95 `27.2`. The short Zoox
+  failure retained `3` OCR labels (`Paradise`, `Las Vegas Paradise`,
+  `Las Vegas`) in `0.165s`; the tall Zoox failure retained `14` OCR labels
+  (`Las Vegas`, `Paradise`, `Spring Mountain Rd`, `Cameron St`, etc.) in
+  `0.329s`. A road-label rescue probe remains rejected: even when
+  `Spring Mountain Rd` was temporarily allowed through the road-token
+  normalized path and live/cached Las Vegas road responses were available, the
+  existing similarity fit still could not produce an acceptable georeference,
+  so preserving the explicit fail-closed behavior is safer than enabling the
+  previously rejected road-network fallback.

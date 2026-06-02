@@ -1021,6 +1021,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         error = row.get("error") or ""
         if isinstance(expected_error, str) and expected_error not in error:
             issues.append(f"error did not contain {expected_error!r}")
+        append_min_ocr_labels_expectation_issue(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
         return issues
 
@@ -1042,11 +1043,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         if not isinstance(control_points, int) or control_points < min_control_points:
             issues.append(f"control_points {control_points!r} below {min_control_points}")
 
-    min_ocr_labels = expect.get("min_ocr_labels")
-    if isinstance(min_ocr_labels, int):
-        ocr_label_count = row.get("ocr_label_count")
-        if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
-            issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
+    append_min_ocr_labels_expectation_issue(row, expect, issues)
 
     append_min_confidence_expectation_issue(
         row,
@@ -1074,6 +1071,14 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         elif bbox_error_m > float(max_bbox_error_m):
             issues.append(f"bbox max corner error {bbox_error_m:.1f}m above {float(max_bbox_error_m):g}m")
     return issues
+
+
+def append_min_ocr_labels_expectation_issue(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
+    min_ocr_labels = expect.get("min_ocr_labels")
+    if isinstance(min_ocr_labels, int):
+        ocr_label_count = row.get("ocr_label_count")
+        if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
+            issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
 
 
 def append_total_elapsed_expectation_issue(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:

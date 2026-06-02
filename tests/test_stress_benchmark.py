@@ -475,6 +475,23 @@ def test_check_expectations_rejects_slow_expected_failure() -> None:
     assert issues == ["total_elapsed_s 1.2 above 1.0"]
 
 
+def test_check_expectations_can_guard_ocr_labels_on_expected_failure() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a reliable map location from sparse OCR labels.",
+            "ocr_label_count": 2,
+        },
+        {
+            "status": "failed",
+            "error_contains": "sparse OCR labels",
+            "min_ocr_labels": 3,
+        },
+    )
+
+    assert issues == ["ocr_label_count 2 below 3"]
+
+
 def test_check_expectations_rejects_slow_complete() -> None:
     issues = stress_module.check_expectations(
         {
