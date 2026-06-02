@@ -1526,6 +1526,7 @@ def extract_focus_georef_labels_from_rgb(
     focus_min_text_area = focus_georef_ocr_min_text_area_for_style(extraction.style)
     if focus_min_text_area is not None:
         ocr_kwargs["rapidocr_min_text_area"] = focus_min_text_area
+    ocr_kwargs["allow_tesseract_fallback"] = False
     labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
         return labels

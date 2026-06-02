@@ -12078,3 +12078,29 @@ with zero failures in 0.531s.
   from other high-coverage Waymo maps (`phoenix-waymo` `0.237119`, Orlando
   `0.238254`, San Antonio `0.262704`, Houston `0.273855`, Miami `0.264005`),
   so it would likely repeat the earlier Phoenix label-retention failure.
+- Accepted a narrow focused-georef OCR guard that disables Tesseract fallback
+  only for the focused crop path. The rationale is robustness more than broad
+  current-runtime speed: focused georef is supposed to gather a small set of map
+  labels, and a low-label crop can become worse when Tesseract expands two
+  RapidOCR labels into many noisy merged strings. A direct five-crop probe kept
+  Ann Arbor, Grand Rapids, Zoox tall, and Zoox SF label texts stable, while the
+  `zoox-las-vegas-mobile` focused crop changed from `97` useful postprocessed
+  labels with fallback to `3` concise RapidOCR-derived labels with fallback
+  disabled (`Paradise`, `Las Vegas Paradise`, `Las Vegas`), and elapsed time in
+  that paired run dropped from `9.680256s` to `1.375991s`. The actual current
+  stress runtime still keeps Zoox portrait cases on their provider-UI/full-frame
+  fail-closed path, so this does not re-enable the rejected focused-georef
+  runtime lane. Focused tests passed (`80` OCR grouping tests and `73` runner
+  summary tests), and the real-screenshot stress gate
+  `out/focus-no-tesseract-full-stress-20260602/stress-summary.json` passed
+  `12/12` expectations with statuses `{"complete": 10, "failed": 2}`, one
+  focused-label event, zero full-detail OCR retries, and sources
+  `{"ocr-georeference:nominatim-label-fit": 10}`. The strict no-catalog
+  fixture gate `out/focus-no-tesseract-nocatalog-20260602/full-report.json`
+  passed `8/8` scored fixtures with seven `reference_mismatch` skips, zero
+  regression issues against
+  `out/current-benchmark-stage-tail-cli-clean-20260602/full-report.json`, exact
+  top-label retention, no OCR label-count drop, and only the allowed active OCR
+  georeference sources. Absolute stress and fixture timings in these runs were
+  cold/noisy (`ocr=97.333876s` total in stress, max total `17.616529s`; active
+  fixture total `32.90s`), so do not treat them as a new latency baseline.

@@ -1522,6 +1522,36 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(rapidocr.call_count, 1)
         self.assertIn("Bay Area CA", {label.text for label in labels})
 
+    def test_extract_ocr_labels_can_disable_tesseract_fallback(self) -> None:
+        rapid_label = OcrLabel("Bay Area CA", x=10, y=10, width=80, height=20, confidence=96)
+        prepared_bgr = np.zeros((100, 120, 3), dtype=np.uint8)
+
+        with (
+            patch.object(
+                ocr_module,
+                "tesseract_available",
+                side_effect=AssertionError("disabled Tesseract fallback should not be probed"),
+            ),
+            patch.object(ocr_module, "TESSERACT_FALLBACK_MIN_USEFUL_LABELS", 3),
+            patch.object(ocr_module, "run_rapidocr_words", return_value=[rapid_label]) as rapidocr,
+            patch.object(ocr_module, "run_tesseract_array") as tesseract_array,
+            patch.object(ocr_module, "run_tesseract_words") as tesseract_words,
+            patch.object(ocr_module, "run_preprocessed_tesseract_bgr") as preprocessed_bgr,
+            patch.object(ocr_module, "run_preprocessed_tesseract_words") as preprocessed_words,
+        ):
+            labels = extract_ocr_labels(
+                "unused.png",
+                prepared_bgr=prepared_bgr,
+                allow_tesseract_fallback=False,
+            )
+
+        self.assertEqual(rapidocr.call_count, 1)
+        tesseract_array.assert_not_called()
+        tesseract_words.assert_not_called()
+        preprocessed_bgr.assert_not_called()
+        preprocessed_words.assert_not_called()
+        self.assertIn("Bay Area CA", {label.text for label in labels})
+
     def test_extract_ocr_labels_preserves_high_confidence_rapidocr_after_noisy_tesseract(self) -> None:
         rapid_label = OcrLabel("Nashville", x=250, y=99, width=37, height=10, confidence=98)
         noisy_tesseract_labels = [

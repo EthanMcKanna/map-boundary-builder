@@ -329,6 +329,7 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
     assert captured == {
         "shape": (580, 255),
         "kwargs": {
+            "allow_tesseract_fallback": False,
             "cache": True,
             "rapidocr_detector_limit_side_len": 416,
             "rapidocr_max_dimension": 550,

@@ -222,12 +222,15 @@ def extract_ocr_labels(
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
     rapidocr_min_text_area: float | None = None,
+    allow_tesseract_fallback: bool = True,
     cache: bool = True,
 ) -> list[OcrLabel]:
     use_tesseract: bool | None = None
 
     def tesseract_is_available() -> bool:
         nonlocal use_tesseract
+        if not allow_tesseract_fallback:
+            return False
         if use_tesseract is None:
             use_tesseract = tesseract_available()
         return use_tesseract
@@ -456,6 +459,7 @@ def extract_ocr_labels_from_rgb(
     rapidocr_detector_limit_type: str | None = None,
     rapidocr_recognition_profile: str | None = None,
     rapidocr_min_text_area: float | None = None,
+    allow_tesseract_fallback: bool = True,
     cache: bool = True,
 ) -> list[OcrLabel]:
     return extract_ocr_labels(
@@ -466,6 +470,7 @@ def extract_ocr_labels_from_rgb(
         rapidocr_detector_limit_type=rapidocr_detector_limit_type,
         rapidocr_recognition_profile=rapidocr_recognition_profile,
         rapidocr_min_text_area=rapidocr_min_text_area,
+        allow_tesseract_fallback=allow_tesseract_fallback,
         cache=cache,
     )
 
