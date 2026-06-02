@@ -14276,3 +14276,35 @@ with zero failures in 0.531s.
   the same 242 KB PNG after OCR cache warmup completed before send in `0.145s`;
   treat production smoke as deployment/reliability proof and the local
   cache-disabled prewarm repeats as the speed proof.
+- Accepted an Austin OSM road-point seed after isolating the remaining cold
+  auto-city tail on the browser-rasterized Austin SVG path. A fresh local
+  source-hint run with OCR/extraction caches disabled spent `7.775s` in
+  georeference and completed in `8.358s`; wrapping geocoder calls showed `60`
+  cached-only label lookups totaling about `0.002s`, so live Nominatim was not
+  the slow segment. Road-place instrumentation then attributed `7.098s` to OSM
+  road refinement, and inner instrumentation showed `5.682s` in the cold
+  Overpass road load and only `0.243s` in the transform search. A latency-only
+  shortcut that skipped high-support road refinement was rejected despite a
+  `0.585s` total because confidence dropped from `0.93` to `0.865` and geometry
+  moved materially (`IoU=0.908`, `area_ratio=0.925`) against the road-refined
+  baseline. The accepted patch adds seed key `676b0b212cb9b4db477d531e` for the
+  Austin bbox `(-97.9367663, 30.0985133, -97.5605288, 30.5166255)`, with
+  `41335` float32 road points; the bundled seed archive grows from `240,964`
+  to `449,300` bytes. A cold, network-blocked source-hint probe in
+  `out/austin-road-seed-cold-probe-20260602` used `MAP_BOUNDARY_BLOCK_NETWORK=1`
+  and no OCR/extraction caches, made no Overpass calls, stayed on
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, and completed in
+  `0.909s` with georeference `0.335s`, road refinement `0.291s`, `14` controls,
+  confidence `0.93`, and exact geometry parity with the prior road-refined
+  output (`IoU=1.0`, `area_ratio=1.0`). The hard full16 gate
+  `out/austin-road-seed-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`, `32/32`
+  analyzed repeats, all repeats subsecond, primary max `0.645s`, repeat p95
+  `0.576s`, repeat max `0.634s`, OCR repeat-total p95 `0.502s`, and zero labels
+  below 70/80. Comparing the gate to
+  `out/svg-sourcehint-full16-hard-actual-20260602/stress-summary.json` found no
+  output changes across status, geometry hash, coordinate count, bbox, controls,
+  confidence, or source, while lowering primary max from `0.751s` to `0.645s`.
+  Focused validation passed `tests/test_osm_roads.py tests/test_runtime_warmup.py`
+  (`22` tests), the full suite passed `584` tests plus `30` subtests, and
+  `compileall`, `node --check`, and `git diff --check` were clean.

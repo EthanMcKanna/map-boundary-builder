@@ -631,8 +631,10 @@ class RoadScoringTests(unittest.TestCase):
         self.assertIn("4d5722451b742341f86a6928", seed)
         self.assertIn("c7c13d1754292efb8db6bb0f", seed)
         self.assertIn("93e43ee6c074669e9df90297", seed)
+        self.assertIn("676b0b212cb9b4db477d531e", seed)
         self.assertGreater(len(seed_road_points("4d5722451b742341f86a6928")), 5000)
         self.assertGreater(len(seed_road_points("93e43ee6c074669e9df90297")), 5000)
+        self.assertGreater(len(seed_road_points("676b0b212cb9b4db477d531e")), 5000)
         self.assertEqual(seed_road_points("missing-road-seed"), None)
 
     def test_block_network_env_returns_empty_uncached_overpass_miss_without_urlopen(self) -> None:
