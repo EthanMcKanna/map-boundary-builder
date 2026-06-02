@@ -1348,6 +1348,75 @@ def test_latency_budget_flags_repeat_ocr_engine_count_p95_excess() -> None:
     ]
 
 
+def test_latency_budget_skips_primary_ocr_engine_budgets_for_zero_call_profiles() -> None:
+    report = stress_module.build_latency_budget_summary(
+        rows=[
+            {
+                "slug": "pure-catalog",
+                "observed_status": "complete",
+                "source": "catalog-shape-match",
+                "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+            },
+            {
+                "slug": "missing-profile",
+                "observed_status": "complete",
+                "source": "ocr-georeference:nominatim-label-fit",
+            },
+            {
+                "slug": "slow-profile",
+                "observed_status": "complete",
+                "source": "ocr-georeference:nominatim-label-fit",
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.95,
+                    "selected_box_count": 31,
+                },
+            },
+        ],
+        repeat_profile=None,
+        max_ocr_engine_duration_s={"total_s": 0.9},
+        max_ocr_engine_count={"selected_box_count": 30},
+    )
+
+    assert report["passed"] is False
+    assert report["ocr_engine_violations"] == [
+        {
+            "kind": "ocr_engine_duration_missing",
+            "slug": "missing-profile",
+            "metric": "total_s",
+            "observed_status": "complete",
+            "max_ocr_engine_duration_s": 0.9,
+        },
+        {
+            "kind": "ocr_engine_duration_budget_exceeded",
+            "slug": "slow-profile",
+            "metric": "total_s",
+            "observed_status": "complete",
+            "duration_s": 0.95,
+            "max_ocr_engine_duration_s": 0.9,
+            "excess_s": 0.05,
+        },
+    ]
+    assert report["ocr_engine_count_violations"] == [
+        {
+            "kind": "ocr_engine_count_missing",
+            "slug": "missing-profile",
+            "metric": "selected_box_count",
+            "observed_status": "complete",
+            "max_ocr_engine_count": 30.0,
+        },
+        {
+            "kind": "ocr_engine_count_budget_exceeded",
+            "slug": "slow-profile",
+            "metric": "selected_box_count",
+            "observed_status": "complete",
+            "count": 31.0,
+            "max_ocr_engine_count": 30.0,
+            "excess_count": 1.0,
+        },
+    ]
+
+
 def test_repeat_profile_flags_output_signature_drift() -> None:
     samples = [
         {

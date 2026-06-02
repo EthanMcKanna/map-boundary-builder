@@ -2037,6 +2037,8 @@ def ocr_engine_duration_budget_violations(
         for metric, budget in sorted(budgets.items()):
             duration_s = row_ocr_engine_metric(row, metric)
             if duration_s is None:
+                if row_has_no_ocr_engine_calls(row):
+                    continue
                 violations.append(
                     ocr_engine_budget_missing_violation(
                         row,
@@ -2073,6 +2075,8 @@ def ocr_engine_count_budget_violations(
         for metric, budget in sorted(budgets.items()):
             count = row_ocr_engine_metric(row, metric)
             if count is None:
+                if row_has_no_ocr_engine_calls(row):
+                    continue
                 violations.append(
                     ocr_engine_budget_missing_violation(
                         row,
@@ -2111,6 +2115,14 @@ def row_ocr_engine_metric(row: dict[str, Any], metric: str) -> float | None:
     if detail_profile is None:
         return None
     return parse_nonnegative_float(detail_profile.get(metric))
+
+
+def row_has_no_ocr_engine_calls(row: dict[str, Any]) -> bool:
+    profile = row.get("ocr_engine_profile")
+    if not isinstance(profile, dict):
+        return False
+    calls = parse_nonnegative_float(profile.get("calls"))
+    return calls == 0.0
 
 
 def ocr_engine_budget_missing_violation(

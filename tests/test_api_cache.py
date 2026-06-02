@@ -1402,7 +1402,7 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)
         self.assertFalse(cold["ocr"]["onnxruntime_enable_cpu_mem_arena"])
-        self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])
+        self.assertFalse(cold["ocr"]["onnxruntime_allow_spinning"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_styles"], ["bright-blue", "gray-fill", "light-fill"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_min_area"], 1500.0)
         self.assertEqual(cold["ocr"]["bright_blue_fast_text_ocr_min_area"], 2300.0)

@@ -15549,3 +15549,70 @@ with zero failures in 0.531s.
   confidence, control count, OCR label count, or top labels. The full Python
   suite also passed: `612 passed, 31 subtests passed in 7.88s`, plus
   `compileall` and `git diff --check`.
+- Production Phoenix smoke after the broad-fit road skip confirmed the next
+  bottleneck is RapidOCR, not georeference. A profiled no-catalog Phoenix upload
+  completed with `build_boundary_s=2.447493`, OCR `1.850243s`, georeference
+  `0.032934s`, and no accepted road match; a cache-busted non-profiled Phoenix
+  upload completed with `build_boundary_s=2.078978`, OCR `1.718030s`,
+  georeference `0.031398s`, extraction `0.327460s`, and export `0.001445s`.
+  The production warm endpoint also still paid a large RapidOCR warm cost
+  (`rapidocr_s=4.367642`, total `4.745781`), so the next speed work should
+  keep targeting OCR/runtime behavior.
+- Rejected another batch of broad bright-blue OCR work-reduction knobs after
+  the Phoenix road skip. Lowering the non-SVG bright-blue OCR max dimension to
+  `1200px` passed only `6/9` focused Waymo rows at
+  `out/ocr-brightblue-1200-focused-20260602/stress-summary.json`: Los Angeles,
+  Houston, and Nashville violated expectations despite repeat p95 `0.496s`.
+  The `1300px` cap also passed only `6/9` at
+  `out/ocr-brightblue-1300-focused-20260602/stress-summary.json`: Bay Area,
+  Nashville, and Miami violated expectations, with Miami triggering the
+  full-detail retry tail and primary max `1.364628s`. A stronger bright-blue
+  focus-crop monkeypatch preserved all `9/9` expectations but did not improve
+  speed (`out/ocr-brightblue-focuscrop-real-probe-20260602/stress-summary.json`
+  repeat p95 `0.557s`), and measured focus crop areas were mostly too large
+  for the existing focused OCR lane. Disabling road-feature precompute also
+  preserved `9/9` expectations but raised primary max to `0.817838s` at
+  `out/road-feature-precompute-off-waymo-focused-20260602/stress-summary.json`,
+  so keep speculative precompute enabled.
+- Rejected explicit RapidOCR ONNX thread caps on the current Waymo OCR slice.
+  `intra=1,inter=1` passed only `4/9` rows and pushed repeat p95 to `1.379s`
+  at `out/ocr-threadcap-1x1-waymo-focused-20260602/stress-summary.json`;
+  `2x1` passed but slowed repeat p95 to `0.754s`, and `4x1` passed but still
+  slowed repeat p95 to `0.565s`. A smaller bright-blue warm sample at `1200px`
+  reduced focused prewarm from the baseline `1.556s` to `1.103s`, but its
+  generation repeat p95 worsened from `0.530s` to `0.541s`, so do not ship it
+  as a generation-speed default without a production-warm-specific gate.
+- Accepted primary OCR-engine budget handling for zero-call profile rows in the
+  stress CLI. The first full no-spinning hard gate exposed a false budget
+  failure: pure SVG catalog rows (`source=catalog-shape-match`) correctly
+  reported `ocr_engine_profile.calls=0`, but the primary
+  `--max-ocr-engine-duration-s total_s=0.9` check treated the missing
+  `total_s` as a violation. The stress benchmark now skips primary OCR-engine
+  duration/count budget checks only when the row explicitly has zero OCR engine
+  calls; rows with missing profiles still fail. Focused unit coverage passed
+  `23` runtime/profile tests, and the patched no-spin full gate at
+  `out/ocr-onnx-nospin-full36-hard-patched-20260602/stress-summary.json` passed
+  `36/36`, primary max `0.734878s`, repeat p95 `0.517s`, repeat OCR-engine p95
+  `0.461s`, prewarm `1.464s`, and the primary OCR-engine budget.
+- Accepted disabling ONNX Runtime thread spinning by default for RapidOCR after
+  paired focused and full hard gates preserved output signatures and improved
+  the OCR tail. The focused Waymo no-spin probe at
+  `out/ocr-onnx-nospin-waymo-focused-20260602/stress-summary.json` passed
+  `9/9`, reduced primary OCR engine total from `3.458471s` to `3.163749s`,
+  repeat p95 from `0.529775s` to `0.505520s`, repeat OCR-engine p95 from
+  `0.474285s` to `0.446249s`, and prewarm from `1.556s` to `1.276s` versus
+  `out/ocr-brightblue-baseline-focused-20260602/stress-summary.json`. A
+  same-shape spinning full36 control at
+  `out/ocr-onnx-spin-control-full36-hard-patched-20260602/stress-summary.json`
+  passed `36/36` with primary max `0.804336s`, repeat p95 `0.576858s`,
+  repeat OCR-engine p95 `0.509945s`, OCR stage total `8.290547s`, and prewarm
+  `1.516300s`. With no env override after changing the default, the full hard
+  gate at
+  `out/ocr-onnx-nospin-default-full36-hard-20260602/stress-summary.json`
+  reported `onnxruntime_allow_spinning=false`, passed `36/36`, statuses
+  `{"complete":25,"failed":11}`, primary max `0.733518s`, repeat p95
+  `0.506779s`, repeat max `0.608004s`, repeat OCR-engine p95 `0.458219s`,
+  OCR stage total `7.797011s`, and prewarm `1.345849s`. Comparing all 36 rows
+  against `out/phoenix-roadskip-full36-hard-20260602/stress-summary.json`
+  showed zero changes for status, source, city, bbox, geometry hash,
+  coordinate count, confidence, control count, OCR label count, or top labels.

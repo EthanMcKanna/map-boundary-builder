@@ -212,7 +212,7 @@ ONNXRUNTIME_ENABLE_CPU_MEM_ARENA = env_bool(
 )
 ONNXRUNTIME_ALLOW_SPINNING = env_bool(
     "MAP_BOUNDARY_ONNXRUNTIME_ALLOW_SPINNING",
-    True,
+    False,
 )
 FAST_TEXT_OCR_STYLES = frozenset({"bright-blue", "gray-fill", "light-fill"})
 FAST_TEXT_OCR_MIN_AREA = env_float("MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA", 1500.0)
