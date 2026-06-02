@@ -14341,3 +14341,19 @@ with zero failures in 0.531s.
   `compileall` and `git diff --check` were clean, and the full suite passed
   `585` tests plus `30` subtests. Treat profiled elapsed times as diagnostic
   because the profiler intentionally adds instrumentation overhead.
+- Production deployment `dpl_JE8FUiMPE7GGkhpRPGv2isvMsrY7` is aliased to
+  `https://mapboundary.app` with pipeline `pipeline-e107705497659e33`.
+  `/api/health?warm=ocr` returned `ok: true`, `road_seed_entries=4`, and
+  `rapidocr_s=3.192s`. A live Austin browser-rasterized SVG PNG upload with
+  `source_was_svg=1`, no catalog, overlay disabled, normalized cache lookup
+  disabled, and `profile_ocr_engine=1` wrote
+  `out/prod-api-ocr-profile-20260602/response.json`; it was a raw-cache miss and
+  returned `201` in `2.984s`, with `build_boundary_s=2.264s`,
+  `total_before_send_s=2.270s`, `14` controls, confidence `0.93`, source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, and stage timings
+  `ocr=1.563s`, `georeference=0.482s`, `extract=0.107s`, `inspect=0.034s`.
+  The RapidOCR profile captured one call with detector `0.769s`, recognizer
+  `0.759s`, `41` raw boxes, `34` selected boxes, `34` useful labels, zero labels
+  below 70 confidence, and one label below 80. This proves the deployed profiler
+  works and shows the remaining production Austin SVG tail is balanced between
+  detector and recognizer rather than dominated by road refinement.
