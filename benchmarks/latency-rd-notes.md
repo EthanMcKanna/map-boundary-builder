@@ -15180,3 +15180,38 @@ with zero failures in 0.531s.
   expected, statuses `{"complete":18,"failed":11}`, primary max `0.755536s`,
   repeat `58/58` subsecond, repeat p95 `0.530s`, repeat max `0.618s`, and OCR
   calls unchanged at `26`.
+- Rejected two no-raster SVG catalog-miss shortcuts, then accepted a narrower
+  crop-only SVG render for provider labels. Literal SVG label parsing is not
+  available on the local Illustrator exports: `mi.svg`, `Nashville_ServiceArea.svg`,
+  `h-waymo.svg`, and `a.png` expose the blue service-area path, but city and
+  neighborhood labels are path outlines rather than `<text>` content. A weak
+  shape-only Miami fallback was also rejected because the path candidate's
+  best match was `miami-waymo` at IoU `0.611715`, but the runner-up
+  `austin-waymo` was close at `0.573813` (margin `0.037902`) and the area
+  ratio was only `0.731256`, so relaxing the catalog gate would be guessing.
+  The accepted experiment keeps the OCR evidence but rewrites the root SVG
+  `viewBox` to the existing provider-area crop and rasterizes only that crop
+  before OCR. It is attempted only after a single SVG service-area path exists
+  and strict catalog matching misses; if crop OCR fails or labels do not
+  produce a provider-label catalog match, the old full-SVG raster fallback
+  still runs. The default SVG provider crop cap is `625px`: a real unprofiled
+  sweep on `/Users/ethanmckanna/Downloads/mi.svg` as generic `upload.png`
+  matched `miami-waymo` at `625px` in `0.900737s`, `0.955789s`, and
+  `0.899170s`; `600px` also matched but had a slightly wider tail, while
+  `575px` and `550px` preserved the match but introduced noisy `1.4s+` OCR
+  tails. A profiled no-cache runner smoke wrote
+  `out/svg-mi-crop-only-625-profile-20260602.geojson`, completed via
+  `catalog-shape-match:provider-ui-label`, preserved
+  `catalog_slug=miami-waymo`, `catalog_shape_iou=0.611715`,
+  `catalog_area_ratio=0.731256`, and the same bbox
+  `[-80.3461737,25.6799742,-80.1149101,25.976257]`, with
+  `total_elapsed_s=0.927575`, SVG-crop provider-label events, one OCR call,
+  five useful labels, and no `Rasterizing SVG upload`/generic map-label event.
+  Validation passed focused SVG/provider tests (`18 passed, 79 deselected`),
+  full `pytest -q` (`608 passed, 30 subtests passed`), the strict SVG stress
+  slice at `out/svg-crop-only-fast-fixtures-20260602/stress-summary.json`
+  (`3/3` expected, max `0.105222s`, zero OCR calls), and the full hard gate at
+  `out/svg-crop-only-full29-hard-20260602/stress-summary.json`: `29/29`
+  expected, statuses `{"complete":18,"failed":11}`, primary max `0.867585s`,
+  repeat `58/58` subsecond, repeat p95 `0.536s`, repeat max `0.587s`, and OCR
+  calls unchanged at `26`.

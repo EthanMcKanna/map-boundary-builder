@@ -1365,6 +1365,59 @@ def test_svg_bright_blue_provider_ui_ocr_uses_svg_specific_kwargs(monkeypatch, t
     assert labels[0].y == 102.0
 
 
+def test_svg_provider_ui_crop_rewrites_viewbox_and_uses_svg_ocr_kwargs(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(runner, "PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 900)
+    monkeypatch.setattr(runner, "SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 625)
+    monkeypatch.setattr(runner, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208)
+    monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max")
+    monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5")
+    monkeypatch.setattr(runner, "SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA", 300.0)
+    image_path = tmp_path / "map.svg"
+    image_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 1000"><rect width="500" height="1000"/></svg>',
+        encoding="utf-8",
+    )
+    extraction = ExtractionResult(
+        mask=np.zeros((1000, 500), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(100, 200), (400, 200), (400, 600), (100, 600), (100, 200)]),
+        coverage_ratio=0.24,
+        contour_count=1,
+        confidence=1.0,
+    )
+    raster_calls: list[dict] = []
+    ocr_calls: list[dict] = []
+
+    def fake_rasterize_svg_bytes_to_png(svg_bytes, target_path, **kwargs):
+        raster_calls.append({"svg": svg_bytes.decode("utf-8"), "kwargs": kwargs})
+        Image.fromarray(np.zeros((625, 479, 3), dtype=np.uint8)).save(target_path)
+
+    def fake_extract_ocr_labels_from_rgb(path, crop, **kwargs):
+        ocr_calls.append({"path": path, "shape": crop.shape, "kwargs": kwargs})
+        return [OcrLabel("Miami", x=1, y=2, width=30, height=10, confidence=99)]
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize_svg_bytes_to_png)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+
+    labels = runner.extract_provider_ui_labels_from_svg(
+        image_path,
+        extraction=extraction,
+        width=500,
+        height=1000,
+        rapidocr_max_dimension=1200,
+    )
+
+    assert 'viewBox="20 100 460 600"' in raster_calls[0]["svg"]
+    assert raster_calls[0]["kwargs"]["max_dimension"] == 625
+    assert ocr_calls[0]["kwargs"]["rapidocr_max_dimension"] == 625
+    assert ocr_calls[0]["kwargs"]["rapidocr_detector_limit_side_len"] == 208
+    assert ocr_calls[0]["kwargs"]["rapidocr_detector_limit_type"] == "max"
+    assert ocr_calls[0]["kwargs"]["rapidocr_recognition_profile"] == "en-ppocrv5"
+    assert ocr_calls[0]["kwargs"]["rapidocr_min_text_area"] == 300.0
+    assert labels[0].x == 21.0
+    assert labels[0].y == 102.0
+
+
 def test_svg_catalog_service_path_document_extracts_single_blue_class_path() -> None:
     svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
 <defs><style>.st1{fill:#fff}.st2{fill:#07f}</style></defs>
@@ -1460,6 +1513,79 @@ def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, 
     assert finish_calls[0]["height"] == 80
 
 
+def test_svg_catalog_miss_uses_svg_provider_crop_before_full_raster(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<rect fill="#fff" width="100" height="80"/>
+<path class="st2" d="M10 10h60v40H10z"/>
+</svg>""",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+    mask = np.zeros((80, 100), dtype=bool)
+    mask[10:50, 10:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    events: list[dict] = []
+    fake_match = SimpleNamespace(iou=0.61, entry=SimpleNamespace(slug="miami-waymo"))
+
+    def fake_rasterize(_svg_bytes, target_path, **_kwargs):
+        Image.fromarray(rgb).save(target_path)
+
+    def fake_finish_catalog_boundary_result(*_args, **kwargs):
+        return BoundaryBuildResult(
+            geojson={"type": "FeatureCollection", "features": []},
+            summary={
+                "status": "complete",
+                "catalog_slug": fake_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(
+        runner,
+        "extract_provider_ui_labels_from_svg",
+        lambda *_args, **_kwargs: [OcrLabel("Miami", x=20, y=20, width=60, height=18, confidence=99)],
+    )
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+    monkeypatch.setattr(
+        runner,
+        "normalize_image_for_processing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("full SVG rasterization should be skipped after SVG crop label match")
+        ),
+    )
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(filename_hint="upload.png", write_mask_artifact=False),
+        progress=events.append,
+    )
+
+    assert result.summary["catalog_slug"] == "miami-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:provider-ui-label"
+    assert any(
+        event["message"] == "Reading provider area labels" and event["details"]["source"] == "svg-crop"
+        for event in events
+    )
+
+
 def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unknown.svg"
     image_path.write_text(
@@ -1521,11 +1647,15 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
         provider_ocr_calls.append({"args": args, "kwargs": kwargs})
         return [OcrLabel("Miami", x=10, y=10, width=60, height=18, confidence=99)]
 
+    def fake_provider_ui_label_catalog_match(_extraction, labels):
+        return fake_match if labels else None
+
     monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
     monkeypatch.setattr(runner, "normalize_image_for_processing", fake_normalize_image_for_processing)
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
     monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_svg", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
     monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
@@ -1533,7 +1663,7 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
     monkeypatch.setattr(runner, "filename_hinted_avride_light_fill_catalog_match", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runner, "provider_ui_focus_crop_enabled", lambda _extraction: False)
     monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", fake_extract_provider_ui_labels_from_rgb)
-    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", fake_provider_ui_label_catalog_match)
     monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
 
     result = build_boundary(

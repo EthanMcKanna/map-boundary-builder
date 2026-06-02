@@ -88,6 +88,7 @@ from .runtime_config import (
     RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
     SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
+    SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION,
     SVG_RASTER_MAX_DIMENSION,
 )
 
@@ -415,6 +416,36 @@ def svg_path_tag_with_fill(tag: str, fill: str) -> str | None:
     return f'{tag} fill="{fill}" stroke="none"/>'
 
 
+def svg_viewbox(svg_bytes: bytes) -> tuple[float, float, float, float] | None:
+    text = svg_bytes.decode("utf-8", "replace")
+    viewbox_match = re.search(r'\bviewBox\s*=\s*(["\'])(?P<value>[^"\']+)\1', text, flags=re.IGNORECASE)
+    if viewbox_match is None:
+        return None
+    parts = re.split(r"[\s,]+", viewbox_match.group("value").strip())
+    if len(parts) != 4:
+        return None
+    try:
+        min_x, min_y, width, height = (float(part) for part in parts)
+    except ValueError:
+        return None
+    if width <= 0.0 or height <= 0.0:
+        return None
+    return (min_x, min_y, width, height)
+
+
+def svg_with_viewbox(svg_bytes: bytes, viewbox: tuple[float, float, float, float]) -> bytes:
+    text = svg_bytes.decode("utf-8", "replace")
+    value = " ".join(f"{part:.6f}".rstrip("0").rstrip(".") for part in viewbox)
+    replaced = re.sub(
+        r'\bviewBox\s*=\s*(["\'])(?P<value>[^"\']+)\1',
+        f'viewBox="{value}"',
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return replaced.encode("utf-8")
+
+
 def svg_tag_attribute(tag: str, name: str) -> str | None:
     match = re.search(rf"\b{re.escape(name)}\s*=\s*([\"'])(?P<value>.*?)\1", tag, flags=re.IGNORECASE | re.DOTALL)
     return match.group("value") if match is not None else None
@@ -543,6 +574,83 @@ def match_svg_service_path_candidate_catalog(
     )
 
 
+def try_svg_provider_ui_label_catalog_shortcut(
+    image_path: Path,
+    candidate: SvgServicePathCandidate,
+    *,
+    city_input: str | None,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult | None:
+    if city_input is not None:
+        return None
+    extraction = candidate.extraction
+    provider_ui_fast_ocr_max_dimension = provider_ui_fast_ocr_max_dimension_for_context(
+        extraction.style,
+        width=candidate.width,
+        height=candidate.height,
+        svg_service_path_candidate=True,
+    )
+    if provider_ui_fast_ocr_max_dimension is None:
+        return None
+    crop_max_dimension = svg_provider_ui_crop_ocr_max_dimension_for_style(
+        extraction.style,
+        rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+    )
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="Reading provider area labels",
+        percent=43,
+        details={
+            "source": "svg-crop",
+            "rapidocr_max_dimension": provider_ui_fast_ocr_max_dimension,
+            "crop_rapidocr_max_dimension": crop_max_dimension,
+        },
+    )
+    try:
+        provider_ui_labels = extract_provider_ui_labels_from_svg(
+            image_path,
+            extraction=extraction,
+            width=candidate.width,
+            height=candidate.height,
+            rapidocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+        )
+    except Exception:
+        return None
+    provider_ui_match = provider_ui_label_catalog_match(extraction, provider_ui_labels)
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="Provider area labels read",
+        percent=46,
+        details={
+            "source": "svg-crop",
+            "label_count": len(provider_ui_labels),
+            "top_labels": [label.text for label in provider_ui_labels[:8]],
+            "matched_catalog": provider_ui_match.entry.slug if provider_ui_match is not None else None,
+        },
+    )
+    if provider_ui_match is None:
+        return None
+    return finish_catalog_boundary_result(
+        extraction,
+        provider_ui_match,
+        width=candidate.width,
+        height=candidate.height,
+        image_path=image_path,
+        city_input="Auto",
+        output_path=output_path,
+        debug_path=debug_path,
+        opts=opts,
+        rgb=candidate.rgb,
+        progress=progress,
+        georeference_source="catalog-shape-match:provider-ui-label",
+    )
+
+
 def svg_service_path_extraction_for_raster(
     candidate: SvgServicePathCandidate | None,
     *,
@@ -626,6 +734,17 @@ def build_boundary(
                     progress=progress,
                     georeference_source=catalog_match_source or "catalog-shape-match",
                 )
+            provider_ui_result = try_svg_provider_ui_label_catalog_shortcut(
+                image_path,
+                svg_service_path_candidate,
+                city_input=city_input,
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                progress=progress,
+            )
+            if provider_ui_result is not None:
+                return provider_ui_result
 
     emit_progress(
         progress,
@@ -2112,27 +2231,11 @@ def extract_provider_ui_labels_from_rgb(
         extraction.style,
         rapidocr_max_dimension=rapidocr_max_dimension,
     )
-    ocr_kwargs: dict[str, Any] = {
-        "rapidocr_max_dimension": crop_max_dimension,
-        "cache": runner_ocr_cache_enabled(),
-    }
-    if source_is_svg and extraction.style == "bright-blue":
-        rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(extraction.style, source_is_svg=True)
-        if rapidocr_detector_limit is not None:
-            ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-        rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
-            extraction.style,
-            source_is_svg=True,
-        )
-        if rapidocr_detector_limit_type is not None:
-            ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
-        rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(extraction.style)
-        if rapidocr_recognition_profile is not None:
-            ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
-        rapidocr_min_text_area = fast_text_ocr_min_area_for_style(extraction.style, source_is_svg=True)
-        if rapidocr_min_text_area is not None:
-            ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
-    add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, extraction.style)
+    ocr_kwargs = provider_ui_label_ocr_kwargs(
+        extraction.style,
+        rapidocr_max_dimension=crop_max_dimension,
+        source_is_svg=source_is_svg,
+    )
     labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
     if offset_x == 0 and offset_y == 0:
         return labels
@@ -2147,6 +2250,119 @@ def extract_provider_ui_labels_from_rgb(
         )
         for label in labels
     ]
+
+
+def extract_provider_ui_labels_from_svg(
+    image_path: str | Path,
+    *,
+    extraction,
+    width: int,
+    height: int,
+    rapidocr_max_dimension: int | None,
+) -> list[Any]:
+    svg_document, offset_x, offset_y, crop_max_dimension = svg_provider_ui_crop_document(
+        Path(image_path),
+        extraction=extraction,
+        width=width,
+        height=height,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
+    with tempfile.TemporaryDirectory(prefix="map-boundary-svg-provider-ocr-") as tmp_dir:
+        crop_path = Path(tmp_dir) / f"{Path(image_path).stem}.provider-crop.png"
+        rasterize_svg_bytes_to_png(
+            svg_document,
+            crop_path,
+            max_dimension=crop_max_dimension or 0,
+            source_path=Path(image_path),
+        )
+        crop_rgb = load_rgb(crop_path)
+        labels = extract_ocr_labels_from_rgb(
+            str(crop_path),
+            crop_rgb,
+            **provider_ui_label_ocr_kwargs(
+                extraction.style,
+                rapidocr_max_dimension=crop_max_dimension,
+                source_is_svg=True,
+            ),
+        )
+    if offset_x == 0 and offset_y == 0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + offset_x,
+            y=label.y + offset_y,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
+
+
+def svg_provider_ui_crop_document(
+    image_path: Path,
+    *,
+    extraction,
+    width: int,
+    height: int,
+    rapidocr_max_dimension: int | None,
+) -> tuple[bytes, float, float, int | None]:
+    svg_bytes = read_svg_bytes(image_path)
+    viewbox = svg_viewbox(svg_bytes)
+    if viewbox is None:
+        raise ValueError("SVG upload does not expose a usable viewBox for provider OCR crop.")
+    left, top, right, bottom = provider_ui_ocr_crop_box(width, height, extraction.pixel_geometry.bounds)
+    if right <= left or bottom <= top:
+        left, top, right, bottom = 0, 0, width, height
+    min_x, min_y, viewbox_width, viewbox_height = viewbox
+    scale_x = viewbox_width / float(max(1, width))
+    scale_y = viewbox_height / float(max(1, height))
+    crop_viewbox = (
+        min_x + left * scale_x,
+        min_y + top * scale_y,
+        max(1.0, (right - left) * scale_x),
+        max(1.0, (bottom - top) * scale_y),
+    )
+    return (
+        svg_with_viewbox(svg_bytes, crop_viewbox),
+        float(left),
+        float(top),
+        svg_provider_ui_crop_ocr_max_dimension_for_style(
+            extraction.style,
+            rapidocr_max_dimension=rapidocr_max_dimension,
+        ),
+    )
+
+
+def provider_ui_label_ocr_kwargs(
+    style: str | None,
+    *,
+    rapidocr_max_dimension: int | None,
+    source_is_svg: bool = False,
+) -> dict[str, Any]:
+    ocr_kwargs: dict[str, Any] = {
+        "rapidocr_max_dimension": rapidocr_max_dimension,
+        "cache": runner_ocr_cache_enabled(),
+    }
+    if source_is_svg and style == "bright-blue":
+        rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style, source_is_svg=True)
+        if rapidocr_detector_limit is not None:
+            ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+        rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+            style,
+            source_is_svg=True,
+        )
+        if rapidocr_detector_limit_type is not None:
+            ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+        rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
+        if rapidocr_recognition_profile is not None:
+            ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+        rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style, source_is_svg=True)
+        if rapidocr_min_text_area is not None:
+            ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+    add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, style)
+    return ocr_kwargs
 
 
 def extract_profile_app_ui_labels_from_rgb(
@@ -2312,6 +2528,22 @@ def provider_ui_crop_ocr_max_dimension_for_style(style: str | None, *, rapidocr_
     return crop_max_dimension
 
 
+def svg_provider_ui_crop_ocr_max_dimension_for_style(
+    style: str | None,
+    *,
+    rapidocr_max_dimension: int | None,
+) -> int | None:
+    crop_max_dimension = provider_ui_crop_ocr_max_dimension_for_style(
+        style,
+        rapidocr_max_dimension=rapidocr_max_dimension,
+    )
+    if style == "bright-blue" and SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION > 0:
+        if crop_max_dimension is None:
+            return SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION
+        return min(crop_max_dimension, SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION)
+    return crop_max_dimension
+
+
 def provider_ui_focus_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
     height, width = rgb.shape[:2]
     min_x, min_y, max_x, max_y = bounds
@@ -2329,6 +2561,17 @@ def provider_ui_focus_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
 
 def provider_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
     height, width = rgb.shape[:2]
+    left, top, right, bottom = provider_ui_ocr_crop_box(width, height, bounds)
+    if right <= left or bottom <= top:
+        return rgb, 0.0, 0.0
+    return rgb[top:bottom, left:right], float(left), float(top)
+
+
+def provider_ui_ocr_crop_box(
+    width: int,
+    height: int,
+    bounds: tuple[float, float, float, float],
+) -> tuple[int, int, int, int]:
     min_x, min_y, max_x, max_y = bounds
     polygon_width = max(1.0, max_x - min_x)
     polygon_height = max(1.0, max_y - min_y)
@@ -2338,9 +2581,7 @@ def provider_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
     top = max(0, int(min_y - pad_y))
     right = min(width, int(max_x + pad_x))
     bottom = min(height, int(max_y + pad_y))
-    if right <= left or bottom <= top:
-        return rgb, 0.0, 0.0
-    return rgb[top:bottom, left:right], float(left), float(top)
+    return left, top, right, bottom
 
 
 def classify_style_for_ocr(rgb):
