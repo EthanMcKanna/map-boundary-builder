@@ -14113,3 +14113,31 @@ with zero failures in 0.531s.
   `0.853339`, active total `4.362970s`, max fixture duration `0.968932s`,
   prewarm `total_s=0.916821`, `rapidocr_s=0.844035`, active OCR engine total
   `2.337716s`, and zero prewarm/latency-budget issues.
+- Accepted a narrow bright-blue full-detail OCR retry cap after isolating the
+  Nashville active-fixture failure above to the fallback georeference path, not
+  the hot fast-OCR path. The 2400x2400 Nashville screenshot failed at the
+  current 1400px bright-blue cap after reading only 17 useful full-detail
+  labels and producing a sparse, unroad-refined label fit; raising only the
+  full-detail retry cap to 1500px read 19 labels and recovered
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` with confidence
+  `0.82`. A 1600px probe also worked but cost more, so the accepted default is
+  the smaller 1500px fallback cap while the normal bright-blue fast path stays
+  at 1400px and SVG bright-blue keeps its own SVG cap. Focused Nashville
+  no-catalog validation
+  `out/brightblue-full-detail-retry-nashville-20260602/full-report.json`
+  passed with IoU `0.979223`, duration `1.914381s`, active OCR total
+  `1.449205s`, road score `0.77409`, 19 labels, and zero latency-budget
+  issues under a 4s fixture budget. The broader all-active no-catalog run
+  `out/brightblue-full-detail-retry-active-20260602/full-report.json` passed
+  8/8 scored fixtures with 7 `reference_mismatch` skips, avg IoU `0.944437`,
+  min IoU `0.853339`, active total `6.387388s`, max fixture duration
+  `1.574673s`, and zero latency-budget issues; Nashville specifically moved
+  from the rejected sparse-label failure to IoU `0.979223` in `1.574673s`.
+  The real-screenshot production-prewarmed hard stress gate
+  `out/brightblue-full-detail-retry-stress-full16-20260602/stress-summary.json`
+  stayed green with `16/16` expectations, statuses
+  `{"complete":14,"failed":2}`, primary max `0.651826s`, OCR engine max
+  `0.524s`, prewarm `total_s=1.050856`, `rapidocr_s=0.975848`, and zero
+  latency-budget issues. This is a reliability ship: it converts a sparse
+  Nashville no-catalog failure into a correct road-refined output while keeping
+  the production-style stress cases subsecond.

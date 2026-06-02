@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, PngImagePlugin
 
 import map_boundary_builder.ocr as ocr_module
+import map_boundary_builder.runner as runner_module
 import map_boundary_builder.runtime_config as runtime_config_module
 from map_boundary_builder.georeference import (
     CityContext,
@@ -77,7 +78,12 @@ from map_boundary_builder.ocr import (
     warm_rapidocr_runtime,
     write_ocr_cache,
 )
-from map_boundary_builder.runner import fit_georeference, is_fast_context_hint_georeference, rank_road_context_queries
+from map_boundary_builder.runner import (
+    fit_georeference,
+    is_fast_context_hint_georeference,
+    rank_road_context_queries,
+    rapidocr_full_detail_max_dimension_for_ocr_style,
+)
 
 
 class FakeRapidOcrEngine:
@@ -937,6 +943,48 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertFalse(config["rapidocr_bright_blue_recognition_assets_available"])
         self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "default")
+
+    def test_runtime_config_reports_bright_blue_full_detail_retry_cap(self) -> None:
+        with patch.object(runtime_config_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500):
+            config = runtime_config_module.ocr_runtime_config()
+
+        self.assertEqual(config["rapidocr_bright_blue_full_detail_max_dimension"], 1500)
+
+    def test_bright_blue_full_detail_retry_can_step_above_fast_cap(self) -> None:
+        with (
+            patch.object(runner_module, "RAPIDOCR_MAX_DIMENSION", 1600),
+            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION", 1400),
+            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500),
+            patch.object(runner_module, "RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION", 1400),
+        ):
+            bright_blue = rapidocr_full_detail_max_dimension_for_ocr_style(
+                "bright-blue",
+                width=2400,
+                height=2400,
+            )
+            svg_bright_blue = rapidocr_full_detail_max_dimension_for_ocr_style(
+                "bright-blue",
+                width=2400,
+                height=2400,
+                source_is_svg=True,
+            )
+
+        self.assertEqual(bright_blue, 1500)
+        self.assertEqual(svg_bright_blue, 1600)
+
+    def test_bright_blue_full_detail_retry_does_not_lower_uncapped_ocr(self) -> None:
+        with (
+            patch.object(runner_module, "RAPIDOCR_MAX_DIMENSION", 1600),
+            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION", 1600),
+            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500),
+        ):
+            max_dimension = rapidocr_full_detail_max_dimension_for_ocr_style(
+                "bright-blue",
+                width=2400,
+                height=2400,
+            )
+
+        self.assertIsNone(max_dimension)
 
     def test_runtime_config_can_use_explicit_v5_recognition_asset_paths(self) -> None:
         with TemporaryDirectory() as workdir:

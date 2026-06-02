@@ -120,6 +120,10 @@ RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION",
     1400,
 )
+RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION",
+    1500,
+)
 RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION = env_int(
     "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION",
     RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
@@ -391,6 +395,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_bright_blue_detector_limit_type": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
         "rapidocr_bright_blue_recognition_profile": RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
         "rapidocr_bright_blue_max_dimension": RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
+        "rapidocr_bright_blue_full_detail_max_dimension": RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION,
         "rapidocr_bright_blue_warm_sample_max_dimension": RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION,
         "rapidocr_dark_teal_wide_max_dimension": RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION,
         "rapidocr_dark_teal_wide_max_height_width_ratio": RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO,

@@ -77,6 +77,7 @@ from .runtime_config import (
     RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
+    RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
@@ -1817,7 +1818,7 @@ def extract_full_ocr_labels_for_style(
     source_is_svg: bool = False,
 ) -> list[Any]:
     height, width = rgb.shape[:2]
-    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+    rapidocr_max_dimension = rapidocr_full_detail_max_dimension_for_ocr_style(
         style,
         width=width,
         height=height,
@@ -1846,6 +1847,31 @@ def extract_full_ocr_labels_for_style(
         rapidocr_max_dimension=rapidocr_max_dimension,
         **ocr_kwargs,
     )
+
+
+def rapidocr_full_detail_max_dimension_for_ocr_style(
+    style: str | None,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+    source_is_svg: bool = False,
+) -> int | None:
+    max_dimension = rapidocr_max_dimension_for_ocr_style(
+        style,
+        width=width,
+        height=height,
+        source_is_svg=source_is_svg,
+    )
+    if source_is_svg or style != "bright-blue":
+        return max_dimension
+    full_detail_max_dimension = capped_rapidocr_max_dimension(
+        RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION
+    )
+    if full_detail_max_dimension is None:
+        return max_dimension
+    if max_dimension is None:
+        return None
+    return max(max_dimension, full_detail_max_dimension)
 
 
 def fast_text_ocr_min_area_for_style(style: str | None, *, source_is_svg: bool = False) -> float | None:
