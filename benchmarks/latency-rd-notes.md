@@ -14999,3 +14999,47 @@ with zero failures in 0.531s.
   repeat `54/54` subsecond, repeat p95 `0.601s`, and the `austin-waymo-disguised-svg`
   row now records `no_catalog=false`, `filename_hint=upload.png`, and
   `source_was_svg=true` while ordinary raster rows record `source_was_svg=false`.
+- Rejected a direct-SVG vector-layer catalog shortcut after isolating the
+  backend SVG bottleneck. Direct no-catalog backend rasterization of
+  `/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg` completed with
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, `3` controls, and
+  confidence `0.763`, but spent `1.006543s` in SVG rasterization alone and
+  `1.678610s` total. A standalone prototype that parsed Illustrator CSS and
+  rendered only the single `#07f` service-area path was dramatically faster
+  (`0.1308s` raster / `0.0268s` extraction for Austin at `240px`, `0.003s`
+  raster / `0.0019s` extraction for Nashville), but the resulting generic
+  catalog shape scores were too weak to ship: Austin best IoU `0.925866`
+  against `austin-waymo`, Nashville best IoU `0.927581` against
+  `nashville-waymo`, both below the strict catalog threshold. Full-SVG
+  extraction at `400px` showed similar sub-threshold scores, while the existing
+  accepted Austin disguised-SVG row reaches catalog IoU `0.972838`, so the
+  one-layer vector shortcut would trade away shape reliability for speed.
+- Added catalog shape metrics to stress-report rows so catalog-match R&D can be
+  audited without reopening GeoJSON outputs. Rows now preserve
+  `catalog_shape_iou`, `catalog_shape_margin`, and `catalog_area_ratio` from
+  the CLI/API summary alongside `catalog_slug`. Targeted validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`63 passed`). The primary disguised-SVG smoke
+  `out/catalog-metrics-row-primary-smoke-20260602/stress-summary.json` passed
+  `1/1` with primary `0.676159s`, zero OCR calls, and row metrics
+  `catalog_shape_iou=0.972838`, `catalog_shape_margin=0.288825`,
+  `catalog_area_ratio=0.990459`. A repeat-profile version also wrote the new
+  row metrics but hit the known backend SVG rasterization variance tail
+  (`1.162s` repeat with `0.790s` inspect), so it is treated as provenance
+  evidence rather than a speed pass.
+- Full patched-harness hard-gate validation passed at
+  `out/catalog-metrics-full27-hard-rerun2-20260602/stress-summary.json`:
+  `27/27` expected, statuses `{"complete":16,"failed":11}`, primary max
+  `0.775307s`, repeat `54/54` subsecond, repeat p95 `0.634s`, repeat max
+  `0.892s`, and zero OCR-cache/extraction-cache use. The run preserved the
+  same accepted catalog row metrics for `austin-waymo-disguised-svg`:
+  `catalog_shape_iou=0.972838`, `catalog_shape_margin=0.288825`, and
+  `catalog_area_ratio=0.990459`. The immediately prior full rerun
+  `out/catalog-metrics-full27-hard-rerun-20260602/stress-summary.json` is not
+  counted as pass evidence because one `robotaxi-austin` repeat hit a local OCR
+  recognition tail at `1.020s`; its primary rows still passed under `1s`, and a
+  focused default repeat probe
+  `out/robotaxi-austin-default-repeat5-20260602/stress-summary.json` then ran
+  five `robotaxi-austin` repeats with p95 `0.391s` and max `0.396s`, supporting
+  that the failed full rerun was variance evidence rather than a deterministic
+  regression from the row-metrics patch.

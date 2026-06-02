@@ -2768,6 +2768,10 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
                 "combined_confidence": 0.92,
                 "georeference_confidence": 0.89,
                 "control_points": 5,
+                "catalog_slug": "houston-waymo",
+                "catalog_shape_iou": 0.972838,
+                "catalog_shape_margin": 0.288825,
+                "catalog_area_ratio": 0.990459,
                 "bbox": [-96, 29, -95, 30],
             }
         )
@@ -2798,6 +2802,10 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
     assert row["city"] == "Houston"
     assert row["control_points"] == 5
+    assert row["catalog_slug"] == "houston-waymo"
+    assert row["catalog_shape_iou"] == 0.972838
+    assert row["catalog_shape_margin"] == 0.288825
+    assert row["catalog_area_ratio"] == 0.990459
     assert row["image_width"] == 1200
     assert row["image_height"] == 900
     assert row["ocr_label_count"] == 6
