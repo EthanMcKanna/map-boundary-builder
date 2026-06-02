@@ -15616,3 +15616,39 @@ with zero failures in 0.531s.
   against `out/phoenix-roadskip-full36-hard-20260602/stress-summary.json`
   showed zero changes for status, source, city, bbox, geometry hash,
   coordinate count, confidence, control count, OCR label count, or top labels.
+- Screened uncovered current service-area screenshots in
+  `/Users/ethanmckanna/Downloads/service area images` with neutral filename
+  hints, no catalog, network blocked, and OCR cache disabled at
+  `out/service-area-uncovered-screen-20260602`. Fast complete candidates were
+  `tesla-houston` at `0.369023s` total, Houston, 3 controls, 4 OCR labels,
+  confidence `0.853`; `zoox-las-vegas-service` at `0.541825s`, Las Vegas, 3
+  controls, 29 stress labels, confidence `0.767`; and `zoox-sf-service` at
+  `0.657048s`, San Francisco, 3 controls, 19 labels, confidence `0.83`.
+  Catalog comparison made the split clear: Zoox Las Vegas matched
+  `las-vegas-zoox` exactly with IoU `1.0`, Tesla Houston was centered and usable
+  but below the strict catalog shape threshold with IoU `0.945032`, area ratio
+  `1.010592`, and centroid distance `35.7m`, while the newer Zoox SF screenshot
+  was not close enough to the saved `san-francisco-zoox` reference with IoU
+  `0.520240`, area ratio `1.720466`, and centroid distance `721.9m`. Other
+  distinct current screenshots stayed out of the tracked suite for this pass:
+  Waymo Houston completed but was slow at `1.273017s`, Waymo Nashville completed
+  but was slow at `1.706353s` with two OCR calls, Waymo Phoenix completed at
+  `1.144012s` with weak inferred-city output, and Waymo Miami failed sparse OCR.
+- Accepted two additional no-catalog real screenshot stress rows after focused
+  and full hard gates: `tesla-houston-service-area` and
+  `zoox-las-vegas-service-area`. The focused two-row gate at
+  `out/service-area-tracked-focused-20260602/stress-summary.json` passed
+  `2/2`, primary max `0.296195s`, repeat `6/6` subsecond, repeat p95
+  `0.264s`, repeat OCR-engine p95 `0.241s`, and prewarm `1.493s`. The full
+  expanded gate at `out/service-area-full38-hard-20260602/stress-summary.json`
+  passed `38/38`, statuses `{"complete":27,"failed":11}`, primary max
+  `0.754040s`, repeat `38/38` subsecond, repeat p95 `0.543s`, repeat max
+  `0.595s`, repeat OCR-engine p95 `0.463s`, prewarm `1.335s`, and zero
+  full-detail OCR retries. The new rows themselves stayed fast in the full gate:
+  Tesla Houston completed in `0.110037s` with OCR engine total `0.090325s`, 3
+  controls, 4 labels, and confidence `0.853`; Zoox Las Vegas completed in
+  `0.265075s` with OCR engine total `0.241606s`, 3 controls, 29 stress labels,
+  and confidence `0.767`. Comparing all 36 common rows against
+  `out/ocr-onnx-nospin-default-full36-hard-20260602/stress-summary.json` showed
+  zero changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, control count, OCR label count, or top labels.

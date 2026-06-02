@@ -385,6 +385,23 @@
       }
     },
     {
+      "slug": "tesla-houston-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Houston.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Houston",
+        "min_control_points": 3,
+        "min_ocr_labels": 4,
+        "min_combined_confidence": 0.82,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-95.6247125, 29.8572751, -95.5245324, 29.9718015],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "dallas-waymo",
       "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
       "no_catalog": true,
@@ -415,6 +432,23 @@
         "min_combined_confidence": 0.90,
         "max_total_elapsed_s": 1.0,
         "bbox_approx": [-98.5610934, 29.3896417, -98.3917587, 29.5392142],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "zoox-las-vegas-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Las Vegas",
+        "min_control_points": 3,
+        "min_ocr_labels": 18,
+        "min_combined_confidence": 0.74,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-115.3550119, 36.0353866, -115.1830059, 36.187696],
         "max_bbox_error_m": 1000
       }
     },
