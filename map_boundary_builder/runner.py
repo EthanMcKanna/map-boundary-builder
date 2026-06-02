@@ -122,12 +122,18 @@ RIDE_ROUTE_UI_CATEGORY_PATTERNS = {
     "dropoff": ("dropoff", "drop off"),
     "ride": ("ride is", "cancel ride", "ride away"),
     "plate": ("plate", "license plate"),
+    "rider": ("rider", "driver seat", "do not sit"),
     "receipt": ("tips", "payment", "trip fare", "report issue", "lost item"),
     "battery": ("phone battery low",),
     "edit": ("tap to edit",),
+    "walk": ("min walk", "ft to pickup", "to pickup"),
 }
 RIDE_ROUTE_UI_METRIC_RE = re.compile(
     r"(?:\b\d+(?:\.\d+)?\s*(?:mi|ft)\b|\b\d+\s*min(?:ute)?s?\b|\b\d{1,2}:\d{2}\s*(?:am|pm)?\b)",
+    re.IGNORECASE,
+)
+RIDE_ROUTE_UI_COMPACT_METRIC_RE = re.compile(
+    r"\d+(?:\d+)?(?:mi|ft|min)(?:walk|away|topickup)?",
     re.IGNORECASE,
 )
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
@@ -2924,12 +2930,13 @@ def ride_route_ui_reject_evidence(labels: list[Any]) -> dict[str, Any] | None:
         if getattr(label, "confidence", 0.0) < RIDE_ROUTE_UI_LABEL_MIN_CONFIDENCE:
             continue
         text = normalize_route_ui_text(getattr(label, "text", ""))
+        compact_text = compact_route_ui_text(getattr(label, "text", ""))
         if not text:
             continue
         for category, patterns in RIDE_ROUTE_UI_CATEGORY_PATTERNS.items():
-            if any(pattern in text for pattern in patterns):
+            if any(route_ui_pattern_matches(text, compact_text, pattern) for pattern in patterns):
                 categories.add(category)
-        if RIDE_ROUTE_UI_METRIC_RE.search(text):
+        if RIDE_ROUTE_UI_METRIC_RE.search(text) or RIDE_ROUTE_UI_COMPACT_METRIC_RE.search(compact_text):
             metric_labels.append(getattr(label, "text", ""))
     if len(categories) < RIDE_ROUTE_UI_MIN_CATEGORIES or not metric_labels:
         return None
@@ -2941,6 +2948,19 @@ def ride_route_ui_reject_evidence(labels: list[Any]) -> dict[str, Any] | None:
 
 def normalize_route_ui_text(text: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9:.]+", " ", text.lower()).split())
+
+
+def compact_route_ui_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def route_ui_pattern_matches(text: str, compact_text: str, pattern: str) -> bool:
+    normalized_pattern = normalize_route_ui_text(pattern)
+    compact_pattern = compact_route_ui_text(pattern)
+    return (
+        bool(normalized_pattern and normalized_pattern in text)
+        or bool(compact_pattern and compact_pattern in compact_text)
+    )
 
 
 def sparse_low_res_label_catalog_match(

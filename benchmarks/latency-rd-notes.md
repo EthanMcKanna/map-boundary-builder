@@ -14584,3 +14584,33 @@ with zero failures in 0.531s.
   `ocr-georeference:nominatim-label-fit`, confidence `0.825`, expected bbox
   `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=1.567336`.
+- Tightened the route-receipt guard after variant probes showed the first guard
+  was too dependent on OCR whitespace. `/Users/ethanmckanna/Downloads/IMG_0065.PNG`
+  previously produced a false complete from ride UI text in `2.873576s`, with
+  `39` labels, top labels including `Dropoff`, `115W9th St`, `Pickup`,
+  `Donotsitinthedriverseat`, `Spacefor4riders`, and `20minwalk`, and an
+  invented Austin bbox from `3` controls. `/Users/ethanmckanna/Downloads/IMG_0066.PNG`
+  previously failed closed only after `31.994989s`, including `18.352s` of
+  georeference time, a full-detail OCR retry, and glued labels like
+  `Rideis22minaway`, `22minwalk`, and `Spacefor4riders`. The guard now matches
+  compacted OCR text for route categories and route metrics, so phrases such as
+  `Rideis22minaway`, `22minwalk`, and `Spacefor4riders` are recognized without
+  weakening the requirement for route/receipt categories plus a route metric.
+  Both variants are now locked negatives:
+  `tesla-austin-route-active` and `tesla-austin-route-active-later`, expecting
+  the specific `ride-route UI` error, at least `30` OCR labels, and
+  `max_total_elapsed_s=1.5`. Fresh in-process stress with OCR/extraction caches
+  disabled passed at `out/route-ui-variants-stress-20260602/stress-summary.json`:
+  `3/3` expected failures, no full-detail retries, max `1.233851s`; the former
+  false complete now failed in `0.537561s` with `39` labels, and the former
+  `31.995s` slow failure now failed in `0.450628s` with `43` labels. The full
+  actual-code 19-case hard gate
+  `out/route-ui-variants-full19-hard-20260602/stress-summary.json` passed
+  `19/19` expectations with statuses `{"complete":14,"failed":5}`, primary max
+  `0.695716s`, `38/38` analyzed repeats subsecond, repeat p95 `0.103s`, and no
+  full-detail retries; all `14` valid service-area screenshots still completed.
+  Focused validation passed `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_runner_summary.py tests/test_stress_benchmark.py -q`
+  (`143 passed`), compileall over `map_boundary_builder`, `api`, and `tests`
+  passed, `git diff --check` was clean, and the full suite passed `589` tests
+  plus `30` subtests.

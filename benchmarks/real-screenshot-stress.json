@@ -73,6 +73,30 @@
       }
     },
     {
+      "slug": "tesla-austin-route-active",
+      "image": "/Users/ethanmckanna/Downloads/IMG_0065.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "ride-route UI",
+        "min_ocr_labels": 30,
+        "max_total_elapsed_s": 1.5
+      }
+    },
+    {
+      "slug": "tesla-austin-route-active-later",
+      "image": "/Users/ethanmckanna/Downloads/IMG_0066.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "failed",
+        "error_contains": "ride-route UI",
+        "min_ocr_labels": 30,
+        "max_total_elapsed_s": 1.5
+      }
+    },
+    {
       "slug": "avride-dallas-map",
       "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
       "no_catalog": true,

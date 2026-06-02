@@ -888,6 +888,18 @@ def test_ride_route_ui_reject_evidence_requires_route_ui_and_metric() -> None:
             OcrLabel("South Congress", x=500, y=650, width=140, height=24, confidence=98),
         ]
     ) is None
+    glued_evidence = runner.ride_route_ui_reject_evidence(
+        [
+            OcrLabel("Dropoff", x=80, y=320, width=80, height=24, confidence=98),
+            OcrLabel("Rideis22minaway", x=120, y=1260, width=220, height=28, confidence=98),
+            OcrLabel("22minwalk to Pickup", x=420, y=360, width=180, height=24, confidence=98),
+            OcrLabel("Spacefor4riders", x=120, y=1350, width=180, height=24, confidence=97),
+        ]
+    )
+    assert glued_evidence == {
+        "route_ui_categories": ["dropoff", "pickup", "ride", "rider", "walk"],
+        "route_metric_labels": ["Rideis22minaway", "22minwalk to Pickup"],
+    }
 
 
 def test_ride_route_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
