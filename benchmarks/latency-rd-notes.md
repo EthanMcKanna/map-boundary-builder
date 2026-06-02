@@ -11847,3 +11847,25 @@ with zero failures in 0.531s.
   `extract=3.572181s`, `georeference=0.392866s`, and max rows naming
   `ann-arbor-may-mobility-avif` as the OCR (`0.878299s`) and extract
   (`0.533763s`) tail. Focused stress-runner tests passed (`6 passed`).
+- Rejected broad no-catalog dark-teal OCR deferral, then converted the failure
+  mode into a stress guard. The prototype skipped pre-extraction full-frame OCR
+  for no-city dark-teal uploads so the Ann Arbor May Mobility screenshot could
+  reach the existing focused georeference OCR branch. It did speed Ann Arbor
+  from recent full-frame repeats (`1.277983s`/`1.332238s` total with
+  `0.818692s`/`0.872283s` OCR) to warm focused repeats of `0.645040s` and
+  `0.727956s` total with `0.408134s`/`0.485239s` OCR, but it was not safe:
+  the focused result changed the display city from `Ann Arbor` to
+  `Yost Ice Arena`, and the full stress candidate
+  `out/real-screenshot-stress-darkteal-defer-candidate-20260602/stress-summary.json`
+  failed expectations because `zoox-sf` dropped to 7 controls instead of the
+  required 10. The runtime prototype was reverted. The accepted follow-up adds
+  `city_equals` expectations to the real-screenshot stress manifest for stable
+  city cases so future speed probes catch venue/city drift directly. Focused
+  stress-runner tests passed (`7 passed`), the manifest JSON validated, and the
+  restored-runtime stress proof
+  `out/real-screenshot-stress-city-guard-final-20260602/stress-summary.json`
+  passed `12/12` expectations with the new city checks: Ann Arbor, Grand
+  Rapids, Dallas, Austin, San Francisco, Houston, and Miami all matched, while
+  Bay Area remained intentionally unconstrained because the current output is
+  `Inferred map area`. The proof run was latency-noisy (`2.198434s` max,
+  `ocr=9.371661s`, `extract=4.553110s`) but had zero unexpected rows.

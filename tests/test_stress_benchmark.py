@@ -47,6 +47,7 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
             "expect": {
                 "status": "complete",
                 "source_prefix": "ocr-georeference:",
+                "city_equals": "Dallas",
                 "min_control_points": 5,
             },
         },
@@ -61,6 +62,48 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
     assert row["total_elapsed_s"] == 0.612345
     assert row["stages"] == {"ocr": 0.4}
+
+
+def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+
+    def fake_run(command, *, text, capture_output, timeout, check):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "city": "Yost Ice Arena",
+                    "georeference_source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 4,
+                    "event_profile": {"total_elapsed_s": 0.7},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(stress_module.subprocess, "run", fake_run)
+
+    row = stress_module.run_stress_case(
+        {
+            "slug": "ann-arbor",
+            "image": str(image),
+            "expect": {
+                "status": "complete",
+                "source_prefix": "ocr-georeference:",
+                "city_equals": "Ann Arbor",
+                "min_control_points": 3,
+            },
+        },
+        tmp_path / "out",
+        timeout_seconds=5,
+        write_debug=False,
+        python_executable="python",
+    )
+
+    assert row["expectation_passed"] is False
+    assert row["expectation_issues"] == ["city 'Yost Ice Arena' did not equal 'Ann Arbor'"]
 
 
 def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> None:

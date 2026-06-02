@@ -282,6 +282,10 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
     if isinstance(source_prefix, str) and not str(source).startswith(source_prefix):
         issues.append(f"source {source!r} did not start with {source_prefix!r}")
 
+    city_equals = expect.get("city_equals")
+    if isinstance(city_equals, str) and row.get("city") != city_equals:
+        issues.append(f"city {row.get('city')!r} did not equal {city_equals!r}")
+
     min_control_points = expect.get("min_control_points")
     if isinstance(min_control_points, int):
         control_points = row.get("control_points")

@@ -10,6 +10,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Ann Arbor",
         "min_control_points": 3
       }
     },
@@ -21,6 +22,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Grand Rapids",
         "min_control_points": 5
       }
     },
@@ -52,6 +54,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Dallas",
         "min_control_points": 5
       }
     },
@@ -63,6 +66,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Austin",
         "min_control_points": 8
       }
     },
@@ -74,6 +78,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Dallas",
         "min_control_points": 3
       }
     },
@@ -85,6 +90,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "San Francisco",
         "min_control_points": 10
       }
     },
@@ -96,6 +102,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Dallas",
         "min_control_points": 2
       }
     },
@@ -118,6 +125,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Houston",
         "min_control_points": 8
       }
     },
@@ -129,6 +137,7 @@
       "expect": {
         "status": "complete",
         "source_prefix": "ocr-georeference:",
+        "city_equals": "Miami",
         "min_control_points": 5
       }
     }
