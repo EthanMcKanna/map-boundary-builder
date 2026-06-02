@@ -12328,3 +12328,36 @@ with zero failures in 0.531s.
   max `0.812s`. This broadens arbitrary screenshot coverage across LA,
   Orlando, Nashville, and gray-fill Houston while preserving the strict
   fresh-cache subsecond local proof.
+- Accepted two follow-on reliability/speed changes for the expanded stress
+  gate. First, `map-boundary-stress --max-total-elapsed-s` now writes a
+  `latency_budget` verdict and exits non-zero when any primary row or analyzed
+  non-warmup repeat-profile sample exceeds the budget; this caught a noisy
+  fresh-cache drift immediately in
+  `out/stress-expanded16-budget-fresh-cache-20260602/stress-summary.json`.
+  That rejected baseline still preserved `16/16` expectations, but failed the
+  new `1.0s` budget with primary max `1.239946s`, primary violations on Grand
+  Rapids/Bay Area/Los Angeles/Miami, and repeat OCR spikes up to `6.272829s`.
+  Second, the runtime now caps large bright-blue OCR inputs at `1400px` and
+  caps only non-tall dark-teal OCR inputs at `1400px`, leaving tall dark-teal
+  screenshots on the previous full-detail path so the Zoox tall fail-closed
+  fixture keeps its sparse-label error behavior. A global
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION=1200` probe was rejected after only
+  `2/4` slow-tail expectations passed and Miami drifted to `Inferred map area`
+  (`out/stress-slow4-maxdim1200-20260602/stress-summary.json`). A global
+  `1400px` probe was faster, but it changed the Zoox tall error string and
+  passed only `15/16` expectations
+  (`out/stress-expanded16-maxdim1400-budget-20260602/stress-summary.json`).
+  The accepted style/shape cap proof
+  `out/stress-expanded16-stylecap-budget-fresh-cache-20260602/stress-summary.json`
+  disabled both OCR and extraction caches, enforced `--max-total-elapsed-s
+  1.0`, preserved `16/16` expectations, and kept every primary and analyzed
+  repeat sample subsecond: primary max `0.841617s`, repeat analyzed
+  `16/16` expected, `16/16` subsecond, median `0.445s`, max `0.774s`.
+  Focused/adjacent tests passed:
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py
+  tests/test_runner_summary.py tests/test_api_cache.py::ApiRunCacheTests::test_health_payload_can_prewarm_generation_runtime -q`
+  (`88 passed`) and
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py tests/test_benchmark.py
+  tests/test_api_cache.py::ApiRunCacheTests::test_health_payload_can_prewarm_generation_runtime
+  tests/test_ocr_georeference.py -q` (`285 passed`).

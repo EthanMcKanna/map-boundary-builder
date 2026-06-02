@@ -69,7 +69,10 @@ from .runtime_config import (
     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
+    RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
+    RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION,
+    RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO,
     PROVIDER_UI_RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
@@ -398,6 +401,14 @@ def build_boundary(
                 ):
                     ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                     labels_future_current_catalog_shortcut = True
+                else:
+                    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+                        early_ocr_style,
+                        width=width,
+                        height=height,
+                    )
+                    if rapidocr_max_dimension is not None:
+                        ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
                 if rapidocr_min_text_area is not None:
                     ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
                 rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
@@ -435,6 +446,14 @@ def build_boundary(
             ):
                 ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                 labels_future_current_catalog_shortcut = True
+            else:
+                rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+                    early_ocr_style,
+                    width=width,
+                    height=height,
+                )
+                if rapidocr_max_dimension is not None:
+                    ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
             rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
@@ -743,6 +762,8 @@ def build_boundary(
                         image_path,
                         rgb,
                         style=extraction.style,
+                        width=width,
+                        height=height,
                         rapidocr_max_dimension_override=(
                             CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION if shortcut_ocr else None
                         ),
@@ -989,6 +1010,8 @@ def build_boundary(
                 image_path,
                 rgb,
                 style=extraction.style,
+                width=width,
+                height=height,
                 rapidocr_max_dimension_override=(
                     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                     if current_catalog_label_shape_shortcut_enabled(
@@ -1442,12 +1465,14 @@ def submit_ocr_labels_from_rgb(
     rgb,
     *,
     style: str,
+    width: int | None = None,
+    height: int | None = None,
     rapidocr_max_dimension_override: int | None = None,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = (
         rapidocr_max_dimension_override
         if rapidocr_max_dimension_override is not None
-        else rapidocr_max_dimension_for_extraction_style(style)
+        else rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
     )
     rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
     kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
@@ -1543,9 +1568,15 @@ def extract_focus_georef_labels_from_rgb(
     ]
 
 
-def ocr_kwargs_for_style(style: str | None, *, cache: bool) -> dict[str, Any]:
+def ocr_kwargs_for_style(
+    style: str | None,
+    *,
+    cache: bool,
+    width: int | None = None,
+    height: int | None = None,
+) -> dict[str, Any]:
     kwargs: dict[str, Any] = {"cache": cache}
-    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
     rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
@@ -1675,7 +1706,8 @@ def classify_style_for_ocr(rgb):
 
 
 def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str) -> list[Any]:
-    rapidocr_max_dimension = rapidocr_max_dimension_for_extraction_style(style)
+    height, width = rgb.shape[:2]
+    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
     rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
     ocr_kwargs: dict[str, Any] = {
         "cache": runner_ocr_cache_enabled(),
@@ -1772,14 +1804,37 @@ def runner_ocr_cache_enabled() -> bool:
     return True
 
 
-def rapidocr_max_dimension_for_extraction_style(style: str) -> int | None:
+def rapidocr_max_dimension_for_extraction_style(style: str | None) -> int | None:
+    return rapidocr_max_dimension_for_ocr_style(style)
+
+
+def rapidocr_max_dimension_for_ocr_style(
+    style: str | None,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+) -> int | None:
     if style != "purple-fill":
+        if style == "bright-blue":
+            return capped_rapidocr_max_dimension(RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION)
+        if style == "dark-teal" and dark_teal_wide_ocr_image(width=width, height=height):
+            return capped_rapidocr_max_dimension(RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION)
         return None
-    if RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_PURPLE_FILL_MAX_DIMENSION <= 0:
+    return capped_rapidocr_max_dimension(RAPIDOCR_PURPLE_FILL_MAX_DIMENSION)
+
+
+def capped_rapidocr_max_dimension(style_max_dimension: int) -> int | None:
+    if RAPIDOCR_MAX_DIMENSION <= 0 or style_max_dimension <= 0:
         return None
-    if RAPIDOCR_PURPLE_FILL_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+    if style_max_dimension >= RAPIDOCR_MAX_DIMENSION:
         return None
-    return RAPIDOCR_PURPLE_FILL_MAX_DIMENSION
+    return style_max_dimension
+
+
+def dark_teal_wide_ocr_image(*, width: int | None, height: int | None) -> bool:
+    if width is None or height is None or width <= 0 or height <= 0:
+        return False
+    return height <= width * RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO
 
 
 def rapidocr_detector_limit_for_ocr_style(style: str | None) -> int | None:

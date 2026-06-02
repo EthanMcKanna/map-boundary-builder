@@ -256,6 +256,13 @@ def test_provider_ui_fast_ocr_allows_gray_fill_non_tall_screens() -> None:
     assert runner.provider_ui_fast_ocr_max_dimension_for_style("dark-teal", width=1200, height=1014) is None
 
 
+def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark_teal() -> None:
+    assert runner.rapidocr_max_dimension_for_ocr_style("bright-blue", width=2400, height=2400) == 1400
+    assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=1280, height=1012) == 1400
+    assert runner.rapidocr_max_dimension_for_ocr_style("dark-teal", width=734, height=1596) is None
+    assert runner.rapidocr_max_dimension_for_ocr_style("purple-fill", width=1400, height=933) == 800
+
+
 def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     rgb = np.zeros((700, 1000, 3), dtype=np.uint8)
     small_dark_teal = ExtractionResult(
@@ -904,6 +911,7 @@ def test_catalog_miss_refines_at_bounded_processing_cap(tmp_path, monkeypatch) -
     assert ocr_rgb_shapes == [(1000, 2000, 3)]
     assert ocr_kwargs == [
         {
+            "rapidocr_max_dimension": runner.RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
             "rapidocr_min_text_area": runner.FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
@@ -2755,6 +2763,7 @@ def test_no_catalog_path_preloads_georeference_resources_before_fit(tmp_path, mo
     assert ocr_rgb_shapes == [(800, 1200, 3)]
     assert ocr_kwargs == [
         {
+            "rapidocr_max_dimension": runner.RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
             "rapidocr_min_text_area": runner.FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,

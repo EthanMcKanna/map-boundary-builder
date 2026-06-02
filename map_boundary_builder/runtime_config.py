@@ -66,6 +66,18 @@ RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE = (
     os.environ.get("MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5").strip().lower()
     or "default"
 )
+RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION",
+    1400,
+)
+RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION = env_int(
+    "MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION",
+    1400,
+)
+RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO = env_float(
+    "MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO",
+    1.25,
+)
 RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH = os.environ.get(
     "MAP_BOUNDARY_RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH",
     "",
@@ -245,6 +257,9 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_bright_blue_detector_limit_side_len": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
         "rapidocr_bright_blue_detector_limit_type": RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
         "rapidocr_bright_blue_recognition_profile": RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
+        "rapidocr_bright_blue_max_dimension": RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION,
+        "rapidocr_dark_teal_wide_max_dimension": RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION,
+        "rapidocr_dark_teal_wide_max_height_width_ratio": RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO,
         "rapidocr_bright_blue_recognition_assets_available": (
             rapidocr_bright_blue_recognition_assets_available()
         ),

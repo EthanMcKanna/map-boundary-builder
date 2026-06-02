@@ -1294,6 +1294,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_side_len"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_side_len"], 256)
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_type"], "max")
+        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_height_width_ratio"], 1.25)
         self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_assets_available"], bool)
         self.assertIn(
             cold["ocr"]["rapidocr_bright_blue_effective_recognition_profile"],

@@ -93,6 +93,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Number of repeat-profile samples per stress case to exclude from aggregate repeat statistics.",
     )
+    parser.add_argument(
+        "--max-total-elapsed-s",
+        type=float,
+        default=None,
+        help=(
+            "Fail when any primary row or analyzed repeat-profile sample exceeds this total elapsed budget."
+        ),
+    )
     return parser
 
 
@@ -103,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat-profile-runs must be non-negative")
     if args.repeat_profile_warmups < 0:
         parser.error("--repeat-profile-warmups must be non-negative")
+    if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
+        parser.error("--max-total-elapsed-s must be positive")
     report = run_stress_benchmark(
         Path(args.manifest),
         Path(args.out_dir),
@@ -115,8 +125,12 @@ def main(argv: list[str] | None = None) -> int:
         execution=args.execution,
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
+        max_total_elapsed_s=args.max_total_elapsed_s,
     )
     print_stress_table(report)
+    latency_budget = report.get("latency_budget")
+    if isinstance(latency_budget, dict) and latency_budget.get("passed") is False:
+        return 1
     if args.fail_on_unexpected and report["summary"]["unexpected"]:
         return 1
     return 0
@@ -144,12 +158,15 @@ def run_stress_benchmark(
     execution: str = "subprocess",
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
+    max_total_elapsed_s: float | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
         raise ValueError("repeat_profile_runs must be non-negative")
     if repeat_profile_warmups < 0:
         raise ValueError("repeat_profile_warmups must be non-negative")
+    if max_total_elapsed_s is not None and max_total_elapsed_s <= 0.0:
+        raise ValueError("max_total_elapsed_s must be positive")
     if execution not in {"subprocess", "in-process"}:
         raise ValueError(f"Unsupported stress execution mode: {execution}")
     manifest = load_manifest(manifest_path)
@@ -201,6 +218,12 @@ def run_stress_benchmark(
     }
     if repeat_profile is not None:
         report["repeat_profile"] = repeat_profile
+    if max_total_elapsed_s is not None:
+        report["latency_budget"] = build_latency_budget_summary(
+            rows,
+            repeat_profile,
+            max_total_elapsed_s=max_total_elapsed_s,
+        )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
 
@@ -936,6 +959,54 @@ def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[
     return [sample for sample in samples if not sample.get("warmup")]
 
 
+def build_latency_budget_summary(
+    rows: list[dict[str, Any]],
+    repeat_profile: dict[str, Any] | None,
+    *,
+    max_total_elapsed_s: float,
+) -> dict[str, Any]:
+    repeat_samples: list[dict[str, Any]] = []
+    if isinstance(repeat_profile, dict):
+        samples = repeat_profile.get("samples")
+        if isinstance(samples, list):
+            repeat_samples = repeat_profile_analyzed_samples(
+                [sample for sample in samples if isinstance(sample, dict)]
+            )
+    primary_violations = latency_budget_violations(rows, max_total_elapsed_s=max_total_elapsed_s)
+    repeat_violations = latency_budget_violations(repeat_samples, max_total_elapsed_s=max_total_elapsed_s)
+    return {
+        "max_total_elapsed_s": round(float(max_total_elapsed_s), 6),
+        "passed": not primary_violations and not repeat_violations,
+        "primary_violations": primary_violations,
+        "repeat_violations": repeat_violations,
+    }
+
+
+def latency_budget_violations(
+    rows: list[dict[str, Any]],
+    *,
+    max_total_elapsed_s: float,
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for row in rows:
+        total_elapsed_s = parse_nonnegative_float(row.get("total_elapsed_s"))
+        if total_elapsed_s is None or total_elapsed_s <= max_total_elapsed_s:
+            continue
+        violation: dict[str, Any] = {
+            "slug": row.get("slug"),
+            "total_elapsed_s": round(total_elapsed_s, 6),
+            "over_by_s": round(total_elapsed_s - max_total_elapsed_s, 6),
+        }
+        repeat_index = row.get("repeat_index")
+        if isinstance(repeat_index, int):
+            violation["repeat_index"] = repeat_index
+        observed_status = row.get("observed_status")
+        if observed_status is not None:
+            violation["observed_status"] = observed_status
+        violations.append(violation)
+    return violations
+
+
 def count_repeat_expectation_passed_samples(samples: list[dict[str, Any]]) -> int:
     return sum(sample.get("expectation_passed") is True for sample in samples)
 
@@ -1074,6 +1145,19 @@ def print_stress_table(report: dict[str, Any]) -> None:
         print("note: runner OCR cache is disabled; repeat samples keep paying OCR cost")
     if report.get("extraction_cache") is False:
         print("note: extraction cache is disabled; repeat samples keep paying extraction cost")
+    latency_budget = report.get("latency_budget")
+    if isinstance(latency_budget, dict):
+        budget = latency_budget.get("max_total_elapsed_s")
+        budget_text = f"{budget:.3f}s" if isinstance(budget, (int, float)) else "-"
+        if latency_budget.get("passed"):
+            print(f"latency budget: passed total<={budget_text}")
+        else:
+            print(
+                "latency budget: failed "
+                f"total<={budget_text} "
+                f"primary={len(latency_budget.get('primary_violations', []))} "
+                f"repeat={len(latency_budget.get('repeat_violations', []))}"
+            )
     repeat_profile = report.get("repeat_profile")
     if isinstance(repeat_profile, dict):
         repeat_summary = repeat_profile.get("summary")

@@ -577,6 +577,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         profile_ocr_engine=True,
         repeat_profile_runs=2,
         repeat_profile_warmups=1,
+        max_total_elapsed_s=1.0,
         python_executable="python",
     )
 
@@ -641,6 +642,67 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["cases"]["kept"]["max_total_elapsed_s"] == 0.8
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
+    assert saved["latency_budget"] == report["latency_budget"]
+    assert report["latency_budget"] == {
+        "max_total_elapsed_s": 1.0,
+        "passed": False,
+        "primary_violations": [
+            {
+                "slug": "kept",
+                "total_elapsed_s": 1.4,
+                "over_by_s": 0.4,
+                "observed_status": "complete",
+            }
+        ],
+        "repeat_violations": [],
+    }
+
+
+def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["max_total_elapsed_s"] == 1.0
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 1.2,
+            },
+            "rows": [
+                {
+                    "slug": "slow-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 1.2,
+                }
+            ],
+            "latency_budget": {
+                "max_total_elapsed_s": 1.0,
+                "passed": False,
+                "primary_violations": [{"slug": "slow-map", "total_elapsed_s": 1.2}],
+                "repeat_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--max-total-elapsed-s",
+            "1.0",
+        ]
+    )
+
+    assert exit_code == 1
 
 
 def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatch) -> None:
