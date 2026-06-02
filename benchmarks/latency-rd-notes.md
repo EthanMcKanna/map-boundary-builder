@@ -13638,3 +13638,32 @@ with zero failures in 0.531s.
   repeat p95 `0.564s`, repeat max `0.611s`, RapidOCR total p95 `0.506s`,
   detector p95 `0.268s`, recognizer p95 `0.238s`, and no `status` alias
   mismatches across `16` primary rows or `64` repeat samples.
+- Accepted a conservative SVG-only bright-blue fast-text OCR threshold after
+  probing the `/Users/ethanmckanna/Downloads/a.png` upload, which is SVG
+  content behind a `.png` suffix. The general raster bright-blue threshold
+  remains unchanged, but `MAP_BOUNDARY_SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA`
+  now defaults to `300.0` so vector uploads skip the smallest text boxes before
+  recognition. Higher SVG thresholds were rejected: `500` preserved the Austin
+  bbox but dropped support from `17` to `14` controls and was slower in the
+  cold CLI probe; `700`, `900`, and `1100` shifted the bbox and dropped support
+  to `10` or `8` controls. The accepted `300` setting preserved city `Austin`,
+  source `ocr-georeference:nominatim-label-fit+osm-road-refine`, confidence
+  `0.93`, `17` controls, and bbox
+  `[-97.8876796,30.1171301,-97.6607465,30.4090075]`. An alternating
+  in-process A/B with OCR and extraction caches disabled
+  (`out/svg-fasttext-ab-20260602`) kept identical bboxes and controls on all
+  eight samples while improving median total from `0.784s` to `0.754s` and
+  median RapidOCR total from `0.513s` to `0.461s`; selected OCR boxes dropped
+  from `45` to `35`. Focused validation:
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_image_io.py -q` passed `99` tests,
+  `PYTHONPATH=. .venv/bin/python -m pytest -q` passed `536` tests plus `30`
+  subtests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, and `git diff --check` passed. The full
+  actual-code hard gate
+  `out/svg-fasttext300-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.802725s`, repeat median `0.340s`,
+  repeat p95 `0.561s`, repeat max `0.581s`, RapidOCR total p95 `0.493s`,
+  detector p95 `0.258s`, and recognizer p95 `0.239s`.

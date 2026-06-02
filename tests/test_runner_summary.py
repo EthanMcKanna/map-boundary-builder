@@ -574,10 +574,12 @@ def test_classify_style_for_ocr_keeps_small_images_unscaled(monkeypatch) -> None
 
 def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
     monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 1300.0)
+    monkeypatch.setattr(runner, "SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA", 300.0)
 
     assert runner.fast_text_ocr_min_area_for_style("bright-blue") == 1300.0
-    assert runner.fast_text_ocr_min_area_for_style("bright-blue", source_is_svg=True) is None
+    assert runner.fast_text_ocr_min_area_for_style("bright-blue", source_is_svg=True) == 300.0
     assert runner.fast_text_ocr_min_area_for_style("gray-fill") == 1300.0
+    assert runner.fast_text_ocr_min_area_for_style("gray-fill", source_is_svg=True) == 1300.0
     assert runner.fast_text_ocr_min_area_for_style("dark-teal") is None
     assert runner.fast_text_ocr_min_area_for_style("light-fill") == 1300.0
     assert runner.fast_text_ocr_min_area_for_style(None) is None
@@ -585,8 +587,10 @@ def test_fast_text_ocr_filter_only_applies_to_safe_styles(monkeypatch) -> None:
 
 def test_fast_text_ocr_can_be_disabled(monkeypatch) -> None:
     monkeypatch.setattr(runner, "FAST_TEXT_OCR_MIN_AREA", 0.0)
+    monkeypatch.setattr(runner, "SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA", 0.0)
 
     assert runner.fast_text_ocr_min_area_for_style("bright-blue") is None
+    assert runner.fast_text_ocr_min_area_for_style("bright-blue", source_is_svg=True) is None
 
 
 def test_fast_text_ocr_fallback_guard(monkeypatch) -> None:
@@ -1071,6 +1075,7 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
     assert ocr_kwargs == [
         {
             "rapidocr_max_dimension": runner.RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
+            "rapidocr_min_text_area": runner.SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
             "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
