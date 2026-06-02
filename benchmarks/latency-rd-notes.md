@@ -11410,3 +11410,17 @@ with zero failures in 0.531s.
   at max depth 3. Keep this as an open stress-fixture gap until the original
   screenshot is available; the suspected failure mode is a crop that contains
   the polygon but too little readable map text for OCR/georeference.
+- Rejected a guarded low-resolution bright-blue OCR first pass. The prototype
+  used an initial filtered `1500px` bright-blue OCR pass and forced full-detail
+  fallback for weak road matches or six-control/no-road high-p90 fits. Focused
+  unit coverage for the helper, fallback guard, and health payload passed
+  (`5 passed in 0.60s`), but the real no-catalog 15-fixture gate failed against
+  `out/recbatch12-default-currentref-20260601/full-report.json`
+  (`out/fastbb1500-guard-currentref-20260601/full-report.json`). The guard
+  restored Dallas and Phoenix geometry, but double OCR pushed total duration to
+  `12.527447s`, OCR to `9.850801s`, and max fixture duration to `3.018023s`.
+  It also still dropped Miami by `0.015293` IoU and Nashville by `0.007059`
+  before fallback, while Bay Area Waymo, Dallas, and Phoenix exceeded the 1s
+  fixture budget. The code was reverted; a useful future version needs a
+  pre-georeference label-set or city-label-loss detector, not just residual,
+  confidence, or road-score checks after a potentially wrong fit.
