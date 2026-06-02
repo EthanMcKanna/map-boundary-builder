@@ -350,11 +350,29 @@ def test_benchmark_score_reports_ocr_label_summary() -> None:
         ocr_label_count=23,
         ocr_top_labels=["Miami", "Brickell", "Coral Gables"],
         ocr_label_event="Full-detail map labels read",
+        ocr_label_events=[
+            {"message": "Map labels read", "label_count": 9, "top_labels": ["Miami"]},
+            {
+                "message": "Full-detail map labels read",
+                "label_count": 23,
+                "top_labels": ["Miami", "Brickell", "Coral Gables"],
+            },
+        ],
+        ocr_full_detail_retry=True,
     ).as_dict()
 
     assert row["ocr_label_count"] == 23
     assert row["ocr_top_labels"] == ["Miami", "Brickell", "Coral Gables"]
     assert row["ocr_label_event"] == "Full-detail map labels read"
+    assert row["ocr_label_events"] == [
+        {"message": "Map labels read", "label_count": 9, "top_labels": ["Miami"]},
+        {
+            "message": "Full-detail map labels read",
+            "label_count": 23,
+            "top_labels": ["Miami", "Brickell", "Coral Gables"],
+        },
+    ]
+    assert row["ocr_full_detail_retry"] is True
 
 
 def test_benchmark_score_reports_ocr_engine_profile() -> None:
@@ -406,6 +424,15 @@ def test_ocr_label_summary_from_events_uses_last_ocr_label_read() -> None:
         "ocr_label_count": 12,
         "ocr_top_labels": ["Miami", "Aventura"],
         "ocr_label_event": "Full-detail map labels read",
+        "ocr_label_events": [
+            {"message": "Map labels read", "label_count": 4, "top_labels": ["Phoenix"]},
+            {
+                "message": "Full-detail map labels read",
+                "label_count": 12,
+                "top_labels": ["Miami", "Aventura"],
+            },
+        ],
+        "ocr_full_detail_retry": True,
     }
 
 
@@ -523,6 +550,8 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "ocr_label_count": None,
             "ocr_top_labels": None,
             "ocr_label_event": None,
+            "ocr_label_events": None,
+            "ocr_full_detail_retry": None,
             "ocr_engine_profile": None,
             "error": None,
             "status": "reference_mismatch",
@@ -2589,6 +2618,10 @@ def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, m
     assert score.ocr_label_count == 8
     assert score.ocr_top_labels == ["Phoenix", "Tempe"]
     assert score.ocr_label_event == "Map labels read"
+    assert score.ocr_label_events == [
+        {"message": "Map labels read", "label_count": 8, "top_labels": ["Phoenix", "Tempe"]}
+    ]
+    assert score.ocr_full_detail_retry is False
 
 
 def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:
@@ -2653,6 +2686,18 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
             }
         )
         progress(
+            {
+                "stage": "ocr",
+                "message": "Full-detail map labels read",
+                "percent": 48,
+                "status": "running",
+                "details": {
+                    "label_count": 16,
+                    "top_labels": ["Phoenix", "Scottsdale", "Tempe", "Mesa"],
+                },
+            }
+        )
+        progress(
             {"stage": "complete", "message": "Boundary export ready", "percent": 100, "status": "complete"}
         )
         return SimpleNamespace(
@@ -2685,9 +2730,18 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
     assert score.georeference_source == "ocr-georeference:nominatim-label-fit"
     assert score.road_match_score == 0.681518
     assert score.road_match_elapsed_s == 0.195375
-    assert score.ocr_label_count == 10
-    assert score.ocr_top_labels == ["Phoenix", "Scottsdale", "Tempe"]
-    assert score.ocr_label_event == "Map labels read"
+    assert score.ocr_label_count == 16
+    assert score.ocr_top_labels == ["Phoenix", "Scottsdale", "Tempe", "Mesa"]
+    assert score.ocr_label_event == "Full-detail map labels read"
+    assert score.ocr_label_events == [
+        {"message": "Map labels read", "label_count": 10, "top_labels": ["Phoenix", "Scottsdale", "Tempe"]},
+        {
+            "message": "Full-detail map labels read",
+            "label_count": 16,
+            "top_labels": ["Phoenix", "Scottsdale", "Tempe", "Mesa"],
+        },
+    ]
+    assert score.ocr_full_detail_retry is True
     assert calls == [
         {
             "image": image_path,

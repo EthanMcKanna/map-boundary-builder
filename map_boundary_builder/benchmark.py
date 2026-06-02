@@ -113,6 +113,8 @@ class BenchmarkScore:
     ocr_label_count: int | None = None
     ocr_top_labels: list[str] | None = None
     ocr_label_event: str | None = None
+    ocr_label_events: list[dict[str, Any]] | None = None
+    ocr_full_detail_retry: bool | None = None
     ocr_engine_profile: dict[str, Any] | None = None
     error: str | None = None
     status: str = "active"
@@ -143,6 +145,8 @@ class BenchmarkScore:
             "ocr_label_count": self.ocr_label_count,
             "ocr_top_labels": self.ocr_top_labels,
             "ocr_label_event": self.ocr_label_event,
+            "ocr_label_events": self.ocr_label_events,
+            "ocr_full_detail_retry": self.ocr_full_detail_retry,
             "ocr_engine_profile": self.ocr_engine_profile,
             "error": self.error,
             "status": self.status,
@@ -1696,10 +1700,13 @@ def ocr_label_summary_from_events(events: Any) -> dict[str, Any]:
         "ocr_label_count": None,
         "ocr_top_labels": None,
         "ocr_label_event": None,
+        "ocr_label_events": [],
+        "ocr_full_detail_retry": False,
     }
     if not isinstance(events, list):
         return summary
 
+    label_events: list[dict[str, Any]] = []
     for event in events:
         if not isinstance(event, dict) or event.get("stage") != "ocr":
             continue
@@ -1716,10 +1723,21 @@ def ocr_label_summary_from_events(events: Any) -> dict[str, Any]:
             else None
         )
         message = event.get("message")
+        label_event: dict[str, Any] = {
+            "message": message if isinstance(message, str) else None,
+            "label_count": raw_label_count,
+        }
+        if top_labels is not None:
+            label_event["top_labels"] = top_labels
+        label_events.append(label_event)
         summary = {
             "ocr_label_count": raw_label_count,
             "ocr_top_labels": top_labels,
             "ocr_label_event": message if isinstance(message, str) else None,
+            "ocr_label_events": label_events,
+            "ocr_full_detail_retry": any(
+                item.get("message") == "Full-detail map labels read" for item in label_events
+            ),
         }
     return summary
 
@@ -1733,6 +1751,8 @@ def failed_full_score(
     ocr_label_count: int | None = None,
     ocr_top_labels: list[str] | None = None,
     ocr_label_event: str | None = None,
+    ocr_label_events: list[dict[str, Any]] | None = None,
+    ocr_full_detail_retry: bool | None = None,
     ocr_engine_profile: dict[str, Any] | None = None,
 ) -> BenchmarkScore:
     return BenchmarkScore(
@@ -1750,6 +1770,8 @@ def failed_full_score(
         ocr_label_count=ocr_label_count,
         ocr_top_labels=ocr_top_labels,
         ocr_label_event=ocr_label_event,
+        ocr_label_events=ocr_label_events,
+        ocr_full_detail_retry=ocr_full_detail_retry,
         ocr_engine_profile=ocr_engine_profile,
         error=error,
         status=fixture.status,

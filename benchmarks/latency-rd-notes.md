@@ -11962,3 +11962,36 @@ with zero failures in 0.531s.
   `ocr_full_detail_retry_count=0`. Focused stress-runner tests passed (`7
   passed`), full pytest passed (`477 passed`), `py_compile` passed, and
   `git diff --check` passed.
+- Rejected lowering the global bright-blue RapidOCR detector cap below the
+  current 256px default even though it looked attractive on the three
+  bright-blue real-screenshot stress rows. The default subset probe
+  `out/brightblue-default-probe-20260602/stress-summary.json` passed `3/3`
+  with max internal `1.400397s` and OCR total `2.224117s`; lower caps also
+  passed that subset, including 224px (`1.075583s` max), 192px (`0.928838s`
+  max), 128px (`0.978051s` max), and 96px (`0.959771s` max). Full stress
+  candidates were also superficially good: 192px
+  `out/real-screenshot-stress-brightblue-det192-20260602/stress-summary.json`
+  passed `12/12` with max `1.137649s` and OCR total `6.809s`, while 128px
+  `out/real-screenshot-stress-brightblue-det128-20260602/stress-summary.json`
+  passed `12/12` with max `1.117406s` and OCR total `6.436s`. The broader
+  fixture gate correctly rejected all plausible global caps: 224px, 192px, and
+  128px each preserved active IoU/source checks but reduced `phoenix-waymo`
+  OCR evidence from 116 labels to 74 and top-label retention to 0.375 against
+  `out/narrow-focus-currentref-clean-20260602/full-report.json`. A
+  neutral-filename 128px gate
+  `out/brightblue-det128-neutral-currentref-20260602/full-report.json` passed
+  strict geometry, source, label-count, and top-label retention checks against
+  `out/brightblue-neutral-default-currentref-20260602/full-report.json`, but it
+  was not an overall speed win (`6.43s` active total versus `6.25s` baseline)
+  and would couple OCR quality to filename semantics. Keep the 256px
+  bright-blue default until a less brittle signal is found.
+- Accepted fixture-benchmark OCR retry sequence reporting to make future OCR
+  speed probes easier to audit. `BenchmarkScore` now preserves
+  `ocr_label_events` and `ocr_full_detail_retry` alongside the existing last
+  OCR label event. This fills the same observability gap fixed in the stress
+  runner: the lower-cap Phoenix rejection depended on whether the run stopped
+  after `Map labels read` or retried to `Full-detail map labels read`. Focused
+  benchmark tests passed (`66 passed`), and the real Phoenix smoke
+  `out/benchmark-ocr-events-smoke-20260602/full-report.json` passed `1/1` with
+  `ocr_label_events` showing 74 fast-text labels followed by 116 full-detail
+  labels and `ocr_full_detail_retry=true`.
