@@ -12450,3 +12450,41 @@ with zero failures in 0.531s.
   and OCR max `0.747008s` vs `2.667230s`. This is a runtime change worth
   shipping because it improves the broad no-cache stress tail without changing
   fresh `HEAD` current-reference outputs.
+- Rejected portrait dark-teal full-frame dimension caps. Raising
+  `MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO` to `3.0`
+  with the current `1400` max dimension looked promising for tall screenshots,
+  but `out/stress-zoox-portrait-darkteal-cap1400-ratio3-20260602/stress-summary.json`
+  failed `1/2` primary expectations because the known Zoox tall fail-closed
+  fixture no longer emitted the expected `sparse OCR labels` error. Repeating
+  the probe with `MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION=1500`
+  (`out/stress-zoox-portrait-darkteal-cap1500-ratio3-20260602/stress-summary.json`)
+  failed the same expectation and also produced a noisy `1.489942s` total on
+  the mobile Zoox fixture. Keep the portrait cap conservative until a probe
+  preserves both sparse-label semantics and the subsecond budget.
+- Rejected higher bright-blue fast-text OCR area thresholds after strict
+  current-reference comparison. Stress subsets with
+  `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA=2000`
+  (`out/stress-brightblue-fastarea2000-20260602/stress-summary.json`) and
+  `=2500` (`out/stress-brightblue-fastarea2500-20260602/stress-summary.json`)
+  both preserved the six-case bright-blue expectations and subsecond repeat
+  budgets, but the fresh-control comparisons failed output-retention gates.
+  `out/fastarea2000-currentref-vs-headcontrol-20260602/full-report.json`
+  dropped Dallas IoU from `0.958383` to `0.954771`, Dallas OCR labels from
+  `11` to `8`, Dallas top-label retention to `0.714`, and San Antonio IoU
+  from `0.960795` to `0.930016`; the `=2500` report
+  `out/fastarea2500-currentref-vs-headcontrol-20260602/full-report.json`
+  showed the same Dallas/San Antonio regressions. Current-reference Dallas
+  and San Antonio screenshots are both `2400x2400`, so this was not a coherent
+  size-gated shortcut.
+- Added image dimensions to benchmark score rows so future strict comparisons
+  can distinguish image-scale effects without opening fixtures manually. This
+  is diagnostic-only and does not alter extraction, OCR, georeferencing, or
+  cache keys. Unit coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_benchmark.py -q`
+  (`69 passed`). A real in-process smoke on Dallas also passed:
+  `PYTHONPATH=. .venv/bin/python -m map_boundary_builder.benchmark --mode full
+  --execution in-process --no-catalog --no-debug-artifacts --block-network
+  --out-dir out/benchmark-dimensions-smoke-20260602 --only dallas-waymo`
+  reported `PASS full benchmark: 1/1 scored fixtures`, active total `0.85s`,
+  IoU `0.958`, and the JSON score row now includes `image_width=2400` and
+  `image_height=2400`.

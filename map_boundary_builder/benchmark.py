@@ -12,6 +12,7 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
+from PIL import Image
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import transform
 
@@ -101,6 +102,8 @@ class BenchmarkScore:
     centroid_distance_m: float | None
     vertices: int | None
     style: str | None
+    image_width: int | None = None
+    image_height: int | None = None
     duration_s: float | None = None
     georeference_source: str | None = None
     combined_confidence: float | None = None
@@ -124,6 +127,8 @@ class BenchmarkScore:
         return {
             "slug": self.slug,
             "image": self.image,
+            "image_width": self.image_width,
+            "image_height": self.image_height,
             "mode": self.mode,
             "passed": self.passed,
             "iou": round(self.iou, 6) if self.iou is not None else None,
@@ -1320,6 +1325,7 @@ def benchmark_network_policy(block_network: bool):
 
 def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:
     started = time.perf_counter()
+    image_dimensions = benchmark_score_image_dimensions(fixture)
     try:
         extraction = extract_service_area(fixture.image_path)
         reference = project_geometry(load_reference_geometry(fixture.reference_path))
@@ -1335,6 +1341,7 @@ def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> Be
             centroid_distance_m=metrics["centroid_distance_m"],
             vertices=count_vertices(extraction.pixel_geometry),
             style=extraction.style,
+            **image_dimensions,
             duration_s=time.perf_counter() - started,
             status=fixture.status,
             note=fixture.note,
@@ -1350,6 +1357,7 @@ def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> Be
             centroid_distance_m=None,
             vertices=None,
             style=None,
+            **image_dimensions,
             duration_s=time.perf_counter() - started,
             error=str(exc),
             status=fixture.status,
@@ -1469,6 +1477,7 @@ def score_full_fixture(
             centroid_distance_m=None if metrics is None else metrics["centroid_distance_m"],
             vertices=count_vertices(output_geometry),
             style=summary.get("style"),
+            **benchmark_score_image_dimensions(fixture),
             duration_s=duration_s,
             georeference_source=summary.get("georeference_source"),
             combined_confidence=summary.get("combined_confidence"),
@@ -1571,6 +1580,7 @@ def score_full_fixture_in_process(
             centroid_distance_m=None if metrics is None else metrics["centroid_distance_m"],
             vertices=count_vertices(output_geometry),
             style=result.summary.get("style"),
+            **benchmark_score_image_dimensions(fixture),
             duration_s=duration_s,
             georeference_source=result.summary.get("georeference_source"),
             combined_confidence=result.summary.get("combined_confidence"),
@@ -1783,6 +1793,7 @@ def failed_full_score(
         centroid_distance_m=None,
         vertices=None,
         style=None,
+        **benchmark_score_image_dimensions(fixture),
         duration_s=duration_s,
         stage_elapsed_s=stage_elapsed_s,
         ocr_label_count=ocr_label_count,
@@ -1808,10 +1819,24 @@ def skipped_fixture_score(fixture: BenchmarkFixture, *, mode: str) -> BenchmarkS
         centroid_distance_m=None,
         vertices=None,
         style=None,
+        **benchmark_score_image_dimensions(fixture),
         duration_s=None,
         status=fixture.status,
         note=fixture.note,
     )
+
+
+def benchmark_score_image_dimensions(fixture: BenchmarkFixture) -> dict[str, int | None]:
+    width, height = image_dimensions(fixture.image_path)
+    return {"image_width": width, "image_height": height}
+
+
+def image_dimensions(path: Path) -> tuple[int | None, int | None]:
+    try:
+        with Image.open(path) as image:
+            return int(image.size[0]), int(image.size[1])
+    except Exception:
+        return None, None
 
 
 def load_reference_geometry(path: Path) -> Polygon | MultiPolygon:

@@ -436,11 +436,15 @@ def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
         centroid_distance_m=0.0,
         vertices=42,
         style="bright-blue",
+        image_width=2400,
+        image_height=2400,
         road_match_score=0.681518,
         road_match_elapsed_s=0.195375,
         duration_s=1.00049,
     ).as_dict()
 
+    assert row["image_width"] == 2400
+    assert row["image_height"] == 2400
     assert row["duration_s"] == 1.00049
     assert row["road_match_score"] == 0.681518
     assert row["road_match_elapsed_s"] == 0.195375
@@ -641,6 +645,8 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
         {
             "slug": "houston-waymo",
             "image": "Waymo Houston.png",
+            "image_width": None,
+            "image_height": None,
             "mode": "extraction",
             "passed": False,
             "iou": None,
