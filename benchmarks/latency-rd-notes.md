@@ -14188,3 +14188,23 @@ with zero failures in 0.531s.
   passed the same hard budgets with primary max `0.634s`, repeat p95 `0.555s`,
   repeat max `0.579s`, and RapidOCR total p95 `0.482s`. Keep the bright-blue
   detector at `256/max`; the `240px` cap is still not a safe default.
+- Added final-label OCR confidence telemetry to the RapidOCR profiling path so
+  future latency probes can tell whether a faster candidate is also weakening
+  recognized map text. The new fields are profiling-only:
+  `label_confidence_min/p25/p50/p75/p90/max` plus low-confidence counts below
+  `50/70/80/90`, surfaced in CLI/stress row profiles, stress slowest-sample
+  summaries, repeat count metrics, and benchmark OCR count aggregation. The
+  helper records final returned labels after classifier retry and image-bound
+  filtering, so the evidence matches the labels used by georeferencing rather
+  than a stale raw OCR pass. Validation: focused tests
+  `tests/test_ocr_georeference.py tests/test_stress_benchmark.py
+  tests/test_benchmark.py` passed `292` tests; full suite passed `580` tests
+  plus `30` subtests; `compileall` and `git diff --check` were clean. A real
+  LA smoke
+  `out/ocr-confidence-profile-la-smoke-20260602/stress-summary.json` passed
+  with profiling enabled, OCR/extraction caches disabled, production prewarm,
+  strict signature checks, primary total `0.804899s`, repeat max `0.566s`,
+  OCR engine repeat p95 `0.502s`, and row/slowest confidence telemetry
+  visible (`label_confidence_p50=99.929`, `p90=99.988`, zero labels below
+  80/90). This ships as a reliability/evidence improvement for future speed
+  experiments without changing the generation path when profiling is off.

@@ -2368,6 +2368,18 @@ OCR_ENGINE_PROFILE_COUNT_KEYS = (
     "result_count",
     "label_count",
     "useful_label_count",
+    "label_confidence_lt_50_count",
+    "label_confidence_lt_70_count",
+    "label_confidence_lt_80_count",
+    "label_confidence_lt_90_count",
+)
+OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS = (
+    "label_confidence_min",
+    "label_confidence_p25",
+    "label_confidence_p50",
+    "label_confidence_p75",
+    "label_confidence_p90",
+    "label_confidence_max",
 )
 PREWARM_STAGE_DURATION_KEYS = ("catalog_s", "seed_s", "extraction_s", "rapidocr_s", "total_s")
 PREWARM_STAGE_DURATION_ALIASES = {
@@ -2386,6 +2398,7 @@ def summarize_ocr_engine_profile_events(events: list[dict[str, Any]] | None) -> 
         total = sum_profile_int(call.get(key) for call in calls)
         if total is not None:
             summary[key] = total
+    copy_single_ocr_engine_profile_values(summary, calls, OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
     summary["calls_detail"] = calls
     return summary
 
@@ -2410,7 +2423,21 @@ def summarize_ocr_engine_profile_summaries(profiles: list[dict[str, Any]]) -> di
         total = sum_profile_int(profile.get(key) for profile in profiles)
         if total is not None:
             summary[key] = total
+    copy_single_ocr_engine_profile_values(summary, profiles, OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
     return summary
+
+
+def copy_single_ocr_engine_profile_values(
+    summary: dict[str, Any],
+    profiles: list[dict[str, Any]],
+    keys: tuple[str, ...],
+) -> None:
+    if len(profiles) != 1:
+        return
+    profile = profiles[0]
+    for key in keys:
+        if key in profile:
+            summary[key] = profile[key]
 
 
 def sum_profile_number(values) -> float | None:

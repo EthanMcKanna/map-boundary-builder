@@ -66,6 +66,7 @@ from map_boundary_builder.ocr import (
     ocr_coarse_visual_cache_key,
     ocr_cache_dependency_signature,
     ocr_near_visual_cache_key,
+    ocr_label_confidence_profile,
     ocr_visual_cache_key,
     rapidocr_box_area,
     rapidocr_box_area_profile,
@@ -97,8 +98,9 @@ class FakeRapidOcrEngine:
 
 
 class FakeFilteredRapidOcrEngine:
-    def __init__(self, boxes: list[np.ndarray]) -> None:
+    def __init__(self, boxes: list[np.ndarray], rec_res: list[tuple[str, float]] | None = None) -> None:
         self.boxes = boxes
+        self.rec_res = rec_res
         self.selected_boxes: list[np.ndarray] = []
 
     def load_img(self, image):
@@ -118,6 +120,8 @@ class FakeFilteredRapidOcrEngine:
         return [np.zeros((8, 8, 3), dtype=np.uint8) for _box in selected]
 
     def text_rec(self, crop_images, _use_cls):
+        if self.rec_res is not None:
+            return self.rec_res[: len(crop_images)], 0.0
         return [("Austin", 0.98) for _crop in crop_images], 0.0
 
     def _get_origin_points(self, selected, _op_record, _raw_h, _raw_w):
@@ -1043,6 +1047,59 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(profile["selected_box_area_lt_900_count"], 2)
         self.assertEqual(profile["selected_box_area_lt_1300_count"], 2)
         self.assertEqual(profile["selected_box_area_lt_1500_count"], 2)
+
+    def test_ocr_label_confidence_profile_summarizes_final_labels(self) -> None:
+        labels = [
+            OcrLabel("Austin", x=20, y=20, width=40, height=20, confidence=96),
+            OcrLabel("Airport", x=60, y=20, width=40, height=20, confidence=72),
+            OcrLabel("Metro", x=100, y=20, width=40, height=20, confidence=48),
+        ]
+
+        profile = ocr_label_confidence_profile("label", labels)
+
+        self.assertEqual(profile["label_confidence_min"], 48.0)
+        self.assertEqual(profile["label_confidence_p50"], 72.0)
+        self.assertEqual(profile["label_confidence_p90"], 91.2)
+        self.assertEqual(profile["label_confidence_max"], 96.0)
+        self.assertEqual(profile["label_confidence_lt_50_count"], 1)
+        self.assertEqual(profile["label_confidence_lt_70_count"], 1)
+        self.assertEqual(profile["label_confidence_lt_80_count"], 2)
+        self.assertEqual(profile["label_confidence_lt_90_count"], 2)
+
+    def test_profiled_rapidocr_words_record_final_label_confidence(self) -> None:
+        boxes = [
+            rapidocr_test_box(10.0, 20.0, 80.0, 20.0),
+            rapidocr_test_box(100.0, 20.0, 80.0, 20.0),
+            rapidocr_test_box(190.0, 20.0, 80.0, 20.0),
+        ]
+        engine = FakeFilteredRapidOcrEngine(
+            boxes,
+            rec_res=[("Austin", 0.96), ("Airport", 0.72), ("Metro", 0.48)],
+        )
+        image = np.zeros((320, 480, 3), dtype=np.uint8)
+
+        with (
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "should_retry_rapidocr_with_classifier", return_value=False),
+            ocr_module.collect_rapidocr_profiles() as events,
+        ):
+            labels = ocr_module.run_rapidocr_words(
+                "synthetic-map.png",
+                prepared_bgr=image,
+                rapidocr_max_dimension=1000,
+            )
+
+        self.assertEqual([label.confidence for label in labels], [96.0, 72.0, 48.0])
+        summary = ocr_module.summarize_rapidocr_profile_events(events)
+        self.assertEqual(summary["label_confidence_lt_50_count"], 1)
+        self.assertEqual(summary["label_confidence_lt_70_count"], 1)
+        self.assertEqual(summary["label_confidence_lt_80_count"], 2)
+        self.assertEqual(summary["label_confidence_lt_90_count"], 2)
+        self.assertEqual(summary["label_confidence_p50"], 72.0)
+        self.assertEqual(summary["label_confidence_p90"], 91.2)
+        detail = summary["calls_detail"][0]
+        self.assertEqual(detail["label_confidence_p50"], 72.0)
+        self.assertEqual(detail["label_confidence_p90"], 91.2)
 
     def test_rapidocr_header_region_filter_keeps_title_and_wide_header_context(self) -> None:
         title = rapidocr_test_box(20.0, 40.0, 520.0, 44.0)

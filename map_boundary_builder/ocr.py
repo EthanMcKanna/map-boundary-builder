@@ -93,6 +93,12 @@ RAPIDOCR_PROFILE_DURATION_KEYS = (
     "classifier_total_s",
     "total_s",
 )
+RAPIDOCR_PROFILE_CONFIDENCE_COUNT_KEYS = (
+    "label_confidence_lt_50_count",
+    "label_confidence_lt_70_count",
+    "label_confidence_lt_80_count",
+    "label_confidence_lt_90_count",
+)
 RAPIDOCR_PROFILE_COUNT_KEYS = (
     "raw_box_count",
     "selected_box_count",
@@ -101,6 +107,15 @@ RAPIDOCR_PROFILE_COUNT_KEYS = (
     "useful_label_count",
     "header_region_filter_used",
     "footer_region_filter_used",
+    *RAPIDOCR_PROFILE_CONFIDENCE_COUNT_KEYS,
+)
+RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS = (
+    "label_confidence_min",
+    "label_confidence_p25",
+    "label_confidence_p50",
+    "label_confidence_p75",
+    "label_confidence_p90",
+    "label_confidence_max",
 )
 RAPIDOCR_HEADER_REGION_FILTER_MIN_BOXES = 24
 RAPIDOCR_HEADER_REGION_FILTER_MIN_HEADER_BOXES = 8
@@ -159,6 +174,7 @@ def summarize_rapidocr_profile_events(events: list[dict[str, Any]] | None) -> di
         total = sum_rapidocr_profile_int(call.get(key) for call in calls)
         if total is not None:
             summary[key] = total
+    copy_single_rapidocr_profile_values(summary, calls, RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
     summary["calls_detail"] = calls
     return summary
 
@@ -178,7 +194,21 @@ def summarize_rapidocr_profile_summaries(profiles: list[dict[str, Any]]) -> dict
         total = sum_rapidocr_profile_int(profile.get(key) for profile in profiles)
         if total is not None:
             summary[key] = total
+    copy_single_rapidocr_profile_values(summary, profiles, RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
     return summary
+
+
+def copy_single_rapidocr_profile_values(
+    summary: dict[str, Any],
+    profiles: list[dict[str, Any]],
+    keys: tuple[str, ...],
+) -> None:
+    if len(profiles) != 1:
+        return
+    profile = profiles[0]
+    for key in keys:
+        if key in profile:
+            summary[key] = profile[key]
 
 
 def sum_rapidocr_profile_number(values) -> float | None:
@@ -255,6 +285,35 @@ def rapidocr_box_area_profile(prefix: str, boxes: list[np.ndarray]) -> dict[str,
         f"{prefix}_box_area_lt_900_count": count_values_below(areas, 900.0),
         f"{prefix}_box_area_lt_1300_count": count_values_below(areas, 1300.0),
         f"{prefix}_box_area_lt_1500_count": count_values_below(areas, 1500.0),
+    }
+
+
+def ocr_label_confidence_profile(prefix: str, labels: list[OcrLabel]) -> dict[str, int | float | None]:
+    confidences = [max(0.0, min(100.0, float(label.confidence))) for label in labels]
+    if not confidences:
+        return {
+            f"{prefix}_confidence_min": None,
+            f"{prefix}_confidence_p25": None,
+            f"{prefix}_confidence_p50": None,
+            f"{prefix}_confidence_p75": None,
+            f"{prefix}_confidence_p90": None,
+            f"{prefix}_confidence_max": None,
+            f"{prefix}_confidence_lt_50_count": 0,
+            f"{prefix}_confidence_lt_70_count": 0,
+            f"{prefix}_confidence_lt_80_count": 0,
+            f"{prefix}_confidence_lt_90_count": 0,
+        }
+    return {
+        f"{prefix}_confidence_min": round(min(confidences), 3),
+        f"{prefix}_confidence_p25": round(percentile_linear(confidences, 25), 3),
+        f"{prefix}_confidence_p50": round(percentile_linear(confidences, 50), 3),
+        f"{prefix}_confidence_p75": round(percentile_linear(confidences, 75), 3),
+        f"{prefix}_confidence_p90": round(percentile_linear(confidences, 90), 3),
+        f"{prefix}_confidence_max": round(max(confidences), 3),
+        f"{prefix}_confidence_lt_50_count": count_values_below(confidences, 50.0),
+        f"{prefix}_confidence_lt_70_count": count_values_below(confidences, 70.0),
+        f"{prefix}_confidence_lt_80_count": count_values_below(confidences, 80.0),
+        f"{prefix}_confidence_lt_90_count": count_values_below(confidences, 90.0),
     }
 
 
@@ -1113,6 +1172,7 @@ def run_rapidocr_words(
                 profile["total_s"] = time.perf_counter() - profile_started
                 profile["label_count"] = len(labels)
                 profile["useful_label_count"] = count_useful_labels(labels)
+                profile.update(ocr_label_confidence_profile("label", labels))
                 record_rapidocr_profile(profile)
             return labels
         classifier_started = time.perf_counter()
@@ -1137,6 +1197,7 @@ def run_rapidocr_words(
         profile["total_s"] = time.perf_counter() - profile_started
         profile["label_count"] = len(labels)
         profile["useful_label_count"] = count_useful_labels(labels)
+        profile.update(ocr_label_confidence_profile("label", labels))
         record_rapidocr_profile(profile)
     return labels
 

@@ -61,6 +61,18 @@ OCR_ENGINE_BOX_AREA_KEYS = (
     "selected_box_area_lt_1300_count",
     "selected_box_area_lt_1500_count",
 )
+OCR_ENGINE_CONFIDENCE_KEYS = (
+    "label_confidence_min",
+    "label_confidence_p25",
+    "label_confidence_p50",
+    "label_confidence_p75",
+    "label_confidence_p90",
+    "label_confidence_max",
+    "label_confidence_lt_50_count",
+    "label_confidence_lt_70_count",
+    "label_confidence_lt_80_count",
+    "label_confidence_lt_90_count",
+)
 OCR_ENGINE_COUNT_METRIC_KEYS = (
     "raw_box_count",
     "selected_box_count",
@@ -68,6 +80,7 @@ OCR_ENGINE_COUNT_METRIC_KEYS = (
     "label_count",
     "useful_label_count",
     *tuple(key for key in OCR_ENGINE_BOX_AREA_KEYS if key.endswith("_count")),
+    *tuple(key for key in OCR_ENGINE_CONFIDENCE_KEYS if key.endswith("_count")),
 )
 
 
@@ -1283,6 +1296,7 @@ def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) 
         "label_count",
         "useful_label_count",
         *OCR_ENGINE_BOX_AREA_KEYS,
+        *OCR_ENGINE_CONFIDENCE_KEYS,
     ):
         value = call.get(key)
         if value is not None:
@@ -1558,7 +1572,7 @@ def slowest_sample_ocr_engine_summary(sample: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, int):
             summary[key] = value
     detail_profile = slowest_ocr_engine_detail_profile(ocr_engine_profile)
-    for key in OCR_ENGINE_BOX_AREA_KEYS:
+    for key in (*OCR_ENGINE_BOX_AREA_KEYS, *OCR_ENGINE_CONFIDENCE_KEYS):
         value = ocr_engine_profile.get(key)
         if value is None and detail_profile is not None:
             value = detail_profile.get(key)

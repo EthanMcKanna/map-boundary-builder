@@ -935,6 +935,8 @@ def test_summarize_ocr_engine_profiles_totals_fixture_calls() -> None:
                 "rec_elapsed_s": 0.09,
                 "raw_box_count": 17,
                 "selected_box_count": 9,
+                "label_confidence_lt_80_count": 1,
+                "label_confidence_lt_90_count": 3,
             },
         ),
         BenchmarkScore(
@@ -953,6 +955,8 @@ def test_summarize_ocr_engine_profiles_totals_fixture_calls() -> None:
                 "rec_elapsed_s": 0.36,
                 "raw_box_count": 85,
                 "selected_box_count": 44,
+                "label_confidence_lt_80_count": 0,
+                "label_confidence_lt_90_count": 5,
             },
         ),
     ]
@@ -964,6 +968,8 @@ def test_summarize_ocr_engine_profiles_totals_fixture_calls() -> None:
         "rec_elapsed_s": 0.45,
         "raw_box_count": 102,
         "selected_box_count": 53,
+        "label_confidence_lt_80_count": 1,
+        "label_confidence_lt_90_count": 8,
     }
 
 
