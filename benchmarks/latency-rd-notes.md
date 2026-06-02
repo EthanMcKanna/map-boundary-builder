@@ -14570,3 +14570,17 @@ with zero failures in 0.531s.
   tests/test_stress_benchmark.py -q` (`143 passed`), compileall over
   `map_boundary_builder`, `api`, and `tests` passed, `git diff --check` was
   clean, and the full suite passed `589` tests plus `30` subtests.
+  Production deploy proof: commit `ce20913` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_AWAQ6xtApxYcYD5V4fY2kNQaPeqU`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-e64a79d65b7e89ff` with the expected
+  dependency map. A live upload of `IMG_0084.PNG` to `/api/runs` returned HTTP
+  `422` with the exact `ride-route UI` error, `64` labels, route categories
+  `["battery","dropoff","edit","pickup","plate","receipt","ride"]`,
+  `build_boundary_s=3.393116`, and `build_stage_elapsed_s.georeference=0.000011`.
+  A live Dallas no-catalog positive smoke with `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg`
+  returned HTTP `201`, city `Dallas`, source
+  `ocr-georeference:nominatim-label-fit`, confidence `0.825`, expected bbox
+  `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
+  `build_boundary_s=1.567336`.
