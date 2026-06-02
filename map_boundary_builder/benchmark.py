@@ -109,6 +109,9 @@ class BenchmarkScore:
     road_match_score: float | None = None
     road_match_elapsed_s: float | None = None
     stage_elapsed_s: dict[str, float] | None = None
+    ocr_label_count: int | None = None
+    ocr_top_labels: list[str] | None = None
+    ocr_label_event: str | None = None
     error: str | None = None
     status: str = "active"
     note: str | None = None
@@ -135,6 +138,9 @@ class BenchmarkScore:
                 round(self.road_match_elapsed_s, 6) if self.road_match_elapsed_s is not None else None
             ),
             "stage_elapsed_s": self.stage_elapsed_s,
+            "ocr_label_count": self.ocr_label_count,
+            "ocr_top_labels": self.ocr_top_labels,
+            "ocr_label_event": self.ocr_label_event,
             "error": self.error,
             "status": self.status,
             "note": self.note,
@@ -1281,11 +1287,13 @@ def score_full_fixture(
         )
         event_profile = summary.get("event_profile")
         stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
+        events = event_profile.get("events") if isinstance(event_profile, dict) else None
         return failed_full_score(
             fixture,
             error,
             duration_s=duration_s,
             stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
+            **ocr_label_summary_from_events(events),
         )
 
     try:
@@ -1293,6 +1301,7 @@ def score_full_fixture(
         summary = parse_cli_summary(completed.stdout)
         event_profile = summary.get("event_profile") if isinstance(summary, dict) else None
         stage_elapsed_s = event_profile.get("stage_elapsed_s") if isinstance(event_profile, dict) else None
+        events = event_profile.get("events") if isinstance(event_profile, dict) else None
         properties = output["features"][0].get("properties", {})
         output_geometry = shape(output["features"][0]["geometry"])
         metrics = (
@@ -1327,6 +1336,7 @@ def score_full_fixture(
                 properties.get("road_match_elapsed_s"),
             ),
             stage_elapsed_s=stage_elapsed_s if isinstance(stage_elapsed_s, dict) else None,
+            **ocr_label_summary_from_events(events),
             status=fixture.status,
             note=fixture.note,
         )
@@ -1425,6 +1435,7 @@ def score_full_fixture_in_process(
                 properties.get("road_match_elapsed_s"),
             ),
             stage_elapsed_s=stage_elapsed_seconds(events),
+            **ocr_label_summary_from_events(events),
             status=fixture.status,
             note=fixture.note,
         )
@@ -1531,12 +1542,48 @@ def first_float(*values: Any) -> float | None:
     return None
 
 
+def ocr_label_summary_from_events(events: Any) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "ocr_label_count": None,
+        "ocr_top_labels": None,
+        "ocr_label_event": None,
+    }
+    if not isinstance(events, list):
+        return summary
+
+    for event in events:
+        if not isinstance(event, dict) or event.get("stage") != "ocr":
+            continue
+        details = event.get("details")
+        if not isinstance(details, dict):
+            continue
+        raw_label_count = details.get("label_count")
+        if not isinstance(raw_label_count, int) or raw_label_count < 0:
+            continue
+        raw_top_labels = details.get("top_labels")
+        top_labels = (
+            [label for label in raw_top_labels if isinstance(label, str)]
+            if isinstance(raw_top_labels, list)
+            else None
+        )
+        message = event.get("message")
+        summary = {
+            "ocr_label_count": raw_label_count,
+            "ocr_top_labels": top_labels,
+            "ocr_label_event": message if isinstance(message, str) else None,
+        }
+    return summary
+
+
 def failed_full_score(
     fixture: BenchmarkFixture,
     error: str,
     *,
     duration_s: float | None = None,
     stage_elapsed_s: dict[str, float] | None = None,
+    ocr_label_count: int | None = None,
+    ocr_top_labels: list[str] | None = None,
+    ocr_label_event: str | None = None,
 ) -> BenchmarkScore:
     return BenchmarkScore(
         slug=fixture.slug,
@@ -1550,6 +1597,9 @@ def failed_full_score(
         style=None,
         duration_s=duration_s,
         stage_elapsed_s=stage_elapsed_s,
+        ocr_label_count=ocr_label_count,
+        ocr_top_labels=ocr_top_labels,
+        ocr_label_event=ocr_label_event,
         error=error,
         status=fixture.status,
         note=fixture.note,

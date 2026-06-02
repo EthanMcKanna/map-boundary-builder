@@ -11593,3 +11593,19 @@ with zero failures in 0.531s.
   real same-pixel encodings that differ inside visual or metadata boxes.
   Focused AVIF/normalized API cache coverage passed (`6 passed`) and
   `py_compile` passed for the edited API/test files.
+- Accepted a benchmark-report reliability improvement so future latency sweeps
+  can explain OCR regressions without a separate event-log dig. Full benchmark
+  scores now include nullable `ocr_label_count`, `ocr_top_labels`, and
+  `ocr_label_event` fields, extracted from the last OCR progress event that
+  reports label details in both subprocess and in-process execution modes. This
+  directly supports the repeated label-loss failure mode seen in prior
+  downscale / detector-limit probes, where fixtures such as Phoenix, Miami, and
+  Nashville could pass or collapse depending on whether critical city labels
+  survived OCR. A fresh in-process no-catalog fixture run passed with active
+  total `5.55s`, `8/8` scored fixtures, average IoU `0.968`, min IoU `0.943`,
+  and populated OCR evidence for every active fixture; examples include
+  Dallas Waymo `11` labels, Phoenix Waymo `74` labels, and Nashville Waymo
+  `19` labels in
+  `out/ocr-label-report-evidence-20260602/full-report.json`. Focused benchmark
+  tests passed (`49 passed`), the full suite passed (`447 passed`), and
+  `git diff --check` passed.

@@ -228,6 +228,55 @@ def test_benchmark_score_preserves_sub_millisecond_duration_precision() -> None:
     assert row["road_match_elapsed_s"] == 0.195375
 
 
+def test_benchmark_score_reports_ocr_label_summary() -> None:
+    row = BenchmarkScore(
+        slug="miami-waymo",
+        image="Waymo Miami.png",
+        mode="full",
+        passed=True,
+        iou=0.91,
+        area_ratio=1.0,
+        centroid_distance_m=0.0,
+        vertices=42,
+        style="bright-blue",
+        ocr_label_count=23,
+        ocr_top_labels=["Miami", "Brickell", "Coral Gables"],
+        ocr_label_event="Full-detail map labels read",
+    ).as_dict()
+
+    assert row["ocr_label_count"] == 23
+    assert row["ocr_top_labels"] == ["Miami", "Brickell", "Coral Gables"]
+    assert row["ocr_label_event"] == "Full-detail map labels read"
+
+
+def test_ocr_label_summary_from_events_uses_last_ocr_label_read() -> None:
+    summary = benchmark_module.ocr_label_summary_from_events(
+        [
+            {
+                "stage": "ocr",
+                "message": "Map labels read",
+                "details": {"label_count": 4, "top_labels": ["Phoenix"]},
+            },
+            {
+                "stage": "extract",
+                "message": "Map boundary extracted",
+                "details": {"label_count": 99, "top_labels": ["ignored"]},
+            },
+            {
+                "stage": "ocr",
+                "message": "Full-detail map labels read",
+                "details": {"label_count": 12, "top_labels": ["Miami", 42, "Aventura"]},
+            },
+        ]
+    )
+
+    assert summary == {
+        "ocr_label_count": 12,
+        "ocr_top_labels": ["Miami", "Aventura"],
+        "ocr_label_event": "Full-detail map labels read",
+    }
+
+
 def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"
     image_dir = tmp_path / "images"
@@ -289,6 +338,9 @@ def test_reference_mismatch_fixtures_are_reported_but_not_scored(tmp_path: Path)
             "road_match_score": None,
             "road_match_elapsed_s": None,
             "stage_elapsed_s": None,
+            "ocr_label_count": None,
+            "ocr_top_labels": None,
+            "ocr_label_event": None,
             "error": None,
             "status": "reference_mismatch",
             "note": "changed live service area",
@@ -1803,7 +1855,16 @@ def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, m
                     "error": "could not infer a reliable map location",
                     "event_profile": {
                         "stage_elapsed_s": {"inspect": 0.01, "ocr": 0.2},
-                        "events": [],
+                        "events": [
+                            {
+                                "stage": "ocr",
+                                "message": "Map labels read",
+                                "details": {
+                                    "label_count": 8,
+                                    "top_labels": ["Phoenix", "Tempe"],
+                                },
+                            }
+                        ],
                     },
                 }
             ),
@@ -1832,6 +1893,9 @@ def test_subprocess_full_fixture_preserves_cli_failure_profile(tmp_path: Path, m
     assert score.passed is False
     assert score.error == "could not infer a reliable map location"
     assert score.stage_elapsed_s == {"inspect": 0.01, "ocr": 0.2}
+    assert score.ocr_label_count == 8
+    assert score.ocr_top_labels == ["Phoenix", "Tempe"]
+    assert score.ocr_label_event == "Map labels read"
 
 
 def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, monkeypatch) -> None:
@@ -1884,6 +1948,18 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
             {"stage": "inspect", "message": "Reading image metadata", "percent": 5, "status": "running"}
         )
         progress(
+            {
+                "stage": "ocr",
+                "message": "Map labels read",
+                "percent": 47,
+                "status": "running",
+                "details": {
+                    "label_count": 10,
+                    "top_labels": ["Phoenix", "Scottsdale", "Tempe"],
+                },
+            }
+        )
+        progress(
             {"stage": "complete", "message": "Boundary export ready", "percent": 100, "status": "complete"}
         )
         return SimpleNamespace(
@@ -1916,6 +1992,9 @@ def test_in_process_full_fixture_scores_without_debug_artifacts(tmp_path: Path, 
     assert score.georeference_source == "ocr-georeference:nominatim-label-fit"
     assert score.road_match_score == 0.681518
     assert score.road_match_elapsed_s == 0.195375
+    assert score.ocr_label_count == 10
+    assert score.ocr_top_labels == ["Phoenix", "Scottsdale", "Tempe"]
+    assert score.ocr_label_event == "Map labels read"
     assert calls == [
         {
             "image": image_path,
