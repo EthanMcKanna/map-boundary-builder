@@ -15075,3 +15075,16 @@ with zero failures in 0.531s.
   `165` GeoJSON coordinates and strict catalog metrics (`catalog_shape_iou`
   `0.974165`, `catalog_shape_margin` `0.291463`, `catalog_area_ratio`
   `0.990175`).
+  Production deploy proof: commit `5202a65` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `PATH="$PWD/.venv/bin:$PATH" vercel deploy --prebuilt --prod --yes` as
+  `dpl_2TXyrRDzWo9gHWemT4Drjdr5KfTd`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-b65d16ad1c059e63`,
+  `ocr.rapidocr_svg_bright_blue_max_dimension=1600`, and SVG rasterizer
+  `resvg-py`. A live Nashville SVG upload with catalog enabled, overlay
+  disabled, normalized cache lookup disabled, and OCR profiling enabled
+  completed via `catalog-shape-match`, zero OCR calls, `catalog_slug=nashville-waymo`,
+  `catalog_shape_iou=0.983962`, and `build_boundary_s=0.592222`. A live Austin
+  disguised-SVG upload with the same profiling options completed via
+  `catalog-shape-match`, zero OCR calls, `catalog_slug=austin-waymo`,
+  `catalog_shape_iou=0.974266`, and `build_boundary_s=0.226265`.
