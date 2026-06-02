@@ -14822,3 +14822,20 @@ with zero failures in 0.531s.
   compileall over `map_boundary_builder`, `api`, and `tests`, `jq empty` on
   `benchmarks/real-screenshot-stress.json`, `git diff --check`, and the full
   suite (`595 passed`, `30` subtests).
+  Production deploy proof: commit `850b435` was built with Vercel CLI `54.3.0`
+  using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and deployed with
+  `vercel deploy --prebuilt --prod --yes` as
+  `dpl_ESoUytukxtCbTKPZH1cywqAo6Rk8`, aliased to `https://mapboundary.app`.
+  Live health reported `pipeline-c5a5c40af29c1640`,
+  `gray_fill_route_ui_ocr_max_dimension=1000`,
+  `light_fill_route_ui_ocr_max_dimension=1000`, and warm status `ok`. A
+  cache-busted neutral-filename live upload of the climate map with
+  `no_catalog=1` and `include_overlay=0` returned HTTP `422` with the exact
+  `thematic map` error, `2` labels, thematic evidence
+  `nge Vulnerability Index`, `build_stage_elapsed_s.georeference=0.000011`,
+  and `build_boundary_s=0.619122`. A cache-busted warmed Dallas no-catalog
+  positive smoke with `/Users/ethanmckanna/Downloads/d-robotaxi.jpeg` returned
+  HTTP `201`, city `Dallas`, source `ocr-georeference:nominatim-label-fit`,
+  confidence `0.825`, bbox
+  `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
+  `build_boundary_s=0.066790`.
