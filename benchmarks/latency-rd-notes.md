@@ -11995,3 +11995,16 @@ with zero failures in 0.531s.
   `out/benchmark-ocr-events-smoke-20260602/full-report.json` passed `1/1` with
   `ocr_label_events` showing 74 fast-text labels followed by 116 full-detail
   labels and `ocr_full_detail_retry=true`.
+- Accepted summary-level fixture-benchmark OCR retry reporting so broad
+  full-benchmark reports expose retry behavior without opening each score row.
+  The report summary now includes active, smoked-skipped, and evaluated OCR
+  label event counts plus full-detail retry counts and retry row lists. This is
+  the fixture-benchmark companion to the stress-summary retry counters and
+  makes candidate sweeps easier to reject quickly when only a subset triggers
+  expensive full-detail OCR. Focused benchmark tests passed (`67 passed`), and
+  the real Phoenix smoke
+  `out/benchmark-ocr-retry-summary-smoke-20260602/full-report.json` passed
+  `1/1` with summary-level `active_ocr_label_event_counts` of
+  `{"Full-detail map labels read": 1, "Map labels read": 1}`,
+  `active_ocr_full_detail_retry_count=1`, and
+  `active_ocr_full_detail_retry_rows=["phoenix-waymo"]`.

@@ -850,6 +850,9 @@ def run_benchmark(
     active_georeference_sources = summarize_georeference_sources(scored)
     smoke_georeference_sources = summarize_georeference_sources(smoke_validated)
     evaluated_georeference_sources = summarize_georeference_sources([*scored, *smoke_validated])
+    active_ocr_label_events = summarize_ocr_label_events(scored)
+    smoke_ocr_label_events = summarize_ocr_label_events(smoke_validated)
+    evaluated_ocr_label_events = summarize_ocr_label_events([*scored, *smoke_validated])
     active_road_match_elapsed = summarize_road_match_elapsed(scored)
     smoke_road_match_elapsed = summarize_road_match_elapsed(smoke_validated)
     average_iou = float(mean(ious)) if ious else 0.0
@@ -902,12 +905,21 @@ def run_benchmark(
             "evaluated_duration_s": round(active_total_duration + smoke_total_duration, 6),
             "active_stage_duration_s": active_stage_duration,
             "active_georeference_sources": active_georeference_sources,
+            "active_ocr_label_event_counts": active_ocr_label_events["event_counts"],
+            "active_ocr_full_detail_retry_count": active_ocr_label_events["full_detail_retry_count"],
+            "active_ocr_full_detail_retry_rows": active_ocr_label_events["full_detail_retry_rows"],
             "active_ocr_engine_profile": summarize_ocr_engine_profiles(scored),
             "smoked_skipped_stage_duration_s": smoke_stage_duration,
             "smoked_skipped_georeference_sources": smoke_georeference_sources,
+            "smoked_skipped_ocr_label_event_counts": smoke_ocr_label_events["event_counts"],
+            "smoked_skipped_ocr_full_detail_retry_count": smoke_ocr_label_events["full_detail_retry_count"],
+            "smoked_skipped_ocr_full_detail_retry_rows": smoke_ocr_label_events["full_detail_retry_rows"],
             "smoked_skipped_ocr_engine_profile": summarize_ocr_engine_profiles(smoke_validated),
             "evaluated_stage_duration_s": evaluated_stage_duration,
             "evaluated_georeference_sources": evaluated_georeference_sources,
+            "evaluated_ocr_label_event_counts": evaluated_ocr_label_events["event_counts"],
+            "evaluated_ocr_full_detail_retry_count": evaluated_ocr_label_events["full_detail_retry_count"],
+            "evaluated_ocr_full_detail_retry_rows": evaluated_ocr_label_events["full_detail_retry_rows"],
             "evaluated_ocr_engine_profile": summarize_ocr_engine_profiles(
                 [*scored, *smoke_validated]
             ),
@@ -1890,6 +1902,29 @@ def summarize_georeference_sources(scores: list[BenchmarkScore]) -> dict[str, in
         source = georeference_source_count_key(score.georeference_source)
         counts[source] = counts.get(source, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def summarize_ocr_label_events(scores: list[BenchmarkScore]) -> dict[str, Any]:
+    event_counts: dict[str, int] = {}
+    full_detail_retry_rows: list[str] = []
+    for score in scores:
+        events = score.ocr_label_events
+        if isinstance(events, list):
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                message = event.get("message")
+                if isinstance(message, str) and message:
+                    event_counts[message] = event_counts.get(message, 0) + 1
+        elif isinstance(score.ocr_label_event, str) and score.ocr_label_event:
+            event_counts[score.ocr_label_event] = event_counts.get(score.ocr_label_event, 0) + 1
+        if score.ocr_full_detail_retry:
+            full_detail_retry_rows.append(score.slug)
+    return {
+        "event_counts": dict(sorted(event_counts.items())),
+        "full_detail_retry_count": len(full_detail_retry_rows),
+        "full_detail_retry_rows": full_detail_retry_rows,
+    }
 
 
 def georeference_source_count_key(value: Any) -> str:

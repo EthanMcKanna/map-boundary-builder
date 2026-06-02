@@ -20,6 +20,7 @@ from map_boundary_builder.benchmark import (
     run_benchmark,
     score_full_fixture_in_process,
     summarize_georeference_sources,
+    summarize_ocr_label_events,
 )
 
 
@@ -137,6 +138,49 @@ def test_summarize_georeference_sources_counts_missing_sources() -> None:
     }
 
 
+def test_summarize_ocr_label_events_counts_retries() -> None:
+    scores = [
+        BenchmarkScore(
+            slug="phoenix-waymo",
+            image="Waymo Phoenix.png",
+            mode="full",
+            passed=True,
+            iou=0.98,
+            area_ratio=1.0,
+            centroid_distance_m=2.0,
+            vertices=42,
+            style="bright-blue",
+            ocr_label_events=[
+                {"message": "Map labels read", "label_count": 74},
+                {"message": "Full-detail map labels read", "label_count": 116},
+            ],
+            ocr_full_detail_retry=True,
+        ),
+        BenchmarkScore(
+            slug="dallas-waymo",
+            image="Waymo Dallas.png",
+            mode="full",
+            passed=True,
+            iou=0.96,
+            area_ratio=1.0,
+            centroid_distance_m=1.0,
+            vertices=20,
+            style="bright-blue",
+            ocr_label_event="Map labels read",
+            ocr_full_detail_retry=False,
+        ),
+    ]
+
+    assert summarize_ocr_label_events(scores) == {
+        "event_counts": {
+            "Full-detail map labels read": 1,
+            "Map labels read": 2,
+        },
+        "full_detail_retry_count": 1,
+        "full_detail_retry_rows": ["phoenix-waymo"],
+    }
+
+
 def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Path) -> None:
     polygon_dir = tmp_path / "polygons"
     image_dir = tmp_path / "images"
@@ -205,6 +249,11 @@ def test_run_benchmark_summary_includes_georeference_source_counts(
             style="blue-fill",
             duration_s=0.12,
             georeference_source="catalog-shape-match",
+            ocr_label_events=[
+                {"message": "Map labels read", "label_count": 8},
+                {"message": "Full-detail map labels read", "label_count": 12},
+            ],
+            ocr_full_detail_retry=True,
         )
 
     monkeypatch.setattr(benchmark_module, "score_full_fixture", fake_score_full_fixture)
@@ -226,6 +275,21 @@ def test_run_benchmark_summary_includes_georeference_source_counts(
     assert report["summary"]["active_georeference_sources"] == {"catalog-shape-match": 1}
     assert report["summary"]["smoked_skipped_georeference_sources"] == {}
     assert report["summary"]["evaluated_georeference_sources"] == {"catalog-shape-match": 1}
+    assert report["summary"]["active_ocr_label_event_counts"] == {
+        "Full-detail map labels read": 1,
+        "Map labels read": 1,
+    }
+    assert report["summary"]["active_ocr_full_detail_retry_count"] == 1
+    assert report["summary"]["active_ocr_full_detail_retry_rows"] == ["dallas-waymo"]
+    assert report["summary"]["smoked_skipped_ocr_label_event_counts"] == {}
+    assert report["summary"]["smoked_skipped_ocr_full_detail_retry_count"] == 0
+    assert report["summary"]["smoked_skipped_ocr_full_detail_retry_rows"] == []
+    assert report["summary"]["evaluated_ocr_label_event_counts"] == {
+        "Full-detail map labels read": 1,
+        "Map labels read": 1,
+    }
+    assert report["summary"]["evaluated_ocr_full_detail_retry_count"] == 1
+    assert report["summary"]["evaluated_ocr_full_detail_retry_rows"] == ["dallas-waymo"]
 
 
 def test_run_benchmark_repeat_profile_records_warm_samples(monkeypatch, tmp_path: Path) -> None:
