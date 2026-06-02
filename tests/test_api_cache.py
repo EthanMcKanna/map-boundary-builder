@@ -1321,6 +1321,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(cold["ocr"]["onnxruntime_allow_spinning"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_styles"], ["bright-blue", "gray-fill", "light-fill"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_min_area"], 1500.0)
+        self.assertEqual(cold["ocr"]["bright_blue_fast_text_ocr_min_area"], 2300.0)
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_area"], 900.0)
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_aspect"], 2.8)
         self.assertEqual(cold["ocr"]["fast_text_ocr_fallback_confidence"], 0.70)

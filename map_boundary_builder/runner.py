@@ -63,6 +63,7 @@ from .image_io import is_svg_image, normalize_image_for_processing
 from .ocr import OcrLabel, extract_ocr_labels_from_rgb
 from .osm_roads import image_feature_distance
 from .runtime_config import (
+    BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
     FAST_TEXT_OCR_FALLBACK_CONFIDENCE,
     FAST_TEXT_OCR_MIN_AREA,
     FAST_TEXT_OCR_STYLES,
@@ -1852,6 +1853,10 @@ def fast_text_ocr_min_area_for_style(style: str | None, *, source_is_svg: bool =
         if SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA <= 0.0:
             return None
         return SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA
+    if style == "bright-blue":
+        if BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA <= 0.0:
+            return None
+        return BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA
     if FAST_TEXT_OCR_MIN_AREA <= 0.0 or style not in FAST_TEXT_OCR_STYLES:
         return None
     return FAST_TEXT_OCR_MIN_AREA

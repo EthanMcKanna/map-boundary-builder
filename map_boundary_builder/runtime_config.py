@@ -133,6 +133,10 @@ ONNXRUNTIME_ALLOW_SPINNING = env_bool(
 )
 FAST_TEXT_OCR_STYLES = frozenset({"bright-blue", "gray-fill", "light-fill"})
 FAST_TEXT_OCR_MIN_AREA = env_float("MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA", 1500.0)
+BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA = env_float(
+    "MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA",
+    2300.0,
+)
 SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA = env_float(
     "MAP_BOUNDARY_SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA",
     300.0,
@@ -309,6 +313,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "onnxruntime_allow_spinning": ONNXRUNTIME_ALLOW_SPINNING,
         "fast_text_ocr_styles": sorted(FAST_TEXT_OCR_STYLES),
         "fast_text_ocr_min_area": FAST_TEXT_OCR_MIN_AREA,
+        "bright_blue_fast_text_ocr_min_area": BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
         "fast_text_ocr_rescue_min_area": FAST_TEXT_OCR_RESCUE_MIN_AREA,
         "fast_text_ocr_rescue_min_aspect": FAST_TEXT_OCR_RESCUE_MIN_ASPECT,
         "fast_text_ocr_fallback_confidence": FAST_TEXT_OCR_FALLBACK_CONFIDENCE,

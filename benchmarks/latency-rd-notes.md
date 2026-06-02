@@ -13696,3 +13696,37 @@ with zero failures in 0.531s.
   with pipeline `pipeline-b202d8651ee809b8`; the generated function bundle
   lists `resvg-py` as a direct dependency and includes
   `_vendor/resvg_py/resvg_py.cpython-312-x86_64-linux-gnu.so`.
+- Accepted a style-scoped non-SVG bright-blue fast-text OCR threshold of
+  `2300.0` after isolating the remaining slow warm-path tail to bright-blue
+  Waymo-style screenshots. A same-session slow-five sweep over Bay Area, Los
+  Angeles, Houston, Orlando, and Miami rejected smaller bright-blue OCR max
+  dimensions (`1300` and `1200`) because they failed expectations by dropping
+  support on LA/Houston/Miami. Detector limits `224` and `192` preserved
+  expectations but did not clearly improve the repeat tail. Global fast-text
+  thresholds `2000`, `2300`, and `2500` all preserved the slow-five
+  expectations, with `2300` strongest in that run: repeat p95 `0.524s`,
+  RapidOCR total p95 `0.450s`, detector p95 `0.235s`, and recognizer p95
+  `0.208s` versus same-session control repeat p95 `0.588s`, RapidOCR total
+  p95 `0.531s`, detector p95 `0.251s`, and recognizer p95 `0.262s`. A global
+  `2300` threshold was not shipped because it also changed the gray-fill Austin
+  path from `13` to `12` controls, despite identical geometry. The shipped
+  implementation adds `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA=2300`
+  while preserving the general gray/light `MAP_BOUNDARY_FAST_TEXT_OCR_MIN_AREA`
+  default at `1500` and the SVG bright-blue threshold at `300`. Focused tests
+  confirmed the scoping (`bright-blue=2300`, `svg bright-blue=300`,
+  `gray-fill=1500`) and `PYTHONPATH=. .venv/bin/uv run --with pytest python -m
+  pytest tests/test_runner_summary.py tests/test_api_cache.py
+  tests/test_runtime_warmup.py -q` passed `155` tests. Full validation:
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest -q` passed
+  `539` tests plus `30` subtests, `PYTHONPATH=. .venv/bin/python -m
+  compileall -q map_boundary_builder api tests` passed, and the actual-code
+  hard gate
+  `out/brightblue-fasttext2300-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, stable geometry-inclusive signatures,
+  `48/48` subsecond repeats, primary max `0.706481s`, repeat median `0.327s`,
+  repeat p90 `0.516s`, repeat p95 `0.546s`, RapidOCR total p95 `0.472s`,
+  detector p95 `0.264s`, and recognizer p95 `0.218s`. Compared with the prior
+  hard gate, all GeoJSON geometry hashes stayed identical; Miami improved from
+  `5` to `6` controls and confidence `0.73` to `0.788`, while repeat median,
+  p90, p95, OCR-total p95, detector p95, and recognizer p95 all improved.
