@@ -786,6 +786,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         error = row.get("error") or ""
         if isinstance(expected_error, str) and expected_error not in error:
             issues.append(f"error did not contain {expected_error!r}")
+        append_total_elapsed_expectation_issue(row, expect, issues)
         return issues
 
     source_prefix = expect.get("source_prefix")
@@ -809,11 +810,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
             issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
 
-    max_total_elapsed_s = expect.get("max_total_elapsed_s")
-    if isinstance(max_total_elapsed_s, (int, float)):
-        total_elapsed_s = row.get("total_elapsed_s")
-        if not isinstance(total_elapsed_s, (int, float)) or total_elapsed_s > float(max_total_elapsed_s):
-            issues.append(f"total_elapsed_s {total_elapsed_s!r} above {max_total_elapsed_s}")
+    append_total_elapsed_expectation_issue(row, expect, issues)
 
     expected_bbox = expect.get("bbox_approx")
     max_bbox_error_m = expect.get("max_bbox_error_m")
@@ -824,6 +821,14 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         elif bbox_error_m > float(max_bbox_error_m):
             issues.append(f"bbox max corner error {bbox_error_m:.1f}m above {float(max_bbox_error_m):g}m")
     return issues
+
+
+def append_total_elapsed_expectation_issue(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
+    max_total_elapsed_s = expect.get("max_total_elapsed_s")
+    if isinstance(max_total_elapsed_s, (int, float)):
+        total_elapsed_s = row.get("total_elapsed_s")
+        if not isinstance(total_elapsed_s, (int, float)) or total_elapsed_s > float(max_total_elapsed_s):
+            issues.append(f"total_elapsed_s {total_elapsed_s!r} above {max_total_elapsed_s}")
 
 
 def bbox_max_corner_error_m(observed: object, expected: object) -> float | None:

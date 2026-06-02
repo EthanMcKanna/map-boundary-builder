@@ -35,7 +35,8 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "failed",
-        "error_contains": "sparse OCR labels"
+        "error_contains": "sparse OCR labels",
+        "max_total_elapsed_s": 1.0
       }
     },
     {
@@ -45,7 +46,8 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "failed",
-        "error_contains": "sparse OCR labels"
+        "error_contains": "sparse OCR labels",
+        "max_total_elapsed_s": 1.0
       }
     },
     {

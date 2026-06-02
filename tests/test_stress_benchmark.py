@@ -407,6 +407,23 @@ def test_check_expectations_rejects_invalid_bbox() -> None:
     assert issues == ["bbox was missing or invalid"]
 
 
+def test_check_expectations_rejects_slow_expected_failure() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a reliable map location from sparse OCR labels.",
+            "total_elapsed_s": 1.2,
+        },
+        {
+            "status": "failed",
+            "error_contains": "sparse OCR labels",
+            "max_total_elapsed_s": 1.0,
+        },
+    )
+
+    assert issues == ["total_elapsed_s 1.2 above 1.0"]
+
+
 def test_run_stress_case_accepts_expected_fail_closed(tmp_path, monkeypatch) -> None:
     image = tmp_path / "zoox.png"
     image.write_bytes(b"not a real image")

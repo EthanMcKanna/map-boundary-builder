@@ -13395,3 +13395,26 @@ with zero failures in 0.531s.
   cases, `48/48` subsecond repeats, primary max `0.771357s`, repeat median
   `0.364s`, repeat p95 `0.544s`, repeat max `0.588s`, RapidOCR total p95
   `0.473s`, detector p95 `0.250s`, and recognizer p95 `0.232s`.
+- Closed a stress-harness blind spot for fail-closed negative controls:
+  per-case `expect.max_total_elapsed_s` is now checked for expected non-complete
+  rows instead of being skipped by the early return that validates
+  `error_contains`. This lets the Las Vegas Zoox sparse-label controls assert
+  both the intended failure reason and a fast failure budget even when a run is
+  not launched with the global `--max-total-elapsed-s` guard. The two manifest
+  negative controls now cap total elapsed time at `1.0s`; the accepted
+  hard-gate samples remained well below that at `0.157873s` and `0.319091s`.
+  Focused validation: `jq empty` on `benchmarks/real-screenshot-stress.json`
+  passed, the stress benchmark test module passed `37` tests,
+  `PYTHONPATH=. .venv/bin/python -m compileall -q map_boundary_builder tests`
+  passed, `git diff --check` passed, and the full suite passed `527` tests plus
+  `30` subtests. A targeted no-global-budget negative-control run
+  `out/fail-closed-latency-negatives-actual-20260602/stress-summary.json`
+  passed `2/2` expected failures with max total `0.369141s`, proving the
+  manifest-level cap is active without relying on the global latency budget.
+  The full actual-code hard gate
+  `out/fail-closed-latency-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeats, stable bbox-inclusive signatures for all `16`
+  cases, `48/48` subsecond repeats, primary max `0.699770s`, repeat median
+  `0.350s`, repeat p95 `0.545s`, repeat max `0.568s`, RapidOCR total p95
+  `0.475s`, and recognizer p95 `0.233s`.
