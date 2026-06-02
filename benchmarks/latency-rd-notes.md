@@ -15264,3 +15264,29 @@ with zero failures in 0.531s.
   expected, statuses `{"complete":18,"failed":11}`, primary max `0.744776s`,
   repeat `58/58` subsecond, repeat p95 `0.672277s`, repeat max `0.775204s`,
   OCR calls `26`, Ann Arbor four controls at `0.62192s`).
+- Raised the road-refine feature-field cache cap from `1000000` to `3000000`
+  pixels after isolating the remaining fresh-cache hard-gate tail on Nashville:
+  the baseline seed-only full gate still spent about `0.50s` in Nashville
+  georeference/road refinement and repeats could reach `0.775204s` because the
+  HD `1920x1080` road feature field exceeded the old cache cap. This is a
+  narrower version of the previously rejected `6000000` cap: it admits common
+  1080p feature fields without enabling much larger rasters that had regressed
+  broad fixtures. A Nashville-only probe with
+  `MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS=3000000` kept the same
+  `ocr-georeference:nominatim-label-fit+osm-road-refine` path and made repeats
+  subsecond with median `0.325s`, p95 `0.490s`, and max `0.509s`; the matching
+  default-cap probe had repeat p95 `1.289s` and max `1.348s` because each repeat
+  recomputed road refinement. The full fresh-cache/network-blocked hard gate
+  under the `3000000` candidate passed at
+  `out/roadcache3m-yost-seedonly-full29-hard-20260602/stress-summary.json`:
+  `29/29` expected, statuses `{"complete":18,"failed":11}`, primary max
+  `0.770328s`, repeat `58/58` subsecond, repeat p95 `0.553s`, repeat max
+  `0.581s`, OCR calls `26`, Nashville preserved three controls, confidence
+  `0.746501`, and source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`. After patching the
+  default, the same full hard gate without an env override passed at
+  `out/roadcache3m-default-full29-hard-20260602/stress-summary.json`: `29/29`
+  expected, statuses `{"complete":18,"failed":11}`, primary max `0.773081s`,
+  repeat `58/58` subsecond, repeat p95 `0.554s`, repeat max `0.596s`, OCR
+  calls `26`, and Nashville still preserved three controls on the
+  road-refined path at `0.773s`.

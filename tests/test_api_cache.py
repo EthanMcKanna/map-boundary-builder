@@ -1419,6 +1419,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"], "1")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_RUNNER_OCR_CACHE"], "1")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS"], "3000000")
+        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS"], "3000000")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"], "24")
         self.assertEqual(cold["runtime_dependencies"]["onnxruntime"], "1.26.0")
         self.assertIn("cairosvg", cold["runtime_dependencies"])

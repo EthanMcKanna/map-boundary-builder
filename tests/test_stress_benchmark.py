@@ -870,6 +870,7 @@ def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monk
     assert runtime_config["ocr"] == {"rapidocr_max_dimension": 1400}
     assert runtime_config["generation_env"][RUNNER_OCR_CACHE_ENV] == "0"
     assert runtime_config["generation_env"][EXTRACTION_CACHE_ENV] == "0"
+    assert runtime_config["generation_env"]["MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS"] == "3000000"
     assert os.environ.get(RUNNER_OCR_CACHE_ENV) is None
     assert os.environ.get(EXTRACTION_CACHE_ENV) is None
 
