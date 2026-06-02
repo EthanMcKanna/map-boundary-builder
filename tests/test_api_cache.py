@@ -18,6 +18,8 @@ from api.index import (
     LEGACY_CRON_WARM_PATH,
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     allow_catalog_for_request,
+    avif_container_run_result_cache_key,
+    avif_container_sha256,
     authorized_cron_request,
     bool_field,
     cached_payload_satisfies_success_options,
@@ -97,6 +99,20 @@ def insert_webp_chunk(image_bytes: bytes, chunk_type: bytes, payload: bytes) -> 
         chunk += b"\x00"
     riff_size = int.from_bytes(image_bytes[4:8], "little") + len(chunk)
     return image_bytes[:4] + riff_size.to_bytes(4, "little") + image_bytes[8:] + chunk
+
+
+def bmff_box(box_type: bytes, payload: bytes) -> bytes:
+    assert len(box_type) == 4
+    return (len(payload) + 8).to_bytes(4, "big") + box_type + payload
+
+
+def avif_like_bytes(*, media_payload: bytes = b"image-data", padding: bytes = b"") -> bytes:
+    return (
+        bmff_box(b"ftyp", b"avif\x00\x00\x00\x00avifmif1")
+        + bmff_box(b"meta", b"\x00\x00\x00\x00avif-metadata")
+        + bmff_box(b"mdat", media_payload)
+        + padding
+    )
 
 
 class ApiRunCacheTests(unittest.TestCase):
@@ -647,6 +663,41 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         self.assertIsNone(webp_visual_run_result_cache_key(b"not a webp", None, BoundaryBuildOptions()))
 
+    def test_avif_container_hash_ignores_padding_boxes_only(self) -> None:
+        base = avif_like_bytes()
+        padded = avif_like_bytes(padding=bmff_box(b"free", b"padding") + bmff_box(b"skip", b"more"))
+        changed_media = avif_like_bytes(media_payload=b"changed-image-data")
+        changed_metadata = (
+            bmff_box(b"ftyp", b"avif\x00\x00\x00\x00avifmif1")
+            + bmff_box(b"meta", b"\x00\x00\x00\x00changed-metadata")
+            + bmff_box(b"mdat", b"image-data")
+        )
+
+        self.assertNotEqual(base, padded)
+        self.assertEqual(avif_container_sha256(base), avif_container_sha256(padded))
+        self.assertNotEqual(avif_container_sha256(base), avif_container_sha256(changed_media))
+        self.assertNotEqual(avif_container_sha256(base), avif_container_sha256(changed_metadata))
+        self.assertIsNone(avif_container_sha256(b"not an avif"))
+        self.assertIsNone(avif_container_sha256(base[:-1]))
+
+    def test_avif_container_run_cache_key_ignores_padding_but_keeps_options(self) -> None:
+        base = avif_like_bytes()
+        padded = avif_like_bytes(padding=bmff_box(b"free", b"cache bust"))
+
+        self.assertNotEqual(
+            raw_run_result_cache_key(base, None, BoundaryBuildOptions()),
+            raw_run_result_cache_key(padded, None, BoundaryBuildOptions()),
+        )
+        self.assertEqual(
+            avif_container_run_result_cache_key(base, None, BoundaryBuildOptions()),
+            avif_container_run_result_cache_key(padded, None, BoundaryBuildOptions()),
+        )
+        self.assertNotEqual(
+            avif_container_run_result_cache_key(base, None, BoundaryBuildOptions()),
+            avif_container_run_result_cache_key(base, "Ann Arbor", BoundaryBuildOptions()),
+        )
+        self.assertIsNone(avif_container_run_result_cache_key(b"not an avif", None, BoundaryBuildOptions()))
+
     def test_tiff_visual_hash_ignores_metadata_only(self) -> None:
         base = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)))
         first = tiff_bytes(Image.new("RGB", (4, 3), (12, 34, 56)), description="first metadata")
@@ -1021,6 +1072,70 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertFalse(payload["profile"]["normalized_cache_lookup_enabled"])
         self.assertEqual(payload["profile"]["normalized_cache_lookup_s"], 0.0)
         self.assertIn("tiff_visual_cache_lookup_s", payload["profile"])
+        self.assertEqual(payload["summary"]["city"], "Ann Arbor")
+
+    def test_create_run_uses_avif_container_cache_before_normalized_lookup(self) -> None:
+        filename = "Ann Arbor.avif"
+        first = avif_like_bytes()
+        second = avif_like_bytes(padding=bmff_box(b"free", b"padding-only variant"))
+        cache_options = SimpleNamespace(
+            simplify_px=6.0,
+            min_confidence=0.55,
+            min_control_points=3,
+            include_overlay=False,
+            preview_max_dimension=None,
+            overlay_format="png",
+            write_mask_artifact=False,
+            allow_catalog=True,
+            catalog_probe_only=False,
+            catalog_probe_missed=False,
+            catalog_probe_miss_low_iou=False,
+            filename_hint=filename,
+        )
+        cached_payload = {
+            "id": "old-run",
+            "filename": filename,
+            "city": "Ann Arbor",
+            "status": "complete",
+            "summary": {
+                "city": "Ann Arbor",
+                "combined_confidence": 0.805,
+                "control_points": 3,
+            },
+            "artifacts": {"geojson_inline": {"type": "FeatureCollection", "features": []}},
+        }
+        with (
+            TemporaryDirectory() as workdir,
+            patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)),
+            patch("api.index.get_pipeline_version", return_value="pipeline-avif-container-cache"),
+        ):
+            container_key = avif_container_run_result_cache_key(first, None, cache_options)
+            assert container_key is not None
+            write_run_result_cache(container_key, cached_payload)
+
+            request = api_index.handler.__new__(api_index.handler)
+            request.parse_upload_request = lambda: (
+                {"include_overlay": "0", "normalized_cache_lookup": "1"},
+                {"image": (filename, second)},
+                "multipart",
+            )
+            captured: dict[str, object] = {}
+
+            def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+                captured["payload"] = payload
+                captured["status"] = status
+
+            request.send_json = send_json
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["profile"]["cache_hit"], "avif-container")
+        self.assertTrue(payload["profile"]["normalized_cache_lookup_enabled"])
+        self.assertEqual(payload["profile"]["normalized_cache_lookup_s"], 0.0)
+        self.assertIn("avif_container_cache_lookup_s", payload["profile"])
         self.assertEqual(payload["summary"]["city"], "Ann Arbor")
 
     def test_create_run_reports_runner_import_failure_without_secondary_error(self) -> None:

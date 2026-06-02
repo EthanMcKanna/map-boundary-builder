@@ -98,6 +98,9 @@ JPEG_XMP_PREFIX = b"http://ns.adobe.com/xap/1.0/\x00"
 WEBP_RIFF_SIGNATURE = b"RIFF"
 WEBP_SIGNATURE = b"WEBP"
 WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
+AVIF_BRAND_BOX_TYPES = {b"ftyp", b"styp"}
+AVIF_MEDIA_BOX_TYPES = {b"meta", b"mdat"}
+AVIF_CONTAINER_NON_VISUAL_BOXES = {b"free", b"skip"}
 TIFF_LITTLE_ENDIAN_SIGNATURE = b"II"
 TIFF_BIG_ENDIAN_SIGNATURE = b"MM"
 TIFF_CLASSIC_MAGIC = 42
@@ -505,6 +508,40 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        avif_container_cache_started = time.perf_counter()
+        avif_container_hash = avif_container_sha256(image_bytes)
+        if avif_container_hash is not None:
+            avif_container_cache_key, avif_container_success_cache_key = run_result_cache_key_pair_for_hash(
+                "avif_container_sha256",
+                avif_container_hash,
+                city,
+                options,
+            )
+        else:
+            avif_container_cache_key = None
+            avif_container_success_cache_key = None
+        if avif_container_cache_key is not None:
+            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+                avif_container_cache_key,
+                avif_container_success_cache_key,
+                options=options,
+            )
+        else:
+            compatible_cache_hit = False
+        profile["avif_container_cache_lookup_s"] = elapsed_seconds(avif_container_cache_started)
+        if avif_container_cache_key is not None and cached is not None:
+            raw_cache_write_started = time.perf_counter()
+            write_run_result_cache(raw_cache_key, cached)
+            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            profile["cache_hit"] = "avif-container-compatible" if compatible_cache_hit else "avif-container"
+            profile["total_before_send_s"] = elapsed_seconds(request_started)
+            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            self.send_json(
+                payload,
+                status=cached_run_response_status(payload),
+            )
+            return
+
         tiff_visual_cache_started = time.perf_counter()
         tiff_visual_hash = tiff_visual_sha256(image_bytes)
         if tiff_visual_hash is not None:
@@ -635,6 +672,8 @@ class handler(BaseHTTPRequestHandler):
                 write_run_result_cache(jpeg_visual_cache_key, payload)
             if webp_visual_cache_key is not None:
                 write_run_result_cache(webp_visual_cache_key, payload)
+            if avif_container_cache_key is not None:
+                write_run_result_cache(avif_container_cache_key, payload)
             if tiff_visual_cache_key is not None:
                 write_run_result_cache(tiff_visual_cache_key, payload)
             write_run_result_cache(raw_cache_key, payload)
@@ -658,6 +697,8 @@ class handler(BaseHTTPRequestHandler):
                     write_run_result_cache(jpeg_visual_cache_key, payload)
                 if webp_visual_cache_key is not None:
                     write_run_result_cache(webp_visual_cache_key, payload)
+                if avif_container_cache_key is not None:
+                    write_run_result_cache(avif_container_cache_key, payload)
                 if tiff_visual_cache_key is not None:
                     write_run_result_cache(tiff_visual_cache_key, payload)
                 write_run_result_cache(raw_cache_key, payload)
@@ -694,6 +735,8 @@ class handler(BaseHTTPRequestHandler):
             write_run_result_cache(jpeg_visual_cache_key, payload)
         if webp_visual_cache_key is not None:
             write_run_result_cache(webp_visual_cache_key, payload)
+        if avif_container_cache_key is not None:
+            write_run_result_cache(avif_container_cache_key, payload)
         if tiff_visual_cache_key is not None:
             write_run_result_cache(tiff_visual_cache_key, payload)
         write_run_result_cache(raw_cache_key, payload)
@@ -704,6 +747,7 @@ class handler(BaseHTTPRequestHandler):
             jpeg_commentless_success_cache_key,
             jpeg_visual_success_cache_key,
             webp_visual_success_cache_key,
+            avif_container_success_cache_key,
             tiff_visual_success_cache_key,
             normalized_success_cache_key if cache_key is not None else None,
         )
@@ -1198,6 +1242,26 @@ def webp_visual_run_result_success_cache_key(image_bytes: bytes, city: str | Non
     )
 
 
+def avif_container_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    container_hash = avif_container_sha256(image_bytes)
+    if container_hash is None:
+        return None
+    return run_result_cache_key_for_hash("avif_container_sha256", container_hash, city, options)
+
+
+def avif_container_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
+    container_hash = avif_container_sha256(image_bytes)
+    if container_hash is None:
+        return None
+    return run_result_cache_key_for_hash(
+        "avif_container_sha256",
+        container_hash,
+        city,
+        options,
+        threshold_compatible=True,
+    )
+
+
 def tiff_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
     visual_hash = tiff_visual_sha256(image_bytes)
     if visual_hash is None:
@@ -1504,6 +1568,47 @@ def webp_visual_sha256(image_bytes: bytes) -> str | None:
             digest.update(image_bytes[data_start:data_end])
         offset = padded_end
     if offset != riff_end:
+        return None
+    return digest.hexdigest()
+
+
+def avif_container_sha256(image_bytes: bytes) -> str | None:
+    if len(image_bytes) < 16:
+        return None
+    digest = hashlib.sha256()
+    digest.update(b"avif-container-v1")
+    offset = 0
+    saw_avif_brand = False
+    saw_media_box = False
+    while offset < len(image_bytes):
+        if offset + 8 > len(image_bytes):
+            return None
+        box_size = int.from_bytes(image_bytes[offset : offset + 4], "big")
+        box_type = image_bytes[offset + 4 : offset + 8]
+        header_size = 8
+        if box_size == 1:
+            if offset + 16 > len(image_bytes):
+                return None
+            box_size = int.from_bytes(image_bytes[offset + 8 : offset + 16], "big")
+            header_size = 16
+        elif box_size == 0:
+            box_size = len(image_bytes) - offset
+        if box_size < header_size or offset + box_size > len(image_bytes):
+            return None
+        payload_start = offset + header_size
+        payload = image_bytes[payload_start : offset + box_size]
+        if box_type in AVIF_BRAND_BOX_TYPES:
+            if b"avif" not in payload and b"avis" not in payload:
+                return None
+            saw_avif_brand = True
+        if box_type in AVIF_MEDIA_BOX_TYPES:
+            saw_media_box = True
+        if box_type not in AVIF_CONTAINER_NON_VISUAL_BOXES:
+            digest.update(box_type)
+            digest.update(len(payload).to_bytes(8, "big"))
+            digest.update(payload)
+        offset += box_size
+    if offset != len(image_bytes) or not saw_avif_brand or not saw_media_box:
         return None
     return digest.hexdigest()
 

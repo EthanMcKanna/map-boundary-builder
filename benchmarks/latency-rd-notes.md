@@ -11571,3 +11571,25 @@ with zero failures in 0.531s.
   Focused validation passed with `6` selected TIFF/normalized API cache tests,
   `py_compile` for the edited API/test files, full `tests/test_api_cache.py`
   (`72 passed`), and `git diff --check`.
+- Accepted a narrow AVIF container-cache tier ahead of the AVIF decoded-pixel
+  normalized fallback. The parser is intentionally conservative: it recognizes
+  AVIF-like ISO BMFF containers, hashes all non-padding box payloads, ignores
+  only `free` / `skip` padding boxes, and returns `None` for malformed or
+  unsupported containers. On the real Ann Arbor AVIF stress case plus the
+  appended-`free` byte variant, a throwaway parser measured about `0.028ms`
+  median per hash and still distinguished a re-encoded one-pixel-changed AVIF.
+  The process-isolated API probe kept the frontend-shaped
+  `normalized_cache_lookup=1` request and compared the patched tier with a
+  monkeypatched disabled control. With the new tier enabled, the source miss
+  paid only `avif_container_cache_lookup_s: 0.000335` before falling through to
+  the existing normalized/build path, and the byte-variant returned
+  `cache_hit: avif-container` in `0.009146s` before send with
+  `normalized_cache_lookup_s: 0.0`. With the AVIF container tier disabled, the
+  same byte-variant hit the generic normalized cache in `0.074287s` before send
+  and spent `0.065519s` in decoded-pixel lookup
+  (`out/avif-container-cache-probe-20260602/api-avif-container-cache-same-filename-results.json`).
+  This is not a replacement for normalized pixels; it catches safe
+  padding-only/container variants first and leaves normalized lookup to handle
+  real same-pixel encodings that differ inside visual or metadata boxes.
+  Focused AVIF/normalized API cache coverage passed (`6 passed`) and
+  `py_compile` passed for the edited API/test files.
