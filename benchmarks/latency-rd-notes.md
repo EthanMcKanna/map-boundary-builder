@@ -13007,3 +13007,24 @@ with zero failures in 0.531s.
   cold max was higher in the new full gate (`0.952189s`, Bay Area) than the
   previous checkpoint (`0.892963s`), but that case is outside the guarded
   selector path and the analyzed repeats improved without signature drift.
+  Production deployment proof: commit `8c2c557` was built with Vercel CLI
+  `54.3.0` using `PATH="$PWD/.venv/bin:$PATH" vercel build --prod` and
+  deployed with `vercel deploy --prebuilt --prod --yes` as
+  `dpl_mQw9VwReT8iocjVqiKT3gQGs6cpN`, aliased to
+  `https://mapboundary.app`. Public `/api/health?warm=ocr`
+  (`out/prod-header-region-filter-health-20260602.json`) returned `ok: true`,
+  pipeline `pipeline-28ad601e2d0bb2ae`, warm `status: ok`, warm total
+  `2.559230s`, RapidOCR warm `2.129817s`, and `cv2 4.10.0`. A cache-busted
+  original Grand Rapids no-catalog POST with `include_overlay=0` and
+  `normalized_cache_lookup=0`
+  (`out/prod-header-region-filter-grand-rapids-20260602.json`) returned HTTP
+  `201`, `cache_hit: miss`, city `Grand Rapids`, source
+  `ocr-georeference:nominatim-label-fit`, `5` controls, the expected bbox,
+  `build_boundary_s: 1.974851`, `total_before_send_s: 1.982281`, and stage
+  timings `extract=0.236760s`, `ocr=1.537423s`, `georeference=0.109978s`.
+  A one-pixel cache-busted PNG variant
+  (`out/prod-header-region-filter-grand-rapids-pixelbust-20260602.json`)
+  then forced another run-cache miss on the warm instance and preserved the
+  same city/source/controls/bbox with `build_boundary_s: 0.163889`,
+  `total_before_send_s: 0.175637`, and stages `extract=0.110085s`,
+  `ocr=0.011446s`, `georeference=0.013121s`.
