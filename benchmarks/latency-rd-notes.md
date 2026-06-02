@@ -12383,3 +12383,35 @@ with zero failures in 0.531s.
   stable p95 subsecond generation under load, and that future speed work should
   keep targeting OCR variance, especially full-frame dark-teal and dense
   dark-teal text recognition.
+- Rejected two tempting OCR-tail shortcuts after direct probes. First, enabling
+  the focused dark-teal OCR path ahead of full-frame OCR for no-catalog Zoox
+  portrait screenshots preserved the sparse-label failure behavior, but did not
+  produce a clean speed win under disabled OCR/extraction caches. On
+  `/Users/ethanmckanna/Downloads/IMG_0226.PNG`, the current full-frame path
+  failed closed in `6.064562s`, `2.757863s`, `2.093629s`, and `2.340129s`
+  across four fresh samples, while focus-first plus full-detail fallback took
+  `3.219686s`, `3.255675s`, `2.451078s`, and `2.239317s`. It also adds a
+  geocoder/focused-fit attempt before the same full OCR fallback, so it is not
+  safe enough to ship as a default.
+- Rejected lowering RapidOCR recognition batch size from the current default
+  `12` despite a strong stress-only Zoox tail improvement. Targeted Zoox
+  stress probes with disabled OCR/extraction caches preserved the two expected
+  fail-closed rows and improved repeat p95 from the same-moment default control
+  `2.863s` (`out/stress-zoox-current-baseline-20260602/stress-summary.json`)
+  to `1.689s` at `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=8`
+  (`out/stress-zoox-recbatch8-20260602/stress-summary.json`) and `1.660s` at
+  `=16` (`out/stress-zoox-recbatch16-20260602/stress-summary.json`). The full
+  expanded 16-case stress repeat with `=16` was also attractive:
+  `out/stress-expanded16-recbatch16-repeat4-20260602/stress-summary.json`
+  preserved `16/16` primary expectations and `48/48` analyzed repeat
+  expectations, with primary max `0.842800s`, analyzed repeat median `0.510s`,
+  p95 `0.819s`, max `1.057s`, and only one repeat budget violation. However,
+  the stricter no-catalog current-reference benchmark rejected both `=16` and
+  `=8` against `out/nocatalog-source-subsecond-20260602/full-report.json`:
+  `out/recbatch16-currentref-strict-20260602/full-report.json` and
+  `out/recbatch8-currentref-strict-20260602/full-report.json` each scored only
+  `7/8` active fixtures, made Nashville fail as sparse OCR, dropped Phoenix
+  IoU from `0.983820` to `0.853339`, dropped Los Angeles IoU from `0.942536`
+  to `0.925149`, lost Phoenix/Los Angeles OCR labels, and failed strict
+  top-label retention. Keep `RAPIDOCR_REC_BATCH_NUM=12`; stress-only latency
+  wins that alter OCR evidence are not acceptable defaults.
