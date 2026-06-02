@@ -11626,3 +11626,25 @@ with zero failures in 0.531s.
   (`out/ocr-label-regression-gate-pass-20260602/full-report.json`). Focused
   benchmark tests passed (`52 passed`), the full suite passed (`450 passed`),
   and `git diff --check` passed.
+- Rejected closer-to-default global OCR max-side trimming under the new OCR
+  label-loss gate. The current no-catalog baseline
+  `out/ocr-label-regression-gate-pass-20260602/full-report.json` has active
+  total `5.612038s`, OCR total `4.230392s`, average IoU `0.967842`, min IoU
+  `0.942536`, and stable OCR evidence for all `8` active fixtures. Dropping
+  `MAP_BOUNDARY_RAPIDOCR_MAX_DIMENSION` to `1580` failed the strict baseline
+  comparison with `11` regression issues, slowed active total to `6.843192s`,
+  and collapsed Phoenix from IoU `0.983820` to `0.841294`; the label gate
+  specifically surfaced lost labels including Dallas `oak lawn` /
+  `university park`, Orlando `orlando`, Phoenix `fashion park` /
+  `school park`, and San Antonio `san antonio`
+  (`out/ocrmax1580-strict-label-gate-20260602/full-report.json`). A nearly
+  default `1595` probe still failed with `10` regression issues, slowed active
+  total to `6.073045s`, nudged average IoU down to `0.967593`, and compared
+  OCR label counts/top-label sets for all `8` fixtures; top-label retention
+  dropped for Dallas, Los Angeles, Nashville, Orlando, Phoenix, and San
+  Antonio, while OCR total barely changed (`4.260518s`) and georeference grew
+  to `0.718808s`
+  (`out/ocrmax1595-strict-label-gate-20260602/full-report.json`). Treat global
+  OCR max-side trimming below the current `1600` as closed unless a future
+  design has a pre-georeference equivalence verifier or a style/market-specific
+  trigger with same-session speed proof.
