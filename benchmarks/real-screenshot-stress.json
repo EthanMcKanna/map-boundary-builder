@@ -368,6 +368,23 @@
       }
     },
     {
+      "slug": "san-antonio-waymo",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "San Antonio",
+        "min_control_points": 10,
+        "min_ocr_labels": 18,
+        "min_combined_confidence": 0.90,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-98.5610934, 29.3896417, -98.3917587, 29.5392142],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "bay-area-waymo",
       "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
       "no_catalog": true,

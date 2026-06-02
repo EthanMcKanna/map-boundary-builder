@@ -15456,3 +15456,28 @@ with zero failures in 0.531s.
   against `out/road-skip-full32-hard-20260602/stress-summary.json` showed zero
   changes for status, source, city, bbox, geometry hash, coordinate count,
   confidence, or control count.
+- Screened uncovered current Waymo service-area screenshots after the Dallas
+  stress expansion. The no-catalog scored benchmark candidate at
+  `out/candidate-sanantonio-phoenix-benchmark-20260602/full-report.json`
+  accepted San Antonio but rejected Phoenix for this manifest pass: San Antonio
+  scored IoU `0.930016`, area ratio `1.037497`, centroid distance `147.3m`,
+  source `ocr-georeference:nominatim-label-fit`, 11 controls, confidence
+  `0.946`, bbox `[-98.5610934, 29.3896417, -98.3917587, 29.5392142]`, and
+  profiled duration `0.645702s`; Phoenix scored IoU `0.853339` but exceeded
+  the subsecond gate at `1.312764s` with `0.621500s` georeference, so do not
+  add Phoenix until a follow-up speed change earns it back. A stricter
+  temporary San Antonio stress gate at
+  `out/candidate-waymo-sanantonio-stress-20260602/stress-summary.json` passed
+  with primary `0.619933s`, repeat p95 `0.523570s`, repeat max `0.532216s`,
+  stable output signature, OCR engine p95 `0.448246s`, 14 selected boxes, and
+  zero labels below 80 confidence. After adding the row to the tracked
+  manifest, focused validation at
+  `out/waymo-sanantonio-tracked-focused-20260602/stress-summary.json` passed
+  with primary `0.617176s` and repeat p95 `0.475449s`. The expanded hard gate
+  at `out/waymo-sanantonio-full34-hard-20260602/stress-summary.json` passed
+  `34/34` expected rows, statuses `{"complete":23,"failed":11}`, primary max
+  `0.784237s`, repeat `34/34` subsecond, repeat p95 `0.549378s`, repeat max
+  `0.618971s`, and no repeat signature drift. Comparing all 33 common rows
+  against `out/waymo-dallas-full33-hard-20260602/stress-summary.json` showed
+  zero changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, or control count.
