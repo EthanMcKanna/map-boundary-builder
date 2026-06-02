@@ -11496,3 +11496,27 @@ with zero failures in 0.531s.
   (`out/brightblue-det208-waymo-scoredref-probe-20260602/full-report.json`).
   Accuracy stability is encouraging, but the lower detector cap is not a
   reliable default speedup.
+- Rejected higher-resolution split-detection OCR as a near-term bright-blue
+  default. A scratch monkeypatch detected filtered text boxes at `1300`,
+  `1400`, or `1500` max-side pixels and recognized selected crops at the
+  accepted `1600` max-side path, leaving the full-detail fallback unchanged.
+  The targeted stress set covered the previous drift/tail fixtures
+  (`phoenix-waymo`, `miami-waymo`, `los-angeles-waymo`, `orlando-waymo`,
+  `dallas-waymo`, `houston-waymo`) against
+  `out/recbatch12-default-currentref-20260601/full-report.json`. The `1300`
+  probe was already unsafe, dropping Phoenix by `0.138012` IoU and Dallas by
+  `0.012298` while LA still moved by `0.000068`
+  (`out/bright-blue-split-det1300-rec1600-target-probe-20260602/full-report.json`).
+  Rerunning with scored current catalog references showed `1400` was a useful
+  diagnostic but still failed strict regression: Dallas, Orlando, and Houston
+  were fast and preserved/improved IoU, but LA dropped `0.017387`, Miami
+  dropped `0.110641`, and Phoenix dropped `0.130481`; total OCR was
+  `2.353695s`, max fixture duration `1.316478s`
+  (`out/bright-blue-split-det1400-rec1600-target-probe-20260602/full-report.json`).
+  At `1500`, LA recovered, but Dallas dropped `0.044611`, Miami dropped
+  `0.059175`, and Phoenix dropped `0.141247`, with OCR rising to `3.352407s`
+  (`out/bright-blue-split-det1500-rec1600-target-probe-20260602/full-report.json`).
+  The pattern rules out a simple split-detector scale promotion: the pass cases
+  are market-specific and the wrong fits can still have plausible confidence.
+  Do not ship this without an independent pre-georeference label-stability
+  guard or a much broader fixture-backed provider/market strategy.
