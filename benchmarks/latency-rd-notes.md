@@ -12587,3 +12587,23 @@ with zero failures in 0.531s.
   Grand Rapids stayed stable at `city=Grand Rapids`, `control_points=5`, and
   `ocr_label_count=56`; Zoox tall stayed stable in its expected fail-closed
   sparse-OCR signature with `ocr_label_count=62`.
+- Tightened the existing `--fail-on-unexpected` stress gate so it also fails
+  when analyzed repeat-profile samples violate manifest expectations. Before
+  this change, a run with a clean primary row could still finish zero if a
+  repeat sample failed expectations and no latency/signature gate caught it.
+  The harness now reads `repeat_profile.summary.unexpected_samples`, falls back
+  to per-case repeat summaries when needed, and prints a compact
+  `repeat unexpected` line naming affected repeat cases. This is
+  diagnostic-only and does not change generation, OCR inputs, labels,
+  georeferencing, cache keys, or deployed runtime behavior. Focused harness
+  coverage passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  (`21 passed`), and the full suite passed with
+  `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`501 passed, 30 subtests passed`). A real no-cache in-process smoke with
+  both `--fail-on-unexpected` and `--fail-on-repeat-signature-drift`,
+  `out/stress-repeat-unexpected-gate-smoke-20260602/stress-summary.json`,
+  preserved `2/2` primary expectations, kept analyzed repeats at `4/4`
+  expected and `4/4` subsecond, and reported `unexpected_samples=0`,
+  `stable_signature_cases=2`, `unstable_signature_cases=[]`, median total
+  `0.730768s`, p95 total `0.837784s`, and max total `0.838158s`.

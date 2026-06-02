@@ -772,6 +772,30 @@ def test_repeat_profile_signature_drift_cases_reads_summary() -> None:
     ) == []
 
 
+def test_repeat_profile_unexpected_helpers_read_summary_and_cases() -> None:
+    report = {
+        "repeat_profile": {
+            "summary": {"unexpected_samples": 3},
+            "cases": {
+                "stable": {"unexpected_samples": 0},
+                "flaky": {"unexpected_samples": 2},
+                "missing": {},
+            },
+        }
+    }
+
+    assert stress_module.repeat_profile_unexpected_sample_count(report) == 3
+    assert stress_module.repeat_profile_unexpected_cases(report) == ["flaky"]
+
+    assert (
+        stress_module.repeat_profile_unexpected_sample_count(
+            {"repeat_profile": {"cases": {"fallback": {"unexpected_samples": 2}}}}
+        )
+        == 2
+    )
+    assert stress_module.repeat_profile_unexpected_sample_count({}) == 0
+
+
 def test_main_requires_repeat_runs_for_repeat_signature_drift_gate(monkeypatch) -> None:
     def fake_run_stress_benchmark(*args, **kwargs):
         raise AssertionError("stress benchmark should not run without repeat samples")
@@ -889,6 +913,61 @@ def test_main_passes_repeat_signature_drift_gate_when_stable(tmp_path, monkeypat
     )
 
     assert exit_code == 0
+
+
+def test_main_fails_on_repeat_profile_unexpected_when_requested(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["repeat_profile_runs"] == 2
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.7,
+            },
+            "rows": [
+                {
+                    "slug": "flaky-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.7,
+                }
+            ],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 1,
+                    "unexpected_samples": 1,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.64,
+                    "p95_total_elapsed_s": 0.68,
+                    "max_total_elapsed_s": 0.68,
+                    "unstable_signature_cases": [],
+                },
+                "cases": {"flaky-map": {"unexpected_samples": 1}},
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--repeat-profile-runs",
+            "2",
+            "--fail-on-unexpected",
+        ]
+    )
+
+    assert exit_code == 1
 
 
 def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> None:

@@ -141,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
         return 1
-    if args.fail_on_unexpected and report["summary"]["unexpected"]:
+    if args.fail_on_unexpected and (
+        report["summary"]["unexpected"] or repeat_profile_unexpected_sample_count(report)
+    ):
         return 1
     return 0
 
@@ -1021,6 +1023,50 @@ def repeat_profile_signature_drift_cases(report: dict[str, Any]) -> list[str]:
     return [str(slug) for slug in unstable_cases]
 
 
+def repeat_profile_unexpected_sample_count(report: dict[str, Any]) -> int:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return 0
+    summary = repeat_profile.get("summary")
+    if isinstance(summary, dict):
+        unexpected_samples = summary.get("unexpected_samples")
+        if isinstance(unexpected_samples, int) and unexpected_samples > 0:
+            return unexpected_samples
+    return sum(
+        unexpected_samples
+        for unexpected_samples in repeat_profile_case_unexpected_sample_counts(repeat_profile)
+    )
+
+
+def repeat_profile_unexpected_cases(report: dict[str, Any]) -> list[str]:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return []
+    cases = repeat_profile.get("cases")
+    if not isinstance(cases, dict):
+        return []
+    return [
+        str(slug)
+        for slug, case_summary in sorted(cases.items())
+        if isinstance(case_summary, dict)
+        and isinstance(case_summary.get("unexpected_samples"), int)
+        and case_summary["unexpected_samples"] > 0
+    ]
+
+
+def repeat_profile_case_unexpected_sample_counts(repeat_profile: dict[str, Any]) -> list[int]:
+    cases = repeat_profile.get("cases")
+    if not isinstance(cases, dict):
+        return []
+    return [
+        case_summary["unexpected_samples"]
+        for case_summary in cases.values()
+        if isinstance(case_summary, dict)
+        and isinstance(case_summary.get("unexpected_samples"), int)
+        and case_summary["unexpected_samples"] > 0
+    ]
+
+
 def build_latency_budget_summary(
     rows: list[dict[str, Any]],
     repeat_profile: dict[str, Any] | None,
@@ -1291,6 +1337,12 @@ def print_stress_table(report: dict[str, Any]) -> None:
                     "repeat signature drift: "
                     + ", ".join(str(slug) for slug in unstable_signature_cases)
                 )
+            unexpected_samples = repeat_profile_unexpected_sample_count(report)
+            if unexpected_samples:
+                unexpected_cases = repeat_profile_unexpected_cases(report)
+                case_text = ", ".join(unexpected_cases)
+                suffix = f": {case_text}" if case_text else ""
+                print(f"repeat unexpected: {unexpected_samples} sample(s){suffix}")
             ocr_engine_stage_duration = repeat_summary.get("ocr_engine_stage_duration_s")
             if isinstance(ocr_engine_stage_duration, dict) and ocr_engine_stage_duration:
                 labels = {
