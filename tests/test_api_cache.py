@@ -960,6 +960,69 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
         self.assertEqual(payload["profile"]["cache_hit"], "raw")
 
+    def test_create_run_can_include_ocr_engine_profile_on_cache_miss(self) -> None:
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {"profile_ocr_engine": "1", "include_overlay": "0"},
+            {"image": ("Austin.png", b"image-bytes")},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        def build_boundary_ok(*args, **kwargs):
+            kwargs["progress"](
+                {
+                    "stage": "ocr",
+                    "message": "Reading map labels on server",
+                    "percent": 44,
+                    "status": "running",
+                }
+            )
+            from map_boundary_builder.ocr import record_rapidocr_profile
+
+            record_rapidocr_profile(
+                {
+                    "det_elapsed_s": 0.2,
+                    "rec_elapsed_s": 0.3,
+                    "raw_box_count": 4,
+                    "selected_box_count": 2,
+                    "label_count": 5,
+                    "useful_label_count": 5,
+                }
+            )
+            return SimpleNamespace(
+                summary={"city": "Austin", "combined_confidence": 0.93, "control_points": 14},
+                geojson={"type": "FeatureCollection", "features": []},
+                overlay_path=None,
+            )
+
+        request.send_json = send_json
+        with (
+            patch("api.index.get_pipeline_version", return_value="pipeline-ocr-profile"),
+            patch("api.index.read_run_result_cache_with_success_fallback", return_value=(None, False)),
+            patch("api.index.write_run_result_cache"),
+            patch("api.index.write_success_run_result_cache_keys"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=build_boundary_ok),
+        ):
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        profile = payload["profile"]
+        self.assertEqual(profile["pipeline_version"], "pipeline-ocr-profile")
+        self.assertTrue(profile["ocr_engine_profile_requested"])
+        self.assertEqual(profile["cache_hit"], "miss")
+        self.assertEqual(profile["ocr_engine_profile"]["calls"], 1)
+        self.assertEqual(profile["ocr_engine_profile"]["det_elapsed_s"], 0.2)
+        self.assertEqual(profile["ocr_engine_profile"]["rec_elapsed_s"], 0.3)
+        self.assertEqual(profile["ocr_engine_profile"]["raw_box_count"], 4)
+        self.assertEqual(profile["ocr_engine_profile"]["selected_box_count"], 2)
+
     def test_create_run_uses_success_cache_when_thresholds_still_pass(self) -> None:
         image_bytes = b"image-bytes"
         filename = "Phoenix.png"

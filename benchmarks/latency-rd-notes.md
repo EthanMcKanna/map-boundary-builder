@@ -14323,3 +14323,21 @@ with zero failures in 0.531s.
   production source-hint smoke on the same payload (`build_boundary_s=11.960s`
   cold auto-city tail), this confirms the Austin seed removes the production
   Overpass tail while preserving road-refined georeferencing.
+- Accepted an opt-in API OCR engine profiler for production R&D after the
+  deployed Austin road-seed smoke showed the remaining live raw-cache-miss tail
+  is OCR-bound rather than road-bound: `build_stage_elapsed_s` reported
+  `ocr=1.572s`, `georeference=0.420s`, `extract=0.103s`, and `inspect=0.031s`.
+  The new `profile_ocr_engine=1` request field is default-off and does not
+  change cache keys or normal generation behavior; on a cache miss it attaches
+  the same RapidOCR detector/recognizer summary already used by the CLI and
+  stress harness to the API `profile`. A local real-payload API handler probe in
+  `out/api-ocr-profile-local-20260602/response.json` used the Austin 1600px
+  browser-rasterized SVG PNG with `source_was_svg=1`, no catalog, overlay off,
+  fresh cache, OCR/extraction caches disabled, and network blocked. It returned
+  a complete Austin road-refined result with `14` controls and confidence
+  `0.93`; the profile captured one RapidOCR call with detector `0.338s`,
+  recognizer `0.252s`, `41` raw boxes, `34` selected boxes, and zero labels
+  below 70 confidence. Focused API/profile tests passed `83` tests,
+  `compileall` and `git diff --check` were clean, and the full suite passed
+  `585` tests plus `30` subtests. Treat profiled elapsed times as diagnostic
+  because the profiler intentionally adds instrumentation overhead.

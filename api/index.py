@@ -327,6 +327,9 @@ class handler(BaseHTTPRequestHandler):
         normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=False)
         profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
         profile["normalized_cache_lookup_s"] = 0.0
+        profile_ocr_engine = bool_field(fields, "profile_ocr_engine", default=False)
+        if profile_ocr_engine:
+            profile["ocr_engine_profile_requested"] = True
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
@@ -631,17 +634,41 @@ class handler(BaseHTTPRequestHandler):
             )
             return
 
+        ocr_engine_events: list[dict[str, Any]] | None = None
+        ocr_engine_profile_summarizer = None
+
+        def attach_ocr_engine_profile() -> None:
+            if ocr_engine_profile_summarizer is None:
+                return
+            profile["ocr_engine_profile"] = ocr_engine_profile_summarizer(ocr_engine_events)
+
         try:
-            result = build_boundary(
-                image_path,
-                city,
-                output_path,
-                debug_dir=debug_dir,
-                options=options,
-                progress=progress,
-            )
+            if profile_ocr_engine:
+                from map_boundary_builder.ocr import collect_rapidocr_profiles, summarize_rapidocr_profile_events
+
+                ocr_engine_profile_summarizer = summarize_rapidocr_profile_events
+                with collect_rapidocr_profiles() as collected:
+                    ocr_engine_events = collected
+                    result = build_boundary(
+                        image_path,
+                        city,
+                        output_path,
+                        debug_dir=debug_dir,
+                        options=options,
+                        progress=progress,
+                    )
+            else:
+                result = build_boundary(
+                    image_path,
+                    city,
+                    output_path,
+                    debug_dir=debug_dir,
+                    options=options,
+                    progress=progress,
+                )
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            attach_ocr_engine_profile()
         except CatalogProbeMiss as exc:
             events = terminal_run_events(
                 events,
@@ -652,6 +679,7 @@ class handler(BaseHTTPRequestHandler):
             )
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            attach_ocr_engine_profile()
             profile["cache_hit"] = "miss"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = {
@@ -685,6 +713,7 @@ class handler(BaseHTTPRequestHandler):
             events = generation_failure_events(events, exc)
             profile["build_boundary_s"] = elapsed_seconds(build_started)
             profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+            attach_ocr_engine_profile()
             profile["cache_hit"] = "miss"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = generation_error_payload(exc, run_id, original_filename, events, profile)
