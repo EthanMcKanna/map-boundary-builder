@@ -11818,9 +11818,11 @@ with zero failures in 0.531s.
 - Production deployment proof for the real-screenshot stress gate: commit
   `b6c5647` auto-deployed to Vercel as
   `dpl_6BQZJG7W1LFgxbA4C2fLyRudQDxd`, aliased to `https://mapboundary.app`.
-  Production health remained on pipeline hash `pipeline-8f97622b0d1bfbc6`
-  because this commit did not touch the hashed pipeline inputs, so both POST
-  smokes used one-pixel cache-busted PNGs to avoid stale run-result caches.
+  Production health reported pipeline hash `pipeline-8f97622b0d1bfbc6`, which
+  matches the local `b6c5647`/`HEAD` pipeline hash and differs from the prior
+  `946cf0a` hash `pipeline-520a61c9bc4ef1d5`; the subsequent notes-only commit
+  does not change that hash. Both POST smokes still used one-pixel
+  cache-busted PNGs to avoid any pre-existing run-result caches.
   The San Antonio no-catalog smoke
   `out/prod-b6c5647-san-antonio-smoke.json` returned HTTP `201`, cache miss,
   city `San Antonio`, source `ocr-georeference:nominatim-label-fit`, 12
