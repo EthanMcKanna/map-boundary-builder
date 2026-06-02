@@ -618,6 +618,7 @@ def run_stress_case_in_process(
     filename_hint = case.get("filename_hint")
     if not isinstance(filename_hint, str):
         filename_hint = GENERIC_FILENAME_HINT
+    source_was_svg = bool(case.get("source_was_svg", False))
     events: list[dict[str, Any]] = []
     started = time.perf_counter()
     ocr_engine_events: list[dict[str, Any]] | None = None
@@ -641,6 +642,7 @@ def run_stress_case_in_process(
             options=BoundaryBuildOptions(
                 allow_catalog=not case.get("no_catalog", True),
                 filename_hint=filename_hint,
+                source_was_svg=source_was_svg,
             ),
             progress=progress,
         )
@@ -728,6 +730,8 @@ def build_in_process_command_summary(
     if not isinstance(filename_hint, str):
         filename_hint = GENERIC_FILENAME_HINT
     command.extend(["--filename-hint", filename_hint])
+    if case.get("source_was_svg", False):
+        command.append("--source-was-svg")
     if debug_dir is not None:
         command.extend(["--debug-dir", str(debug_dir)])
     if not runner_ocr_cache:
@@ -801,6 +805,8 @@ def build_cli_command(
     if not isinstance(filename_hint, str):
         filename_hint = GENERIC_FILENAME_HINT
     command.extend(["--filename-hint", filename_hint])
+    if case.get("source_was_svg", False):
+        command.append("--source-was-svg")
     if write_debug:
         command.extend(["--debug-dir", str(out_dir / f"{case['slug']}-debug")])
     if profile_ocr_engine:

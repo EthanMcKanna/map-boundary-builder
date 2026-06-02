@@ -143,3 +143,29 @@ def test_filename_hint_override_reaches_runner(tmp_path, monkeypatch) -> None:
 
     assert exit_code == 1
     assert seen_hints == ["uploaded-map.png"]
+
+
+def test_source_was_svg_flag_reaches_runner_options(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "browser-rasterized.png"
+    output_path = tmp_path / "boundary.geojson"
+    image_path.write_bytes(b"not a real image")
+    seen_source_flags = []
+
+    def fake_build_boundary(image, city, output, *, debug_dir, options, progress):
+        seen_source_flags.append(options.source_was_svg)
+        raise RuntimeError("stop after options")
+
+    monkeypatch.setattr(cli_module, "build_boundary", fake_build_boundary)
+
+    exit_code = cli_module.main(
+        [
+            "--image",
+            str(image_path),
+            "--output",
+            str(output_path),
+            "--source-was-svg",
+        ]
+    )
+
+    assert exit_code == 1
+    assert seen_source_flags == [True]

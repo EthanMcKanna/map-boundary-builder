@@ -2696,6 +2696,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
                         "slug": "in-process-map",
                         "image": str(image),
                         "filename_hint": "custom-upload.png",
+                        "source_was_svg": True,
                         "expect": {
                             "status": "complete",
                             "source_prefix": "ocr-georeference:",
@@ -2720,6 +2721,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
                 "debug_dir": debug_dir,
                 "allow_catalog": options.allow_catalog,
                 "filename_hint": options.filename_hint,
+                "source_was_svg": options.source_was_svg,
             }
         )
         progress({"stage": "inspect", "message": "Reading image metadata", "percent": 5})
@@ -2780,6 +2782,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
     assert row["ocr_label_count"] == 6
     assert row["ocr_top_labels"] == ["Houston", "Montrose"]
     assert row["command"][0] == "in-process"
+    assert "--source-was-svg" in row["command"]
     assert row["timeout_seconds"] == 30.0
     assert calls == [
         {
@@ -2789,10 +2792,33 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
             "debug_dir": None,
             "allow_catalog": False,
             "filename_hint": "custom-upload.png",
+            "source_was_svg": True,
         }
     ]
     assert set(row["stages"]) >= {"extract", "inspect", "ocr"}
     assert RUNNER_OCR_CACHE_ENV not in os.environ
+
+
+def test_stress_cli_command_can_pass_source_was_svg(tmp_path) -> None:
+    image = tmp_path / "browser-rasterized.png"
+    output = tmp_path / "boundary.geojson"
+
+    command = stress_module.build_cli_command(
+        {
+            "slug": "browser-svg",
+            "image": str(image),
+            "filename_hint": "a.png",
+            "source_was_svg": True,
+        },
+        image,
+        output,
+        tmp_path,
+        write_debug=False,
+        profile_ocr_engine=False,
+        python_executable="python",
+    )
+
+    assert "--source-was-svg" in command
 
 
 def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:

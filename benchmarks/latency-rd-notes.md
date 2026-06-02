@@ -14357,3 +14357,34 @@ with zero failures in 0.531s.
   below 70 confidence, and one label below 80. This proves the deployed profiler
   works and shows the remaining production Austin SVG tail is balanced between
   detector and recognizer rather than dominated by road refinement.
+- Rejected another SVG bright-blue OCR box-filter threshold bump, then accepted
+  source-SVG coverage in the CLI/stress harness so this browser-rasterized lane
+  can be guarded directly. The current Austin browser-SVG source-hint path in
+  `out/svg-threshold-sweep-austin-20260602` stayed complete at the default
+  `MAP_BOUNDARY_SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA=300` with `14` controls,
+  confidence `0.93`, `34` selected OCR boxes, OCR total `0.515s`, and bbox
+  `[-97.8882068,30.1170481,-97.6603375,30.4090807]`. Thresholds `325` and
+  `350` preserved the exact geometry and controls but still selected `34` boxes,
+  so they did not actually reduce recognizer work. The first active cutoff
+  (`375`, same result as `400`) reduced selected boxes to `30` and looked faster,
+  but label count dropped from `96` to `80`, controls dropped from `14` to `13`,
+  and geometry moved (`IoU=0.987505`, area ratio `0.98991`). Higher thresholds
+  were worse: `500/600` dropped support to `11/9` controls, `700` to `7`, and
+  `900/1100` fell back to non-road-refined label fit with confidence `0.733`.
+  The new CLI flag `--source-was-svg` and stress-manifest field
+  `source_was_svg` now pass through to `BoundaryBuildOptions.source_was_svg`.
+  The locked source-hint stress manifest in
+  `out/svg-sourcehint-stress-manifest-20260602.json` passed on current defaults
+  at `out/svg-sourcehint-stress-current-20260602`: `1/1` primary expectation,
+  source `ocr-georeference:nominatim-label-fit+osm-road-refine`, `14` controls,
+  primary total `0.836s`, repeat p95 `0.737s`, repeat max `0.738s`, stable
+  signatures, selected-box p95/max `34`, and zero labels below 70 confidence.
+  The same gate with threshold `375` failed as intended at
+  `out/svg-sourcehint-stress-threshold375-20260602`: `13` controls, OCR label
+  count `80`, selected-box p95/max `30`, and bbox max corner error `185.4m`
+  against the `20m` lock. A subprocess smoke using
+  `out/svg-sourcehint-stress-manifest-subprocess-20260602.json` passed at
+  `out/svg-sourcehint-stress-current-subprocess-20260602`, proving the CLI flag
+  path as well. Focused CLI/stress tests passed `69` tests, `compileall` and
+  `git diff --check` were clean, and the full suite passed `587` tests plus
+  `30` subtests.

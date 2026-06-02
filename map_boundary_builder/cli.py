@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--filename-hint",
         help="Override the uploaded filename hint used for catalog/context matching.",
     )
+    parser.add_argument(
+        "--source-was-svg",
+        action="store_true",
+        help="Treat a raster upload as originating from SVG for OCR profile selection.",
+    )
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")
     parser.add_argument(
         "--profile-events",
@@ -92,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
                 catalog_probe_missed=args.catalog_probe_missed,
                 catalog_probe_miss_low_iou=args.catalog_probe_miss_low_iou,
                 filename_hint=args.filename_hint if args.filename_hint is not None else image_path.name,
+                source_was_svg=args.source_was_svg,
             ),
             progress=progress if args.profile_events else None,
         )
