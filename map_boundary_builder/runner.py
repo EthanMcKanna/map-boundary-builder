@@ -50,6 +50,7 @@ from .georeference import (
     georeference_from_city_context,
     georeference_from_label_context,
     georeference_from_labels,
+    georeference_result_with_city,
     infer_city_contexts,
     is_credible_context_hint_georeference,
     is_decisive_georeference_result,
@@ -105,6 +106,10 @@ PROVIDER_UI_LABEL_CONFIDENCE = 0.72
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
 PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
+PRE_EXTRACTION_FOCUS_OCR_STYLES = {"dark-teal"}
+PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT = 1200
+PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO = 1.35
+FOCUSED_ADMIN_DISPLAY_PLACE_TYPES = {"city", "municipality", "town", "village"}
 PROVIDER_UI_CROP_OCR_MAX_DIMENSION = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_PROVIDER_UI_CROP_OCR_MAX_DIMENSION", "750")),
@@ -375,35 +380,42 @@ def build_boundary(
             filename_hint=filename_hint,
         ):
             early_ocr_style = classify_style_for_ocr(rgb)
-            ocr_executor = ThreadPoolExecutor(max_workers=1)
-            rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
-            labels_future_filtered = rapidocr_min_text_area is not None
-            ocr_kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
-            if current_catalog_label_shape_shortcut_enabled(
+            if not should_defer_pre_extraction_ocr_for_focus(
+                early_ocr_style,
                 city_input=city_input,
                 allow_catalog=allow_catalog,
-                skip_redundant_probe=skip_redundant_probe,
+                width=width,
+                height=height,
             ):
-                ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
-                labels_future_current_catalog_shortcut = True
-            if rapidocr_min_text_area is not None:
-                ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
-            rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
-            if rapidocr_detector_limit is not None:
-                ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-            rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
-            if rapidocr_detector_limit_type is not None:
-                ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
-            rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
-            if rapidocr_recognition_profile is not None:
-                ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
-            labels_future = ocr_executor.submit(
-                extract_ocr_labels_from_rgb,
-                str(image_path),
-                rgb,
-                **ocr_kwargs,
-            )
-            ensure_georeference_resource_preload()
+                ocr_executor = ThreadPoolExecutor(max_workers=1)
+                rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
+                labels_future_filtered = rapidocr_min_text_area is not None
+                ocr_kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
+                if current_catalog_label_shape_shortcut_enabled(
+                    city_input=city_input,
+                    allow_catalog=allow_catalog,
+                    skip_redundant_probe=skip_redundant_probe,
+                ):
+                    ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
+                    labels_future_current_catalog_shortcut = True
+                if rapidocr_min_text_area is not None:
+                    ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+                rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
+                if rapidocr_detector_limit is not None:
+                    ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+                rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
+                if rapidocr_detector_limit_type is not None:
+                    ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+                rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
+                if rapidocr_recognition_profile is not None:
+                    ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+                labels_future = ocr_executor.submit(
+                    extract_ocr_labels_from_rgb,
+                    str(image_path),
+                    rgb,
+                    **ocr_kwargs,
+                )
+                ensure_georeference_resource_preload()
         if labels_future is None and should_overlap_probe_miss_ocr(
             skip_redundant_probe=skip_redundant_probe,
             city_input=city_input,
@@ -1198,6 +1210,8 @@ def build_boundary(
         allow_credible_cached_fit=labels_from_focus_georef_ocr,
         progress=progress,
     )
+    if labels_from_focus_georef_ocr:
+        georef = focused_georef_with_admin_control_city(georef)
     if should_fallback_focus_georef_ocr(labels_from_focus_georef_ocr, georef):
         emit_progress(
             progress,
@@ -1697,6 +1711,31 @@ def should_fallback_focus_georef_ocr(focused: bool, georef) -> bool:
     return not is_credible_context_hint_georeference(georef)
 
 
+def focused_georef_with_admin_control_city(georef):
+    if georef is None:
+        return None
+    current_city_tokens = normalize_catalog_area_tokens(str(georef.transform.city))
+    for control in georef.control_points:
+        geocode = getattr(control, "geocode", None)
+        label = getattr(control, "label", None)
+        if geocode is None or label is None:
+            continue
+        if getattr(geocode, "place_type", "").lower() not in FOCUSED_ADMIN_DISPLAY_PLACE_TYPES:
+            continue
+        if getattr(label, "confidence", 0.0) < 95.0:
+            continue
+        admin_city = str(getattr(geocode, "display_name", "")).split(",", 1)[0].strip()
+        if not admin_city:
+            continue
+        admin_tokens = normalize_catalog_area_tokens(admin_city)
+        if not admin_tokens or normalize_catalog_area_tokens(str(getattr(label, "text", ""))) != admin_tokens:
+            continue
+        if current_city_tokens == admin_tokens:
+            return georef
+        return georeference_result_with_city(georef, admin_city)
+    return georef
+
+
 def should_fallback_fast_text_ocr(
     filtered: bool,
     georef,
@@ -1954,6 +1993,24 @@ def should_overlap_ocr_with_extraction(
     if is_stale_only_catalog_hint(city_input):
         return True
     return not (has_active_catalog_area_hint(city_input) or has_active_catalog_city_hint(city_input))
+
+
+def should_defer_pre_extraction_ocr_for_focus(
+    style: str | None,
+    *,
+    city_input: str | None,
+    allow_catalog: bool,
+    width: int,
+    height: int,
+) -> bool:
+    if allow_catalog or city_input is not None or style not in PRE_EXTRACTION_FOCUS_OCR_STYLES:
+        return False
+    if not PROVIDER_UI_FOCUS_CROP_ENABLED or PROVIDER_UI_CROP_OCR_MAX_DIMENSION <= 0:
+        return False
+    if width <= 0 or height < PRE_EXTRACTION_FOCUS_OCR_MIN_HEIGHT:
+        return False
+    aspect_ratio = width / max(float(height), 1.0)
+    return aspect_ratio <= PRE_EXTRACTION_FOCUS_OCR_MAX_ASPECT_RATIO
 
 
 def should_overlap_probe_miss_ocr(

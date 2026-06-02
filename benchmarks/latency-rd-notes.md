@@ -11869,3 +11869,34 @@ with zero failures in 0.531s.
   Bay Area remained intentionally unconstrained because the current output is
   `Inferred map area`. The proof run was latency-noisy (`2.198434s` max,
   `ocr=9.371661s`, `extract=4.553110s`) but had zero unexpected rows.
+- Accepted a narrower dark-teal focused-OCR scheduling win after the city guard
+  made the previous broad deferral failure observable. The shipped trigger only
+  defers pre-extraction OCR for no-catalog, no-city, dark-teal images that are
+  large enough (`height >= 1200`) and near-square enough (`width/height <=
+  1.35`) to match the Ann Arbor May Mobility stress shape while excluding the
+  wide Zoox SF map and the lower-height Grand Rapids map. Focused OCR can still
+  produce a venue-centered context, so focused georeference now rewrites only
+  the display city when an exact high-confidence administrative control point
+  is present; the transform, controls, confidence, and residuals are left
+  untouched. Target probes showed the intended behavior: Ann Arbor used focused
+  OCR and returned `Ann Arbor`, 4 controls, confidence `0.854`, total
+  `0.864808s`, OCR `0.574328s`; Zoox SF stayed on full-frame OCR, returned
+  `San Francisco`, 17 controls, total `0.981229s`; Grand Rapids stayed on
+  full-frame OCR and returned `Grand Rapids`, 5 controls, total `1.271133s`.
+  The full real-screenshot stress proof
+  `out/real-screenshot-stress-narrow-focus-candidate-20260602/stress-summary.json`
+  passed `12/12` expectations with max internal `1.195293s`, stage totals
+  `ocr=7.085380s`, `extract=2.851647s`, and Ann Arbor at `0.893813s` total
+  (`0.592435s` OCR) with the city guard intact. The no-catalog current-reference
+  accuracy/source gate
+  `out/narrow-focus-currentref-clean-20260602/full-report.json` passed 8/8
+  active fixtures with exact avg/min IoU `0.967842`/`0.942536`, zero regression
+  issues against `out/nocatalog-source-subsecond-20260602/full-report.json`,
+  and the expected source counts
+  (`ocr-georeference:nominatim-label-fit=6`,
+  `ocr-georeference:nominatim-label-fit+osm-road-refine=2`). Strict latency
+  budget reruns were noisy on untouched bright-blue fixtures (`phoenix-waymo`
+  up to `1.96s`/`2.03s`, `los-angeles-waymo` up to `1.07s`), so they were not
+  used as a speed claim for this change. Focused runner tests passed (`7
+  passed`), stress-runner tests passed (`7 passed`), `py_compile` passed, and
+  `git diff --check` passed.

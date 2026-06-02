@@ -2367,6 +2367,92 @@ def test_catalog_probe_low_iou_miss_allows_early_ocr_for_provider_hints() -> Non
     )
 
 
+def test_no_catalog_dark_teal_defers_pre_extraction_ocr_only_for_large_near_square_focus(monkeypatch) -> None:
+    monkeypatch.setattr(runner, "PROVIDER_UI_FOCUS_CROP_ENABLED", True)
+    monkeypatch.setattr(runner, "PROVIDER_UI_CROP_OCR_MAX_DIMENSION", 750)
+
+    assert (
+        runner.should_defer_pre_extraction_ocr_for_focus(
+            "dark-teal",
+            city_input=None,
+            allow_catalog=False,
+            width=1696,
+            height=1365,
+        )
+        is True
+    )
+    assert (
+        runner.should_defer_pre_extraction_ocr_for_focus(
+            "dark-teal",
+            city_input=None,
+            allow_catalog=False,
+            width=2880,
+            height=1620,
+        )
+        is False
+    )
+    assert (
+        runner.should_defer_pre_extraction_ocr_for_focus(
+            "dark-teal",
+            city_input=None,
+            allow_catalog=False,
+            width=1280,
+            height=1012,
+        )
+        is False
+    )
+    assert (
+        runner.should_defer_pre_extraction_ocr_for_focus(
+            "bright-blue",
+            city_input=None,
+            allow_catalog=False,
+            width=1696,
+            height=1365,
+        )
+        is False
+    )
+
+
+def test_focused_georef_display_city_prefers_exact_admin_control() -> None:
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Yost Ice Arena",
+            lon=-83.74,
+            lat=42.28,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=4.0,
+            rotation_radians=0.0,
+            confidence=0.85,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[
+            SimpleNamespace(
+                label=OcrLabel("Yost Ice Arena", 900, 900, 120, 22, 93.5),
+                geocode=SimpleNamespace(
+                    display_name="Yost Ice Arena, Ann Arbor, Michigan",
+                    place_type="leisure",
+                ),
+            ),
+            SimpleNamespace(
+                label=OcrLabel("Ann Arbor", 800, 436, 95, 22, 99.5),
+                geocode=SimpleNamespace(
+                    display_name="Ann Arbor, Washtenaw County, Michigan, United States",
+                    place_type="city",
+                ),
+            ),
+        ],
+        residual_median_m=500.0,
+        residual_p90_m=700.0,
+    )
+
+    updated = runner.focused_georef_with_admin_control_city(georef)
+
+    assert updated.transform.city == "Ann Arbor"
+    assert updated.transform.confidence == georef.transform.confidence
+    assert updated.control_points == georef.control_points
+
+
 def test_avride_light_fill_filename_hint_uses_catalog_before_ocr(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "uber-avride-operating-map-dallas.png"
     Image.new("RGB", (680, 551), (245, 245, 245)).save(image_path)
