@@ -13754,3 +13754,50 @@ with zero failures in 0.531s.
   python -m pytest tests/test_stress_benchmark.py -q` (`43` tests) and
   `PYTHONPATH=. .venv/bin/python -m compileall -q
   map_boundary_builder/stress_benchmark.py tests/test_stress_benchmark.py`.
+- Rejected a dense-only fast-text rescue-area tightening after isolating the
+  global `1000` failure to sparse Nashville but failing to prove a real current
+  speedup. A monkeypatched dense-only probe that used `1000px^2` only when raw
+  OCR boxes were at least `20` passed the full hard gate
+  `out/probe-dense-rescue1000-raw20-full16-hard-20260602/stress-summary.json`
+  and looked faster than the same-session control
+  `out/current-control-full16-hard-rerun-20260602/stress-summary.json` (repeat
+  p95 `0.530s` versus `0.559s`, OCR-total p95 `0.463s` versus `0.492s`), but
+  the selected-box counts were identical on all current 16 hard-gate rows, so
+  the improvement was runtime noise rather than the filter doing work. The
+  actual-code version also passed
+  `out/dense-rescue-full16-hard-actual-20260602/stress-summary.json`, but still
+  left hard-gate selected counts unchanged. Raising the dense threshold to
+  `1025px^2` made the filter active and immediately failed the focused slow-five
+  gate (`out/probe-dense-rescue1025-raw20-slow5-actual-20260602`) by dropping LA
+  from `18` to `17` controls and pushing bbox error above `1000m`. No runtime
+  change was shipped.
+- Rejected a bright-blue focused OCR crop as another near miss. The slow-five
+  bright-blue screenshots have focus-crop area ratios around `0.44-0.51` versus
+  `0.84-0.99` for the normal provider crop, so the idea was to reuse the
+  existing focused georeference path for bright-blue with the current
+  bright-blue OCR detail. `out/probe-brightblue-focuscrop1400-slow5-20260602`
+  preserved all five focused expectations and improved repeat p95 to `0.535s`,
+  but the Bay Area primary run hit `1.110s`, failing the hard subsecond gate.
+  Reducing the focused max dimension to `1200`
+  (`out/probe-brightblue-focuscrop1200-slow5-20260602`) fixed primary latency
+  at `0.876s` but worsened repeat p95 to `0.589s`. No runtime change was
+  shipped.
+- Added OCR engine count-metric repeat budgets to harden the stress harness
+  against timing-noise false positives. Follow-up inspection of the current
+  bright-blue selected boxes showed that the rescued small wide boxes in LA,
+  Bay Area, Houston, Orlando, and Miami are mostly real map labels, so further
+  area/aspect filtering is not a safe speed lever. The stress CLI now reports
+  repeat-profile OCR count distributions and accepts
+  `--max-repeat-ocr-engine-p95-count`, e.g. `selected_box_count=30`, alongside
+  the existing duration budgets. Full validation with the new count gate passed
+  at `out/ocr-count-budget-full16-hard-actual-20260602/stress-summary.json`:
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`, `48/48`
+  analyzed repeat expectations, stable signatures, primary max `0.858128s`,
+  repeat median `0.330s`, repeat p95 `0.542s`, repeat max `0.563s`,
+  RapidOCR total p95 `0.455s`, detector p95 `0.249s`, recognizer p95 `0.214s`,
+  and `selected_box_count` p95 `28.2` / max `30` under the new budget. Focused
+  validation passed `PYTHONPATH=. .venv/bin/uv run --with pytest python -m
+  pytest tests/test_stress_benchmark.py -q` (`46` tests), compileall for the
+  touched harness/test files, and the full suite
+  `PYTHONPATH=. .venv/bin/uv run --with pytest python -m pytest -q` (`542`
+  tests plus `30` subtests).

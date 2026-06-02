@@ -848,6 +848,26 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "max_duration_s": 0.2,
         },
     }
+    assert repeat_profile["summary"]["ocr_engine_count_metric"] == {
+        "raw_box_count": {
+            "samples": 1,
+            "min_count": 3,
+            "median_count": 3,
+            "average_count": 3,
+            "p90_count": 3,
+            "p95_count": 3,
+            "max_count": 3,
+        },
+        "selected_box_count": {
+            "samples": 1,
+            "min_count": 3,
+            "median_count": 3,
+            "average_count": 3,
+            "p90_count": 3,
+            "p95_count": 3,
+            "max_count": 3,
+        },
+    }
     assert repeat_profile["summary"]["ocr_engine_stage_max_rows"] == {
         "det_elapsed_s": {
             "slug": "kept",
@@ -912,6 +932,61 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         ],
         "repeat_violations": [],
     }
+
+
+def test_parse_metric_count_budgets_accepts_known_ocr_engine_counts() -> None:
+    assert stress_module.parse_metric_count_budgets(
+        ["selected_box_count=30,raw_box_count=50", "result_count=29"]
+    ) == {
+        "raw_box_count": 50.0,
+        "result_count": 29.0,
+        "selected_box_count": 30.0,
+    }
+
+
+def test_parse_metric_count_budgets_rejects_unknown_counts() -> None:
+    with pytest.raises(ValueError, match="Unknown OCR engine count metric"):
+        stress_module.parse_metric_count_budgets(["total_elapsed_s=1"])
+
+
+def test_latency_budget_flags_repeat_ocr_engine_count_p95_excess() -> None:
+    report = stress_module.build_latency_budget_summary(
+        rows=[],
+        repeat_profile={
+            "summary": {
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": 30.0},
+                    "raw_box_count": {"p95_count": 50.0},
+                }
+            }
+        },
+        max_repeat_ocr_engine_p95_count={
+            "selected_box_count": 28.0,
+            "raw_box_count": 55.0,
+            "result_count": 29.0,
+        },
+    )
+
+    assert report["passed"] is False
+    assert report["max_repeat_ocr_engine_p95_count"] == {
+        "raw_box_count": 55.0,
+        "result_count": 29.0,
+        "selected_box_count": 28.0,
+    }
+    assert report["repeat_ocr_engine_count_p95_violations"] == [
+        {
+            "kind": "repeat_ocr_engine_count_p95_missing",
+            "metric": "result_count",
+            "max_repeat_ocr_engine_p95_count": 29.0,
+        },
+        {
+            "kind": "repeat_ocr_engine_count_p95_budget_exceeded",
+            "metric": "selected_box_count",
+            "p95_count": 30.0,
+            "max_repeat_ocr_engine_p95_count": 28.0,
+            "excess_count": 2.0,
+        },
+    ]
 
 
 def test_repeat_profile_flags_output_signature_drift() -> None:
