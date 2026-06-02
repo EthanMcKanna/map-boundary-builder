@@ -13140,3 +13140,43 @@ with zero failures in 0.531s.
   city/source/controls/bbox with `build_boundary_s: 0.227487`,
   `total_before_send_s: 0.236900`, `18` labels, and stages
   `extract=0.087380s`, `ocr=0.017301s`, `georeference=0.093521s`.
+- Post-footer slow-tail profiling: after the dense dark-teal footer trim, the
+  six-case no-catalog tail gate
+  `out/slow6-post-footer-profile-20260602/stress-summary.json` covered Tesla
+  Dallas, Bay Area, Los Angeles, Houston, Orlando, and Miami with disabled
+  OCR/extraction caches, OCR-engine profiling, `--repeat-profile-runs 5`,
+  `--repeat-profile-warmups 1`, signature drift checks, total p95 budget
+  `1.05s`, and OCR-engine p95 budgets `rec_elapsed_s=0.9,total_s=1.2`. It
+  passed `6/6` primary expectations, `24/24` analyzed repeat expectations,
+  stable signatures for all six cases, and `24/24` subsecond repeats. Primary
+  max was `0.875059s`; repeat median was `0.512439s`, repeat p95
+  `0.573583s`, and repeat max `0.580637s`. OCR remains the tail:
+  repeat OCR-stage p95 `0.441790s`, RapidOCR total p95 `0.510749s`,
+  detector p95 `0.269614s`, and recognizer p95 `0.236755s`. Tesla Dallas is a
+  cold/primary gray-fill outlier, not the repeat tail, with repeat p95
+  `0.288488s`; the warm repeat tail is dominated by Los Angeles, Bay Area, and
+  Houston bright-blue OCR. A direct label/control audit found useful LA, Bay,
+  and Houston controls interleaved with extra labels inside the extraction
+  bounds rather than confined to a clean spatial footer/header region, so a
+  simple bright-blue crop or bbox filter is still too brittle.
+- Rejected lowering the bright-blue detector cap from the current `256px` path
+  to `224px` for the post-footer tail. The env-only probe
+  `out/probe-brightblue-det224-slow5-20260602/stress-summary.json` preserved
+  expectations and stable signatures on the five bright-blue tail cases, but
+  it widened the repeat p95 from the current six-case baseline's `0.573583s`
+  to `0.631143s` and raised RapidOCR total p95 from `0.510749s` to
+  `0.533807s` while recognizer p95 rose from `0.236755s` to `0.257035s`.
+  Lower detector resolution remains correctness-preserving on this subset but
+  not a speed win.
+- Rejected changing the global RapidOCR recognizer batch size for the slow tail.
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=16`
+  (`out/probe-rec-batch16-slow6-20260602/stress-summary.json`) kept `6/6`
+  expectations, stable signatures, and `24/24` subsecond repeats, but widened
+  repeat p95 to `0.610219s`, RapidOCR total p95 to `0.543454s`, and recognizer
+  p95 to `0.256187s`. `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=8`
+  (`out/probe-rec-batch8-slow6-20260602/stress-summary.json`) also kept
+  expectations and stable signatures, but widened repeat p95 further to
+  `0.643027s`, RapidOCR total p95 to `0.587164s`, and recognizer p95 to
+  `0.279017s`. Keep the current default batch `12` and the existing
+  dark-teal-specific override `16`; the remaining LA tail is not improved by
+  batching alone.
