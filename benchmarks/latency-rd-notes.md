@@ -11308,3 +11308,34 @@ with zero failures in 0.531s.
   (`out/prod-det256-dallas-upload-20260601.json`). The production smoke confirms
   the new runtime config is live; serverless first-pass OCR on full-size Dallas
   remains the largest tail target.
+- Rejected two attractive but unsafe first-pass OCR alternatives while looking
+  for the next no-catalog tail reduction. Extending the dark-teal focused
+  georeference crop to bright-blue screenshots did not beat the overlapped
+  full-OCR path: the representative 5-fixture probe preserved IoU but took
+  `4.309252s` total with max duration `1.180163s`
+  (`out/bright-blue-focuscrop-probe-20260601/full-report.json`). A more
+  aggressive split-resolution prototype, detecting text boxes at `1000px` and
+  recognizing those crops at `1600px`, cut OCR sharply but was not reliable:
+  total duration fell to `7.329697s`, yet strict regression failed with average
+  IoU `0.934770` and drops on Los Angeles (`-0.035189`), Miami (`-0.115919`),
+  Orlando (`-0.027103`), and Phoenix (`-0.170886`)
+  (`out/bright-blue-split-det1000-rec1600-probe-20260601/full-report.json`).
+  The useful lesson is that low-resolution detection can be very fast, but it
+  needs a stronger drift detector or a parallel full-OCR fallback before it can
+  become a safe default.
+- Accepted a smaller RapidOCR recognition batch as a low-risk speed win. A
+  focused batch sweep over Dallas, Phoenix, Los Angeles, and Houston found
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=12` preserved fixture IoUs and made all
+  four representative bright-blue runs subsecond, while larger batches were
+  noisier for Phoenix. After changing the code default from `24` to `12`, the
+  full no-catalog strict gate passed 15/15 with unchanged avg/min IoU
+  `0.952958`/`0.843889` and no regression issues against
+  `out/bright-blue-det256-default-currentref-20260601/full-report.json`.
+  Runtime improved from `8.888976s` total / `6.726195s` OCR / `1.117577s` max
+  fixture to `8.615786s` total / `6.332814s` OCR / `0.954584s` max fixture
+  (`out/recbatch12-default-currentref-20260601/full-report.json`). Dallas Waymo
+  moved from `1.117577s` / `0.869690s` OCR to `0.954584s` / `0.689512s` OCR,
+  and Phoenix Waymo moved from `0.959628s` / `0.776578s` OCR to `0.933633s` /
+  `0.733175s` OCR, both with identical IoU. The catalog gate also passed 15/15
+  with unchanged avg/min IoU `0.996223`/`0.943345`, total `1.055138s`, and max
+  `0.118112s` (`out/recbatch12-default-catalog-20260601/full-report.json`).
