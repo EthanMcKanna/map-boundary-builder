@@ -24,6 +24,7 @@ from .runner import BoundaryBuildOptions, RUNNER_OCR_CACHE_ENV, build_boundary
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
+OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -739,10 +740,57 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_full_detail_retry_count": len(ocr_full_detail_retry_rows),
         "ocr_full_detail_retry_rows": ocr_full_detail_retry_rows,
         "ocr_engine_profile": summarize_rapidocr_profile_summaries(ocr_engine_profiles),
+        "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(rows),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
     }
+
+
+def ocr_engine_stage_max_rows(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    maxima: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        slug = row.get("slug")
+        ocr_engine_profile = row.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        calls = ocr_engine_profile.get("calls_detail")
+        call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+        if not call_profiles:
+            call_profiles = [ocr_engine_profile]
+        for call in call_profiles:
+            for key in OCR_ENGINE_STAGE_MAX_KEYS:
+                elapsed_s = parse_nonnegative_float(call.get(key))
+                if elapsed_s is None:
+                    continue
+                prior = maxima.get(key)
+                if prior is not None and elapsed_s <= float(prior["elapsed_s"]):
+                    continue
+                maxima[key] = ocr_engine_stage_max_row(slug, elapsed_s, call)
+    return dict(sorted(maxima.items()))
+
+
+def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) -> dict[str, Any]:
+    row = {
+        "slug": slug,
+        "elapsed_s": round(elapsed_s, 6),
+    }
+    for key in (
+        "input_shape",
+        "detector_limit",
+        "detector_limit_type",
+        "recognition_profile",
+        "min_text_area",
+        "raw_box_count",
+        "selected_box_count",
+        "result_count",
+        "label_count",
+        "useful_label_count",
+    ):
+        value = call.get(key)
+        if value is not None:
+            row[key] = value
+    return row
 
 
 def build_repeat_profile(
@@ -825,6 +873,7 @@ def summarize_repeat_profile_samples(
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+            "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
         },
         "cases": case_summaries,
         "samples": samples,
@@ -843,6 +892,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         **repeat_profile_total_elapsed_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
         "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+        "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
     }
 
 
@@ -970,6 +1020,20 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"det={float(profile.get('det_elapsed_s', 0.0)):.3f}s, "
             f"rec={float(profile.get('rec_elapsed_s', 0.0)):.3f}s"
         )
+    if summary.get("ocr_engine_stage_max_rows"):
+        max_rows = summary["ocr_engine_stage_max_rows"]
+        labels = {
+            "det_elapsed_s": "det",
+            "rec_elapsed_s": "rec",
+            "total_s": "total",
+        }
+        max_text = ", ".join(
+            f"{labels.get(key, key)}={row['elapsed_s']:.3f}s@{row['slug']}"
+            for key, row in max_rows.items()
+            if isinstance(row, dict) and isinstance(row.get("elapsed_s"), (int, float))
+        )
+        if max_text:
+            print(f"ocr engine max: {max_text}")
     if report.get("runner_ocr_cache") is False:
         print("note: runner OCR cache is disabled; repeat samples keep paying OCR cost")
     repeat_profile = report.get("repeat_profile")

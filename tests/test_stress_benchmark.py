@@ -132,7 +132,9 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
                         "calls": 1,
                         "det_elapsed_s": 0.2,
                         "rec_elapsed_s": 0.3,
+                        "total_s": 0.55,
                         "raw_box_count": 4,
+                        "selected_box_count": 3,
                     },
                     "event_profile": {"total_elapsed_s": 0.7, "stage_elapsed_s": {"ocr": 0.6}},
                 }
@@ -157,7 +159,29 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
         "calls": 1,
         "det_elapsed_s": 0.2,
         "rec_elapsed_s": 0.3,
+        "total_s": 0.55,
         "raw_box_count": 4,
+        "selected_box_count": 3,
+    }
+    assert report["summary"]["ocr_engine_stage_max_rows"] == {
+        "det_elapsed_s": {
+            "slug": "profiled-map",
+            "elapsed_s": 0.2,
+            "raw_box_count": 4,
+            "selected_box_count": 3,
+        },
+        "rec_elapsed_s": {
+            "slug": "profiled-map",
+            "elapsed_s": 0.3,
+            "raw_box_count": 4,
+            "selected_box_count": 3,
+        },
+        "total_s": {
+            "slug": "profiled-map",
+            "elapsed_s": 0.55,
+            "raw_box_count": 4,
+            "selected_box_count": 3,
+        },
     }
 
 
@@ -427,6 +451,7 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["ocr_label_event_counts"] == {}
     assert saved["summary"]["ocr_full_detail_retry_count"] == 0
     assert saved["summary"]["ocr_full_detail_retry_rows"] == []
+    assert saved["summary"]["ocr_engine_stage_max_rows"] == {}
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
 
@@ -479,7 +504,18 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "calls": 1,
                 "det_elapsed_s": round(duration / 10, 6),
                 "rec_elapsed_s": round(duration / 5, 6),
+                "total_s": round(duration / 4, 6),
                 "raw_box_count": 3,
+                "calls_detail": [
+                    {
+                        "det_elapsed_s": round(duration / 10, 6),
+                        "rec_elapsed_s": round(duration / 5, 6),
+                        "total_s": round(duration / 4, 6),
+                        "input_shape": [900, 1200],
+                        "detector_limit": 608,
+                        "selected_box_count": 3,
+                    }
+                ],
             },
         }
 
@@ -527,7 +563,31 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         "calls": 1,
         "det_elapsed_s": 0.08,
         "rec_elapsed_s": 0.16,
+        "total_s": 0.2,
         "raw_box_count": 3,
+    }
+    assert repeat_profile["summary"]["ocr_engine_stage_max_rows"] == {
+        "det_elapsed_s": {
+            "slug": "kept",
+            "elapsed_s": 0.08,
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "selected_box_count": 3,
+        },
+        "rec_elapsed_s": {
+            "slug": "kept",
+            "elapsed_s": 0.16,
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "selected_box_count": 3,
+        },
+        "total_s": {
+            "slug": "kept",
+            "elapsed_s": 0.2,
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "selected_box_count": 3,
+        },
     }
     assert repeat_profile["cases"]["kept"]["max_total_elapsed_s"] == 0.8
     assert repeat_profile["samples"][0]["warmup"] is True

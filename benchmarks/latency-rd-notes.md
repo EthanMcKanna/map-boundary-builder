@@ -12263,3 +12263,23 @@ with zero failures in 0.531s.
   dark-teal full-image OCR at the accepted defaults; the reliable path remains
   fixture/expectation hardening plus narrow focused OCR where the existing
   guards prove city/control stability.
+- Accepted stress-summary attribution for RapidOCR sub-stage tails so future
+  arbitrary-screenshot probes distinguish detector-bound and recognizer-bound
+  cases without row-by-row JSON spelunking. The stress report now records
+  `ocr_engine_stage_max_rows` for `det_elapsed_s`, `rec_elapsed_s`, and
+  `total_s` in the primary summary plus repeat-profile summaries, carrying the
+  fixture slug, elapsed time, input shape, detector limit/type, recognition
+  profile, min text area, and OCR box/label counts from the responsible call.
+  CLI output also prints a compact `ocr engine max:` line. Focused tests passed
+  (`PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`,
+  `11 passed`). A two-tail no-cache in-process smoke
+  `out/stress-ocr-engine-stage-max-smoke-20260602/stress-summary.json`
+  preserved `2/2` expectations and demonstrated the intended attribution:
+  primary detector max was `bay-area-waymo` at `1.408740s` on a `1600x1600`
+  bright-blue input with detector cap `256/max`, while recognizer and total
+  max were `zoox-las-vegas-mobile-tall` (`rec_elapsed_s=1.353260s`,
+  `total_s=3.019279s`) on the `1600x736` dark-teal full-frame path. The
+  analyzed repeat summary kept the same diagnosis at lower warm timings:
+  Bay Area detector max `0.726704s`, Zoox tall recognizer max `1.068915s`,
+  and Zoox tall total max `1.393367s`. This is harness/reliability progress,
+  not a runtime speed claim.
