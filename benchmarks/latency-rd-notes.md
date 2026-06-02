@@ -14308,3 +14308,18 @@ with zero failures in 0.531s.
   Focused validation passed `tests/test_osm_roads.py tests/test_runtime_warmup.py`
   (`22` tests), the full suite passed `584` tests plus `30` subtests, and
   `compileall`, `node --check`, and `git diff --check` were clean.
+- Production deployment `dpl_GY3VZ2a9bmuZcjFqUuuEsyKLjuym` is aliased to
+  `https://mapboundary.app` with pipeline `pipeline-b45ed15166b46e02`.
+  `/api/health?warm=ocr` returned `ok: true`, `road_seed_entries=4`,
+  `road_seed_digest_entries=4`, and `seed_s=0.169s`. A live Austin
+  browser-rasterized SVG PNG upload with `source_was_svg=1`, no catalog,
+  overlay disabled, and normalized cache lookup disabled wrote
+  `out/prod-austin-road-seed-smoke-20260602/response.json`; it was a raw-cache
+  miss (`upload_bytes=242397`) and returned `201` in `2.884s`, with
+  `build_boundary_s=2.189s`, `total_before_send_s=2.194s`, `14` controls,
+  confidence `0.93`, source
+  `ocr-georeference:nominatim-label-fit+osm-road-refine`, road score
+  `0.823563`, and road refinement `0.332s`. Compared with the previous
+  production source-hint smoke on the same payload (`build_boundary_s=11.960s`
+  cold auto-city tail), this confirms the Austin seed removes the production
+  Overpass tail while preserving road-refined georeferencing.
