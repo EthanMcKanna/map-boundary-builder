@@ -9,7 +9,14 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
-from .ocr import summarize_rapidocr_profile_summaries
+from .cli import stage_elapsed_seconds
+from .ocr import (
+    collect_rapidocr_profiles,
+    summarize_rapidocr_profile_events,
+    summarize_rapidocr_profile_summaries,
+)
+from .pipeline_version import get_pipeline_version
+from .runner import BoundaryBuildOptions, build_boundary
 
 
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
@@ -52,6 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
     )
     parser.add_argument(
+        "--execution",
+        choices=("subprocess", "in-process"),
+        default="subprocess",
+        help=(
+            "subprocess preserves the historical CLI stress gate; in-process measures warm "
+            "production-instance generation without interpreter startup."
+        ),
+    )
+    parser.add_argument(
         "--repeat-profile-runs",
         type=int,
         default=0,
@@ -80,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         write_debug=args.write_debug,
         profile_ocr_engine=args.profile_ocr_engine,
+        execution=args.execution,
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
     )
@@ -106,6 +123,7 @@ def run_stress_benchmark(
     timeout_seconds: float = 30.0,
     write_debug: bool = False,
     profile_ocr_engine: bool = False,
+    execution: str = "subprocess",
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
     python_executable: str = sys.executable,
@@ -114,6 +132,8 @@ def run_stress_benchmark(
         raise ValueError("repeat_profile_runs must be non-negative")
     if repeat_profile_warmups < 0:
         raise ValueError("repeat_profile_warmups must be non-negative")
+    if execution not in {"subprocess", "in-process"}:
+        raise ValueError(f"Unsupported stress execution mode: {execution}")
     manifest = load_manifest(manifest_path)
     cases = select_cases(manifest["cases"], only_slugs or [])
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +145,7 @@ def run_stress_benchmark(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            execution=execution,
             python_executable=python_executable,
         )
         for case in cases
@@ -138,6 +159,7 @@ def run_stress_benchmark(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            execution=execution,
             python_executable=python_executable,
         )
         if repeat_profile_runs
@@ -147,6 +169,7 @@ def run_stress_benchmark(
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
         "profile_ocr_engine": profile_ocr_engine,
+        "execution": execution,
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
         "summary": summarize_rows(rows),
@@ -176,6 +199,7 @@ def run_stress_case(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool = False,
+    execution: str = "subprocess",
     python_executable: str,
 ) -> dict[str, Any]:
     slug = require_string(case, "slug")
@@ -188,6 +212,19 @@ def run_stress_case(
         row["expectation_issues"] = [] if expected_status == "missing" else [f"expected {expected_status}, got missing"]
         row["expectation_passed"] = not row["expectation_issues"]
         return row
+
+    if execution == "in-process":
+        return run_stress_case_in_process(
+            case,
+            image,
+            out_dir,
+            expected_status=expected_status,
+            timeout_seconds=timeout_seconds,
+            write_debug=write_debug,
+            profile_ocr_engine=profile_ocr_engine,
+        )
+    if execution != "subprocess":
+        raise ValueError(f"Unsupported stress execution mode: {execution}")
 
     output_path = out_dir / f"{slug}.geojson"
     command = build_cli_command(
@@ -239,6 +276,122 @@ def run_stress_case(
     row["expectation_issues"] = check_expectations(row, expect)
     row["expectation_passed"] = not row["expectation_issues"]
     return row
+
+
+def run_stress_case_in_process(
+    case: dict[str, Any],
+    image: Path,
+    out_dir: Path,
+    *,
+    expected_status: str,
+    timeout_seconds: float,
+    write_debug: bool,
+    profile_ocr_engine: bool,
+) -> dict[str, Any]:
+    slug = require_string(case, "slug")
+    expect = case.get("expect") if isinstance(case.get("expect"), dict) else {}
+    output_path = out_dir / f"{slug}.geojson"
+    debug_dir = out_dir / f"{slug}-debug" if write_debug else None
+    city = case.get("city")
+    city_input = city.strip() if isinstance(city, str) and city.strip() else None
+    filename_hint = case.get("filename_hint")
+    if not isinstance(filename_hint, str):
+        filename_hint = GENERIC_FILENAME_HINT
+    events: list[dict[str, Any]] = []
+    started = time.perf_counter()
+    ocr_engine_events: list[dict[str, Any]] | None = None
+
+    def progress(event: dict[str, Any]) -> None:
+        events.append({"elapsed_s": round(time.perf_counter() - started, 6), **event})
+
+    def event_profile() -> dict[str, Any]:
+        return {
+            "total_elapsed_s": round(time.perf_counter() - started, 6),
+            "stage_elapsed_s": stage_elapsed_seconds(events),
+            "events": events,
+        }
+
+    def run_build_boundary():
+        return build_boundary(
+            image,
+            city_input,
+            output_path,
+            debug_dir=debug_dir,
+            options=BoundaryBuildOptions(
+                allow_catalog=not case.get("no_catalog", True),
+                filename_hint=filename_hint,
+            ),
+            progress=progress,
+        )
+
+    command = build_in_process_command_summary(case, image, output_path, debug_dir)
+    try:
+        if profile_ocr_engine:
+            with collect_rapidocr_profiles() as collected:
+                ocr_engine_events = collected
+                result = run_build_boundary()
+        else:
+            result = run_build_boundary()
+        wall_s = round(time.perf_counter() - started, 6)
+        summary = dict(result.summary)
+        summary["pipeline_version"] = get_pipeline_version()
+        summary["event_profile"] = event_profile()
+        if profile_ocr_engine:
+            summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
+        completed = subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+    except Exception as exc:
+        wall_s = round(time.perf_counter() - started, 6)
+        summary = {
+            "status": "failed",
+            "error": str(exc),
+            "pipeline_version": get_pipeline_version(),
+            "event_profile": event_profile(),
+        }
+        if profile_ocr_engine:
+            summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
+        completed = subprocess.CompletedProcess(command, 1, stdout="", stderr=f"map-boundary-builder: error: {exc}")
+
+    row = row_from_process(
+        case,
+        command=command,
+        completed=completed,
+        wall_s=wall_s,
+        summary=summary,
+        parse_error=None,
+        expected_status=expected_status,
+    )
+    row["execution"] = "in-process"
+    row["timeout_seconds"] = timeout_seconds
+    row["expectation_issues"] = check_expectations(row, expect)
+    row["expectation_passed"] = not row["expectation_issues"]
+    return row
+
+
+def build_in_process_command_summary(
+    case: dict[str, Any],
+    image: Path,
+    output_path: Path,
+    debug_dir: Path | None,
+) -> list[str]:
+    command = [
+        "in-process",
+        "--image",
+        str(image),
+        "--output",
+        str(output_path),
+    ]
+    if case.get("no_catalog", True):
+        command.append("--no-catalog")
+    city = case.get("city")
+    if isinstance(city, str) and city.strip():
+        command.extend(["--city", city.strip()])
+    filename_hint = case.get("filename_hint")
+    if not isinstance(filename_hint, str):
+        filename_hint = GENERIC_FILENAME_HINT
+    command.extend(["--filename-hint", filename_hint])
+    if debug_dir is not None:
+        command.extend(["--debug-dir", str(debug_dir)])
+    return command
 
 
 def build_cli_command(
@@ -542,6 +695,7 @@ def build_repeat_profile(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool,
+    execution: str,
     python_executable: str,
 ) -> dict[str, Any]:
     samples: list[dict[str, Any]] = []
@@ -556,6 +710,7 @@ def build_repeat_profile(
                 timeout_seconds=timeout_seconds,
                 write_debug=write_debug,
                 profile_ocr_engine=profile_ocr_engine,
+                execution=execution,
                 python_executable=python_executable,
             )
             samples.append(

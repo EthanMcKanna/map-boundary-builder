@@ -12163,3 +12163,52 @@ with zero failures in 0.531s.
   `0.743505s`, max `0.768034s`, OCR stage median `0.592049s`, and OCR-engine
   totals `det_elapsed_s=0.492899s`, `rec_elapsed_s=0.461537s`. Treat this as
   repeat-profile tooling validation, not a full-manifest latency baseline.
+- Exercised the repeat-profile harness on the full real-screenshot stress
+  manifest and used it to reject two more bright-blue OCR knob ideas. The full
+  subprocess run,
+  `out/stress-repeat-profile-full-20260602/stress-summary.json`, preserved
+  `12/12` expectations with statuses `{"complete": 10, "failed": 2}`. Its
+  analyzed repeat profile had `12` post-warmup samples, `7` subsecond, min
+  `0.419983s`, median `0.914837s`, average `0.960770s`, max `2.076211s`, and
+  OCR stage median `0.644842s`. A heavier five-tail rerun over
+  `zoox-las-vegas-mobile`, `zoox-las-vegas-mobile-tall`, `robotaxi-austin`,
+  `bay-area-waymo`, and `houston-waymo`
+  (`out/stress-repeat-profile-tail5-20260602/stress-summary.json`) showed the
+  earlier Zoox portrait `2.076s` sample was noise rather than a deterministic
+  tail: `25/25` analyzed samples passed, `20/25` were subsecond, median
+  `0.801540s`, average `0.823777s`, max `1.137640s`, and both Zoox rows were
+  `5/5` subsecond. The remaining above-one-second samples were Houston,
+  Bay Area, and Austin variance around OCR detection plus extraction. Lowering
+  the global RapidOCR max dimension to `1200` for Houston/Bay Area is rejected:
+  `out/stress-brightblue-maxdim1200-tail-20260602/stress-summary.json`
+  produced only `1/2` expected primary rows, Houston dropped to `7` control
+  points below the manifest minimum `8`, and analyzed repeats were `0/10`
+  subsecond with median `2.267035s`. Lowering the bright-blue detector limit to
+  `192` is also rejected:
+  `out/stress-brightblue-det192-tail-20260602/stress-summary.json` preserved
+  `2/2` expectations but was slower, with analyzed repeats `0/10` subsecond,
+  median `2.882852s`, max `4.065061s`, OCR median `1.933553s`, and OCR-engine
+  totals `det_elapsed_s=13.924910s`, `rec_elapsed_s=6.366687s`.
+- Added an in-process execution mode to the real-screenshot stress harness so
+  it can measure the warm production-instance path separately from subprocess
+  CLI validation. `--execution in-process` calls `build_boundary()` directly,
+  preserves the existing manifest expectation checks and row schema, records
+  event-profile stages, and works with repeat profiling and OCR-engine
+  profiling. Focused tests passed (`PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_stress_benchmark.py -q`, `10 passed`) and `git diff --check`
+  passed. A two-case smoke,
+  `out/stress-inprocess-smoke-20260602/stress-summary.json`, preserved `2/2`
+  expectations. The first in-process pass still paid model warmup and fresh OCR
+  work (`max_total_elapsed_s=4.733133s`), but the analyzed exact-repeat samples
+  were both subsecond with median `0.288384s` and max `0.351463s`. The full
+  manifest in-process run,
+  `out/stress-inprocess-full-20260602/stress-summary.json`, preserved `12/12`
+  expectations with statuses `{"complete": 10, "failed": 2}`. Its first pass
+  still showed fresh-image OCR cost (`max_total_elapsed_s=2.889836s`,
+  OCR total `16.794743s`), while the analyzed exact-repeat profile showed the
+  cache-friendly warm-instance floor: `12/12` expected, `12/12` subsecond, min
+  `0.071793s`, median `0.182721s`, average `0.185281s`, max `0.273822s`,
+  extraction median `0.154459s`, georeference median `0.030292s`, and repeat
+  OCR median `0.000081s` because OCR labels were served from the in-process
+  cache. Treat this as proof that exact-repeat warm generation is comfortably
+  below one second, not proof that arbitrary unseen screenshots skip OCR cost.

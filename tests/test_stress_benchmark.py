@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import map_boundary_builder.stress_benchmark as stress_module
 
@@ -346,9 +347,11 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
         timeout_seconds,
         write_debug,
         profile_ocr_engine,
+        execution,
         python_executable,
     ):
         assert profile_ocr_engine is False
+        assert execution == "subprocess"
         return {
             "slug": case["slug"],
             "image": case["image"],
@@ -407,8 +410,10 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         timeout_seconds,
         write_debug,
         profile_ocr_engine,
+        execution,
         python_executable,
     ):
+        assert execution == "subprocess"
         calls.append((case["slug"], out_dir.name, timeout_seconds, write_debug, profile_ocr_engine))
         duration = next(durations)
         return {
@@ -477,6 +482,108 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["cases"]["kept"]["max_total_elapsed_s"] == 0.8
     assert repeat_profile["samples"][0]["warmup"] is True
     assert repeat_profile["samples"][1]["repeat_index"] == 2
+
+
+def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "in-process-map",
+                        "image": str(image),
+                        "filename_hint": "custom-upload.png",
+                        "expect": {
+                            "status": "complete",
+                            "source_prefix": "ocr-georeference:",
+                            "city_equals": "Houston",
+                            "min_control_points": 4,
+                        },
+                    }
+                ]
+            }
+        )
+    )
+    calls = []
+
+    def fake_build_boundary(image_path, city, output_path, *, debug_dir, options, progress):
+        calls.append(
+            {
+                "image_path": image_path,
+                "city": city,
+                "output_path": output_path,
+                "debug_dir": debug_dir,
+                "allow_catalog": options.allow_catalog,
+                "filename_hint": options.filename_hint,
+            }
+        )
+        progress({"stage": "inspect", "message": "Reading image metadata", "percent": 5})
+        progress(
+            {
+                "stage": "extract",
+                "message": "Extracting service-area pixels",
+                "percent": 35,
+                "details": {"width": 1200, "height": 900},
+            }
+        )
+        progress(
+            {
+                "stage": "ocr",
+                "message": "Map labels read",
+                "percent": 47,
+                "details": {"label_count": 6, "top_labels": ["Houston", "Montrose"]},
+            }
+        )
+        progress({"stage": "complete", "message": "Boundary ready", "percent": 100})
+        return SimpleNamespace(
+            summary={
+                "city": "Houston",
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "combined_confidence": 0.92,
+                "georeference_confidence": 0.89,
+                "control_points": 5,
+                "bbox": [-96, 29, -95, 30],
+            }
+        )
+
+    monkeypatch.setattr(stress_module, "build_boundary", fake_build_boundary)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        execution="in-process",
+        python_executable="python",
+    )
+
+    row = report["rows"][0]
+    assert report["execution"] == "in-process"
+    assert row["execution"] == "in-process"
+    assert row["expectation_passed"] is True
+    assert row["observed_status"] == "complete"
+    assert row["source"] == "ocr-georeference:nominatim-label-fit"
+    assert row["city"] == "Houston"
+    assert row["control_points"] == 5
+    assert row["image_width"] == 1200
+    assert row["image_height"] == 900
+    assert row["ocr_label_count"] == 6
+    assert row["ocr_top_labels"] == ["Houston", "Montrose"]
+    assert row["command"][0] == "in-process"
+    assert row["timeout_seconds"] == 30.0
+    assert calls == [
+        {
+            "image_path": image,
+            "city": None,
+            "output_path": tmp_path / "out" / "in-process-map.geojson",
+            "debug_dir": None,
+            "allow_catalog": False,
+            "filename_hint": "custom-upload.png",
+        }
+    ]
+    assert set(row["stages"]) >= {"extract", "inspect", "ocr"}
 
 
 def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
