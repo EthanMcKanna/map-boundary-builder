@@ -12143,3 +12143,23 @@ with zero failures in 0.531s.
   total `17.774s`, and OCR-engine totals `det_elapsed_s=7.658s`,
   `rec_elapsed_s=8.458s`, versus the earlier clean profiled baseline at max
   `1.086533s` and OCR total `6.337804s`.
+- Added stress-harness repeat profiling so real-screenshot stress manifests can
+  separate the normal expectation pass from additional latency samples. The new
+  `--repeat-profile-runs` / `--repeat-profile-warmups` options rerun selected
+  cases under `repeat-profile/run-N/`, summarize post-warmup expectation pass
+  counts, subsecond counts, total-elapsed distributions, per-stage duration
+  distributions, and OCR-engine totals when profiling is enabled. This is
+  measurement-only; it does not add latency budgets or change pass/fail gates.
+  Focused unit coverage passed (`PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_stress_benchmark.py -q`, `9 passed`), and `git diff --check`
+  passed. A live two-case smoke,
+  `out/stress-repeat-profile-smoke-20260602/stress-summary.json`, used
+  `houston-waymo` plus expected fail-closed `zoox-las-vegas-mobile-tall` with
+  OCR-engine profiling, `--repeat-profile-runs 2`, and
+  `--repeat-profile-warmups 1`. The primary stress pass preserved `2/2`
+  expectations with statuses `{"complete": 1, "failed": 1}` and max internal
+  `1.146532s`. The analyzed repeat samples were cleaner warm evidence:
+  `2/2` expected, `2/2` subsecond, min `0.718977s`, median/average
+  `0.743505s`, max `0.768034s`, OCR stage median `0.592049s`, and OCR-engine
+  totals `det_elapsed_s=0.492899s`, `rec_elapsed_s=0.461537s`. Treat this as
+  repeat-profile tooling validation, not a full-manifest latency baseline.

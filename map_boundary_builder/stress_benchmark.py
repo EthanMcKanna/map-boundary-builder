@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from statistics import mean, median
 from typing import Any
 
 from .ocr import summarize_rapidocr_profile_summaries
@@ -50,11 +51,28 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
     )
+    parser.add_argument(
+        "--repeat-profile-runs",
+        type=int,
+        default=0,
+        help="Rerun each selected stress case this many additional times and summarize latency variance.",
+    )
+    parser.add_argument(
+        "--repeat-profile-warmups",
+        type=int,
+        default=0,
+        help="Number of repeat-profile samples per stress case to exclude from aggregate repeat statistics.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.repeat_profile_runs < 0:
+        parser.error("--repeat-profile-runs must be non-negative")
+    if args.repeat_profile_warmups < 0:
+        parser.error("--repeat-profile-warmups must be non-negative")
     report = run_stress_benchmark(
         Path(args.manifest),
         Path(args.out_dir),
@@ -62,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         write_debug=args.write_debug,
         profile_ocr_engine=args.profile_ocr_engine,
+        repeat_profile_runs=args.repeat_profile_runs,
+        repeat_profile_warmups=args.repeat_profile_warmups,
     )
     print_stress_table(report)
     if args.fail_on_unexpected and report["summary"]["unexpected"]:
@@ -86,8 +106,14 @@ def run_stress_benchmark(
     timeout_seconds: float = 30.0,
     write_debug: bool = False,
     profile_ocr_engine: bool = False,
+    repeat_profile_runs: int = 0,
+    repeat_profile_warmups: int = 0,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
+    if repeat_profile_runs < 0:
+        raise ValueError("repeat_profile_runs must be non-negative")
+    if repeat_profile_warmups < 0:
+        raise ValueError("repeat_profile_warmups must be non-negative")
     manifest = load_manifest(manifest_path)
     cases = select_cases(manifest["cases"], only_slugs or [])
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -103,13 +129,31 @@ def run_stress_benchmark(
         )
         for case in cases
     ]
+    repeat_profile = (
+        build_repeat_profile(
+            cases,
+            out_dir=out_dir,
+            runs_per_case=repeat_profile_runs,
+            warmup_runs_per_case=repeat_profile_warmups,
+            timeout_seconds=timeout_seconds,
+            write_debug=write_debug,
+            profile_ocr_engine=profile_ocr_engine,
+            python_executable=python_executable,
+        )
+        if repeat_profile_runs
+        else None
+    )
     report = {
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
         "profile_ocr_engine": profile_ocr_engine,
+        "repeat_profile_runs": repeat_profile_runs,
+        "repeat_profile_warmups": repeat_profile_warmups,
         "summary": summarize_rows(rows),
         "rows": rows,
     }
+    if repeat_profile is not None:
+        report["repeat_profile"] = repeat_profile
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
 
@@ -489,6 +533,196 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_repeat_profile(
+    cases: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    runs_per_case: int,
+    warmup_runs_per_case: int,
+    timeout_seconds: float,
+    write_debug: bool,
+    profile_ocr_engine: bool,
+    python_executable: str,
+) -> dict[str, Any]:
+    samples: list[dict[str, Any]] = []
+    repeat_base_dir = out_dir / "repeat-profile"
+    for case in cases:
+        for repeat_index in range(1, runs_per_case + 1):
+            sample_out_dir = repeat_base_dir / f"run-{repeat_index}"
+            sample_out_dir.mkdir(parents=True, exist_ok=True)
+            row = run_stress_case(
+                case,
+                sample_out_dir,
+                timeout_seconds=timeout_seconds,
+                write_debug=write_debug,
+                profile_ocr_engine=profile_ocr_engine,
+                python_executable=python_executable,
+            )
+            samples.append(
+                {
+                    "repeat_index": repeat_index,
+                    "warmup": repeat_index <= warmup_runs_per_case,
+                    **row,
+                }
+            )
+    return summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=runs_per_case,
+        warmup_runs_per_case=warmup_runs_per_case,
+    )
+
+
+def summarize_repeat_profile_samples(
+    samples: list[dict[str, Any]],
+    *,
+    runs_per_case: int,
+    warmup_runs_per_case: int,
+) -> dict[str, Any]:
+    case_samples: dict[str, list[dict[str, Any]]] = {}
+    for sample in samples:
+        slug = sample.get("slug")
+        if isinstance(slug, str) and slug:
+            case_samples.setdefault(slug, []).append(sample)
+    case_summaries = {
+        slug: summarize_repeat_profile_sample_group(slug_samples)
+        for slug, slug_samples in sorted(case_samples.items())
+    }
+    analyzed_samples = repeat_profile_analyzed_samples(samples)
+    subsecond_case_count = sum(
+        1
+        for case_summary in case_summaries.values()
+        if parse_nonnegative_float(case_summary.get("min_total_elapsed_s")) is not None
+        and float(case_summary["min_total_elapsed_s"]) < 1.0
+    )
+    return {
+        "runs_per_case": runs_per_case,
+        "warmup_runs_per_case": warmup_runs_per_case,
+        "summary": {
+            "cases": len(case_summaries),
+            "samples": len(samples),
+            "analyzed_samples": len(analyzed_samples),
+            "expectation_passed_samples": count_repeat_expectation_passed_samples(analyzed_samples),
+            "unexpected_samples": len(analyzed_samples)
+            - count_repeat_expectation_passed_samples(analyzed_samples),
+            "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+            "subsecond_case_min_total_count": subsecond_case_count,
+            **repeat_profile_total_elapsed_stats(analyzed_samples),
+            "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+            "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+        },
+        "cases": case_summaries,
+        "samples": samples,
+    }
+
+
+def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    analyzed_samples = repeat_profile_analyzed_samples(samples)
+    return {
+        "samples": len(samples),
+        "analyzed_samples": len(analyzed_samples),
+        "expectation_passed_samples": count_repeat_expectation_passed_samples(analyzed_samples),
+        "unexpected_samples": len(analyzed_samples)
+        - count_repeat_expectation_passed_samples(analyzed_samples),
+        "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+        **repeat_profile_total_elapsed_stats(analyzed_samples),
+        "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+        "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+    }
+
+
+def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [sample for sample in samples if not sample.get("warmup")]
+
+
+def count_repeat_expectation_passed_samples(samples: list[dict[str, Any]]) -> int:
+    return sum(sample.get("expectation_passed") is True for sample in samples)
+
+
+def count_repeat_subsecond_samples(samples: list[dict[str, Any]]) -> int:
+    return sum(
+        elapsed_s is not None and elapsed_s < 1.0
+        for elapsed_s in (parse_nonnegative_float(sample.get("total_elapsed_s")) for sample in samples)
+    )
+
+
+def repeat_profile_total_elapsed_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
+    durations = [
+        elapsed_s
+        for elapsed_s in (parse_nonnegative_float(sample.get("total_elapsed_s")) for sample in samples)
+        if elapsed_s is not None
+    ]
+    if not durations:
+        return {
+            "min_total_elapsed_s": None,
+            "median_total_elapsed_s": None,
+            "average_total_elapsed_s": None,
+            "max_total_elapsed_s": None,
+        }
+    return {
+        "min_total_elapsed_s": round(min(durations), 6),
+        "median_total_elapsed_s": round(float(median(durations)), 6),
+        "average_total_elapsed_s": round(float(mean(durations)), 6),
+        "max_total_elapsed_s": round(max(durations), 6),
+    }
+
+
+def repeat_profile_stage_duration_stats(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    stage_durations: dict[str, list[float]] = {}
+    for sample in samples:
+        stages = sample.get("stages")
+        if not isinstance(stages, dict):
+            continue
+        for stage, elapsed_s in stages.items():
+            if not isinstance(stage, str) or not stage:
+                continue
+            parsed = parse_nonnegative_float(elapsed_s)
+            if parsed is None:
+                continue
+            stage_durations.setdefault(stage, []).append(parsed)
+    return {
+        stage: {
+            "samples": len(durations),
+            **repeat_profile_stage_duration_distribution(durations),
+        }
+        for stage, durations in sorted(stage_durations.items())
+    }
+
+
+def repeat_profile_stage_duration_distribution(durations: list[float]) -> dict[str, float | None]:
+    if not durations:
+        return {
+            "min_duration_s": None,
+            "median_duration_s": None,
+            "average_duration_s": None,
+            "max_duration_s": None,
+        }
+    return {
+        "min_duration_s": round(min(durations), 6),
+        "median_duration_s": round(float(median(durations)), 6),
+        "average_duration_s": round(float(mean(durations)), 6),
+        "max_duration_s": round(max(durations), 6),
+    }
+
+
+def summarize_repeat_profile_ocr_engine(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
+    profiles = [
+        profile
+        for profile in (sample.get("ocr_engine_profile") for sample in samples)
+        if isinstance(profile, dict)
+    ]
+    return summarize_rapidocr_profile_summaries(profiles)
+
+
+def parse_nonnegative_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0.0 else None
+
+
 def print_stress_table(report: dict[str, Any]) -> None:
     summary = report["summary"]
     print(
@@ -520,6 +754,21 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"det={float(profile.get('det_elapsed_s', 0.0)):.3f}s, "
             f"rec={float(profile.get('rec_elapsed_s', 0.0)):.3f}s"
         )
+    repeat_profile = report.get("repeat_profile")
+    if isinstance(repeat_profile, dict):
+        repeat_summary = repeat_profile.get("summary")
+        if isinstance(repeat_summary, dict):
+            median_total = repeat_summary.get("median_total_elapsed_s")
+            max_total = repeat_summary.get("max_total_elapsed_s")
+            median_text = f"{median_total:.3f}s" if isinstance(median_total, (int, float)) else "-"
+            max_text = f"{max_total:.3f}s" if isinstance(max_total, (int, float)) else "-"
+            print(
+                "repeat profile: "
+                f"analyzed={repeat_summary.get('analyzed_samples', 0)}, "
+                f"expected={repeat_summary.get('expectation_passed_samples', 0)}, "
+                f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
+                f"median_total={median_text}, max_total={max_text}"
+            )
     for row in report["rows"]:
         mark = "ok" if row.get("expectation_passed") else "!!"
         elapsed = row.get("total_elapsed_s")

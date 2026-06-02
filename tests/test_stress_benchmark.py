@@ -380,6 +380,105 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["stage_max_rows"] == {}
 
 
+def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+    durations = iter([1.4, 1.2, 0.8])
+    calls = []
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        python_executable,
+    ):
+        calls.append((case["slug"], out_dir.name, timeout_seconds, write_debug, profile_ocr_engine))
+        duration = next(durations)
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": duration,
+            "stages": {"ocr": round(duration / 2, 6)},
+            "ocr_engine_profile": {
+                "calls": 1,
+                "det_elapsed_s": round(duration / 10, 6),
+                "rec_elapsed_s": round(duration / 5, 6),
+                "raw_box_count": 3,
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        timeout_seconds=3,
+        write_debug=True,
+        profile_ocr_engine=True,
+        repeat_profile_runs=2,
+        repeat_profile_warmups=1,
+        python_executable="python",
+    )
+
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    assert calls == [
+        ("kept", "out", 3, True, True),
+        ("kept", "run-1", 3, True, True),
+        ("kept", "run-2", 3, True, True),
+    ]
+    assert report["repeat_profile_runs"] == 2
+    assert report["repeat_profile_warmups"] == 1
+    assert saved["repeat_profile"]["runs_per_case"] == 2
+    repeat_profile = report["repeat_profile"]
+    assert repeat_profile["summary"]["samples"] == 2
+    assert repeat_profile["summary"]["analyzed_samples"] == 1
+    assert repeat_profile["summary"]["expectation_passed_samples"] == 1
+    assert repeat_profile["summary"]["unexpected_samples"] == 0
+    assert repeat_profile["summary"]["subsecond_samples"] == 1
+    assert repeat_profile["summary"]["subsecond_case_min_total_count"] == 1
+    assert repeat_profile["summary"]["min_total_elapsed_s"] == 0.8
+    assert repeat_profile["summary"]["median_total_elapsed_s"] == 0.8
+    assert repeat_profile["summary"]["stage_duration_s"] == {
+        "ocr": {
+            "samples": 1,
+            "min_duration_s": 0.4,
+            "median_duration_s": 0.4,
+            "average_duration_s": 0.4,
+            "max_duration_s": 0.4,
+        }
+    }
+    assert repeat_profile["summary"]["ocr_engine_profile"] == {
+        "fixtures": 1,
+        "calls": 1,
+        "det_elapsed_s": 0.08,
+        "rec_elapsed_s": 0.16,
+        "raw_box_count": 3,
+    }
+    assert repeat_profile["cases"]["kept"]["max_total_elapsed_s"] == 0.8
+    assert repeat_profile["samples"][0]["warmup"] is True
+    assert repeat_profile["samples"][1]["repeat_index"] == 2
+
+
 def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
     summary = stress_module.summarize_rows(
         [
