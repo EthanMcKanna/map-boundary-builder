@@ -59,7 +59,7 @@ class OcrLabel:
 
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 OCR_CACHE_DIR = _CACHE_ROOT / "ocr-labels"
-OCR_CACHE_VERSION = "ocr-labels-v6"
+OCR_CACHE_VERSION = "ocr-labels-v7"
 OCR_VISUAL_CACHE_QUANTIZATION_MASK = 0xFC
 OCR_COARSE_VISUAL_CACHE_QUANTIZATION_MASK = 0xF8
 OCR_BORDER_COLOR_TOLERANCE = 6
@@ -98,7 +98,18 @@ RAPIDOCR_PROFILE_COUNT_KEYS = (
     "result_count",
     "label_count",
     "useful_label_count",
+    "header_region_filter_used",
 )
+RAPIDOCR_HEADER_REGION_FILTER_MIN_BOXES = 24
+RAPIDOCR_HEADER_REGION_FILTER_MIN_HEADER_BOXES = 8
+RAPIDOCR_HEADER_REGION_FILTER_MIN_SELECTED_BOXES = 10
+RAPIDOCR_HEADER_REGION_FILTER_MIN_REMOVED_BOXES = 5
+RAPIDOCR_HEADER_REGION_FILTER_MIN_DIMENSION = 600
+RAPIDOCR_HEADER_REGION_FILTER_Y_RATIO = 0.12
+RAPIDOCR_HEADER_REGION_FILTER_MIN_Y = 90.0
+RAPIDOCR_HEADER_REGION_FILTER_MAX_Y = 180.0
+RAPIDOCR_HEADER_REGION_FILTER_LEFT_TITLE_X_RATIO = 0.44
+RAPIDOCR_HEADER_REGION_FILTER_WIDE_TEXT_RATIO = 0.12
 _OCR_MEMORY_CACHE: OrderedDict[str, tuple[OcrLabel, ...]] = OrderedDict()
 _OCR_MEMORY_CACHE_LOCK = threading.RLock()
 _RAPIDOCR_SESSION_OPTIONS_PATCHED = False
@@ -1044,6 +1055,12 @@ def run_rapidocr_words(
     recognition_profile = normalized_rapidocr_recognition_profile(rapidocr_recognition_profile)
     detector_limit_type = normalized_rapidocr_detector_limit_type(rapidocr_detector_limit_type)
     rec_batch_num = effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num)
+    header_region_filter = should_filter_rapidocr_header_region(
+        min_text_area=min_text_area,
+        recognition_profile=recognition_profile,
+        detector_limit_type=detector_limit_type,
+        rec_batch_num=rec_batch_num,
+    )
     profile: dict[str, Any] | None = None
     if profile_enabled:
         profile = {
@@ -1058,6 +1075,8 @@ def run_rapidocr_words(
             "rec_batch_num": rec_batch_num,
             "min_text_area": min_text_area,
             "classifier_retry": False,
+            "header_region_filter": header_region_filter,
+            "header_region_filter_used": 0,
         }
     try:
         engine = rapidocr_engine(detector_limit, recognition_profile, detector_limit_type, rec_batch_num)
@@ -1066,11 +1085,17 @@ def run_rapidocr_words(
                 engine,
                 ocr_input,
                 min_text_area=min_text_area,
+                header_region_filter=header_region_filter,
             )
             if profile is not None:
                 profile.update(engine_profile)
-        elif min_text_area > 0.0:
-            result = run_rapidocr_filtered_items(engine, ocr_input, min_text_area=min_text_area)
+        elif min_text_area > 0.0 or header_region_filter:
+            result = run_rapidocr_filtered_items(
+                engine,
+                ocr_input,
+                min_text_area=min_text_area,
+                header_region_filter=header_region_filter,
+            )
         else:
             result, _elapsed = engine(ocr_input, use_cls=False)
         labels = filter_ocr_labels_to_image_bounds(
@@ -1148,7 +1173,13 @@ def filter_ocr_labels_to_image_bounds(
     ]
 
 
-def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_text_area: float):
+def run_rapidocr_filtered_items(
+    engine,
+    ocr_input: Path | np.ndarray,
+    *,
+    min_text_area: float,
+    header_region_filter: bool = False,
+):
     img = engine.load_img(ocr_input)
     raw_h, raw_w = img.shape[:2]
     img, ratio_h, ratio_w = engine.preprocess(img)
@@ -1157,11 +1188,12 @@ def run_rapidocr_filtered_items(engine, ocr_input: Path | np.ndarray, *, min_tex
     dt_boxes, _det_elapsed = engine.auto_text_det(img)
     if dt_boxes is None:
         return None
-    selected = [
-        box
-        for box in dt_boxes
-        if rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
-    ]
+    selected, _header_filter_used = select_rapidocr_boxes(
+        list(dt_boxes),
+        img.shape[:2],
+        min_text_area=min_text_area,
+        header_region_filter=header_region_filter,
+    )
     if not selected:
         return None
     crop_images = engine.get_crop_img_list(img, selected)
@@ -1176,6 +1208,7 @@ def run_rapidocr_profiled_items(
     ocr_input: Path | np.ndarray,
     *,
     min_text_area: float,
+    header_region_filter: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
     profile: dict[str, Any] = {}
     total_started = time.perf_counter()
@@ -1202,13 +1235,15 @@ def run_rapidocr_profiled_items(
         return None, profile
 
     raw_boxes = list(dt_boxes)
-    selected = [
-        box
-        for box in raw_boxes
-        if min_text_area <= 0.0 or rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
-    ]
+    selected, header_filter_used = select_rapidocr_boxes(
+        raw_boxes,
+        img.shape[:2],
+        min_text_area=min_text_area,
+        header_region_filter=header_region_filter,
+    )
     profile["raw_box_count"] = len(raw_boxes)
     profile["selected_box_count"] = len(selected)
+    profile["header_region_filter_used"] = int(header_filter_used)
     profile.update(rapidocr_box_area_profile("raw", raw_boxes))
     profile.update(rapidocr_box_area_profile("selected", selected))
     if not selected:
@@ -1234,16 +1269,102 @@ def run_rapidocr_profiled_items(
     return result, profile
 
 
+def should_filter_rapidocr_header_region(
+    *,
+    min_text_area: float,
+    recognition_profile: str,
+    detector_limit_type: str,
+    rec_batch_num: int,
+) -> bool:
+    if min_text_area > 0.0:
+        return False
+    if recognition_profile != RAPIDOCR_RECOGNITION_PROFILE_DEFAULT:
+        return False
+    if detector_limit_type != RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT:
+        return False
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM <= 0:
+        return False
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM == RAPIDOCR_REC_BATCH_NUM:
+        return False
+    return rec_batch_num == RAPIDOCR_DARK_TEAL_REC_BATCH_NUM
+
+
+def select_rapidocr_boxes(
+    raw_boxes: list[np.ndarray],
+    image_shape: tuple[int, int],
+    *,
+    min_text_area: float,
+    header_region_filter: bool,
+) -> tuple[list[np.ndarray], bool]:
+    selected = [
+        box
+        for box in raw_boxes
+        if min_text_area <= 0.0 or rapidocr_box_area(box) >= min_text_area or rapidocr_rescue_text_box(box)
+    ]
+    if not header_region_filter:
+        return selected, False
+    header_selected = select_rapidocr_header_region_boxes(selected, image_shape)
+    if header_selected is None:
+        return selected, False
+    return header_selected, True
+
+
+def select_rapidocr_header_region_boxes(
+    boxes: list[np.ndarray],
+    image_shape: tuple[int, int],
+) -> list[np.ndarray] | None:
+    height, width = image_shape
+    if min(width, height) < RAPIDOCR_HEADER_REGION_FILTER_MIN_DIMENSION:
+        return None
+    if len(boxes) < RAPIDOCR_HEADER_REGION_FILTER_MIN_BOXES:
+        return None
+    header_cutoff_y = min(
+        RAPIDOCR_HEADER_REGION_FILTER_MAX_Y,
+        max(RAPIDOCR_HEADER_REGION_FILTER_MIN_Y, height * RAPIDOCR_HEADER_REGION_FILTER_Y_RATIO),
+    )
+    header_boxes = [box for box in boxes if rapidocr_box_center_y(box) < header_cutoff_y]
+    if len(header_boxes) < RAPIDOCR_HEADER_REGION_FILTER_MIN_HEADER_BOXES:
+        return None
+    left_title_x = width * RAPIDOCR_HEADER_REGION_FILTER_LEFT_TITLE_X_RATIO
+    wide_header_width = width * RAPIDOCR_HEADER_REGION_FILTER_WIDE_TEXT_RATIO
+    selected = [
+        box
+        for box in boxes
+        if (
+            rapidocr_box_center_y(box) >= header_cutoff_y
+            or rapidocr_box_center_x(box) <= left_title_x
+            or rapidocr_box_width(box) >= wide_header_width
+        )
+    ]
+    if len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_SELECTED_BOXES:
+        return None
+    if len(boxes) - len(selected) < RAPIDOCR_HEADER_REGION_FILTER_MIN_REMOVED_BOXES:
+        return None
+    return selected
+
+
 def rapidocr_box_area(box: np.ndarray) -> float:
-    width = max(float(np.linalg.norm(box[0] - box[1])), float(np.linalg.norm(box[2] - box[3])))
-    height = max(float(np.linalg.norm(box[0] - box[3])), float(np.linalg.norm(box[1] - box[2])))
-    return width * height
+    return rapidocr_box_width(box) * rapidocr_box_height(box)
 
 
 def rapidocr_box_aspect(box: np.ndarray) -> float:
-    width = max(float(np.linalg.norm(box[0] - box[1])), float(np.linalg.norm(box[2] - box[3])))
-    height = max(float(np.linalg.norm(box[0] - box[3])), float(np.linalg.norm(box[1] - box[2])))
-    return width / max(height, 1.0)
+    return rapidocr_box_width(box) / max(rapidocr_box_height(box), 1.0)
+
+
+def rapidocr_box_width(box: np.ndarray) -> float:
+    return max(float(np.linalg.norm(box[0] - box[1])), float(np.linalg.norm(box[2] - box[3])))
+
+
+def rapidocr_box_height(box: np.ndarray) -> float:
+    return max(float(np.linalg.norm(box[0] - box[3])), float(np.linalg.norm(box[1] - box[2])))
+
+
+def rapidocr_box_center_x(box: np.ndarray) -> float:
+    return float(sum(float(point[0]) for point in box) / 4.0)
+
+
+def rapidocr_box_center_y(box: np.ndarray) -> float:
+    return float(sum(float(point[1]) for point in box) / 4.0)
 
 
 def rapidocr_rescue_text_box(box: np.ndarray) -> bool:

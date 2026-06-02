@@ -12960,3 +12960,50 @@ with zero failures in 0.531s.
   `0.157s`). No runtime change or deploy is justified from this checkpoint;
   future speed work should focus on a Grand Rapids-safe semantic or
   label-quality selector rather than broad bright-blue detector changes.
+- Accepted a guarded RapidOCR header-region selector for dense dark-teal
+  full-frame OCR. Grand Rapids was the useful target: the prior hard gate read
+  `56` labels, many from provider/header UI (`Highway`, `Service Area
+  Highway`, `GENTEX Poweredby`), yet the successful fit depended on preserving
+  city/title and wide header context while dropping noisy right-header scraps.
+  The new selector only activates on the existing dark-teal recognition batch
+  path when no `rapidocr_min_text_area` filter is active, the default detector
+  and recognizer profiles are in use, the image is large, the header is dense,
+  and at least five boxes would be removed. It keeps all non-header boxes plus
+  left-title and wide header labels, records `header_region_filter_used` in
+  RapidOCR profiles, and bumps the OCR cache version. Focused unit coverage
+  passed with `PYTHONPATH=. .venv/bin/python -m pytest
+  tests/test_ocr_georeference.py -q` (`135 passed`), full validation passed
+  with `PYTHONPATH=. .venv/bin/python -m pytest -q`
+  (`520 passed, 30 subtests passed`), `compileall` over
+  `map_boundary_builder` and `tests` passed, and `git diff --check` passed.
+  The actual-code dark-teal stress gate
+  `out/header-region-filter-darkteal-actual-20260602/stress-summary.json`
+  used Ann Arbor May Mobility, Grand Rapids May Mobility, both Zoox Las Vegas
+  portrait screenshots, and Zoox SF with in-process execution, disabled
+  OCR/extraction caches, OCR-engine profiling, `--repeat-profile-runs 3`,
+  `--repeat-profile-warmups 1`, `--fail-on-unexpected`,
+  `--fail-on-repeat-signature-drift`, `--max-total-elapsed-s 1.5`,
+  `--max-repeat-profile-p95-duration-s 1.05`, and OCR-engine p95 budgets
+  `rec_elapsed_s=0.9,total_s=1.2`. It passed `5/5` primary expectations,
+  `10/10` analyzed repeat expectations, stable signatures, `10/10`
+  subsecond repeats, primary max `0.775262s`, repeat p95 `0.590931s`,
+  repeat max `0.611390s`, recognizer p95 `0.383547s`, RapidOCR total p95
+  `0.556586s`, and `header_region_filter_used=2` across the analyzed repeat
+  OCR-engine profile. The prior same-subset gate was primary max `0.808967s`,
+  repeat p95 `0.630920s`, repeat max `0.635847s`, recognizer p95
+  `0.416808s`, and RapidOCR total p95 `0.587694s`. Grand Rapids now keeps the
+  same `5` controls and bbox while reading `21` labels instead of `56`;
+  repeat rows select `24` boxes instead of the previous `34`, with selected
+  area p50 `2090` px^2 and `6` selected boxes below `1300` px^2. The full
+  16-case hard gate
+  `out/header-region-filter-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, `32/32` analyzed repeat expectations,
+  stable signatures for all `16` cases, `32/32` subsecond repeats, repeat
+  median `0.366736s`, repeat p90 `0.549554s`, repeat p95 `0.565971s`, and
+  repeat max `0.598974s`, with zero unexpected rows. Compared with the
+  previous hard rerun (`out/stress-full-current-subsecond-gate-rerun-20260602`
+  at repeat median `0.378334s`, p90 `0.615027s`, p95 `0.647694s`, max
+  `0.685386s`), this is a narrow steady-state tail improvement. The primary
+  cold max was higher in the new full gate (`0.952189s`, Bay Area) than the
+  previous checkpoint (`0.892963s`), but that case is outside the guarded
+  selector path and the analyzed repeats improved without signature drift.

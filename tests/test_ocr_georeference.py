@@ -125,6 +125,13 @@ def unit_ocr_box(x: float = 0.0) -> list[list[float]]:
     return [[x, 0.0], [x + 80.0, 0.0], [x + 80.0, 20.0], [x, 20.0]]
 
 
+def rapidocr_test_box(x: float, y: float, width: float, height: float) -> np.ndarray:
+    return np.array(
+        [[x, y], [x + width, y], [x + width, y + height], [x, y + height]],
+        dtype=np.float32,
+    )
+
+
 class OcrGroupingTests(unittest.TestCase):
     def test_residual_median_p90_matches_numpy_linear_percentile(self) -> None:
         for values in ([4.0], [8.0, 2.0], [12.0, 2.0, 7.0], [0.0, 100.0, 300.0, 900.0, 1400.0]):
@@ -989,6 +996,33 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(profile["selected_box_area_lt_1300_count"], 2)
         self.assertEqual(profile["selected_box_area_lt_1500_count"], 2)
 
+    def test_rapidocr_header_region_filter_keeps_title_and_wide_header_context(self) -> None:
+        title = rapidocr_test_box(20.0, 40.0, 520.0, 44.0)
+        wide_context = rapidocr_test_box(920.0, 42.0, 170.0, 24.0)
+        header_noise = [rapidocr_test_box(610.0 + idx * 8.0, 40.0, 60.0, 20.0) for idx in range(9)]
+        street_boxes = [rapidocr_test_box(240.0 + idx * 42.0, 250.0 + idx * 18.0, 82.0, 22.0) for idx in range(14)]
+        boxes = [title, *header_noise, wide_context, *street_boxes]
+
+        selected = ocr_module.select_rapidocr_header_region_boxes(boxes, (1012, 1280))
+
+        assert selected is not None
+        self.assertTrue(any(box is title for box in selected))
+        self.assertTrue(any(box is wide_context for box in selected))
+        self.assertTrue(all(any(selected_box is box for selected_box in selected) for box in street_boxes))
+        self.assertTrue(any(all(selected_box is not box for selected_box in selected) for box in header_noise))
+        self.assertGreaterEqual(len(boxes) - len(selected), 5)
+
+    def test_rapidocr_header_region_filter_requires_dense_header(self) -> None:
+        boxes = [
+            rapidocr_test_box(20.0, 40.0, 520.0, 44.0),
+            *[
+                rapidocr_test_box(240.0 + idx * 42.0, 250.0 + idx * 18.0, 82.0, 22.0)
+                for idx in range(14)
+            ],
+        ]
+
+        self.assertIsNone(ocr_module.select_rapidocr_header_region_boxes(boxes, (1012, 1280)))
+
     def test_rapidocr_min_text_area_filters_boxes_before_recognition(self) -> None:
         small_box = np.array(
             [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]],
@@ -1025,6 +1059,34 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(profile["selected_box_area_min"], 2400.0)
         self.assertEqual(profile["selected_box_area_p50"], 2400.0)
         self.assertEqual(profile["selected_box_area_lt_1500_count"], 0)
+
+    def test_rapidocr_header_region_filter_applies_to_dark_teal_batch_path(self) -> None:
+        title = rapidocr_test_box(20.0, 40.0, 520.0, 44.0)
+        wide_context = rapidocr_test_box(920.0, 42.0, 170.0, 24.0)
+        header_noise = [rapidocr_test_box(610.0 + idx * 8.0, 40.0, 60.0, 20.0) for idx in range(9)]
+        street_boxes = [rapidocr_test_box(240.0 + idx * 42.0, 250.0 + idx * 18.0, 82.0, 22.0) for idx in range(14)]
+        engine = FakeFilteredRapidOcrEngine([title, *header_noise, wide_context, *street_boxes])
+
+        with (
+            patch.object(
+                ocr_module,
+                "rapidocr_input_array",
+                return_value=(np.zeros((1012, 1280, 3), dtype=np.uint8), 1.0, 1.0),
+            ),
+            patch.object(ocr_module, "rapidocr_engine", return_value=engine),
+            patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
+            ocr_module.collect_rapidocr_profiles() as profiles,
+        ):
+            labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_rec_batch_num=16)
+
+        self.assertGreater(len(labels), 0)
+        self.assertLess(len(engine.selected_boxes), len(engine.boxes))
+        self.assertTrue(any(box is title for box in engine.selected_boxes))
+        self.assertTrue(any(box is wide_context for box in engine.selected_boxes))
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0]["header_region_filter_used"], 1)
+        self.assertEqual(profiles[0]["raw_box_count"], len(engine.boxes))
+        self.assertEqual(profiles[0]["selected_box_count"], len(engine.selected_boxes))
 
     def test_rapidocr_min_text_area_rescues_medium_horizontal_boxes(self) -> None:
         medium_horizontal_box = np.array(
