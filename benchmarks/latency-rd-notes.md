@@ -13418,3 +13418,24 @@ with zero failures in 0.531s.
   cases, `48/48` subsecond repeats, primary max `0.699770s`, repeat median
   `0.350s`, repeat p95 `0.545s`, repeat max `0.568s`, RapidOCR total p95
   `0.475s`, and recognizer p95 `0.233s`.
+- Added confidence values to repeat-profile output signatures so
+  `--fail-on-repeat-signature-drift` also catches speed probes that preserve
+  city/source/control/bbox/label fields while changing the result confidence.
+  The signature now records rounded `combined_confidence` and
+  `georeference_confidence` values, with `null` for failed rows or missing
+  values. This closes another validation gap exposed by earlier rejected OCR
+  shortcuts, where confidence drops or confidence-plausible wrong fits could
+  hide behind otherwise stable-looking metadata. Focused validation:
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `38` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `528` tests plus `30` subtests. The full actual-code hard gate
+  `out/confidence-signature-full16-hard-actual-20260602/stress-summary.json`
+  passed `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeat expectations, confidence-inclusive stable signatures
+  for all `16` cases, `48/48` subsecond repeats, primary max `0.724347s`,
+  repeat median `0.364s`, repeat p95 `0.519s`, repeat max `0.555s`,
+  RapidOCR total p95 `0.449s`, and recognizer p95 `0.232s`. The Los Angeles
+  signature now explicitly includes `combined_confidence=0.879`,
+  `georeference_confidence=0.879`, `18` controls, the locked bbox, and `40`
+  OCR labels.

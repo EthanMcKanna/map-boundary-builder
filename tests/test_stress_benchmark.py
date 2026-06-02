@@ -811,6 +811,8 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": None,
                 "bbox": None,
+                "combined_confidence": None,
+                "georeference_confidence": None,
                 "ocr_label_count": None,
                 "ocr_label_event": None,
                 "ocr_full_detail_retry": None,
@@ -934,6 +936,61 @@ def test_repeat_profile_flags_bbox_signature_drift() -> None:
     assert sorted(signature["bbox"] for signature in stability["signatures"]) == [
         [-80.338801, 25.688604, -80.111686, 25.983015],
         [-80.318801, 25.688603, -80.091686, 25.983015],
+    ]
+
+
+def test_repeat_profile_flags_confidence_signature_drift() -> None:
+    samples = [
+        {
+            "slug": "drifty-confidence",
+            "repeat_index": 1,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.42,
+            "city": "Los Angeles",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 18,
+            "bbox": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+            "combined_confidence": 0.8794444,
+            "georeference_confidence": 0.8794444,
+            "ocr_label_count": 40,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Brentwood"],
+        },
+        {
+            "slug": "drifty-confidence",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.43,
+            "city": "Los Angeles",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 18,
+            "bbox": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+            "combined_confidence": 0.721,
+            "georeference_confidence": 0.721,
+            "ocr_label_count": 40,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Brentwood"],
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=2,
+        warmup_runs_per_case=0,
+    )
+
+    stability = repeat_profile["cases"]["drifty-confidence"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert sorted(signature["combined_confidence"] for signature in stability["signatures"]) == [
+        0.721,
+        0.879444,
     ]
 
 

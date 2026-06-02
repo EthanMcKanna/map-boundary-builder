@@ -1120,6 +1120,8 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "source": sample.get("source"),
         "control_points": sample.get("control_points"),
         "bbox": repeat_profile_bbox_signature(sample.get("bbox")),
+        "combined_confidence": repeat_profile_confidence_signature(sample.get("combined_confidence")),
+        "georeference_confidence": repeat_profile_confidence_signature(sample.get("georeference_confidence")),
         "ocr_label_count": sample.get("ocr_label_count"),
         "ocr_label_event": sample.get("ocr_label_event"),
         "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
@@ -1141,6 +1143,13 @@ def repeat_profile_bbox_signature(value: Any) -> list[float] | None:
             return None
         bbox.append(round(number, 6))
     return bbox
+
+
+def repeat_profile_confidence_signature(value: Any) -> float | None:
+    parsed = parse_nonnegative_float(value)
+    if parsed is None:
+        return None
+    return round(parsed, 6)
 
 
 def repeat_profile_slowest_samples(
