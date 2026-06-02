@@ -14894,3 +14894,24 @@ with zero failures in 0.531s.
   `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
   bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`,
   `cache_hit=miss`, and `build_boundary_s=1.358150`.
+- Locked a positive stress case for SVG bytes hidden behind a `.png` filename:
+  `/Users/ethanmckanna/Downloads/a.png`. This preserves the older SVG-upload
+  fix in the current arbitrary-upload stress suite and catches regressions where
+  content sniffing/rasterization falls back to treating SVG as a raster PNG.
+  The exact CLI probe with catalog matching enabled, `--filename-hint
+  upload.png`, `--source-was-svg`, fresh OCR/extraction caches, debug artifacts,
+  and OCR profiling completed as Austin Waymo with source `catalog-shape-match`,
+  catalog slug `austin-waymo`, confidence `0.9728383902559491`, bbox
+  `[-97.8914452,30.1144685,-97.6579857,30.4108558]`, zero OCR calls, and
+  `1.004124s` while paying overlay export. The accepted manifest row
+  `austin-waymo-disguised-svg` runs no-debug and catalog-enabled with strict
+  source/city/confidence/bbox expectations. Focused stress passed at
+  `out/disguised-svg-focused-stress-20260602/stress-summary.json`: `1/1`
+  expected, primary `0.568970s`, repeat `3/3` subsecond, repeat p95 `0.622s`,
+  stable signature. The full real-screenshot hard gate passed at
+  `out/disguised-svg-full26-hard-20260602/stress-summary.json`: `26/26`
+  expected, statuses `{"complete":15,"failed":11}`, primary max `0.972540s`,
+  repeat `52/52` subsecond, repeat p95 `0.747s`, and all `15` valid
+  service-area screenshots completed. The new SVG-disguised row itself completed
+  in `0.522s` with source `catalog-shape-match`, while the existing slowest
+  primary row remained `robotaxi-austin` at `0.973s`.
