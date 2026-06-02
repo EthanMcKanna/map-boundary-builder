@@ -11815,3 +11815,18 @@ with zero failures in 0.531s.
   latency-budget issues. Focused OCR/georeference/runner/stress tests passed
   (`201 passed`), the full suite passed (`473 passed`), and `git diff --check`
   passed.
+- Production deployment proof for the real-screenshot stress gate: commit
+  `b6c5647` auto-deployed to Vercel as
+  `dpl_6BQZJG7W1LFgxbA4C2fLyRudQDxd`, aliased to `https://mapboundary.app`.
+  Production health remained on pipeline hash `pipeline-8f97622b0d1bfbc6`
+  because this commit did not touch the hashed pipeline inputs, so both POST
+  smokes used one-pixel cache-busted PNGs to avoid stale run-result caches.
+  The San Antonio no-catalog smoke
+  `out/prod-b6c5647-san-antonio-smoke.json` returned HTTP `201`, cache miss,
+  city `San Antonio`, source `ocr-georeference:nominatim-label-fit`, 12
+  controls, `build_boundary_s` `2.154874s`, and georeference stage
+  `0.046737s`. The Zoox tall mobile no-catalog smoke
+  `out/prod-b6c5647-zoox-tall-smoke.json` returned HTTP `422`, cache miss, and
+  the expected sparse-OCR reliability error instead of emitting the old wrong
+  Las Vegas polygon. Vercel CLI was still `54.3.0` during this deploy check;
+  upgrade to `54.7.1` or newer before the next longer Vercel workflow.
