@@ -11727,3 +11727,21 @@ with zero failures in 0.531s.
   RapidOCR-family backend until upstream publishes a materially different
   release/backend or a hybrid validator proves equivalence before fallback.
   This checkpoint intentionally makes no runtime code change.
+- Measured the catalog/known-shape fast path separately from the arbitrary
+  no-catalog OCR path. With catalog matching enabled, full in-process
+  generation on the `8` active fixtures used `catalog-shape-match` for every
+  scored fixture and passed a sub-second latency gate:
+  `out/catalog-fastpath-budget-pass-20260602/full-report.json` scored `8/8`,
+  average IoU `0.992917`, min IoU `0.943345`, active total `0.633494s`, max
+  fixture `0.106027s`, and `0` latency-budget issues under per-fixture
+  `0.25s`, active total `1.0s`, extract `0.8s`, and georeference `0.01s`
+  budgets. Stage totals show this fast path is extraction/catalog-match bound,
+  not OCR-bound: extract `0.588673s`, georeference `0.000024s`, export
+  `0.013318s`, and no OCR profile/events. A deliberately mismatched earlier
+  run that included an OCR stage budget failed only because the catalog path
+  correctly emitted no OCR stage
+  (`out/catalog-fastpath-profile-20260602/full-report.json`). Treat the
+  sub-second catalog path as healthy; the remaining first-principles work is
+  either arbitrary no-catalog OCR/georeference, stronger equivalence validation
+  for skipping full OCR, or broader catalog/cache coverage without harming
+  unseen screenshots.
