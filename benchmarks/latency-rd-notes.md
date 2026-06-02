@@ -12212,3 +12212,29 @@ with zero failures in 0.531s.
   OCR median `0.000081s` because OCR labels were served from the in-process
   cache. Treat this as proof that exact-repeat warm generation is comfortably
   below one second, not proof that arbitrary unseen screenshots skip OCR cost.
+- Added an explicit stress-harness cache-control option after measuring that
+  distinction. `--disable-ocr-cache` records `runner_ocr_cache=false` in the
+  saved report, passes `MAP_BOUNDARY_RUNNER_OCR_CACHE=0` to subprocess stress
+  cases, and temporarily applies the same setting around in-process
+  `build_boundary()` calls. This keeps exact-repeat cache-floor profiling and
+  fresh-OCR warm-engine profiling separate without relying on untracked shell
+  environment setup. Focused coverage passed (`PYTHONPATH=. .venv/bin/python
+  -m pytest tests/test_stress_benchmark.py -q`, `11 passed`) and
+  `git diff --check` passed. The environment-based full in-process no-cache
+  run, `out/stress-inprocess-nocache-full-20260602/stress-summary.json`,
+  preserved `12/12` expectations with statuses
+  `{"complete": 10, "failed": 2}`. Its post-warmup repeat profile paid OCR on
+  every sample: `12/12` expected, `9/12` subsecond, min `0.376918s`, median
+  `0.749148s`, average `0.779945s`, max `1.266722s`, OCR median
+  `0.593303s`, OCR max `1.160616s`, and OCR-engine totals
+  `det_elapsed_s=3.308969s`, `rec_elapsed_s=4.824008s`. The three above-one
+  second no-cache repeat tails were `zoox-las-vegas-mobile-tall` (`1.266722s`,
+  OCR `1.160616s`), `bay-area-waymo` (`1.175414s`, OCR `0.991563s`), and
+  `grand-rapids-may-mobility` (`1.098898s`, OCR `1.033389s`). A flag-based
+  three-tail smoke,
+  `out/stress-inprocess-disable-cache-tail3-20260602/stress-summary.json`,
+  preserved `3/3` expectations, recorded `runner_ocr_cache=false`, and its
+  analyzed repeats were `1/3` subsecond with median `1.158906s` and max
+  `1.326393s`, confirming the flag keeps fresh OCR cost visible. This is the
+  current best measurement lane for arbitrary unseen screenshots on a warm
+  instance.

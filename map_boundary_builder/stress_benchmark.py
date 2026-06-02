@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import os
 import subprocess
 import sys
 import time
@@ -16,7 +18,7 @@ from .ocr import (
     summarize_rapidocr_profile_summaries,
 )
 from .pipeline_version import get_pipeline_version
-from .runner import BoundaryBuildOptions, build_boundary
+from .runner import BoundaryBuildOptions, RUNNER_OCR_CACHE_ENV, build_boundary
 
 
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
@@ -59,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
     )
     parser.add_argument(
+        "--disable-ocr-cache",
+        action="store_true",
+        help="Disable the runner OCR cache so repeat profiles keep paying fresh OCR cost.",
+    )
+    parser.add_argument(
         "--execution",
         choices=("subprocess", "in-process"),
         default="subprocess",
@@ -96,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         write_debug=args.write_debug,
         profile_ocr_engine=args.profile_ocr_engine,
+        runner_ocr_cache=not args.disable_ocr_cache,
         execution=args.execution,
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
@@ -123,6 +131,7 @@ def run_stress_benchmark(
     timeout_seconds: float = 30.0,
     write_debug: bool = False,
     profile_ocr_engine: bool = False,
+    runner_ocr_cache: bool = True,
     execution: str = "subprocess",
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
@@ -145,6 +154,7 @@ def run_stress_benchmark(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            runner_ocr_cache=runner_ocr_cache,
             execution=execution,
             python_executable=python_executable,
         )
@@ -159,6 +169,7 @@ def run_stress_benchmark(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            runner_ocr_cache=runner_ocr_cache,
             execution=execution,
             python_executable=python_executable,
         )
@@ -169,6 +180,7 @@ def run_stress_benchmark(
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
         "profile_ocr_engine": profile_ocr_engine,
+        "runner_ocr_cache": runner_ocr_cache,
         "execution": execution,
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
@@ -199,6 +211,7 @@ def run_stress_case(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool = False,
+    runner_ocr_cache: bool = True,
     execution: str = "subprocess",
     python_executable: str,
 ) -> dict[str, Any]:
@@ -222,6 +235,7 @@ def run_stress_case(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            runner_ocr_cache=runner_ocr_cache,
         )
     if execution != "subprocess":
         raise ValueError(f"Unsupported stress execution mode: {execution}")
@@ -238,13 +252,16 @@ def run_stress_case(
     )
     started = time.perf_counter()
     try:
-        completed = subprocess.run(
-            command,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
+        run_kwargs: dict[str, Any] = {
+            "text": True,
+            "capture_output": True,
+            "timeout": timeout_seconds,
+            "check": False,
+        }
+        subprocess_env = subprocess_runner_ocr_cache_env(runner_ocr_cache)
+        if subprocess_env is not None:
+            run_kwargs["env"] = subprocess_env
+        completed = subprocess.run(command, **run_kwargs)
     except subprocess.TimeoutExpired as exc:
         wall_s = round(time.perf_counter() - started, 6)
         row = base_row(case, expected_status=expected_status, observed_status="timeout")
@@ -273,6 +290,7 @@ def run_stress_case(
         parse_error=parse_error,
         expected_status=expected_status,
     )
+    row["runner_ocr_cache"] = runner_ocr_cache
     row["expectation_issues"] = check_expectations(row, expect)
     row["expectation_passed"] = not row["expectation_issues"]
     return row
@@ -287,6 +305,7 @@ def run_stress_case_in_process(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool,
+    runner_ocr_cache: bool,
 ) -> dict[str, Any]:
     slug = require_string(case, "slug")
     expect = case.get("expect") if isinstance(case.get("expect"), dict) else {}
@@ -324,14 +343,25 @@ def run_stress_case_in_process(
             progress=progress,
         )
 
-    command = build_in_process_command_summary(case, image, output_path, debug_dir)
+    command = build_in_process_command_summary(
+        case,
+        image,
+        output_path,
+        debug_dir,
+        runner_ocr_cache=runner_ocr_cache,
+    )
+
+    def run_build_boundary_with_cache_setting():
+        with temporary_runner_ocr_cache(runner_ocr_cache):
+            return run_build_boundary()
+
     try:
         if profile_ocr_engine:
             with collect_rapidocr_profiles() as collected:
                 ocr_engine_events = collected
-                result = run_build_boundary()
+                result = run_build_boundary_with_cache_setting()
         else:
-            result = run_build_boundary()
+            result = run_build_boundary_with_cache_setting()
         wall_s = round(time.perf_counter() - started, 6)
         summary = dict(result.summary)
         summary["pipeline_version"] = get_pipeline_version()
@@ -362,6 +392,7 @@ def run_stress_case_in_process(
     )
     row["execution"] = "in-process"
     row["timeout_seconds"] = timeout_seconds
+    row["runner_ocr_cache"] = runner_ocr_cache
     row["expectation_issues"] = check_expectations(row, expect)
     row["expectation_passed"] = not row["expectation_issues"]
     return row
@@ -372,6 +403,8 @@ def build_in_process_command_summary(
     image: Path,
     output_path: Path,
     debug_dir: Path | None,
+    *,
+    runner_ocr_cache: bool,
 ) -> list[str]:
     command = [
         "in-process",
@@ -391,7 +424,33 @@ def build_in_process_command_summary(
     command.extend(["--filename-hint", filename_hint])
     if debug_dir is not None:
         command.extend(["--debug-dir", str(debug_dir)])
+    if not runner_ocr_cache:
+        command.append("--disable-ocr-cache")
     return command
+
+
+def subprocess_runner_ocr_cache_env(runner_ocr_cache: bool) -> dict[str, str] | None:
+    if runner_ocr_cache:
+        return None
+    env = dict(os.environ)
+    env[RUNNER_OCR_CACHE_ENV] = "0"
+    return env
+
+
+@contextmanager
+def temporary_runner_ocr_cache(runner_ocr_cache: bool):
+    if runner_ocr_cache:
+        yield
+        return
+    previous = os.environ.get(RUNNER_OCR_CACHE_ENV)
+    os.environ[RUNNER_OCR_CACHE_ENV] = "0"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(RUNNER_OCR_CACHE_ENV, None)
+        else:
+            os.environ[RUNNER_OCR_CACHE_ENV] = previous
 
 
 def build_cli_command(
@@ -695,6 +754,7 @@ def build_repeat_profile(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool,
+    runner_ocr_cache: bool,
     execution: str,
     python_executable: str,
 ) -> dict[str, Any]:
@@ -710,6 +770,7 @@ def build_repeat_profile(
                 timeout_seconds=timeout_seconds,
                 write_debug=write_debug,
                 profile_ocr_engine=profile_ocr_engine,
+                runner_ocr_cache=runner_ocr_cache,
                 execution=execution,
                 python_executable=python_executable,
             )
@@ -909,6 +970,8 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"det={float(profile.get('det_elapsed_s', 0.0)):.3f}s, "
             f"rec={float(profile.get('rec_elapsed_s', 0.0)):.3f}s"
         )
+    if report.get("runner_ocr_cache") is False:
+        print("note: runner OCR cache is disabled; repeat samples keep paying OCR cost")
     repeat_profile = report.get("repeat_profile")
     if isinstance(repeat_profile, dict):
         repeat_summary = repeat_profile.get("summary")

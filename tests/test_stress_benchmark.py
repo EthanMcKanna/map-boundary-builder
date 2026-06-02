@@ -1,9 +1,11 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import map_boundary_builder.stress_benchmark as stress_module
+from map_boundary_builder.runner import RUNNER_OCR_CACHE_ENV
 
 
 def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
@@ -157,6 +159,50 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
         "rec_elapsed_s": 0.3,
         "raw_box_count": 4,
     }
+
+
+def test_run_stress_case_can_disable_runner_ocr_cache_for_subprocess(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+
+    def fake_run(command, *, text, capture_output, timeout, check, env):
+        assert env[RUNNER_OCR_CACHE_ENV] == "0"
+        assert RUNNER_OCR_CACHE_ENV not in os.environ
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "city": "Houston",
+                    "georeference_source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "event_profile": {"total_elapsed_s": 0.6},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(stress_module.subprocess, "run", fake_run)
+
+    row = stress_module.run_stress_case(
+        {
+            "slug": "houston",
+            "image": str(image),
+            "expect": {
+                "status": "complete",
+                "source_prefix": "ocr-georeference:",
+                "min_control_points": 5,
+            },
+        },
+        tmp_path / "out",
+        timeout_seconds=5,
+        write_debug=False,
+        runner_ocr_cache=False,
+        python_executable="python",
+    )
+
+    assert row["expectation_passed"] is True
+    assert row["runner_ocr_cache"] is False
 
 
 def test_run_stress_case_reports_city_drift(tmp_path, monkeypatch) -> None:
@@ -347,10 +393,12 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
         timeout_seconds,
         write_debug,
         profile_ocr_engine,
+        runner_ocr_cache,
         execution,
         python_executable,
     ):
         assert profile_ocr_engine is False
+        assert runner_ocr_cache is True
         assert execution == "subprocess"
         return {
             "slug": case["slug"],
@@ -410,9 +458,11 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         timeout_seconds,
         write_debug,
         profile_ocr_engine,
+        runner_ocr_cache,
         execution,
         python_executable,
     ):
+        assert runner_ocr_cache is True
         assert execution == "subprocess"
         calls.append((case["slug"], out_dir.name, timeout_seconds, write_debug, profile_ocr_engine))
         duration = next(durations)
@@ -510,6 +560,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
     calls = []
 
     def fake_build_boundary(image_path, city, output_path, *, debug_dir, options, progress):
+        assert os.environ[RUNNER_OCR_CACHE_ENV] == "0"
         calls.append(
             {
                 "image_path": image_path,
@@ -556,12 +607,15 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
         manifest,
         tmp_path / "out",
         execution="in-process",
+        runner_ocr_cache=False,
         python_executable="python",
     )
 
     row = report["rows"][0]
     assert report["execution"] == "in-process"
+    assert report["runner_ocr_cache"] is False
     assert row["execution"] == "in-process"
+    assert row["runner_ocr_cache"] is False
     assert row["expectation_passed"] is True
     assert row["observed_status"] == "complete"
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
@@ -584,6 +638,7 @@ def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatc
         }
     ]
     assert set(row["stages"]) >= {"extract", "inspect", "ocr"}
+    assert RUNNER_OCR_CACHE_ENV not in os.environ
 
 
 def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
