@@ -12661,3 +12661,32 @@ with zero failures in 0.531s.
   repeat p95s were export `0.254259s`, extract `0.112584s`, georeference
   `0.070173s`, inspect `0.000094s`, and OCR `0.000103s`, confirming this
   warm no-catalog repeat path is stable and comfortably below the p95 gate.
+- Re-ran the full 16-case real-screenshot stress manifest with fresh OCR and
+  fresh extraction repeats to establish the current gated baseline after the
+  recent OCR, stress, and benchmark harness changes. The profiled tail run,
+  `out/stress-full-current-tail-gated-20260602/stress-summary.json`, used
+  `--execution in-process`, `--profile-ocr-engine`, disabled OCR/extraction
+  caches, `--repeat-profile-runs 3`, `--repeat-profile-warmups 1`,
+  `--fail-on-unexpected`, and `--fail-on-repeat-signature-drift`; it preserved
+  `16/16` primary expectations and `32/32` analyzed repeat expectations,
+  kept `32/32` analyzed repeats subsecond, and reported stable signatures for
+  all `16` cases. Repeat total latency was min/median/p90/p95/max
+  `0.249786s`/`0.436881s`/`0.638765s`/`0.744258s`/`0.868864s`. The OCR engine
+  repeat tail is still recognizer-heavy: detector p95 `0.247760s`,
+  recognizer p95 `0.499675s`, and RapidOCR total p95 `0.669871s`; the max OCR
+  engine row remained `zoox-las-vegas-mobile-tall` at RapidOCR total
+  `0.760644s` with recognizer `0.598702s`. A same-subset hard latency gate,
+  `out/stress-full-current-subsecond-gate-20260602/stress-summary.json`,
+  repeated the full manifest without OCR-engine profiling and added
+  `--max-total-elapsed-s 1.0`; it passed with no primary or repeat violations,
+  preserved `16/16` primary expectations, kept `32/32` analyzed repeats
+  expected and subsecond, and reported repeat total min/median/p90/p95/max
+  `0.246200s`/`0.476213s`/`0.650833s`/`0.744892s`/`0.931570s`. The slowest
+  primary rows in the hard gate were `zoox-las-vegas-mobile-tall` at
+  `0.848803s`, `bay-area-waymo` at `0.790641s`, and
+  `grand-rapids-may-mobility` at `0.777597s`. This is the current strongest
+  local proof that the warm in-process, no-cache real-screenshot path is now
+  broadly subsecond on the stress manifest; future speed work should compare
+  against this and focus on the remaining Zoox tall / Grand Rapids OCR
+  recognizer tail rather than accepting broad OCR shortcuts without the full
+  repeat/signature/latency gates.
