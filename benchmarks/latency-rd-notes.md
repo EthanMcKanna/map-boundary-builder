@@ -449,6 +449,21 @@ with zero failures in 0.531s.
   `out/georef-preload-smoke-20260529/full-report.json` passed all six smoke
   checks. This is specifically a cold/unprewarmed seed-load reliability win;
   the broader arbitrary path remains OCR-bound.
+- June 2 SVG/vector upload reliability probe: `/Users/ethanmckanna/Downloads/a.png`
+  is SVG content hidden behind a `.png` suffix. The old bright-blue screenshot
+  OCR profile rasterized and extracted it but failed georeferencing after
+  5.854486s with only 9 labels. A source-SVG-only bright-blue OCR profile now
+  keeps the normal raster screenshot defaults untouched while using a 1600px OCR
+  image and no fast-text area gate for vector uploads. The exact no-catalog SVG
+  probe `out/svg-brightblue-profile-a-lean-actual-20260602/a.geojson` completed
+  as Austin with 59 labels, 13 controls, `0.916` confidence, bbox
+  `[-97.8872494, 30.1190213, -97.6619711, 30.4080687]`, and 1.442437s total
+  including 0.517362s SVG rasterization. The full hard raster screenshot gate
+  `out/svg-brightblue-profile-full16-hard-actual-20260602/stress-summary.json`
+  stayed green: 16/16 expected, primary max 0.757767s, repeat p95 0.540991s,
+  48/48 analyzed repeats subsecond, and stable repeat signatures. Focused
+  runner/image/stress tests passed 140 tests, and full pytest passed 534 tests
+  plus 30 subtests.
 
 ## Shipped Changes
 

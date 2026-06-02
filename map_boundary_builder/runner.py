@@ -78,6 +78,8 @@ from .runtime_config import (
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
+    RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
+    SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
 )
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -309,11 +311,12 @@ def build_boundary(
         allow_pre_ocr_catalog=would_try_pre_ocr_catalog,
     )
     allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
+    source_is_svg = is_svg_image(image_path)
 
     emit_progress(
         progress,
         stage="inspect",
-        message="Rasterizing SVG upload" if is_svg_image(image_path) else "Reading image metadata",
+        message="Rasterizing SVG upload" if source_is_svg else "Reading image metadata",
         percent=5,
     )
     image_path = normalize_image_for_processing(
@@ -396,7 +399,10 @@ def build_boundary(
                 height=height,
             ):
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
-                rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
+                rapidocr_min_text_area = fast_text_ocr_min_area_for_style(
+                    early_ocr_style,
+                    source_is_svg=source_is_svg,
+                )
                 labels_future_filtered = rapidocr_min_text_area is not None
                 ocr_kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
                 if current_catalog_label_shape_shortcut_enabled(
@@ -411,6 +417,7 @@ def build_boundary(
                         early_ocr_style,
                         width=width,
                         height=height,
+                        source_is_svg=source_is_svg,
                     )
                     if rapidocr_max_dimension is not None:
                         ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
@@ -442,7 +449,10 @@ def build_boundary(
             if early_ocr_style is None:
                 early_ocr_style = classify_style_for_ocr(rgb)
             ocr_executor = ThreadPoolExecutor(max_workers=1)
-            rapidocr_min_text_area = fast_text_ocr_min_area_for_style(early_ocr_style)
+            rapidocr_min_text_area = fast_text_ocr_min_area_for_style(
+                early_ocr_style,
+                source_is_svg=source_is_svg,
+            )
             labels_future_filtered = rapidocr_min_text_area is not None
             ocr_kwargs = {"cache": runner_ocr_cache_enabled()}
             if current_catalog_label_shape_shortcut_enabled(
@@ -457,6 +467,7 @@ def build_boundary(
                     early_ocr_style,
                     width=width,
                     height=height,
+                    source_is_svg=source_is_svg,
                 )
                 if rapidocr_max_dimension is not None:
                     ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
@@ -758,7 +769,13 @@ def build_boundary(
                 elif focus_georef_ocr_after_refine:
                     pass
                 else:
-                    labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
+                    labels_future_filtered = (
+                        fast_text_ocr_min_area_for_style(
+                            extraction.style,
+                            source_is_svg=source_is_svg,
+                        )
+                        is not None
+                    )
                     shortcut_ocr = current_catalog_label_shape_shortcut_enabled(
                         city_input=city_input,
                         allow_catalog=allow_catalog,
@@ -774,6 +791,7 @@ def build_boundary(
                         rapidocr_max_dimension_override=(
                             CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION if shortcut_ocr else None
                         ),
+                        source_is_svg=source_is_svg,
                     )
                     labels_future_current_catalog_shortcut = shortcut_ocr
                     ensure_georeference_resource_preload()
@@ -1011,7 +1029,13 @@ def build_boundary(
             ensure_full_rgb()
             if ocr_executor is None:
                 ocr_executor = ThreadPoolExecutor(max_workers=1)
-            labels_future_filtered = fast_text_ocr_min_area_for_style(extraction.style) is not None
+            labels_future_filtered = (
+                fast_text_ocr_min_area_for_style(
+                    extraction.style,
+                    source_is_svg=source_is_svg,
+                )
+                is not None
+            )
             labels_future = submit_ocr_labels_from_rgb(
                 ocr_executor,
                 image_path,
@@ -1028,6 +1052,7 @@ def build_boundary(
                     )
                     else None
                 ),
+                source_is_svg=source_is_svg,
             )
             labels_future_current_catalog_shortcut = current_catalog_label_shape_shortcut_enabled(
                 city_input=city_input,
@@ -1066,8 +1091,16 @@ def build_boundary(
             "top_labels": [label.text for label in labels[:8]],
         },
     )
-    if labels_future_filtered and fast_text_ocr_min_area_for_style(extraction.style) is None:
-        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+    if (
+        labels_future_filtered
+        and fast_text_ocr_min_area_for_style(extraction.style, source_is_svg=source_is_svg) is None
+    ):
+        labels = extract_full_ocr_labels_for_style(
+            image_path,
+            rgb,
+            style=extraction.style,
+            source_is_svg=source_is_svg,
+        )
         labels_future_filtered = False
     if city_input is None and allow_catalog:
         label_shape_match = current_catalog_label_shape_match(extraction, labels)
@@ -1094,7 +1127,12 @@ def build_boundary(
             message="Retrying map labels at full detail",
             percent=47,
         )
-        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels = extract_full_ocr_labels_for_style(
+            image_path,
+            rgb,
+            style=extraction.style,
+            source_is_svg=source_is_svg,
+        )
         labels_future_filtered = False
         labels_future_current_catalog_shortcut = False
         emit_progress(
@@ -1260,7 +1298,12 @@ def build_boundary(
             message="Retrying map labels at full detail",
             percent=47,
         )
-        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels = extract_full_ocr_labels_for_style(
+            image_path,
+            rgb,
+            style=extraction.style,
+            source_is_svg=source_is_svg,
+        )
         labels_from_focus_georef_ocr = False
         emit_progress(
             progress,
@@ -1304,7 +1347,12 @@ def build_boundary(
             message="Retrying map labels at full detail",
             percent=47,
         )
-        labels = extract_full_ocr_labels_for_style(image_path, rgb, style=extraction.style)
+        labels = extract_full_ocr_labels_for_style(
+            image_path,
+            rgb,
+            style=extraction.style,
+            source_is_svg=source_is_svg,
+        )
         labels_future_filtered = False
         emit_progress(
             progress,
@@ -1491,13 +1539,19 @@ def submit_ocr_labels_from_rgb(
     width: int | None = None,
     height: int | None = None,
     rapidocr_max_dimension_override: int | None = None,
+    source_is_svg: bool = False,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = (
         rapidocr_max_dimension_override
         if rapidocr_max_dimension_override is not None
-        else rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
+        else rapidocr_max_dimension_for_ocr_style(
+            style,
+            width=width,
+            height=height,
+            source_is_svg=source_is_svg,
+        )
     )
-    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
+    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style, source_is_svg=source_is_svg)
     kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
@@ -1598,9 +1652,15 @@ def ocr_kwargs_for_style(
     cache: bool,
     width: int | None = None,
     height: int | None = None,
+    source_is_svg: bool = False,
 ) -> dict[str, Any]:
     kwargs: dict[str, Any] = {"cache": cache}
-    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
+    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+        style,
+        width=width,
+        height=height,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
     rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
@@ -1612,7 +1672,7 @@ def ocr_kwargs_for_style(
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
     if rapidocr_recognition_profile is not None:
         kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
-    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style)
+    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style, source_is_svg=source_is_svg)
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
@@ -1746,9 +1806,20 @@ def classify_style_for_ocr(rgb):
     return classify_style(sampled)
 
 
-def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str) -> list[Any]:
+def extract_full_ocr_labels_for_style(
+    image_path: str | Path,
+    rgb,
+    *,
+    style: str,
+    source_is_svg: bool = False,
+) -> list[Any]:
     height, width = rgb.shape[:2]
-    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(style, width=width, height=height)
+    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+        style,
+        width=width,
+        height=height,
+        source_is_svg=source_is_svg,
+    )
     rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
     ocr_kwargs: dict[str, Any] = {
         "cache": runner_ocr_cache_enabled(),
@@ -1774,7 +1845,11 @@ def extract_full_ocr_labels_for_style(image_path: str | Path, rgb, *, style: str
     )
 
 
-def fast_text_ocr_min_area_for_style(style: str | None) -> float | None:
+def fast_text_ocr_min_area_for_style(style: str | None, *, source_is_svg: bool = False) -> float | None:
+    if source_is_svg and style == "bright-blue":
+        if SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA <= 0.0:
+            return None
+        return SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA
     if FAST_TEXT_OCR_MIN_AREA <= 0.0 or style not in FAST_TEXT_OCR_STYLES:
         return None
     return FAST_TEXT_OCR_MIN_AREA
@@ -1868,8 +1943,12 @@ def runner_ocr_cache_enabled() -> bool:
     return True
 
 
-def rapidocr_max_dimension_for_extraction_style(style: str | None) -> int | None:
-    return rapidocr_max_dimension_for_ocr_style(style)
+def rapidocr_max_dimension_for_extraction_style(
+    style: str | None,
+    *,
+    source_is_svg: bool = False,
+) -> int | None:
+    return rapidocr_max_dimension_for_ocr_style(style, source_is_svg=source_is_svg)
 
 
 def rapidocr_max_dimension_for_ocr_style(
@@ -1877,8 +1956,11 @@ def rapidocr_max_dimension_for_ocr_style(
     *,
     width: int | None = None,
     height: int | None = None,
+    source_is_svg: bool = False,
 ) -> int | None:
     if style != "purple-fill":
+        if source_is_svg and style == "bright-blue" and RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION > 0:
+            return RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION
         if style == "bright-blue":
             return capped_rapidocr_max_dimension(RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION)
         if style == "dark-teal" and dark_teal_wide_ocr_image(width=width, height=height):
