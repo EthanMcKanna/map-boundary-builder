@@ -274,19 +274,24 @@ def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark
     assert runner.rapidocr_rec_batch_num_for_ocr_style("dark-teal") == 16
 
 
-def test_route_ui_fast_ocr_cap_only_targets_tall_light_fill_phone_screens(monkeypatch) -> None:
+def test_route_ui_fast_ocr_cap_only_targets_tall_phone_route_screens(monkeypatch) -> None:
     monkeypatch.setattr(runner, "RAPIDOCR_MAX_DIMENSION", 1600)
     monkeypatch.setattr(runner, "LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION", 1000)
+    monkeypatch.setattr(runner, "GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION", 1000)
 
     assert runner.route_ui_fast_ocr_max_dimension_for_style("light-fill", width=1206, height=2622) == 1000
+    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1320, height=2714) == 1000
     assert runner.route_ui_fast_ocr_max_dimension_for_style("light-fill", width=680, height=551) is None
-    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1206, height=2622) is None
+    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=680, height=551) is None
     assert runner.route_ui_fast_ocr_max_dimension_for_style("dark-teal", width=1206, height=2622) is None
     assert runner.route_ui_fast_ocr_max_dimension_for_style("light-fill", width=1400, height=2622) is None
+    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1500, height=2622) is None
     assert runner.route_ui_fast_ocr_max_dimension_for_style("light-fill", width=1206, height=1600) is None
+    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1320, height=1800) is None
 
     monkeypatch.setattr(runner, "RAPIDOCR_MAX_DIMENSION", 900)
     assert runner.route_ui_fast_ocr_max_dimension_for_style("light-fill", width=1206, height=2622) is None
+    assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1320, height=2714) is None
 
 
 def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:

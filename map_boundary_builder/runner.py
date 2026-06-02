@@ -69,6 +69,7 @@ from .runtime_config import (
     FAST_TEXT_OCR_MIN_AREA,
     FAST_TEXT_OCR_STYLES,
     CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION,
+    GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
     LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
@@ -140,6 +141,9 @@ RIDE_ROUTE_UI_COMPACT_METRIC_RE = re.compile(
 LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT = 1800
 LIGHT_FILL_ROUTE_UI_OCR_MAX_WIDTH = 1300
 LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.8
+GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT = 1800
+GRAY_FILL_ROUTE_UI_OCR_MAX_WIDTH = 1400
+GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.8
 NON_MAP_APP_UI_LABEL_MIN_CONFIDENCE = 80.0
 NON_MAP_APP_UI_MAX_COVERAGE_RATIO = 0.01
 NON_MAP_APP_UI_MIN_LABELS = 8
@@ -2154,17 +2158,25 @@ def route_ui_fast_ocr_max_dimension_for_style(
     width: int | None,
     height: int | None,
 ) -> int | None:
-    if style != "light-fill" or LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION <= 0:
-        return None
     if width is None or height is None or width <= 0 or height <= 0:
         return None
-    if width > LIGHT_FILL_ROUTE_UI_OCR_MAX_WIDTH:
-        return None
-    if height < LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT:
-        return None
-    if height < width * LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO:
-        return None
-    return capped_rapidocr_max_dimension(LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION)
+    if style == "light-fill" and LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION > 0:
+        if width > LIGHT_FILL_ROUTE_UI_OCR_MAX_WIDTH:
+            return None
+        if height < LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT:
+            return None
+        if height < width * LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO:
+            return None
+        return capped_rapidocr_max_dimension(LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION)
+    if style == "gray-fill" and GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION > 0:
+        if width > GRAY_FILL_ROUTE_UI_OCR_MAX_WIDTH:
+            return None
+        if height < GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT:
+            return None
+        if height < width * GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO:
+            return None
+        return capped_rapidocr_max_dimension(GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION)
+    return None
 
 
 def capped_rapidocr_max_dimension(style_max_dimension: int) -> int | None:

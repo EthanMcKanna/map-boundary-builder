@@ -14730,3 +14730,38 @@ with zero failures in 0.531s.
   `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
   bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=0.152238`.
+- Added the same narrow tall-phone route OCR cap for gray-fill route/receipt
+  screenshots after the unmanifested image sweep found
+  `/Users/ethanmckanna/Downloads/us.jpeg`, a Tesla Austin receipt screenshot
+  that correctly failed as `ride-route UI` but took `1.118741s` in the
+  neutral no-catalog path and `1.099747s` in the normal one-off probe. A cap
+  sweep on the no-catalog path showed `1200`, `1100`, `1000`, and `900` all
+  preserved route/receipt evidence while rejecting before georeference; `800`
+  and `700` were unsafe because the partial OCR no longer carried enough route
+  categories, so the accepted gray-fill cap is `1000px`. The patched sequential
+  probe `out/gray-route-us-patched-nocatalog-seq-*/` rejected in `0.651058s`
+  and `0.664817s` with `33` event labels, `24` OCR-profile labels,
+  `dropoff`/`pickup`/`plate`/`receipt`, and route metrics
+  `14 5mi 62min License Plate XFY5768` and `14 5mi 62min`; the normal
+  catalog-enabled path stayed subsecond at `0.953985s` and `0.972211s`.
+  The shortcut applies only to gray-fill phone-shaped screenshots
+  (`height >= 1800`, `width <= 1400`, `height/width >= 1.8`) and keeps the
+  existing full-detail OCR retry if route evidence is absent. The new locked
+  negative stress row is `tesla-austin-route-receipt-gray-long`, and
+  `tesla-austin-route-active-dark` now uses a `20` label floor because the
+  same capped OCR still preserves route evidence while intentionally reading
+  fewer labels. Focused route-negative stress passed at
+  `out/gray-route-fastcap-stress-rerun-20260602/stress-summary.json`: `6/6`
+  expected failures, primary max `0.542842s`, repeat `12/12` subsecond, repeat
+  p95 `0.058s`. The full real-screenshot hard gate passed at
+  `out/gray-route-fastcap-full23-hard-20260602/stress-summary.json`: `23/23`
+  expected, statuses `{"complete":14,"failed":9}`, primary max `0.918810s`,
+  repeat `46/46` subsecond, repeat p95 `0.109s`, and all `14` valid
+  service-area screenshots still completed. Validation passed `jq empty` on
+  `benchmarks/real-screenshot-stress.json`,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`146 passed`),
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runtime_warmup.py
+  tests/test_web_handler.py tests/test_pipeline_version.py -q` (`12 passed`),
+  compileall over `map_boundary_builder`, `api`, and `tests`,
+  `git diff --check`, and the full suite (`592 passed`, `30` subtests).
