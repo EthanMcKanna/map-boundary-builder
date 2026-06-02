@@ -14487,3 +14487,38 @@ with zero failures in 0.531s.
   `5.781s`/`8.630s`) with a slower active road-match total (`0.265s` versus
   `0.256s`). Keep `MAP_BOUNDARY_ROAD_MATCH_MAX_POINTS=4000` until a lower cap
   shows a repeatable advantage across both stress and full benchmark lanes.
+- Rechecked the current dependency and slow-tail baselines before reopening OCR
+  runtime work. PyPI inventory from the local venv still shows no immediate
+  upstream upgrade lever: `rapidocr` installed/latest `3.8.1`,
+  `rapidocr-onnxruntime` installed/latest `1.4.4`, and `onnxruntime`
+  installed/latest `1.26.0`. A current five-case slow-tail control over Grand
+  Rapids, Bay Area, Los Angeles, Houston, and Miami initially passed all
+  output/OCR budgets but hit prewarm variance (`out/current-slow5-confidence-
+  baseline-20260602`, prewarm total `1.546s`, `rapidocr_s=1.455s`). The rerun
+  `out/current-slow5-confidence-baseline-rerun-20260602/stress-summary.json`
+  passed the same production-prewarmed gate with `5/5` primary expectations,
+  primary max `0.743s`, prewarm total `1.235s`, `rapidocr_s=1.172s`, `20/20`
+  analyzed repeats subsecond, repeat p95 `0.763s`, repeat max `0.946s`, repeat
+  OCR total p95 `0.519s`, selected-box p95/max `30`, and stable signatures.
+  Miami supplied the noisy repeat tail; Los Angeles remains selected-box heavy
+  at the `30`-box budget. No dependency bump or broad OCR pruning is justified
+  from this checkpoint.
+- Rejected lowering the SVG bright-blue warm sample below the current `1400px`
+  default. The hypothesis was that the source-SVG-only `208/max/en-ppocrv5`
+  engine could be warmed on a smaller sample to reduce prewarm variance while
+  preserving the locked Austin browser-rasterized SVG upload. The matched
+  default control
+  `out/svg-warm-default-sourcegate-control-20260602/stress-summary.json`
+  passed with prewarm total `1.413s`, primary total `0.794s`, repeat p95
+  `0.684s`, repeat OCR total p95 `0.420s`, `14` controls, `96` OCR labels,
+  selected-box p95/max `34`, and the locked road-refined bbox. The `608px`
+  probe (`out/svg-warm608-sourcegate-probe-20260602/stress-summary.json`)
+  preserved correctness and lowered prewarm to `1.262s`, but it worsened
+  source-SVG repeat p95 to `0.733s` and repeat OCR total p95 to `0.463s` while
+  still missing the stricter `1.2s`/`1.1s` prewarm budgets. The middle `1000px`
+  probe (`out/svg-warm1000-sourcegate-probe-20260602/stress-summary.json`) also
+  preserved correctness but was not better: prewarm `1.372s`, primary
+  `0.825s`, repeat p95 `0.719s`, and repeat OCR total p95 `0.465s`. Keep
+  `MAP_BOUNDARY_RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION=1400`; the
+  smaller warm samples trade away source-SVG steady-state latency for only a
+  noisy prewarm reduction.
