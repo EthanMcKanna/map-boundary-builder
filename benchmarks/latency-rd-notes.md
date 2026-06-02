@@ -11709,3 +11709,21 @@ with zero failures in 0.531s.
   the same `235` raw boxes and `137` selected boxes as the earlier profile.
   Focused benchmark tests passed (`59 passed`), and `py_compile` passed for
   the edited benchmark and benchmark-test files.
+- Rechecked the external OCR-backend upgrade path after adding detector /
+  recognizer profiling and the OCR-engine latency budget. The local locked
+  runtime is still `rapidocr-onnxruntime==1.4.4` with `onnxruntime==1.26.0`;
+  `pip show` found no installed `rapidocr`, `rapidocr-openvino`, or
+  `rapidocr-paddle` packages. Primary-source package/docs review did not open
+  a fresh safe dependency swap: PyPI still lists `rapidocr-onnxruntime` at the
+  same `1.4.4` line already used here, unified `rapidocr` is still on the
+  `3.8.1` line, and RapidOCR docs still describe the same current backend
+  family (`onnxruntime`, `paddle`, `openvino`, `torch`, `mnn`, `tensorrt`) plus
+  PP-OCRv5 model assets. That means the local rejected probes remain the
+  authoritative evidence for this workspace: modern RapidOCR/MNN is fast but
+  failed strict no-catalog accuracy, OpenVINO recognition looked promising
+  locally but was slower in live Vercel validation, and the vendored
+  PP-OCRv5-backed modern direct probe still failed the strict gate after the
+  asset-source fix. Do not change production dependencies for another
+  RapidOCR-family backend until upstream publishes a materially different
+  release/backend or a hybrid validator proves equivalence before fallback.
+  This checkpoint intentionally makes no runtime code change.
