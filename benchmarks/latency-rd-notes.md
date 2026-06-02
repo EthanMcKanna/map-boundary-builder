@@ -12912,4 +12912,22 @@ with zero failures in 0.531s.
   block-network sparse-label failure, and then reported missing candidate
   scores against an older 15-fixture baseline. Keep using the dark-teal/full
   real-screenshot stress gates for this branch unless the current-reference
-  gate is first refreshed to the same fixture/scoring mode.
+  gate is first refreshed to the same fixture/scoring mode. Production
+  deployment proof: commit `f77a972` deployed with Vercel CLI `54.3.0` as
+  `dpl_Agwp4x2sayZCFxPAyU1GdXf4cgaS`, aliased to `https://mapboundary.app`,
+  and health reported `pipeline-06c45c3ad3a2733e`, OCR warm `status=ok`, and
+  warm total `2.450403s`
+  (`out/prod-focused-sparse-fastfail-health-20260602.json`). A cache-busted
+  no-catalog Zoox tall production miss with `include_overlay=0` and
+  `normalized_cache_lookup=0`
+  (`out/prod-focused-sparse-fastfail-zoox-tall-20260602.json`) returned the
+  expected HTTP `422` sparse-OCR failure from focused labels only (`14`
+  labels, no full-detail retry), with `cache_hit=miss`, `build_boundary_s:
+  0.159540`, `total_before_send_s: 0.170400`, and stages
+  `extract=0.128350s`, `ocr=0.007941s`, `georeference=0.022580s`. A paired
+  no-catalog Ann Arbor production miss
+  (`out/prod-focused-sparse-fastfail-ann-arbor-20260602.json`) returned HTTP
+  `201` complete, city `Ann Arbor`, source
+  `ocr-georeference:nominatim-label-fit`, `3` controls, confidence `0.805`,
+  the expected focused `19` labels, `cache_hit=miss`, `build_boundary_s:
+  1.028490`, and `total_before_send_s: 1.032551`.
