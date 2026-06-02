@@ -136,6 +136,17 @@ RIDE_ROUTE_UI_COMPACT_METRIC_RE = re.compile(
     r"\d+(?:\d+)?(?:mi|ft|min)(?:walk|away|topickup)?",
     re.IGNORECASE,
 )
+NON_MAP_APP_UI_LABEL_MIN_CONFIDENCE = 80.0
+NON_MAP_APP_UI_MAX_COVERAGE_RATIO = 0.01
+NON_MAP_APP_UI_MIN_LABELS = 8
+NON_MAP_APP_UI_MIN_CATEGORIES = 3
+NON_MAP_APP_UI_CATEGORY_PATTERNS = {
+    "account": ("account", "oauth", "token"),
+    "import": ("import", "ride history", "community tracking"),
+    "privacy": ("secure private", "secure&private", "private"),
+    "stats": ("monthly history", "community stats", "track progress", "totals vehicles"),
+    "sync": ("sync", "disconnect"),
+}
 PROVIDER_UI_FAST_OCR_STYLES = {"dark-teal", "gray-fill"}
 PROVIDER_UI_FAST_OCR_TALL_SCREEN_STYLES = {"dark-teal"}
 PROVIDER_UI_FAST_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.25
@@ -1311,6 +1322,19 @@ def build_boundary(
         raise ValueError(
             "Could not infer a service-area boundary from ride-route UI. "
             "Upload a service-area coverage map crop instead of a trip route or receipt screenshot."
+        )
+    non_map_app_ui_evidence = non_map_app_ui_reject_evidence(extraction, labels)
+    if non_map_app_ui_evidence is not None:
+        emit_progress(
+            progress,
+            stage="georeference",
+            message="Rejecting non-map app UI",
+            percent=48,
+            details=non_map_app_ui_evidence,
+        )
+        raise ValueError(
+            "Could not infer a service-area boundary from non-map app UI. "
+            "Upload a service-area coverage map crop with readable place labels."
         )
     wait_future_result(georef_resource_future)
     georef = fit_georeference(
@@ -2961,6 +2985,36 @@ def route_ui_pattern_matches(text: str, compact_text: str, pattern: str) -> bool
         bool(normalized_pattern and normalized_pattern in text)
         or bool(compact_pattern and compact_pattern in compact_text)
     )
+
+
+def non_map_app_ui_reject_evidence(extraction, labels: list[Any]) -> dict[str, Any] | None:
+    if getattr(extraction, "coverage_ratio", 1.0) > NON_MAP_APP_UI_MAX_COVERAGE_RATIO:
+        return None
+    high_confidence_labels = [
+        label
+        for label in labels
+        if getattr(label, "confidence", 0.0) >= NON_MAP_APP_UI_LABEL_MIN_CONFIDENCE
+        and getattr(label, "text", "").strip()
+    ]
+    if len(high_confidence_labels) < NON_MAP_APP_UI_MIN_LABELS:
+        return None
+
+    categories: set[str] = set()
+    evidence_labels: list[str] = []
+    for label in high_confidence_labels:
+        text = normalize_route_ui_text(getattr(label, "text", ""))
+        compact_text = compact_route_ui_text(getattr(label, "text", ""))
+        for category, patterns in NON_MAP_APP_UI_CATEGORY_PATTERNS.items():
+            if any(route_ui_pattern_matches(text, compact_text, pattern) for pattern in patterns):
+                categories.add(category)
+                evidence_labels.append(getattr(label, "text", ""))
+                break
+    if len(categories) < NON_MAP_APP_UI_MIN_CATEGORIES:
+        return None
+    return {
+        "non_map_ui_categories": sorted(categories),
+        "non_map_ui_labels": evidence_labels[:5],
+    }
 
 
 def sparse_low_res_label_catalog_match(

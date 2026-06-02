@@ -902,6 +902,93 @@ def test_ride_route_ui_reject_evidence_requires_route_ui_and_metric() -> None:
     }
 
 
+def test_non_map_app_ui_reject_evidence_requires_tiny_coverage_and_ui_categories() -> None:
+    extraction = SimpleNamespace(coverage_ratio=0.0017)
+    labels = [
+        OcrLabel("Tesla Sync", x=80, y=260, width=140, height=28, confidence=98),
+        OcrLabel("Continuous Sync", x=120, y=420, width=180, height=24, confidence=96),
+        OcrLabel("Import your robotaxi ride history", x=120, y=520, width=320, height=24, confidence=95),
+        OcrLabel("Secure&Private", x=120, y=620, width=190, height=24, confidence=96),
+        OcrLabel("Track Progress Miles trips and community stats", x=120, y=720, width=420, height=24, confidence=95),
+        OcrLabel("Totals vehicles and monthly history", x=120, y=820, width=330, height=24, confidence=95),
+        OcrLabel("OAuth tokens stored in", x=120, y=920, width=230, height=24, confidence=95),
+        OcrLabel("Disconnect Tesla Account", x=120, y=1020, width=260, height=24, confidence=95),
+    ]
+
+    evidence = runner.non_map_app_ui_reject_evidence(extraction, labels)
+
+    assert evidence == {
+        "non_map_ui_categories": ["account", "import", "privacy", "stats", "sync"],
+        "non_map_ui_labels": [
+            "Tesla Sync",
+            "Continuous Sync",
+            "Import your robotaxi ride history",
+            "Secure&Private",
+            "Track Progress Miles trips and community stats",
+        ],
+    }
+    assert runner.non_map_app_ui_reject_evidence(SimpleNamespace(coverage_ratio=0.08), labels) is None
+    assert runner.non_map_app_ui_reject_evidence(extraction, labels[:4]) is None
+
+
+def test_non_map_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "settings.png"
+    output_path = tmp_path / "boundary.geojson"
+    Image.new("RGB", (1206, 2622), (250, 250, 250)).save(image_path)
+    rgb = np.full((2622, 1206, 3), 250, dtype=np.uint8)
+    mask = np.zeros((120, 80), dtype=bool)
+    mask[56:58, 30:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="gray-fill",
+        pixel_geometry=Polygon([(450, 1220), (880, 1220), (880, 1240), (450, 1240)]),
+        coverage_ratio=0.0017,
+        contour_count=1,
+        confidence=0.663,
+    )
+    labels = [
+        OcrLabel("Tesla Sync", x=80, y=260, width=140, height=28, confidence=98),
+        OcrLabel("Continuous Sync", x=120, y=420, width=180, height=24, confidence=96),
+        OcrLabel("Import your robotaxi ride history", x=120, y=520, width=320, height=24, confidence=95),
+        OcrLabel("Secure&Private", x=120, y=620, width=190, height=24, confidence=96),
+        OcrLabel("Track Progress Miles trips and community stats", x=120, y=720, width=420, height=24, confidence=95),
+        OcrLabel("Totals vehicles and monthly history", x=120, y=820, width=330, height=24, confidence=95),
+        OcrLabel("OAuth tokens stored in", x=120, y=920, width=230, height=24, confidence=95),
+        OcrLabel("Disconnect Tesla Account", x=120, y=1020, width=260, height=24, confidence=95),
+    ]
+    events: list[dict] = []
+
+    def unexpected_fit_georeference(*_args, **_kwargs):
+        raise AssertionError("non-map app UI should fail before georeference")
+
+    def unexpected_full_ocr(*_args, **_kwargs):
+        raise AssertionError("non-map app UI should not retry full-detail OCR")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", lambda *_args, **_kwargs: labels)
+    monkeypatch.setattr(runner, "fit_georeference", unexpected_fit_georeference)
+    monkeypatch.setattr(runner, "extract_full_ocr_labels_for_style", unexpected_full_ocr)
+
+    with pytest.raises(ValueError, match="non-map app UI"):
+        build_boundary(
+            image_path,
+            None,
+            output_path,
+            options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+            progress=events.append,
+        )
+
+    assert events[-1]["message"] == "Rejecting non-map app UI"
+    assert events[-1]["details"]["non_map_ui_categories"] == [
+        "account",
+        "import",
+        "privacy",
+        "stats",
+        "sync",
+    ]
+
+
 def test_ride_route_ui_fails_before_georeference(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "route.png"
     output_path = tmp_path / "boundary.geojson"

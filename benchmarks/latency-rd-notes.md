@@ -14629,3 +14629,36 @@ with zero failures in 0.531s.
   `Dallas`, source `ocr-georeference:nominatim-label-fit`, confidence `0.825`,
   expected bbox `[-96.8609589,32.7622926,-96.7517738,32.8735617]`, and
   `build_boundary_s=1.306910`.
+- Added an explicit fail-fast path for non-map app UI after probing
+  `/Users/ethanmckanna/Downloads/IMG_9930.PNG`, a Tesla Sync/settings
+  screenshot with no coverage map. Current production code failed closed only
+  after `4.715737s`, including `2.509641s` of georeference and a full-detail
+  OCR retry, with labels dominated by `Tesla Sync`, `Secure&Private`,
+  `Continuous Sync`, `Import your robotaxi ride history`, and account/privacy
+  copy. The new guard only fires when the extracted service-area coverage is a
+  tiny sliver and high-confidence OCR has multiple concrete app UI categories
+  such as account/import/privacy/stats/sync. The same image now fails before
+  georeference with the exact `non-map app UI` error in `0.809143s`
+  (`out/nonmap-fast-reject-probe-20260602/`), with no full-detail OCR retry.
+  A dark Tesla active-route screenshot,
+  `/Users/ethanmckanna/Downloads/IMG_0010.PNG`, was also locked as a negative
+  after confirming it already fails as `ride-route UI` in `0.990118s` with
+  `41` labels and no georeference. The new locked stress rows are
+  `tesla-sync-non-map-ui` and `tesla-austin-route-active-dark`.
+  Focused stress with OCR/extraction caches disabled passed at
+  `out/nonmap-route-negatives-stress-20260602/stress-summary.json`: `2/2`
+  expected failures, primary max `0.784055s`, repeat `4/4` subsecond, repeat
+  p95 `0.509s`. The full 21-case real-screenshot hard gate passed at
+  `out/nonmap-guard-full21-hard-20260602/stress-summary.json`: `21/21`
+  expected, statuses `{"complete":14,"failed":7}`, primary max `0.772191s`,
+  repeat `42/42` subsecond, repeat p95 `0.642s`, and all `14` valid
+  service-area screenshots still completed. A nearby Tesla receipt variant,
+  `/Users/ethanmckanna/Downloads/IMG_0083.PNG`, already failed as
+  `ride-route UI` but took `1.890153s` in the one-off cold probe, so it was
+  recorded as a slower follow-up candidate rather than added to the subsecond
+  locked manifest. Validation passed `jq empty` on
+  `benchmarks/real-screenshot-stress.json`,
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_runner_summary.py
+  tests/test_stress_benchmark.py -q` (`145 passed`), compileall over
+  `map_boundary_builder`, `api`, and `tests`, `git diff --check`, and the full
+  suite (`591 passed`, `30` subtests).
