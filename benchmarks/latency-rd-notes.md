@@ -12757,3 +12757,19 @@ with zero failures in 0.531s.
   message. Keep PP-OCRv5 scoped to the accepted bright-blue path; the dark-teal
   default recognizer remains necessary for stable Grand Rapids control support
   and Zoox sparse-failure semantics.
+- Rechecked the external OCR-backend release path after the full stress
+  subsecond baseline and dark-teal PP-OCRv5 rejection. Local package inventory
+  still has `rapidocr-onnxruntime==1.4.4`, `onnxruntime==1.26.0`,
+  `opencv-python-headless==4.10.0.84`, `Shapely==2.1.2`, `numpy==2.4.6`, and
+  `Pillow==12.2.0`; the local index check reported `rapidocr` latest
+  `3.8.1` and `rapidocr-onnxruntime` installed/latest `1.4.4`. Primary-source
+  review matched that: PyPI still lists `rapidocr-onnxruntime 1.4.4`
+  (released Jan 17, 2025), while the RapidOCR install docs warn that
+  `rapidocr_onnxruntime`, `rapidocr_openvino`, and `rapidocr_paddle` are
+  gradually unmaintained, say unified `rapidocr` merges those libraries, and
+  still describe ONNX Runtime as the default inference engine after users
+  install an engine manually. No materially different RapidOCR-family backend
+  or release is available today, so do not spend another production dependency
+  probe on this lane unless upstream publishes a genuinely new release/backend
+  or a hybrid validator can prove equivalence before fallback. This checkpoint
+  intentionally makes no runtime code change and needs no deploy.
