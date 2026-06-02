@@ -353,7 +353,7 @@ def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     assert not runner.focus_georef_ocr_enabled(gray_fill, rgb=rgb, city_input=None)
     assert runner.focus_georef_ocr_max_dimension_for_style("dark-teal") == 550
     assert runner.focus_georef_ocr_max_dimension_for_style("gray-fill") is None
-    assert runner.focus_georef_ocr_detector_limit_for_style("dark-teal") == 384
+    assert runner.focus_georef_ocr_detector_limit_for_style("dark-teal") == 320
     assert runner.focus_georef_ocr_detector_limit_for_style("gray-fill") is None
     assert runner.focus_georef_ocr_min_text_area_for_style("dark-teal") == 500.0
     assert runner.focus_georef_ocr_min_text_area_for_style("gray-fill") == 1500.0

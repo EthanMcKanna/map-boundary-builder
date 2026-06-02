@@ -1411,7 +1411,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_aspect"], 2.8)
         self.assertEqual(cold["ocr"]["fast_text_ocr_fallback_confidence"], 0.70)
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION"], "1600")
-        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN"], "416")
+        self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN"], "320")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_CROP_AREA_RATIO"], "0.35")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION"], "550")
         self.assertEqual(cold["generation_env"]["MAP_BOUNDARY_FOCUS_GEOREF_OCR_MIN_TEXT_AREA"], "500")

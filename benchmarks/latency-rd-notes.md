@@ -15215,3 +15215,28 @@ with zero failures in 0.531s.
   expected, statuses `{"complete":18,"failed":11}`, primary max `0.867585s`,
   repeat `58/58` subsecond, repeat p95 `0.536s`, repeat max `0.587s`, and OCR
   calls unchanged at `26`.
+- Tuned the focused dark-teal georeference OCR detector from the runner's
+  effective `384px` default and the API health/runtime advertised `416px`
+  default down to `320px`. The accepted candidate came from a no-cache sweep
+  over Ann Arbor and Grand Rapids with focused georef OCR dimensions
+  `550/525/500/475` and detector limits `384/352/320/288`. Lower dimensions
+  sometimes shifted Ann Arbor toward `Yost Ice Arena` or `South State Street`,
+  and `288px` was rejected after Ann Arbor dropped to three controls and a
+  much slower `5.356405s` run. The `550px` crop with a `320px` detector kept
+  the expected cities and controls while lowering the leading dark-teal tail
+  in the sweep: Ann Arbor `0.498519s` with four controls, confidence `0.854`,
+  and bbox `[-83.7531447,42.2600279,-83.7359233,42.2886506]`; Grand Rapids
+  `0.605614s` with five controls, confidence `0.781`, and the baseline bbox.
+  With the default patched in code, focused tests passed
+  (`5 passed, 170 deselected`), full `pytest -q` passed
+  (`608 passed, 30 subtests passed`), the dark-teal focused stress gate at
+  `out/focus-det320-default-darkteal-focused-20260602/stress-summary.json`
+  passed `7/7` expected with primary max `0.766304s`, repeat `14/14`
+  subsecond, repeat p95 `0.663s`, and repeat max `0.670s`, and the full hard
+  gate at `out/focus-det320-default-full29-hard-20260602/stress-summary.json`
+  passed `29/29` expected with statuses `{"complete":18,"failed":11}`,
+  primary max `0.722746s`, repeat `58/58` subsecond, repeat p95 `0.594283s`,
+  repeat max `0.635618s`, and OCR calls still `26`. The full hard primary tail
+  improved from the immediately prior SVG-crop gate's `0.867585s` to
+  `0.722746s`; Ann Arbor landed at `0.535237s`, four controls, confidence
+  `0.854`, and Grand Rapids at `0.564087s`, five controls, confidence `0.781`.
