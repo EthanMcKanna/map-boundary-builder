@@ -13345,3 +13345,25 @@ with zero failures in 0.531s.
   no-arena baseline because one `houston-robotaxi-gray` repeat reached
   `0.696s`, but the stricter manifest preserved correctness and stayed inside
   the hard latency budgets.
+- Added generated bbox values to repeat-profile output signatures so
+  `--fail-on-repeat-signature-drift` catches nondeterministic geography shifts
+  even for stress rows that do not have a fixed `bbox_approx` expectation. The
+  signature normalizes valid four-coordinate bboxes to six decimal places and
+  records `null` for missing/invalid bboxes, keeping failed rows and legacy
+  samples stable while making bbox-only drift visible. Focused validation:
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py -q`
+  passed `35` tests, `PYTHONPATH=. .venv/bin/python -m compileall -q
+  map_boundary_builder tests` passed, `git diff --check` passed, and the full
+  suite passed `525` tests plus `30` subtests. The targeted strict slow-six gate
+  `out/bbox-signature-slow6-actual-20260602/stress-summary.json` passed `6/6`
+  primary expectations, `24/24` analyzed repeat expectations, stable signatures
+  including bbox for all six cases, `24/24` subsecond repeats, primary max
+  `0.814846s`, repeat median `0.467s`, repeat p95 `0.604s`, repeat max
+  `0.632s`, RapidOCR total p95 `0.546s`, and recognizer p95 `0.238s`. The
+  full actual-code hard gate
+  `out/bbox-signature-full16-hard-actual-20260602/stress-summary.json` passed
+  `16/16` primary expectations, statuses `{"complete":14,"failed":2}`,
+  `48/48` analyzed repeats, stable signatures for all `16` cases, `48/48`
+  subsecond repeats, primary max `0.700489s`, repeat median `0.343s`, repeat
+  p95 `0.541s`, repeat max `0.562s`, RapidOCR total p95 `0.478s`, detector p95
+  `0.240s`, and recognizer p95 `0.235s`.

@@ -772,6 +772,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "city": None,
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": None,
+                "bbox": None,
                 "ocr_label_count": None,
                 "ocr_label_event": None,
                 "ocr_full_detail_retry": None,
@@ -845,6 +846,57 @@ def test_repeat_profile_flags_output_signature_drift() -> None:
     assert stability["stable"] is False
     assert stability["unique_signatures"] == 2
     assert [signature["count"] for signature in stability["signatures"]] == [1, 1]
+
+
+def test_repeat_profile_flags_bbox_signature_drift() -> None:
+    samples = [
+        {
+            "slug": "drifty-bbox",
+            "repeat_index": 1,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.42,
+            "city": "Miami",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 5,
+            "bbox": [-80.33880121, 25.68860351, -80.11168631, 25.98301471],
+            "ocr_label_count": 20,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Miami"],
+        },
+        {
+            "slug": "drifty-bbox",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.43,
+            "city": "Miami",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "control_points": 5,
+            "bbox": [-80.3188012, 25.6886035, -80.0916863, 25.9830147],
+            "ocr_label_count": 20,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Miami"],
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=2,
+        warmup_runs_per_case=0,
+    )
+
+    stability = repeat_profile["cases"]["drifty-bbox"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert sorted(signature["bbox"] for signature in stability["signatures"]) == [
+        [-80.338801, 25.688604, -80.111686, 25.983015],
+        [-80.318801, 25.688603, -80.091686, 25.983015],
+    ]
 
 
 def test_repeat_profile_signature_drift_cases_reads_summary() -> None:

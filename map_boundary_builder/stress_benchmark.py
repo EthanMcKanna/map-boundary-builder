@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 from contextlib import contextmanager
 import json
+import math
 import os
 import subprocess
 import sys
@@ -1107,12 +1108,28 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "city": sample.get("city"),
         "source": sample.get("source"),
         "control_points": sample.get("control_points"),
+        "bbox": repeat_profile_bbox_signature(sample.get("bbox")),
         "ocr_label_count": sample.get("ocr_label_count"),
         "ocr_label_event": sample.get("ocr_label_event"),
         "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
         "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
         "error": sample.get("error"),
     }
+
+
+def repeat_profile_bbox_signature(value: Any) -> list[float] | None:
+    if not isinstance(value, list) or len(value) != 4:
+        return None
+    bbox: list[float] = []
+    for coordinate in value:
+        try:
+            number = float(coordinate)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(number):
+            return None
+        bbox.append(round(number, 6))
+    return bbox
 
 
 def repeat_profile_slowest_samples(
