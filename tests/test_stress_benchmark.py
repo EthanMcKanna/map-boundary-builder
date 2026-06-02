@@ -833,6 +833,7 @@ def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatc
         manifest,
         tmp_path / "out",
         prewarm_runtime=True,
+        max_prewarm_runtime_s=0.2,
         runner_ocr_cache=False,
         extraction_cache=False,
         python_executable="python",
@@ -842,6 +843,13 @@ def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatc
     assert prewarm_calls == [(False, False)]
     assert report["prewarm_runtime"] is True
     assert saved["prewarm"] == {"status": "ok", "rapidocr_inference_warmed": True, "total_s": 0.12}
+    assert saved["latency_budget"] == {
+        "passed": True,
+        "primary_violations": [],
+        "repeat_violations": [],
+        "max_prewarm_runtime_s": 0.2,
+        "prewarm_violations": [],
+    }
 
 
 def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypatch) -> None:
@@ -1594,6 +1602,7 @@ def test_main_fails_when_requested_prewarm_fails(tmp_path, monkeypatch) -> None:
 def test_main_accepts_successful_requested_prewarm(tmp_path, monkeypatch) -> None:
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["prewarm_runtime"] is True
+        assert kwargs["max_prewarm_runtime_s"] == 0.5
         return {
             "prewarm": {"status": "ok", "total_s": 0.1},
             "summary": {
@@ -1624,6 +1633,8 @@ def test_main_accepts_successful_requested_prewarm(tmp_path, monkeypatch) -> Non
             "--out-dir",
             str(tmp_path / "out"),
             "--prewarm-runtime",
+            "--max-prewarm-runtime-s",
+            "0.5",
         ]
     )
 
@@ -1744,6 +1755,18 @@ def test_main_rejects_nonpositive_repeat_profile_p95_budget(monkeypatch) -> None
     assert exc.value.code == 2
 
 
+def test_main_rejects_nonpositive_prewarm_budget(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run with an invalid prewarm budget")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--max-prewarm-runtime-s", "0"])
+
+    assert exc.value.code == 2
+
+
 def test_latency_budget_flags_repeat_profile_p95_excess_and_missing() -> None:
     repeat_profile = {
         "summary": {
@@ -1782,6 +1805,40 @@ def test_latency_budget_flags_repeat_profile_p95_excess_and_missing() -> None:
         {
             "kind": "repeat_profile_p95_missing",
             "max_repeat_profile_p95_duration_s": 0.8,
+        }
+    ]
+
+
+def test_latency_budget_flags_prewarm_excess_and_missing() -> None:
+    budget = stress_module.build_latency_budget_summary(
+        [],
+        None,
+        prewarm={"status": "ok", "total_s": 1.23},
+        max_prewarm_runtime_s=1.0,
+    )
+
+    assert budget["passed"] is False
+    assert budget["max_prewarm_runtime_s"] == 1.0
+    assert budget["prewarm_violations"] == [
+        {
+            "kind": "prewarm_runtime_budget_exceeded",
+            "prewarm_total_s": 1.23,
+            "max_prewarm_runtime_s": 1.0,
+            "excess_s": 0.23,
+        }
+    ]
+
+    missing_budget = stress_module.build_latency_budget_summary(
+        [],
+        None,
+        max_prewarm_runtime_s=1.0,
+    )
+
+    assert missing_budget["passed"] is False
+    assert missing_budget["prewarm_violations"] == [
+        {
+            "kind": "prewarm_runtime_missing",
+            "max_prewarm_runtime_s": 1.0,
         }
     ]
 

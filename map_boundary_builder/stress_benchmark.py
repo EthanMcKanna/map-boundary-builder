@@ -160,6 +160,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail when analyzed repeat-profile total p95 exceeds this duration budget.",
     )
     parser.add_argument(
+        "--max-prewarm-runtime-s",
+        type=float,
+        default=None,
+        help="Fail when generation runtime prewarm total_s is missing or exceeds this duration budget.",
+    )
+    parser.add_argument(
         "--max-repeat-ocr-engine-p95-duration-s",
         action="append",
         default=[],
@@ -215,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-total-elapsed-s must be positive")
     if args.max_repeat_profile_p95_duration_s is not None and args.max_repeat_profile_p95_duration_s <= 0.0:
         parser.error("--max-repeat-profile-p95-duration-s must be positive")
+    if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
+        parser.error("--max-prewarm-runtime-s must be positive")
     try:
         max_repeat_ocr_engine_p95_duration_s = parse_metric_duration_budgets(
             args.max_repeat_ocr_engine_p95_duration_s
@@ -250,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_warmups=args.repeat_profile_warmups,
         max_total_elapsed_s=args.max_total_elapsed_s,
         max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
+        max_prewarm_runtime_s=args.max_prewarm_runtime_s,
         max_ocr_engine_duration_s=max_ocr_engine_duration_s,
         max_ocr_engine_count=max_ocr_engine_count,
         max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
@@ -295,6 +304,7 @@ def run_stress_benchmark(
     repeat_profile_warmups: int = 0,
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
+    max_prewarm_runtime_s: float | None = None,
     max_ocr_engine_duration_s: dict[str, float] | None = None,
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
@@ -309,6 +319,8 @@ def run_stress_benchmark(
         raise ValueError("max_total_elapsed_s must be positive")
     if max_repeat_profile_p95_duration_s is not None and max_repeat_profile_p95_duration_s <= 0.0:
         raise ValueError("max_repeat_profile_p95_duration_s must be positive")
+    if max_prewarm_runtime_s is not None and max_prewarm_runtime_s <= 0.0:
+        raise ValueError("max_prewarm_runtime_s must be positive")
     ocr_engine_budgets = dict(max_ocr_engine_duration_s or {})
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
@@ -383,6 +395,7 @@ def run_stress_benchmark(
     if (
         max_total_elapsed_s is not None
         or max_repeat_profile_p95_duration_s is not None
+        or max_prewarm_runtime_s is not None
         or ocr_engine_budgets
         or ocr_engine_count_budgets
         or ocr_engine_p95_budgets
@@ -391,8 +404,10 @@ def run_stress_benchmark(
         report["latency_budget"] = build_latency_budget_summary(
             rows,
             repeat_profile,
+            prewarm=prewarm,
             max_total_elapsed_s=max_total_elapsed_s,
             max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
+            max_prewarm_runtime_s=max_prewarm_runtime_s,
             max_ocr_engine_duration_s=ocr_engine_budgets,
             max_ocr_engine_count=ocr_engine_count_budgets,
             max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
@@ -1603,8 +1618,10 @@ def build_latency_budget_summary(
     rows: list[dict[str, Any]],
     repeat_profile: dict[str, Any] | None,
     *,
+    prewarm: dict[str, Any] | None = None,
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
+    max_prewarm_runtime_s: float | None = None,
     max_ocr_engine_duration_s: dict[str, float] | None = None,
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
@@ -1642,11 +1659,16 @@ def build_latency_budget_summary(
         repeat_profile,
         max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
     )
+    prewarm_violations = prewarm_runtime_budget_violations(
+        prewarm,
+        max_prewarm_runtime_s=max_prewarm_runtime_s,
+    )
     summary = {
         "passed": (
             not primary_violations
             and not repeat_violations
             and not repeat_p95_violations
+            and not prewarm_violations
             and not ocr_engine_violations
             and not ocr_engine_count_violations
             and not repeat_ocr_engine_p95_violations
@@ -1660,6 +1682,9 @@ def build_latency_budget_summary(
     if max_repeat_profile_p95_duration_s is not None:
         summary["max_repeat_profile_p95_duration_s"] = round(float(max_repeat_profile_p95_duration_s), 6)
         summary["repeat_p95_violations"] = repeat_p95_violations
+    if max_prewarm_runtime_s is not None:
+        summary["max_prewarm_runtime_s"] = round(float(max_prewarm_runtime_s), 6)
+        summary["prewarm_violations"] = prewarm_violations
     if max_ocr_engine_duration_s:
         summary["max_ocr_engine_duration_s"] = {
             metric: round(float(seconds), 6)
@@ -1685,6 +1710,35 @@ def build_latency_budget_summary(
         }
         summary["repeat_ocr_engine_count_p95_violations"] = repeat_ocr_engine_count_p95_violations
     return summary
+
+
+def prewarm_runtime_budget_violations(
+    prewarm: dict[str, Any] | None,
+    *,
+    max_prewarm_runtime_s: float | None,
+) -> list[dict[str, Any]]:
+    if max_prewarm_runtime_s is None:
+        return []
+    budget = float(max_prewarm_runtime_s)
+    total_s = prewarm.get("total_s") if isinstance(prewarm, dict) else None
+    parsed = parse_nonnegative_float(total_s)
+    if parsed is None:
+        return [
+            {
+                "kind": "prewarm_runtime_missing",
+                "max_prewarm_runtime_s": round(budget, 6),
+            }
+        ]
+    if parsed <= budget:
+        return []
+    return [
+        {
+            "kind": "prewarm_runtime_budget_exceeded",
+            "prewarm_total_s": round(parsed, 6),
+            "max_prewarm_runtime_s": round(budget, 6),
+            "excess_s": round(parsed - budget, 6),
+        }
+    ]
 
 
 def repeat_profile_p95_budget_violations(
@@ -2286,6 +2340,10 @@ def print_stress_table(report: dict[str, Any]) -> None:
             )
             repeat_p95 = latency_budget.get("repeat_p95_violations")
             repeat_p95_count = len(repeat_p95) if isinstance(repeat_p95, list) else 0
+            prewarm_violations = latency_budget.get("prewarm_violations")
+            prewarm_violation_count = (
+                len(prewarm_violations) if isinstance(prewarm_violations, list) else 0
+            )
             total_budget_text = f" total<={budget_text}" if isinstance(budget, (int, float)) else ""
             print(
                 "latency budget: failed"
@@ -2293,11 +2351,24 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"primary={len(latency_budget.get('primary_violations', []))} "
                 f"repeat={len(latency_budget.get('repeat_violations', []))} "
                 f"repeat_p95={repeat_p95_count} "
+                f"prewarm={prewarm_violation_count} "
                 f"ocr_engine={ocr_engine_count} "
                 f"ocr_engine_count={ocr_engine_count_budget_count} "
                 f"repeat_ocr_engine_p95={repeat_ocr_engine_count} "
                 f"repeat_ocr_engine_count_p95={repeat_ocr_engine_count_budget_count}"
             )
+            if isinstance(prewarm_violations, list):
+                for issue in prewarm_violations[:3]:
+                    if not isinstance(issue, dict):
+                        continue
+                    if issue.get("kind") == "prewarm_runtime_budget_exceeded":
+                        print(
+                            "   - "
+                            f"prewarm {float(issue['prewarm_total_s']):.3f}s "
+                            f"> budget {float(issue['max_prewarm_runtime_s']):.3f}s"
+                        )
+                    elif issue.get("kind") == "prewarm_runtime_missing":
+                        print("   - prewarm total_s metric missing")
             if isinstance(repeat_p95, list):
                 for issue in repeat_p95[:3]:
                     if not isinstance(issue, dict):

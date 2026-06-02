@@ -14033,3 +14033,25 @@ with zero failures in 0.531s.
   existing similarity fit still could not produce an acceptable georeference,
   so preserving the explicit fail-closed behavior is safer than enabling the
   previously rejected road-network fallback.
+- Added a stress-harness prewarm duration budget with
+  `--max-prewarm-runtime-s`, plus saved `latency_budget.max_prewarm_runtime_s`
+  and `prewarm_violations` entries. This closes a reporting gap from the
+  RapidOCR warm-shape work: future strict gates can now fail if the
+  production-style generation prewarm silently bloats, instead of only
+  checking first scored generation and repeat samples. Focused validation
+  passed `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py`
+  (`56` tests). A two-case smoke
+  `out/prewarm-budget-smoke-20260602/stress-summary.json` passed with
+  prewarm `total_s=1.008435` under a `1.5s` budget, primary max `0.708492s`,
+  repeat p95 `0.541433s`, primary OCR max `0.549s`, and no prewarm
+  violations. The full real-screenshot hard gate
+  `out/prewarm-budget-full16-20260602/stress-summary.json` then passed with
+  the same prewarm budget and all existing strict OCR/latency budgets:
+  prewarm `total_s=0.956379`, `16/16` primary expectations,
+  statuses `{"complete":14,"failed":2}`, `32/32` analyzed repeat
+  expectations, stable signatures, primary max `0.700282s`, primary OCR
+  engine max `0.564s`, repeat p95 `0.522542s`, repeat OCR total p95
+  `0.451070s`, and zero `prewarm_violations`. The Zoox fail-closed rows also
+  kept their new OCR label floors (`3` and `14` labels), so the prewarm budget
+  guard did not mask the arbitrary-screenshot negative-control reliability
+  checks.
