@@ -867,10 +867,13 @@ def test_build_boundary_fails_closed_for_sparse_unsupported_georeference(tmp_pat
 
 def test_bright_blue_ocr_uses_style_specific_detector_limit(monkeypatch) -> None:
     monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 512)
+    monkeypatch.setattr(runner, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208)
     monkeypatch.setattr(runner, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max")
 
     assert runner.rapidocr_detector_limit_for_ocr_style("bright-blue") == 512
+    assert runner.rapidocr_detector_limit_for_ocr_style("bright-blue", source_is_svg=True) == 208
     assert runner.rapidocr_detector_limit_type_for_ocr_style("bright-blue") == "max"
+    assert runner.rapidocr_detector_limit_type_for_ocr_style("bright-blue", source_is_svg=True) == "max"
     assert runner.rapidocr_detector_limit_for_ocr_style("gray-fill") is None
     assert runner.rapidocr_detector_limit_type_for_ocr_style("gray-fill") is None
     assert runner.rapidocr_detector_limit_for_ocr_style(None) is None
@@ -1079,7 +1082,7 @@ def test_svg_bright_blue_path_uses_vector_ocr_profile(tmp_path, monkeypatch) -> 
         {
             "rapidocr_max_dimension": runner.RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
             "rapidocr_min_text_area": runner.SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
-            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
             "cache": True,
@@ -1165,7 +1168,7 @@ def test_browser_rasterized_svg_hint_uses_vector_ocr_without_rerasterizing(tmp_p
         {
             "rapidocr_max_dimension": runner.RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
             "rapidocr_min_text_area": runner.SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
-            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            "rapidocr_detector_limit_side_len": runner.RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
             "rapidocr_detector_limit_type": runner.RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE,
             "rapidocr_recognition_profile": runner.RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE,
             "cache": True,

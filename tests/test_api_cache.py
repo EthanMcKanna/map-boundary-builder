@@ -1365,6 +1365,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_side_len"], 256)
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_detector_limit_type"], "max")
         self.assertEqual(cold["ocr"]["rapidocr_bright_blue_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_max_dimension"], 1600)
+        self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_detector_limit_side_len"], 208)
+        self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_warm_sample_max_dimension"], 1400)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_dimension"], 1400)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_height_width_ratio"], 1.25)
         self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_assets_available"], bool)
@@ -1383,6 +1386,7 @@ class ApiRunCacheTests(unittest.TestCase):
             [
                 [608, "default", "default", 12],
                 [256, "en-ppocrv5", "max", 12],
+                [208, "en-ppocrv5", "max", 12],
                 [608, "default", "default", 16],
             ],
         )
@@ -1392,6 +1396,7 @@ class ApiRunCacheTests(unittest.TestCase):
                 [608, "default", "default", 12, 608],
                 [608, "default", "default", 16, 608],
                 [256, "en-ppocrv5", "max", 12, 1400],
+                [208, "en-ppocrv5", "max", 12, 1400],
             ],
         )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)
@@ -1400,6 +1405,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["fast_text_ocr_styles"], ["bright-blue", "gray-fill", "light-fill"])
         self.assertEqual(cold["ocr"]["fast_text_ocr_min_area"], 1500.0)
         self.assertEqual(cold["ocr"]["bright_blue_fast_text_ocr_min_area"], 2300.0)
+        self.assertEqual(cold["ocr"]["svg_bright_blue_fast_text_ocr_min_area"], 300.0)
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_area"], 900.0)
         self.assertEqual(cold["ocr"]["fast_text_ocr_rescue_min_aspect"], 2.8)
         self.assertEqual(cold["ocr"]["fast_text_ocr_fallback_confidence"], 0.70)

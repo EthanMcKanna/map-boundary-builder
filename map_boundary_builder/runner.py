@@ -80,6 +80,7 @@ from .runtime_config import (
     RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION,
     RAPIDOCR_PURPLE_FILL_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
+    RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_SVG_BRIGHT_BLUE_MAX_DIMENSION,
     SVG_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA,
     SVG_RASTER_MAX_DIMENSION,
@@ -429,10 +430,16 @@ def build_boundary(
                         ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
                 if rapidocr_min_text_area is not None:
                     ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
-                rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
+                rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
+                    early_ocr_style,
+                    source_is_svg=source_is_svg,
+                )
                 if rapidocr_detector_limit is not None:
                     ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-                rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
+                rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+                    early_ocr_style,
+                    source_is_svg=source_is_svg,
+                )
                 if rapidocr_detector_limit_type is not None:
                     ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
                 rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
@@ -479,10 +486,16 @@ def build_boundary(
                     ocr_kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
             if rapidocr_min_text_area is not None:
                 ocr_kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
-            rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(early_ocr_style)
+            rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
+                early_ocr_style,
+                source_is_svg=source_is_svg,
+            )
             if rapidocr_detector_limit is not None:
                 ocr_kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-            rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(early_ocr_style)
+            rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+                early_ocr_style,
+                source_is_svg=source_is_svg,
+            )
             if rapidocr_detector_limit_type is not None:
                 ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
             rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(early_ocr_style)
@@ -1561,10 +1574,16 @@ def submit_ocr_labels_from_rgb(
     kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
-    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_detector_limit is not None:
         kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_detector_limit_type is not None:
         kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
@@ -1669,10 +1688,16 @@ def ocr_kwargs_for_style(
     )
     if rapidocr_max_dimension is not None:
         kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
-    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_detector_limit is not None:
         kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
-    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_detector_limit_type is not None:
         kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
@@ -1826,14 +1851,20 @@ def extract_full_ocr_labels_for_style(
         height=height,
         source_is_svg=source_is_svg,
     )
-    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style)
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     ocr_kwargs: dict[str, Any] = {
         "cache": runner_ocr_cache_enabled(),
     }
     rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
     if rapidocr_recognition_profile is not None:
         ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
-    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style)
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(
+        style,
+        source_is_svg=source_is_svg,
+    )
     if rapidocr_detector_limit_type is not None:
         ocr_kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
     add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, style)
@@ -2018,18 +2049,28 @@ def dark_teal_wide_ocr_image(*, width: int | None, height: int | None) -> bool:
     return height <= width * RAPIDOCR_DARK_TEAL_WIDE_MAX_HEIGHT_WIDTH_RATIO
 
 
-def rapidocr_detector_limit_for_ocr_style(style: str | None) -> int | None:
+def rapidocr_detector_limit_for_ocr_style(
+    style: str | None,
+    *,
+    source_is_svg: bool = False,
+) -> int | None:
     if style != "bright-blue":
         return None
+    if source_is_svg and RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN > 0:
+        return RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN
     if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
         return None
     return RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN
 
 
-def rapidocr_detector_limit_type_for_ocr_style(style: str | None) -> str | None:
+def rapidocr_detector_limit_type_for_ocr_style(
+    style: str | None,
+    *,
+    source_is_svg: bool = False,
+) -> str | None:
     if style != "bright-blue":
         return None
-    if RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+    if rapidocr_detector_limit_for_ocr_style(style, source_is_svg=source_is_svg) is None:
         return None
     detector_limit_type = RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE.strip().lower()
     if detector_limit_type not in {"max", "min"}:

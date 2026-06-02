@@ -1552,7 +1552,14 @@ class OcrGroupingTests(unittest.TestCase):
         finally:
             warm_rapidocr_runtime.cache_clear()
 
-        self.assertEqual(calls, [((608, 608, 3), False), ((608, 608, 3), False)])
+        self.assertEqual(
+            calls,
+            [
+                ((608, 608, 3), False),
+                ((608, 608, 3), False),
+                ((1400, 1400, 3), False),
+            ],
+        )
 
     def test_warm_rapidocr_runtime_can_fallback_to_ocr_max_dimension_sample(self) -> None:
         calls = []
@@ -1577,7 +1584,14 @@ class OcrGroupingTests(unittest.TestCase):
         finally:
             warm_rapidocr_runtime.cache_clear()
 
-        self.assertEqual(calls, [((1200, 1200, 3), False), ((1200, 1200, 3), False)])
+        self.assertEqual(
+            calls,
+            [
+                ((1200, 1200, 3), False),
+                ((1200, 1200, 3), False),
+                ((1400, 1400, 3), False),
+            ],
+        )
 
     def test_warm_rapidocr_runtime_adds_large_bright_blue_shape(self) -> None:
         calls = []
@@ -1604,6 +1618,8 @@ class OcrGroupingTests(unittest.TestCase):
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
                 patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
+                patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208),
+                patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
                 patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ):
                 self.assertTrue(warm_rapidocr_runtime())
@@ -1615,6 +1631,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 ((608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM), (608, 608, 3), False),
                 ((256, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (1400, 1400, 3), False),
+                ((208, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM), (1400, 1400, 3), False),
             ],
         )
 
@@ -1626,6 +1643,8 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
+            patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208),
+            patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION", 1400),
             patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", 16),
             patch.object(ocr_module, "RAPIDOCR_REC_BATCH_NUM", 12),
         ):
@@ -1637,6 +1656,7 @@ class OcrGroupingTests(unittest.TestCase):
                 (608, "default", "default", 12, 608),
                 (608, "default", "default", 16, 608),
                 (256, "en-ppocrv5", "max", 12, 1400),
+                (208, "en-ppocrv5", "max", 12, 1400),
             ],
         )
 
@@ -1646,6 +1666,7 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "en-ppocrv5"),
+            patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208),
             patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
         ):
             keys = ocr_module.rapidocr_warm_engine_keys()
@@ -1655,6 +1676,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 (608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM),
                 (448, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+                (208, "en-ppocrv5", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ],
         )
 
@@ -1664,6 +1686,7 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 448),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "max"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+            patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 208),
             patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", ocr_module.RAPIDOCR_REC_BATCH_NUM),
         ):
             keys = ocr_module.rapidocr_warm_engine_keys()
@@ -1673,6 +1696,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 (608, "default", "default", ocr_module.RAPIDOCR_REC_BATCH_NUM),
                 (448, "default", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
+                (208, "default", "max", ocr_module.RAPIDOCR_REC_BATCH_NUM),
             ],
         )
 
@@ -1682,6 +1706,7 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 608),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE", "default"),
             patch.object(ocr_module, "RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE", "default"),
+            patch.object(ocr_module, "RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN", 0),
             patch.object(ocr_module, "RAPIDOCR_REC_BATCH_NUM", 12),
             patch.object(ocr_module, "RAPIDOCR_DARK_TEAL_REC_BATCH_NUM", 16),
         ):

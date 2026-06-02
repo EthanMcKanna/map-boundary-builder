@@ -14388,3 +14388,33 @@ with zero failures in 0.531s.
   path as well. Focused CLI/stress tests passed `69` tests, `compileall` and
   `git diff --check` were clean, and the full suite passed `587` tests plus
   `30` subtests.
+- Accepted a source-SVG-only bright-blue RapidOCR detector cap after isolating
+  it from the previously rejected global detector-cap lane. A six-arm sweep of
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN={192,208,224,240,256,288}`
+  against the locked Austin browser-rasterized SVG source-hint manifest kept
+  all correctness signatures stable (`14` controls, `96` OCR labels, `41` raw
+  boxes, `34` selected boxes, zero labels below 70 confidence, and no signature
+  drift) but showed no safe global default change. The best lower-cap candidate
+  was `208`: `out/svg-sourcehint-det-headtohead-20260602/208/stress-summary.json`
+  passed with repeat p95 `0.723s` versus the same head-to-head default p95
+  `0.756s`; the confirmation run
+  `out/svg-sourcehint-det-confirm-20260602/208/stress-summary.json` kept all
+  `15` analyzed repeats subsecond with p95 `0.741s` versus default p95
+  `0.766s`. The shipped code now uses `208/max` only when the image is
+  bright-blue and `source_is_svg` is true, preserving the ordinary bright-blue
+  `256/max` path. It also prewarms the new `[208,"en-ppocrv5","max",12]`
+  engine key with the existing `1400px` bright-blue warm sample rather than a
+  slower `1600px` SVG sample. The actual-code SVG source gate
+  `out/svg-sourcehint-det208-sourcegate-actual-20260602/stress-summary.json`
+  confirmed the source-hint path used detector limit `208/max` and passed with
+  primary total `0.782s`, prewarm `total_s=1.376s`, `15/15` analyzed repeats
+  subsecond, repeat p95 `0.728s`, repeat max `0.735s`, stable signatures, and
+  zero labels below 70 confidence. The full hard 16-case gate
+  `out/svg-det208-full16-hard-actual-20260602/stress-summary.json` passed under
+  the existing prewarm budgets with `16/16` primary expectations, statuses
+  `{"complete":14,"failed":2}`, prewarm `total_s=1.451s`, primary max
+  `0.803s`, `32/32` analyzed repeats subsecond, repeat p95 `0.792s`, repeat
+  OCR total p95 `0.466s`, stable signatures, and zero labels below 70/80
+  confidence in primary or repeat OCR profiles. Focused runtime/API/stress
+  tests passed `362` tests, `compileall` and `git diff --check` were clean, and
+  the full suite passed `587` tests plus `30` subtests.

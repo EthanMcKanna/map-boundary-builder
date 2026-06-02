@@ -40,6 +40,8 @@ from .runtime_config import (
     RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN,
     RAPIDOCR_MAX_DIMENSION,
     RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION,
+    RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+    RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION,
     RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION,
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
@@ -1532,6 +1534,15 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:
         )
         if key not in keys:
             keys.append(key)
+    if RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN > 0:
+        key = (
+            RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+            bright_blue_profile,
+            bright_blue_detector_type,
+            RAPIDOCR_REC_BATCH_NUM,
+        )
+        if key not in keys:
+            keys.append(key)
     if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM > 0 and RAPIDOCR_DARK_TEAL_REC_BATCH_NUM != RAPIDOCR_REC_BATCH_NUM:
         for detector_limit in generic_detector_limits:
             key = (
@@ -1549,13 +1560,23 @@ def rapidocr_warm_engine_sample_plan() -> list[tuple[int, str, str, int, int]]:
     generic_side = rapidocr_generic_warm_sample_side()
     bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side()
     bright_blue_key = rapidocr_bright_blue_warm_key()
+    svg_bright_blue_warm_side = rapidocr_svg_bright_blue_large_warm_sample_side()
+    svg_bright_blue_key = rapidocr_svg_bright_blue_warm_key()
+    large_warm_keys: dict[tuple[int, str, str, int], int] = {}
+    if bright_blue_warm_side > 0:
+        large_warm_keys[bright_blue_key] = bright_blue_warm_side
+    if svg_bright_blue_warm_side > 0:
+        large_warm_keys[svg_bright_blue_key] = max(
+            svg_bright_blue_warm_side,
+            large_warm_keys.get(svg_bright_blue_key, 0),
+        )
     plan: list[tuple[int, str, str, int, int]] = []
     for key in rapidocr_warm_engine_keys():
-        if bright_blue_warm_side > 0 and key == bright_blue_key:
+        if key in large_warm_keys:
             continue
         plan.append((*key, generic_side))
-    if bright_blue_warm_side > 0:
-        plan.append((*bright_blue_key, bright_blue_warm_side))
+    for key, warm_side in large_warm_keys.items():
+        plan.append((*key, warm_side))
     return plan
 
 
@@ -1583,9 +1604,29 @@ def rapidocr_bright_blue_large_warm_sample_side() -> int:
     return warm_side
 
 
+def rapidocr_svg_bright_blue_large_warm_sample_side() -> int:
+    if RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION <= 0:
+        return 0
+    if RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN <= 0:
+        return 0
+    warm_side = bounded_rapidocr_warm_sample_side(RAPIDOCR_SVG_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION)
+    if warm_side <= rapidocr_generic_warm_sample_side():
+        return 0
+    return warm_side
+
+
 def rapidocr_bright_blue_warm_key() -> tuple[int, str, str, int]:
     return (
         RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
+        normalized_rapidocr_recognition_profile(RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE),
+        normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE),
+        RAPIDOCR_REC_BATCH_NUM,
+    )
+
+
+def rapidocr_svg_bright_blue_warm_key() -> tuple[int, str, str, int]:
+    return (
+        RAPIDOCR_SVG_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN,
         normalized_rapidocr_recognition_profile(RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE),
         normalized_rapidocr_detector_limit_type(RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_TYPE),
         RAPIDOCR_REC_BATCH_NUM,
