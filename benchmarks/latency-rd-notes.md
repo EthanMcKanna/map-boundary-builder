@@ -14079,3 +14079,37 @@ with zero failures in 0.531s.
   stable signatures, primary max `0.661026s`, primary OCR engine max
   `0.540224s`, repeat p95 `0.527612s`, repeat OCR total p95 `0.455583s`, and
   zero prewarm runtime or stage violations.
+- Extended the older fixture benchmark with the same production-style
+  generation prewarm path. `map-boundary-benchmark --prewarm-runtime` now
+  records `report.prewarm`, persists the opt-in threshold, and can fail closed
+  with `--max-prewarm-runtime-s` plus `--max-prewarm-stage-s` for
+  `catalog_s`, `seed_s`, `extraction_s`, `rapidocr_s`, and `total_s`. The
+  same patch fixed the evaluated OCR-engine duration CLI parser so the
+  documented `total_elapsed_s` alias now normalizes to `total_s` instead of
+  producing a false missing-profile budget issue. The first real alias smoke
+  `out/benchmark-prewarm-runtime-smoke-dallas-waymo-alias-20260602/full-report.json`
+  proved the alias normalized in the saved budget record but was rejected for
+  prewarm variance (`rapidocr_s=1.201455` against a `1.2s` stage cap). The
+  rerun
+  `out/benchmark-prewarm-runtime-smoke-dallas-waymo-alias-rerun-20260602/full-report.json`
+  passed with `max_evaluated_ocr_engine_duration_s={"total_s":0.7}`, prewarm
+  `total_s=1.097246`, `rapidocr_s=1.025020`, primary duration `0.941553s`,
+  active OCR engine total `0.481150s`, and zero latency-budget issues. Focused
+  validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_benchmark.py -q`
+  (`88` tests). A real in-process Dallas Waymo smoke
+  `out/benchmark-prewarm-runtime-smoke-dallas-waymo-20260602/full-report.json`
+  passed with prewarm `total_s=0.966352`, `rapidocr_s=0.896405`, primary
+  duration `0.917923s`, IoU `0.954771`, active OCR engine total `0.483622s`,
+  and zero latency-budget issues under a `1.5s` prewarm total budget and
+  `1.2s` RapidOCR prewarm stage budget. A broader all-active run
+  `out/benchmark-prewarm-runtime-active-20260602/full-report.json` is recorded
+  as rejected evidence: the new prewarm latency guard passed with
+  `total_s=0.941441`, `rapidocr_s=0.867245`, and zero latency issues, but the
+  existing Nashville Waymo active fixture failed OCR/georeference inference
+  from sparse labels. The green active subset rerun
+  `out/benchmark-prewarm-runtime-active-green-20260602/full-report.json`
+  passed `7/7` scored fixtures with average IoU `0.939468`, min IoU
+  `0.853339`, active total `4.362970s`, max fixture duration `0.968932s`,
+  prewarm `total_s=0.916821`, `rapidocr_s=0.844035`, active OCR engine total
+  `2.337716s`, and zero prewarm/latency-budget issues.

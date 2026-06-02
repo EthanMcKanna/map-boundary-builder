@@ -17,6 +17,7 @@ from map_boundary_builder.benchmark import (
     parse_georeference_source_requirements,
     parse_ocr_engine_duration_budgets,
     parse_ocr_engine_count_budgets,
+    parse_prewarm_stage_duration_budgets,
     parse_stage_duration_budgets,
     parse_image_name,
     run_benchmark,
@@ -76,6 +77,66 @@ def test_parser_accepts_disable_ocr_cache() -> None:
     assert args.disable_ocr_cache is True
 
 
+def test_parser_accepts_prewarm_runtime() -> None:
+    args = benchmark_module.build_parser().parse_args(["--prewarm-runtime"])
+
+    assert args.prewarm_runtime is True
+
+
+def test_main_normalizes_evaluated_ocr_engine_duration_alias(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    out_dir = tmp_path / "out"
+
+    def fake_run_benchmark(**_kwargs) -> dict[str, object]:
+        return {
+            "mode": "full",
+            "thresholds": {},
+            "runtime_config": {},
+            "summary": {
+                "passed": True,
+                "passed_fixtures": 0,
+                "scored_fixtures": 0,
+                "skipped_fixtures": 0,
+                "average_iou": 0.0,
+                "min_iou": 0.0,
+                "total_duration_s": 0.0,
+                "evaluated_ocr_engine_profile": {"total_s": 0.4},
+            },
+            "inventory": {"references_without_images": []},
+            "scores": [],
+        }
+
+    monkeypatch.setattr(benchmark_module, "run_benchmark", fake_run_benchmark)
+
+    exit_code = benchmark_module.main(
+        [
+            "--mode",
+            "full",
+            "--execution",
+            "in-process",
+            "--profile-ocr-engine",
+            "--max-evaluated-ocr-engine-duration-s",
+            "total_elapsed_s=0.7",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    capsys.readouterr()
+    saved = json.loads((out_dir / "full-report.json").read_text())
+    assert saved["latency_budget_check"]["passed"] is True
+    assert saved["latency_budget_check"]["max_evaluated_ocr_engine_duration_s"] == {
+        "total_s": 0.7,
+    }
+    assert saved["latency_budget_check"]["evaluated_ocr_engine_duration_s"] == {
+        "total_s": 0.4,
+    }
+
+
 def test_parse_stage_duration_budgets_accepts_repeated_and_comma_values() -> None:
     budgets = parse_stage_duration_budgets(["ocr=4.0, extract=1.5", "georeference=0.75"])
 
@@ -110,6 +171,41 @@ def test_parse_ocr_engine_duration_budgets_rejects_unknown_metrics() -> None:
         assert "Unknown OCR engine duration metric" in str(exc)
     else:
         raise AssertionError("Expected invalid OCR engine duration budget to raise ValueError")
+
+
+def test_parse_prewarm_stage_duration_budgets_accepts_repeated_and_comma_values() -> None:
+    budgets = parse_prewarm_stage_duration_budgets(
+        ["rapidocr_s=1.2, extraction_s=0.05", "total_elapsed_s=1.5"]
+    )
+
+    assert budgets == {
+        "extraction_s": 0.05,
+        "rapidocr_s": 1.2,
+        "total_s": 1.5,
+    }
+
+
+def test_parse_prewarm_stage_duration_budgets_rejects_invalid_values() -> None:
+    try:
+        parse_prewarm_stage_duration_budgets(["rapidocr_s:1.2"])
+    except ValueError as exc:
+        assert "METRIC=SECONDS" in str(exc)
+    else:
+        raise AssertionError("Expected invalid prewarm stage budget to raise ValueError")
+
+    try:
+        parse_prewarm_stage_duration_budgets(["rapidocr_s=0"])
+    except ValueError as exc:
+        assert "positive" in str(exc)
+    else:
+        raise AssertionError("Expected non-positive prewarm stage budget to raise ValueError")
+
+    try:
+        parse_prewarm_stage_duration_budgets(["det_elapsed_s=0.6"])
+    except ValueError as exc:
+        assert "Unknown prewarm stage metric" in str(exc)
+    else:
+        raise AssertionError("Expected unknown prewarm stage metric to raise ValueError")
 
 
 def test_parse_ocr_engine_count_budgets_accepts_known_counts() -> None:
@@ -306,6 +402,62 @@ def test_run_benchmark_report_includes_runtime_config(monkeypatch, tmp_path: Pat
     assert generation_env["MAP_BOUNDARY_RUNNER_OCR_CACHE"] == "0"
     assert generation_env["MAP_BOUNDARY_EXTRACTION_TRIMMED_CACHE_MAX_PIXELS"] == "3000000"
     assert generation_env["MAP_BOUNDARY_SCALED_EXTRACTION_MEMORY_CACHE_MAX"] == "24"
+    assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
+    assert os.environ.get("MAP_BOUNDARY_RUNNER_OCR_CACHE") is None
+
+
+def test_run_benchmark_records_generation_prewarm(monkeypatch, tmp_path: Path) -> None:
+    polygon_dir = tmp_path / "polygons"
+    image_dir = tmp_path / "images"
+    out_dir = tmp_path / "out"
+    polygon_dir.mkdir()
+    image_dir.mkdir()
+    observed_env: dict[str, str | None] = {}
+
+    def fake_prewarm() -> dict[str, object]:
+        observed_env["MAP_BOUNDARY_BLOCK_NETWORK"] = os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK")
+        observed_env["MAP_BOUNDARY_RUNNER_OCR_CACHE"] = os.environ.get(
+            "MAP_BOUNDARY_RUNNER_OCR_CACHE"
+        )
+        return {
+            "status": "ok",
+            "total_s": 0.91,
+            "rapidocr_s": 0.82,
+            "extraction_s": 0.03,
+        }
+
+    monkeypatch.setattr(benchmark_module, "run_generation_prewarm", fake_prewarm)
+    monkeypatch.delenv("MAP_BOUNDARY_BLOCK_NETWORK", raising=False)
+    monkeypatch.delenv("MAP_BOUNDARY_RUNNER_OCR_CACHE", raising=False)
+
+    report = run_benchmark(
+        polygon_dir=polygon_dir,
+        image_dir=image_dir,
+        out_dir=out_dir,
+        mode="full",
+        min_iou=0.78,
+        mean_iou=0.90,
+        timeout_seconds=1,
+        city_overrides=False,
+        only_filters=[],
+        fixture_config=tmp_path / "fixtures.json",
+        execution="in-process",
+        block_network=True,
+        runner_ocr_cache=False,
+        prewarm_runtime=True,
+    )
+
+    assert report["thresholds"]["prewarm_runtime"] is True
+    assert report["prewarm"] == {
+        "status": "ok",
+        "total_s": 0.91,
+        "rapidocr_s": 0.82,
+        "extraction_s": 0.03,
+    }
+    assert observed_env == {
+        "MAP_BOUNDARY_BLOCK_NETWORK": "1",
+        "MAP_BOUNDARY_RUNNER_OCR_CACHE": "0",
+    }
     assert os.environ.get("MAP_BOUNDARY_BLOCK_NETWORK") is None
     assert os.environ.get("MAP_BOUNDARY_RUNNER_OCR_CACHE") is None
 
@@ -2342,6 +2494,7 @@ def test_report_latency_budget_check_passes_when_within_budget() -> None:
             "smoked_skipped_duration_s": 0.4,
             "evaluated_duration_s": 3.3,
         },
+        "prewarm": {"status": "ok", "total_s": 0.92, "rapidocr_s": 0.81},
         "scores": [{"slug": "dallas-tesla", "status": "active", "duration_s": 0.19}],
     }
 
@@ -2350,14 +2503,84 @@ def test_report_latency_budget_check_passes_when_within_budget() -> None:
         max_duration_s=1.0,
         max_total_duration_s=3.0,
         max_evaluated_duration_s=3.5,
+        max_prewarm_runtime_s=1.0,
+        max_prewarm_stage_s={"rapidocr_s": 0.9},
     )
 
     assert check["passed"] is True
     assert check["max_evaluated_duration_s"] == 3.5
+    assert check["max_prewarm_runtime_s"] == 1.0
+    assert check["max_prewarm_stage_s"] == {"rapidocr_s": 0.9}
+    assert check["prewarm_total_s"] == 0.92
+    assert check["prewarm_stage_s"] == {"rapidocr_s": 0.81, "total_s": 0.92}
     assert check["active_total_duration_s"] == 2.9
     assert check["smoked_skipped_duration_s"] == 0.4
     assert check["evaluated_duration_s"] == 3.3
     assert check["issues"] == []
+
+
+def test_report_latency_budget_check_flags_prewarm_budget_failures() -> None:
+    report = {
+        "summary": {"total_duration_s": 2.5},
+        "prewarm": {"status": "ok", "total_s": 1.31, "rapidocr_s": 1.32},
+        "scores": [{"slug": "dallas-tesla", "status": "active", "duration_s": 0.19}],
+    }
+
+    check = check_report_latency_budgets(
+        report,
+        max_prewarm_runtime_s=1.0,
+        max_prewarm_stage_s={
+            "extraction_s": 0.05,
+            "rapidocr_s": 1.2,
+        },
+    )
+
+    assert check["passed"] is False
+    assert check["prewarm_total_s"] == 1.31
+    assert check["prewarm_stage_s"] == {"rapidocr_s": 1.32, "total_s": 1.31}
+    assert check["issues"] == [
+        {
+            "kind": "prewarm_runtime_budget_exceeded",
+            "prewarm_total_s": 1.31,
+            "max_prewarm_runtime_s": 1.0,
+            "excess_s": 0.31,
+        },
+        {
+            "metric": "extraction_s",
+            "kind": "prewarm_stage_missing",
+            "max_prewarm_stage_s": 0.05,
+        },
+        {
+            "metric": "rapidocr_s",
+            "kind": "prewarm_stage_budget_exceeded",
+            "duration_s": 1.32,
+            "max_prewarm_stage_s": 1.2,
+            "excess_s": 0.12,
+        },
+    ]
+
+
+def test_report_latency_budget_check_flags_missing_prewarm_payload() -> None:
+    check = check_report_latency_budgets(
+        {"summary": {"total_duration_s": 2.5}, "scores": []},
+        max_prewarm_runtime_s=1.0,
+        max_prewarm_stage_s={"rapidocr_s": 1.2},
+    )
+
+    assert check["passed"] is False
+    assert check["prewarm_total_s"] is None
+    assert check["prewarm_stage_s"] == {}
+    assert check["issues"] == [
+        {
+            "kind": "prewarm_runtime_missing",
+            "max_prewarm_runtime_s": 1.0,
+        },
+        {
+            "metric": "rapidocr_s",
+            "kind": "prewarm_stage_missing",
+            "max_prewarm_stage_s": 1.2,
+        },
+    ]
 
 
 def test_report_latency_budget_check_computes_evaluated_duration_when_missing() -> None:
@@ -2732,6 +2955,74 @@ def test_print_table_reports_ocr_engine_latency_budget_failure(capsys, tmp_path:
     assert "det_elapsed_s: missing repeat OCR engine p95 duration" in output
     assert "selected_box_count: repeat OCR engine p95 count 31.0 > budget 30.0" in output
     assert "raw_box_count: missing repeat OCR engine p95 count" in output
+
+
+def test_print_table_reports_prewarm_latency_budget_failure(capsys, tmp_path: Path) -> None:
+    report = {
+        "mode": "full",
+        "thresholds": {"prewarm_runtime": True},
+        "prewarm": {
+            "status": "ok",
+            "total_s": 1.31,
+            "rapidocr_s": 1.32,
+        },
+        "summary": {
+            "passed": False,
+            "passed_fixtures": 1,
+            "scored_fixtures": 1,
+            "skipped_fixtures": 0,
+            "average_iou": 0.95,
+            "min_iou": 0.95,
+            "total_duration_s": 0.5,
+        },
+        "scores": [
+            {
+                "slug": "dallas-waymo",
+                "status": "active",
+                "passed": True,
+                "iou": 0.95,
+                "area_ratio": 1.0,
+                "duration_s": 0.5,
+                "vertices": 42,
+                "style": "bright-blue",
+                "georeference_source": "ocr-georeference:nominatim-label-fit",
+                "error": None,
+                "note": None,
+            }
+        ],
+        "inventory": {"references_without_images": []},
+        "latency_budget_check": {
+            "passed": False,
+            "issues": [
+                {
+                    "kind": "prewarm_runtime_budget_exceeded",
+                    "prewarm_total_s": 1.31,
+                    "max_prewarm_runtime_s": 1.0,
+                    "excess_s": 0.31,
+                },
+                {
+                    "metric": "extraction_s",
+                    "kind": "prewarm_stage_missing",
+                    "max_prewarm_stage_s": 0.05,
+                },
+                {
+                    "metric": "rapidocr_s",
+                    "kind": "prewarm_stage_budget_exceeded",
+                    "duration_s": 1.32,
+                    "max_prewarm_stage_s": 1.2,
+                    "excess_s": 0.12,
+                },
+            ],
+        },
+    }
+
+    benchmark_module.print_table(report, tmp_path / "report.json")
+
+    output = capsys.readouterr().out
+    assert "note: generation runtime prewarm status=ok, total=1.310s" in output
+    assert "prewarm total_s 1.310s > budget 1.000s" in output
+    assert "prewarm extraction_s metric missing" in output
+    assert "prewarm rapidocr_s 1.320s > budget 1.200s" in output
 
 
 def test_print_table_reports_georeference_source_requirement_failure(

@@ -22,6 +22,7 @@ from .georef_transform import lonlat_to_mercator
 from .network_policy import NETWORK_BLOCK_ENV
 from .pipeline_version import get_pipeline_version
 from .runtime_config import generation_env_config, ocr_runtime_config
+from .runtime_warmup import prewarm_generation_runtime
 
 DEFAULT_POLYGON_DIR = Path("/Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons")
 DEFAULT_IMAGE_DIR = Path("/Users/ethanmckanna/Downloads/service area images")
@@ -352,6 +353,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--prewarm-runtime",
+        action="store_true",
+        help=(
+            "For --mode full with --execution in-process, run the production generation "
+            "prewarm before fixture scoring and record its stage timings."
+        ),
+    )
+    parser.add_argument(
         "--baseline-report",
         type=Path,
         help="Optional prior benchmark report; fail if active fixture IoU regresses against it.",
@@ -512,6 +521,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional absolute maximum active plus smoke-checked road-match elapsed budget.",
     )
     parser.add_argument(
+        "--max-prewarm-runtime-s",
+        type=float,
+        default=None,
+        help="Optional maximum generation prewarm total_s budget.",
+    )
+    parser.add_argument(
+        "--max-prewarm-stage-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Optional maximum generation prewarm stage-duration budget. "
+            "Requires --prewarm-runtime data. Repeat or comma-separate entries "
+            "such as rapidocr_s=1.2,extraction_s=0.05,total_s=1.5."
+        ),
+    )
+    parser.add_argument(
         "--require-active-georeference-source",
         action="append",
         default=[],
@@ -542,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
         max_evaluated_stage_duration_s = parse_stage_duration_budgets(
             args.max_evaluated_stage_duration_s
         )
-        max_evaluated_ocr_engine_duration_s = parse_stage_duration_budgets(
+        max_evaluated_ocr_engine_duration_s = parse_ocr_engine_duration_budgets(
             args.max_evaluated_ocr_engine_duration_s
         )
         max_evaluated_ocr_engine_count = parse_ocr_engine_count_budgets(
@@ -557,6 +583,7 @@ def main(argv: list[str] | None = None) -> int:
         max_repeat_profile_ocr_engine_p95_count = parse_ocr_engine_count_budgets(
             args.max_repeat_profile_ocr_engine_p95_count
         )
+        max_prewarm_stage_s = parse_prewarm_stage_duration_budgets(args.max_prewarm_stage_s)
         required_active_georeference_sources = parse_georeference_source_requirements(
             args.require_active_georeference_source
         )
@@ -579,6 +606,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--profile-ocr-engine requires --mode full")
     if args.profile_ocr_engine and args.execution != "in-process":
         parser.error("--profile-ocr-engine requires --execution in-process")
+    if args.prewarm_runtime and args.mode != "full":
+        parser.error("--prewarm-runtime requires --mode full")
+    if args.prewarm_runtime and args.execution != "in-process":
+        parser.error("--prewarm-runtime requires --execution in-process")
+    if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
+        parser.error("--max-prewarm-runtime-s must be positive")
     report = run_benchmark(
         polygon_dir=args.polygon_dir,
         image_dir=args.image_dir,
@@ -610,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_warmups=args.repeat_profile_warmups,
         profile_ocr_engine=args.profile_ocr_engine,
         runner_ocr_cache=not args.disable_ocr_cache,
+        prewarm_runtime=args.prewarm_runtime,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     report_path = args.out_dir / f"{args.mode}-report.json"
@@ -656,6 +690,8 @@ def main(argv: list[str] | None = None) -> int:
         or args.min_repeat_profile_pass_ratio is not None
         or args.min_repeat_profile_subsecond_ratio is not None
         or args.fail_on_repeat_profile_signature_drift
+        or args.max_prewarm_runtime_s is not None
+        or bool(max_prewarm_stage_s)
     ):
         latency_budget_check = check_report_latency_budgets(
             report,
@@ -675,6 +711,8 @@ def main(argv: list[str] | None = None) -> int:
             min_repeat_profile_pass_ratio=args.min_repeat_profile_pass_ratio,
             min_repeat_profile_subsecond_ratio=args.min_repeat_profile_subsecond_ratio,
             fail_on_repeat_profile_signature_drift=args.fail_on_repeat_profile_signature_drift,
+            max_prewarm_runtime_s=args.max_prewarm_runtime_s,
+            max_prewarm_stage_s=max_prewarm_stage_s,
         )
         report["latency_budget_check"] = latency_budget_check
         report["summary"]["latency_budget_check_passed"] = latency_budget_check["passed"]
@@ -729,6 +767,7 @@ def run_benchmark(
     repeat_profile_warmups: int = 0,
     profile_ocr_engine: bool = False,
     runner_ocr_cache: bool = True,
+    prewarm_runtime: bool = False,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
         raise ValueError("repeat_profile_runs must be non-negative")
@@ -738,6 +777,10 @@ def run_benchmark(
         raise ValueError("repeat_profile_runs requires mode='full'")
     if repeat_profile_runs and execution != "in-process":
         raise ValueError("repeat_profile_runs requires execution='in-process'")
+    if prewarm_runtime and mode != "full":
+        raise ValueError("prewarm_runtime requires mode='full'")
+    if prewarm_runtime and execution != "in-process":
+        raise ValueError("prewarm_runtime requires execution='in-process'")
     require_scored_catalog_evidence = bool(
         require_scored_catalog_evidence or score_skipped_catalog_references
     )
@@ -753,6 +796,7 @@ def run_benchmark(
     scores: list[BenchmarkScore] = []
     repeat_targets: list[dict[str, Any]] = []
     with benchmark_runtime_policy(block_network=block_network, runner_ocr_cache=runner_ocr_cache):
+        prewarm = run_generation_prewarm() if prewarm_runtime else None
         for fixture in fixtures:
             if fixture.status != "active":
                 catalog_reference = (
@@ -935,6 +979,7 @@ def run_benchmark(
             "repeat_profile_warmups": repeat_profile_warmups,
             "profile_ocr_engine": profile_ocr_engine,
             "runner_ocr_cache": runner_ocr_cache,
+            "prewarm_runtime": prewarm_runtime,
         },
         "runtime_config": runtime_config,
         "summary": {
@@ -985,6 +1030,8 @@ def run_benchmark(
         "inventory": inventory,
         "scores": [score.as_dict() for score in sorted(scores, key=score_sort_key)],
     }
+    if prewarm is not None:
+        report["prewarm"] = prewarm
     if repeat_profile is not None:
         report["repeat_profile"] = repeat_profile
     return report
@@ -1506,11 +1553,42 @@ def parse_ocr_engine_duration_budgets(raw_budgets: list[str]) -> dict[str, float
     return dict(sorted(budgets.items()))
 
 
+def parse_prewarm_stage_duration_budgets(raw_budgets: list[str]) -> dict[str, float]:
+    budgets: dict[str, float] = {}
+    for raw in raw_budgets:
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"Prewarm stage budget must use METRIC=SECONDS: {entry}")
+            raw_metric, raw_value = (part.strip() for part in entry.split("=", 1))
+            if not raw_metric:
+                raise ValueError(f"Prewarm stage budget is missing a metric name: {entry}")
+            metric = normalize_prewarm_stage_duration_metric(raw_metric)
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(f"Prewarm stage budget seconds must be numeric: {entry}") from exc
+            if value <= 0.0:
+                raise ValueError(f"Prewarm stage budget seconds must be positive: {entry}")
+            budgets[metric] = value
+    return dict(sorted(budgets.items()))
+
+
 def normalize_ocr_engine_duration_metric(metric: str) -> str:
     normalized = OCR_ENGINE_PROFILE_DURATION_ALIASES.get(metric.strip(), metric.strip())
     if normalized not in OCR_ENGINE_PROFILE_DURATION_KEYS:
         expected = ", ".join(OCR_ENGINE_PROFILE_DURATION_KEYS)
         raise ValueError(f"Unknown OCR engine duration metric {metric!r}; expected one of: {expected}")
+    return normalized
+
+
+def normalize_prewarm_stage_duration_metric(metric: str) -> str:
+    normalized = PREWARM_STAGE_DURATION_ALIASES.get(metric.strip(), metric.strip())
+    if normalized not in PREWARM_STAGE_DURATION_KEYS:
+        expected = ", ".join(PREWARM_STAGE_DURATION_KEYS)
+        raise ValueError(f"Unknown prewarm stage metric {metric!r}; expected one of: {expected}")
     return normalized
 
 
@@ -1584,6 +1662,10 @@ def benchmark_network_policy(block_network: bool):
 def benchmark_runtime_policy(*, block_network: bool, runner_ocr_cache: bool):
     with benchmark_network_policy(block_network), benchmark_runner_ocr_cache_policy(runner_ocr_cache):
         yield
+
+
+def run_generation_prewarm() -> dict[str, Any]:
+    return prewarm_generation_runtime()
 
 
 @contextmanager
@@ -2287,6 +2369,10 @@ OCR_ENGINE_PROFILE_COUNT_KEYS = (
     "label_count",
     "useful_label_count",
 )
+PREWARM_STAGE_DURATION_KEYS = ("catalog_s", "seed_s", "extraction_s", "rapidocr_s", "total_s")
+PREWARM_STAGE_DURATION_ALIASES = {
+    "total_elapsed_s": "total_s",
+}
 
 
 def summarize_ocr_engine_profile_events(events: list[dict[str, Any]] | None) -> dict[str, Any]:
@@ -2762,6 +2848,8 @@ def check_report_latency_budgets(
     min_repeat_profile_pass_ratio: float | None = None,
     min_repeat_profile_subsecond_ratio: float | None = None,
     fail_on_repeat_profile_signature_drift: bool = False,
+    max_prewarm_runtime_s: float | None = None,
+    max_prewarm_stage_s: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     duration_budget = None if max_duration_s is None else max(0.0, float(max_duration_s))
     total_budget = None if max_total_duration_s is None else max(0.0, float(max_total_duration_s))
@@ -2828,6 +2916,14 @@ def check_report_latency_budgets(
         if min_repeat_profile_subsecond_ratio is None
         else min(1.0, max(0.0, float(min_repeat_profile_subsecond_ratio)))
     )
+    prewarm_runtime_budget = (
+        None if max_prewarm_runtime_s is None else max(0.0, float(max_prewarm_runtime_s))
+    )
+    prewarm_stage_budgets = {
+        metric: max(0.0, float(duration))
+        for metric, duration in (max_prewarm_stage_s or {}).items()
+        if metric
+    }
     active_total_duration = parse_report_duration(report.get("summary", {}).get("total_duration_s"))
     smoke_total_duration = parse_report_duration(report.get("summary", {}).get("smoked_skipped_duration_s"))
     evaluated_duration = report_evaluated_duration(report)
@@ -2872,7 +2968,47 @@ def check_report_latency_budgets(
         "subsecond_samples",
     )
     repeat_profile_signature_drift_fixtures = report_repeat_profile_signature_drift_fixtures(report)
+    prewarm_total_duration = report_prewarm_duration(report, "total_s")
+    prewarm_stage_durations = report_prewarm_stage_durations(report)
     issues: list[dict[str, Any]] = []
+    if prewarm_runtime_budget is not None:
+        if prewarm_total_duration is None:
+            issues.append(
+                {
+                    "kind": "prewarm_runtime_missing",
+                    "max_prewarm_runtime_s": prewarm_runtime_budget,
+                }
+            )
+        elif prewarm_total_duration > prewarm_runtime_budget:
+            issues.append(
+                {
+                    "kind": "prewarm_runtime_budget_exceeded",
+                    "prewarm_total_s": round(prewarm_total_duration, 6),
+                    "max_prewarm_runtime_s": prewarm_runtime_budget,
+                    "excess_s": round(prewarm_total_duration - prewarm_runtime_budget, 6),
+                }
+            )
+    for metric, metric_budget in sorted(prewarm_stage_budgets.items()):
+        stage_duration = prewarm_stage_durations.get(metric)
+        if stage_duration is None:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "prewarm_stage_missing",
+                    "max_prewarm_stage_s": metric_budget,
+                }
+            )
+            continue
+        if stage_duration > metric_budget:
+            issues.append(
+                {
+                    "metric": metric,
+                    "kind": "prewarm_stage_budget_exceeded",
+                    "duration_s": round(stage_duration, 6),
+                    "max_prewarm_stage_s": metric_budget,
+                    "excess_s": round(stage_duration - metric_budget, 6),
+                }
+            )
     if duration_budget is not None:
         for row in report.get("scores", []):
             if not isinstance(row, dict) or row.get("status") != "active":
@@ -3203,6 +3339,12 @@ def check_report_latency_budgets(
         "min_repeat_profile_pass_ratio": repeat_profile_pass_ratio_budget,
         "min_repeat_profile_subsecond_ratio": repeat_profile_subsecond_ratio_budget,
         "fail_on_repeat_profile_signature_drift": fail_on_repeat_profile_signature_drift,
+        "max_prewarm_runtime_s": prewarm_runtime_budget,
+        "max_prewarm_stage_s": prewarm_stage_budgets,
+        "prewarm_total_s": (
+            round(prewarm_total_duration, 6) if prewarm_total_duration is not None else None
+        ),
+        "prewarm_stage_s": prewarm_stage_durations,
         "active_total_duration_s": round(active_total_duration, 6) if active_total_duration is not None else None,
         "smoked_skipped_duration_s": round(smoke_total_duration, 6) if smoke_total_duration is not None else None,
         "evaluated_duration_s": round(evaluated_duration, 6) if evaluated_duration is not None else None,
@@ -3426,6 +3568,25 @@ def report_repeat_profile_signature_drift_fixtures(report: dict[str, Any]) -> li
     return [str(slug) for slug in raw_fixtures]
 
 
+def report_prewarm_duration(report: dict[str, Any], key: str) -> float | None:
+    prewarm = report.get("prewarm")
+    if not isinstance(prewarm, dict):
+        return None
+    return parse_report_duration(prewarm.get(key))
+
+
+def report_prewarm_stage_durations(report: dict[str, Any]) -> dict[str, float]:
+    prewarm = report.get("prewarm")
+    if not isinstance(prewarm, dict):
+        return {}
+    durations: dict[str, float] = {}
+    for key in PREWARM_STAGE_DURATION_KEYS:
+        duration = parse_report_duration(prewarm.get(key))
+        if duration is not None:
+            durations[key] = round(duration, 6)
+    return durations
+
+
 def active_iou_scores_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     scores: dict[str, dict[str, Any]] = {}
     for row in report.get("scores", []):
@@ -3565,6 +3726,12 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
     print(f"report: {report_path}")
     if report.get("thresholds", {}).get("profile_ocr_engine"):
         print("note: OCR engine profiling is enabled; fixture durations include profiling overhead")
+    if report.get("thresholds", {}).get("prewarm_runtime"):
+        prewarm = report.get("prewarm") if isinstance(report.get("prewarm"), dict) else {}
+        status = prewarm.get("status", "missing")
+        total_s = prewarm.get("total_s")
+        total_text = f", total={float(total_s):.3f}s" if isinstance(total_s, (int, float)) else ""
+        print(f"note: generation runtime prewarm status={status}{total_text}")
     active_sources_text = format_source_counts(summary.get("active_georeference_sources"))
     if active_sources_text:
         print(f"active sources: {active_sources_text}")
@@ -3742,6 +3909,22 @@ def print_table(report: dict[str, Any], report_path: Path) -> None:
                     f"> budget {issue['max_evaluated_duration_s']:.3f}s "
                     f"(+{issue['excess_s']:.3f}s)"
                 )
+            elif issue["kind"] == "prewarm_runtime_budget_exceeded":
+                print(
+                    f"       prewarm total_s {issue['prewarm_total_s']:.3f}s "
+                    f"> budget {issue['max_prewarm_runtime_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "prewarm_runtime_missing":
+                print("       missing prewarm total_s")
+            elif issue["kind"] == "prewarm_stage_budget_exceeded":
+                print(
+                    f"       prewarm {issue['metric']} {issue['duration_s']:.3f}s "
+                    f"> budget {issue['max_prewarm_stage_s']:.3f}s "
+                    f"(+{issue['excess_s']:.3f}s)"
+                )
+            elif issue["kind"] == "prewarm_stage_missing":
+                print(f"       prewarm {issue['metric']} metric missing")
             elif issue["kind"] == "evaluated_ocr_engine_duration_budget_exceeded":
                 print(
                     f"       {issue['metric']}: evaluated OCR engine duration "
