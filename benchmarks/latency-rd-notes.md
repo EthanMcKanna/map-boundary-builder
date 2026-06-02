@@ -14141,3 +14141,27 @@ with zero failures in 0.531s.
   latency-budget issues. This is a reliability ship: it converts a sparse
   Nashville no-catalog failure into a correct road-refined output while keeping
   the production-style stress cases subsecond.
+- Follow-up Nashville speed probes are rejected for now. A production-shaped
+  no-debug all-active baseline
+  `out/current-active-nodebug-20260602/full-report.json` passed 8/8 scored
+  fixtures with 7 `reference_mismatch` skips, avg IoU `0.944437`, min IoU
+  `0.853339`, active total `4.69s`, all non-Nashville scored fixtures under
+  `0.69s`, and Nashville at `1.16s` through one full-detail retry. A broad
+  first-pass bright-blue 1500px cap
+  `out/probe-brightblue-maxdim1500-active-nodebug-20260602/full-report.json`
+  improved some IoUs but slowed active total to `5.95s`, made Phoenix pay a
+  full-detail retry, and pushed Phoenix to `1.63s`, so it is not a safe
+  shortcut around Nashville's double OCR pass. Lowering the non-SVG
+  bright-blue fast-text area threshold also failed to remove the retry:
+  `1800` in
+  `out/probe-brightblue-area1800-active-nodebug-20260602/full-report.json`
+  passed but took `4.78s` active total with Nashville at `1.25s`, and `1500`
+  in `out/probe-brightblue-area1500-active-nodebug-20260602/full-report.json`
+  passed but still took `4.72s` with Nashville at `1.18s`. A full-detail-only
+  detector-cap prototype was also rejected: the focused helper tests passed,
+  but `out/full-detail-det224-nashville-nodebug-20260602/full-report.json`
+  kept the correct `0.979223` IoU while slowing Nashville to `1.56s` versus
+  the current `1.16s` baseline. Keep the accepted 1400px fast path plus 1500px
+  full-detail fallback; the remaining over-subsecond active Nashville path is
+  an OCR double-pass cost, while the real-screenshot hard stress set remains
+  subsecond.
