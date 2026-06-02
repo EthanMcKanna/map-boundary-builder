@@ -14266,4 +14266,13 @@ with zero failures in 0.531s.
   `32/32` analyzed repeat expectations, all repeats subsecond, primary max
   `0.751s`, repeat p95 `0.681s`, repeat max `0.717s`, RapidOCR repeat-total
   p95 `0.588s`, and zero labels below 70/80 confidence in primary or repeat
-  profiles.
+  profiles. Production deployment `dpl_AmWugPx6VACsBbjqsYUdLhQ1iBZX` is aliased
+  to `https://mapboundary.app` with pipeline `pipeline-3395a7990dde7daa`;
+  `/api/health?warm=ocr` returned `ok: true`, `app.js` served the 1600px cap
+  and `source_was_svg` field, and a live Austin browser-rasterized SVG PNG
+  upload with `source_was_svg=1` completed with `14` controls and
+  `confidence=0.865`. The auto-city production smoke paid a cold live
+  georeference tail (`build_boundary_s=11.960s`), while a city-hinted rerun on
+  the same 242 KB PNG after OCR cache warmup completed before send in `0.145s`;
+  treat production smoke as deployment/reliability proof and the local
+  cache-disabled prewarm repeats as the speed proof.
