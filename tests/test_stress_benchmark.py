@@ -1948,6 +1948,136 @@ def test_latency_budget_flags_repeat_ocr_engine_p95_excess_and_missing() -> None
     ]
 
 
+def test_latency_budget_flags_primary_ocr_engine_excess_and_missing() -> None:
+    budget = stress_module.build_latency_budget_summary(
+        [
+            {
+                "slug": "slow-map",
+                "observed_status": "complete",
+                "ocr_engine_profile": {
+                    "total_s": 0.72,
+                    "selected_box_count": 31,
+                },
+            },
+            {
+                "slug": "unprofiled-map",
+                "observed_status": "failed",
+            },
+        ],
+        repeat_profile=None,
+        max_ocr_engine_duration_s={"total_s": 0.6},
+        max_ocr_engine_count={"selected_box_count": 30},
+    )
+
+    assert budget["passed"] is False
+    assert budget["max_ocr_engine_duration_s"] == {"total_s": 0.6}
+    assert budget["ocr_engine_violations"] == [
+        {
+            "kind": "ocr_engine_duration_budget_exceeded",
+            "slug": "slow-map",
+            "metric": "total_s",
+            "observed_status": "complete",
+            "duration_s": 0.72,
+            "max_ocr_engine_duration_s": 0.6,
+            "excess_s": 0.12,
+        },
+        {
+            "kind": "ocr_engine_duration_missing",
+            "slug": "unprofiled-map",
+            "metric": "total_s",
+            "observed_status": "failed",
+            "max_ocr_engine_duration_s": 0.6,
+        },
+    ]
+    assert budget["max_ocr_engine_count"] == {"selected_box_count": 30.0}
+    assert budget["ocr_engine_count_violations"] == [
+        {
+            "kind": "ocr_engine_count_budget_exceeded",
+            "slug": "slow-map",
+            "metric": "selected_box_count",
+            "observed_status": "complete",
+            "count": 31.0,
+            "max_ocr_engine_count": 30.0,
+            "excess_count": 1.0,
+        },
+        {
+            "kind": "ocr_engine_count_missing",
+            "slug": "unprofiled-map",
+            "metric": "selected_box_count",
+            "observed_status": "failed",
+            "max_ocr_engine_count": 30.0,
+        },
+    ]
+
+
+def test_stress_benchmark_can_gate_primary_ocr_engine_duration(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": 0.8,
+            "ocr_engine_profile": {
+                "calls": 1,
+                "total_s": 0.7,
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        profile_ocr_engine=True,
+        max_ocr_engine_duration_s={"total_s": 0.6},
+        python_executable="python",
+    )
+
+    assert report["latency_budget"]["passed"] is False
+    assert report["latency_budget"]["ocr_engine_violations"] == [
+        {
+            "kind": "ocr_engine_duration_budget_exceeded",
+            "slug": "kept",
+            "metric": "total_s",
+            "observed_status": "complete",
+            "duration_s": 0.7,
+            "max_ocr_engine_duration_s": 0.6,
+            "excess_s": 0.1,
+        }
+    ]
+
+
 def test_stress_benchmark_can_gate_repeat_ocr_engine_p95(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")
@@ -2069,6 +2199,71 @@ def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatc
             "2",
             "--max-repeat-ocr-engine-p95-duration-s",
             "rec_elapsed_s=0.6,total_elapsed_s=0.8",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_main_passes_primary_ocr_engine_budgets_to_runner(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["max_ocr_engine_duration_s"] == {
+            "det_elapsed_s": 0.3,
+            "total_s": 0.6,
+        }
+        assert kwargs["max_ocr_engine_count"] == {
+            "raw_box_count": 50.0,
+            "selected_box_count": 30.0,
+        }
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.6,
+                }
+            ],
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+                "max_ocr_engine_duration_s": {
+                    "det_elapsed_s": 0.3,
+                    "total_s": 0.6,
+                },
+                "ocr_engine_violations": [],
+                "max_ocr_engine_count": {
+                    "raw_box_count": 50.0,
+                    "selected_box_count": 30.0,
+                },
+                "ocr_engine_count_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--max-ocr-engine-duration-s",
+            "det_elapsed_s=0.3,total_elapsed_s=0.6",
+            "--max-ocr-engine-count",
+            "selected_box_count=30,raw_box_count=50",
         ]
     )
 

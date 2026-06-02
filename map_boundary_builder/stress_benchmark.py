@@ -170,12 +170,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-ocr-engine-duration-s",
+        action="append",
+        default=[],
+        metavar="METRIC=SECONDS",
+        help=(
+            "Fail when a profiled primary OCR engine metric exceeds this budget. "
+            "Repeat or comma-separate entries such as det_elapsed_s=0.3,rec_elapsed_s=0.6,total_s=0.9."
+        ),
+    )
+    parser.add_argument(
         "--max-repeat-ocr-engine-p95-count",
         action="append",
         default=[],
         metavar="METRIC=COUNT",
         help=(
             "Fail when a profiled repeat OCR engine count metric p95 exceeds this budget. "
+            "Repeat or comma-separate entries such as selected_box_count=30,raw_box_count=50."
+        ),
+    )
+    parser.add_argument(
+        "--max-ocr-engine-count",
+        action="append",
+        default=[],
+        metavar="METRIC=COUNT",
+        help=(
+            "Fail when a profiled primary OCR engine count metric exceeds this budget. "
             "Repeat or comma-separate entries such as selected_box_count=30,raw_box_count=50."
         ),
     )
@@ -202,9 +222,17 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     try:
+        max_ocr_engine_duration_s = parse_metric_duration_budgets(args.max_ocr_engine_duration_s)
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
         max_repeat_ocr_engine_p95_count = parse_metric_count_budgets(
             args.max_repeat_ocr_engine_p95_count
         )
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
+        max_ocr_engine_count = parse_metric_count_budgets(args.max_ocr_engine_count)
     except ValueError as exc:
         parser.error(str(exc))
     report = run_stress_benchmark(
@@ -222,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_warmups=args.repeat_profile_warmups,
         max_total_elapsed_s=args.max_total_elapsed_s,
         max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
+        max_ocr_engine_duration_s=max_ocr_engine_duration_s,
+        max_ocr_engine_count=max_ocr_engine_count,
         max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
         max_repeat_ocr_engine_p95_count=max_repeat_ocr_engine_p95_count,
     )
@@ -265,6 +295,8 @@ def run_stress_benchmark(
     repeat_profile_warmups: int = 0,
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
+    max_ocr_engine_duration_s: dict[str, float] | None = None,
+    max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_count: dict[str, float] | None = None,
     python_executable: str = sys.executable,
@@ -277,6 +309,8 @@ def run_stress_benchmark(
         raise ValueError("max_total_elapsed_s must be positive")
     if max_repeat_profile_p95_duration_s is not None and max_repeat_profile_p95_duration_s <= 0.0:
         raise ValueError("max_repeat_profile_p95_duration_s must be positive")
+    ocr_engine_budgets = dict(max_ocr_engine_duration_s or {})
+    ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
     ocr_engine_p95_count_budgets = dict(max_repeat_ocr_engine_p95_count or {})
     if execution not in {"subprocess", "in-process"}:
@@ -349,6 +383,8 @@ def run_stress_benchmark(
     if (
         max_total_elapsed_s is not None
         or max_repeat_profile_p95_duration_s is not None
+        or ocr_engine_budgets
+        or ocr_engine_count_budgets
         or ocr_engine_p95_budgets
         or ocr_engine_p95_count_budgets
     ):
@@ -357,6 +393,8 @@ def run_stress_benchmark(
             repeat_profile,
             max_total_elapsed_s=max_total_elapsed_s,
             max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
+            max_ocr_engine_duration_s=ocr_engine_budgets,
+            max_ocr_engine_count=ocr_engine_count_budgets,
             max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
             max_repeat_ocr_engine_p95_count=ocr_engine_p95_count_budgets,
         )
@@ -1562,6 +1600,8 @@ def build_latency_budget_summary(
     *,
     max_total_elapsed_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
+    max_ocr_engine_duration_s: dict[str, float] | None = None,
+    max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_count: dict[str, float] | None = None,
 ) -> dict[str, Any]:
@@ -1577,6 +1617,14 @@ def build_latency_budget_summary(
     if max_total_elapsed_s is not None:
         primary_violations = latency_budget_violations(rows, max_total_elapsed_s=max_total_elapsed_s)
         repeat_violations = latency_budget_violations(repeat_samples, max_total_elapsed_s=max_total_elapsed_s)
+    ocr_engine_violations = ocr_engine_duration_budget_violations(
+        rows,
+        max_ocr_engine_duration_s or {},
+    )
+    ocr_engine_count_violations = ocr_engine_count_budget_violations(
+        rows,
+        max_ocr_engine_count or {},
+    )
     repeat_ocr_engine_p95_violations = repeat_ocr_engine_p95_budget_violations(
         repeat_profile,
         max_repeat_ocr_engine_p95_duration_s or {},
@@ -1594,6 +1642,8 @@ def build_latency_budget_summary(
             not primary_violations
             and not repeat_violations
             and not repeat_p95_violations
+            and not ocr_engine_violations
+            and not ocr_engine_count_violations
             and not repeat_ocr_engine_p95_violations
             and not repeat_ocr_engine_count_p95_violations
         ),
@@ -1605,6 +1655,18 @@ def build_latency_budget_summary(
     if max_repeat_profile_p95_duration_s is not None:
         summary["max_repeat_profile_p95_duration_s"] = round(float(max_repeat_profile_p95_duration_s), 6)
         summary["repeat_p95_violations"] = repeat_p95_violations
+    if max_ocr_engine_duration_s:
+        summary["max_ocr_engine_duration_s"] = {
+            metric: round(float(seconds), 6)
+            for metric, seconds in sorted(max_ocr_engine_duration_s.items())
+        }
+        summary["ocr_engine_violations"] = ocr_engine_violations
+    if max_ocr_engine_count:
+        summary["max_ocr_engine_count"] = {
+            metric: round(float(count), 6)
+            for metric, count in sorted(max_ocr_engine_count.items())
+        }
+        summary["ocr_engine_count_violations"] = ocr_engine_count_violations
     if max_repeat_ocr_engine_p95_duration_s:
         summary["max_repeat_ocr_engine_p95_duration_s"] = {
             metric: round(float(seconds), 6)
@@ -1763,6 +1825,121 @@ def repeat_ocr_engine_p95_budget_violations(
                 }
             )
     return violations
+
+
+def ocr_engine_duration_budget_violations(
+    rows: list[dict[str, Any]],
+    budgets: dict[str, float],
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for row in rows:
+        for metric, budget in sorted(budgets.items()):
+            duration_s = row_ocr_engine_metric(row, metric)
+            if duration_s is None:
+                violations.append(
+                    ocr_engine_budget_missing_violation(
+                        row,
+                        metric=metric,
+                        kind="ocr_engine_duration_missing",
+                        budget_key="max_ocr_engine_duration_s",
+                        budget=budget,
+                    )
+                )
+                continue
+            if duration_s > budget:
+                violation = ocr_engine_budget_base_violation(
+                    row,
+                    kind="ocr_engine_duration_budget_exceeded",
+                    metric=metric,
+                )
+                violation.update(
+                    {
+                        "duration_s": round(duration_s, 6),
+                        "max_ocr_engine_duration_s": round(float(budget), 6),
+                        "excess_s": round(duration_s - budget, 6),
+                    }
+                )
+                violations.append(violation)
+    return violations
+
+
+def ocr_engine_count_budget_violations(
+    rows: list[dict[str, Any]],
+    budgets: dict[str, float],
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for row in rows:
+        for metric, budget in sorted(budgets.items()):
+            count = row_ocr_engine_metric(row, metric)
+            if count is None:
+                violations.append(
+                    ocr_engine_budget_missing_violation(
+                        row,
+                        metric=metric,
+                        kind="ocr_engine_count_missing",
+                        budget_key="max_ocr_engine_count",
+                        budget=budget,
+                    )
+                )
+                continue
+            if count > budget:
+                violation = ocr_engine_budget_base_violation(
+                    row,
+                    kind="ocr_engine_count_budget_exceeded",
+                    metric=metric,
+                )
+                violation.update(
+                    {
+                        "count": round(count, 6),
+                        "max_ocr_engine_count": round(float(budget), 6),
+                        "excess_count": round(count - budget, 6),
+                    }
+                )
+                violations.append(violation)
+    return violations
+
+
+def row_ocr_engine_metric(row: dict[str, Any], metric: str) -> float | None:
+    profile = row.get("ocr_engine_profile")
+    if not isinstance(profile, dict):
+        return None
+    parsed = parse_nonnegative_float(profile.get(metric))
+    if parsed is not None:
+        return parsed
+    detail_profile = slowest_ocr_engine_detail_profile(profile)
+    if detail_profile is None:
+        return None
+    return parse_nonnegative_float(detail_profile.get(metric))
+
+
+def ocr_engine_budget_missing_violation(
+    row: dict[str, Any],
+    *,
+    metric: str,
+    kind: str,
+    budget_key: str,
+    budget: float,
+) -> dict[str, Any]:
+    violation = ocr_engine_budget_base_violation(row, kind=kind, metric=metric)
+    violation[budget_key] = round(float(budget), 6)
+    return violation
+
+
+def ocr_engine_budget_base_violation(
+    row: dict[str, Any],
+    *,
+    kind: str,
+    metric: str,
+) -> dict[str, Any]:
+    violation: dict[str, Any] = {
+        "kind": kind,
+        "slug": row.get("slug"),
+        "metric": metric,
+    }
+    observed_status = row.get("observed_status")
+    if observed_status is not None:
+        violation["observed_status"] = observed_status
+    return violation
 
 
 def repeat_ocr_engine_count_p95_budget_violations(
@@ -2092,6 +2269,10 @@ def print_stress_table(report: dict[str, Any]) -> None:
             suffix = f" total<={budget_text}" if isinstance(budget, (int, float)) else ""
             print(f"latency budget: passed{suffix}")
         else:
+            ocr_engine = latency_budget.get("ocr_engine_violations")
+            ocr_engine_count = len(ocr_engine) if isinstance(ocr_engine, list) else 0
+            ocr_engine_counts = latency_budget.get("ocr_engine_count_violations")
+            ocr_engine_count_budget_count = len(ocr_engine_counts) if isinstance(ocr_engine_counts, list) else 0
             repeat_ocr_engine = latency_budget.get("repeat_ocr_engine_p95_violations")
             repeat_ocr_engine_count = len(repeat_ocr_engine) if isinstance(repeat_ocr_engine, list) else 0
             repeat_ocr_engine_counts = latency_budget.get("repeat_ocr_engine_count_p95_violations")
@@ -2107,6 +2288,8 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"primary={len(latency_budget.get('primary_violations', []))} "
                 f"repeat={len(latency_budget.get('repeat_violations', []))} "
                 f"repeat_p95={repeat_p95_count} "
+                f"ocr_engine={ocr_engine_count} "
+                f"ocr_engine_count={ocr_engine_count_budget_count} "
                 f"repeat_ocr_engine_p95={repeat_ocr_engine_count} "
                 f"repeat_ocr_engine_count_p95={repeat_ocr_engine_count_budget_count}"
             )
@@ -2122,6 +2305,34 @@ def print_stress_table(report: dict[str, Any]) -> None:
                         )
                     elif issue.get("kind") == "repeat_profile_p95_missing":
                         print("   - repeat profile p95 metric missing")
+            if isinstance(ocr_engine, list):
+                for issue in ocr_engine[:6]:
+                    if not isinstance(issue, dict):
+                        continue
+                    metric = issue.get("metric")
+                    slug = issue.get("slug")
+                    if issue.get("kind") == "ocr_engine_duration_budget_exceeded":
+                        print(
+                            "   - "
+                            f"{slug}: {metric} primary OCR engine {float(issue['duration_s']):.3f}s "
+                            f"> budget {float(issue['max_ocr_engine_duration_s']):.3f}s"
+                        )
+                    elif issue.get("kind") == "ocr_engine_duration_missing":
+                        print(f"   - {slug}: {metric} primary OCR engine metric missing")
+            if isinstance(ocr_engine_counts, list):
+                for issue in ocr_engine_counts[:6]:
+                    if not isinstance(issue, dict):
+                        continue
+                    metric = issue.get("metric")
+                    slug = issue.get("slug")
+                    if issue.get("kind") == "ocr_engine_count_budget_exceeded":
+                        print(
+                            "   - "
+                            f"{slug}: {metric} primary OCR engine count {float(issue['count']):.1f} "
+                            f"> budget {float(issue['max_ocr_engine_count']):.1f}"
+                        )
+                    elif issue.get("kind") == "ocr_engine_count_missing":
+                        print(f"   - {slug}: {metric} primary OCR engine count metric missing")
             if isinstance(repeat_ocr_engine, list):
                 for issue in repeat_ocr_engine[:6]:
                     if not isinstance(issue, dict):

@@ -13922,3 +13922,23 @@ with zero failures in 0.531s.
   not erase the prior cold strict failure; it gives future R&D a clean switch
   for measuring cold upload risk separately from production-warmed instance
   latency.
+- Extended the stress latency budget with primary OCR-engine duration and
+  count guards, complementing the existing repeat-profile p95 OCR guards. The
+  new `--max-ocr-engine-duration-s METRIC=SECONDS` and
+  `--max-ocr-engine-count METRIC=COUNT` flags fail rows with missing profiled
+  primary OCR metrics, report per-slug violations, and make it possible to
+  catch a first scored upload whose total runtime stays subsecond only because
+  non-OCR stages happen to be quiet. Focused validation passed
+  `PYTHONPATH=. .venv/bin/python -m pytest tests/test_stress_benchmark.py`
+  (`53` tests; installed `pytest` into the local `.venv` because the current
+  venv lacked it). The full production-prewarmed 16-case hard gate
+  `out/stress-prewarm-runtime-full16-primaryocr-20260602/stress-summary.json`
+  passed with OCR and extraction caches disabled and both primary and repeat
+  OCR budgets enabled: `16/16` expected, primary max `0.674659s`, primary OCR
+  engine total max `0.561938s` under `0.65s`, primary selected-box max `30`
+  under `30`, analyzed repeat p95 `0.540037s`, repeat OCR `total_s` p95
+  `0.456209s` under `0.6s`, repeat selected-box p95 `26.25` under `30`,
+  and stable signatures for all `16` cases. This does not change runtime
+  behavior; it tightens the gate around the current OCR tail so future speed
+  probes cannot pass by hiding a primary OCR regression behind aggregate
+  subsecond totals.
