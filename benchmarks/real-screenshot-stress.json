@@ -118,6 +118,18 @@
       }
     },
     {
+      "slug": "los-angeles-waymo",
+      "image": "/Users/ethanmckanna/Downloads/LA.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "city_equals": "Los Angeles",
+        "min_control_points": 10
+      }
+    },
+    {
       "slug": "houston-waymo",
       "image": "/Users/ethanmckanna/Downloads/h-waymo.png",
       "no_catalog": true,
@@ -127,6 +139,42 @@
         "source_prefix": "ocr-georeference:",
         "city_equals": "Houston",
         "min_control_points": 8
+      }
+    },
+    {
+      "slug": "orlando-waymo",
+      "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "city_equals": "Orlando",
+        "min_control_points": 5
+      }
+    },
+    {
+      "slug": "nashville-waymo",
+      "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "city_equals": "Nashville",
+        "min_control_points": 3
+      }
+    },
+    {
+      "slug": "houston-robotaxi-gray",
+      "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "city_equals": "Houston",
+        "min_control_points": 3
       }
     },
     {

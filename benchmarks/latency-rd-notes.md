@@ -12305,3 +12305,26 @@ with zero failures in 0.531s.
   `0.120945s`/`0.200528s`, and OCR median/max `0.407988s`/`0.783848s`.
   This is the current cleanest local warm-instance arbitrary-screenshot
   latency proof.
+- Expanded the real-screenshot stress manifest from 12 to 16 cases after a
+  candidate sweep over remaining local Downloads screenshots. Promoted four
+  non-duplicate, expectation-worthy arbitrary no-catalog cases: Los Angeles
+  Waymo (`/Users/ethanmckanna/Downloads/LA.png`, city `Los Angeles`, 19
+  controls in the probe), Orlando Waymo (`waymo-o.png`, city `Orlando`, 5
+  controls), Nashville Waymo (`waymo-n.webp`, city `Nashville`, 3 controls,
+  road-refined fit), and a gray-fill Houston Robotaxi/Tesla-style map
+  (`h-robotaxi.jpeg`, city `Houston`, 3 controls). The candidate sweep
+  `out/stress-candidates-fresh-cache-20260602/stress-summary.json` completed
+  `6/8` loose expectations; duplicate Avride Dallas and larger Zoox SF variants
+  were not promoted because existing stress rows already cover those shapes,
+  and two non-map/low-map-evidence images were left out rather than weakening
+  the manifest with noisy irrelevant failures. The official expanded-manifest
+  proof `out/stress-expanded16-fresh-cache-final-20260602/stress-summary.json`
+  disabled both OCR and extraction caches, passed `16/16` expectations with
+  statuses `{"complete": 14, "failed": 2}`, and kept every primary row
+  subsecond: max `0.938739s`, OCR max `0.814s` on
+  `zoox-las-vegas-mobile-tall`, extraction max `0.234s` on `bay-area-waymo`,
+  and georeference max `0.114s` on `los-angeles-waymo`. The analyzed repeat
+  profile also passed `16/16`, with `16/16` subsecond, median `0.502s`, and
+  max `0.812s`. This broadens arbitrary screenshot coverage across LA,
+  Orlando, Nashville, and gray-fill Houston while preserving the strict
+  fresh-cache subsecond local proof.
