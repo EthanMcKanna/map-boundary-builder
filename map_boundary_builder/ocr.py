@@ -121,6 +121,19 @@ RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS = (
     "label_confidence_p90",
     "label_confidence_max",
 )
+RAPIDOCR_PROFILE_CONTEXT_KEYS = (
+    "input_kind",
+    "input_shape",
+    "scale_x",
+    "scale_y",
+    "detector_limit",
+    "detector_limit_type",
+    "recognition_profile",
+    "rec_batch_num",
+    "min_text_area",
+    "classifier_retry",
+    "header_region_filter",
+)
 RAPIDOCR_HEADER_REGION_FILTER_MIN_BOXES = 24
 RAPIDOCR_HEADER_REGION_FILTER_MIN_HEADER_BOXES = 8
 RAPIDOCR_HEADER_REGION_FILTER_MIN_SELECTED_BOXES = 10
@@ -182,7 +195,11 @@ def summarize_rapidocr_profile_events(events: list[dict[str, Any]] | None) -> di
         total = sum_rapidocr_profile_int(call.get(key) for call in calls)
         if total is not None:
             summary[key] = total
-    copy_single_rapidocr_profile_values(summary, calls, RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
+    copy_single_rapidocr_profile_values(
+        summary,
+        calls,
+        (*RAPIDOCR_PROFILE_CONTEXT_KEYS, *RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS),
+    )
     summary["calls_detail"] = calls
     return summary
 
@@ -202,7 +219,11 @@ def summarize_rapidocr_profile_summaries(profiles: list[dict[str, Any]]) -> dict
         total = sum_rapidocr_profile_int(profile.get(key) for profile in profiles)
         if total is not None:
             summary[key] = total
-    copy_single_rapidocr_profile_values(summary, profiles, RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
+    copy_single_rapidocr_profile_values(
+        summary,
+        profiles,
+        (*RAPIDOCR_PROFILE_CONTEXT_KEYS, *RAPIDOCR_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS),
+    )
     return summary
 
 

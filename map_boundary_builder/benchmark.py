@@ -2382,6 +2382,19 @@ OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS = (
     "label_confidence_p90",
     "label_confidence_max",
 )
+OCR_ENGINE_PROFILE_CONTEXT_KEYS = (
+    "input_kind",
+    "input_shape",
+    "scale_x",
+    "scale_y",
+    "detector_limit",
+    "detector_limit_type",
+    "recognition_profile",
+    "rec_batch_num",
+    "min_text_area",
+    "classifier_retry",
+    "header_region_filter",
+)
 PREWARM_STAGE_DURATION_KEYS = ("catalog_s", "seed_s", "extraction_s", "rapidocr_s", "total_s")
 PREWARM_STAGE_DURATION_ALIASES = {
     "total_elapsed_s": "total_s",
@@ -2399,7 +2412,11 @@ def summarize_ocr_engine_profile_events(events: list[dict[str, Any]] | None) -> 
         total = sum_profile_int(call.get(key) for call in calls)
         if total is not None:
             summary[key] = total
-    copy_single_ocr_engine_profile_values(summary, calls, OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
+    copy_single_ocr_engine_profile_values(
+        summary,
+        calls,
+        (*OCR_ENGINE_PROFILE_CONTEXT_KEYS, *OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS),
+    )
     summary["calls_detail"] = calls
     return summary
 
@@ -2424,7 +2441,11 @@ def summarize_ocr_engine_profile_summaries(profiles: list[dict[str, Any]]) -> di
         total = sum_profile_int(profile.get(key) for profile in profiles)
         if total is not None:
             summary[key] = total
-    copy_single_ocr_engine_profile_values(summary, profiles, OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS)
+    copy_single_ocr_engine_profile_values(
+        summary,
+        profiles,
+        (*OCR_ENGINE_PROFILE_CONTEXT_KEYS, *OCR_ENGINE_PROFILE_CONFIDENCE_DISTRIBUTION_KEYS),
+    )
     return summary
 
 

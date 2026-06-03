@@ -8,6 +8,7 @@ import pytest
 
 import map_boundary_builder.stress_benchmark as stress_module
 from map_boundary_builder.extract import EXTRACTION_CACHE_ENV
+from map_boundary_builder.ocr import summarize_rapidocr_profile_events
 from map_boundary_builder.runner import RUNNER_OCR_CACHE_ENV
 
 
@@ -553,6 +554,77 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
     assert "total=0.300s@kept shape=607x1000 kind=array" in output
     assert "primary ocr slowest cases: kept ocr=0.300s" in output
     assert "primary ocr slowest cases: " in output and "shape=607x1000 kind=array" in output
+
+
+def test_summarize_rapidocr_profile_events_copies_single_call_context() -> None:
+    summary = summarize_rapidocr_profile_events(
+        [
+            {
+                "input_s": 0.02,
+                "det_elapsed_s": 0.12,
+                "rec_elapsed_s": 0.18,
+                "total_s": 0.34,
+                "input_kind": "array",
+                "input_shape": [1400, 1400],
+                "scale_x": 0.5,
+                "scale_y": 0.5,
+                "detector_limit": 256,
+                "detector_limit_type": "max",
+                "recognition_profile": "en-ppocrv5",
+                "rec_batch_num": 8,
+                "min_text_area": 2300.0,
+                "classifier_retry": False,
+                "header_region_filter": True,
+                "raw_box_count": 16,
+                "selected_box_count": 7,
+                "label_confidence_p50": 98.4,
+            }
+        ]
+    )
+
+    assert summary == {
+        "calls": 1,
+        "input_s": 0.02,
+        "det_elapsed_s": 0.12,
+        "rec_elapsed_s": 0.18,
+        "total_s": 0.34,
+        "raw_box_count": 16,
+        "selected_box_count": 7,
+        "input_kind": "array",
+        "input_shape": [1400, 1400],
+        "scale_x": 0.5,
+        "scale_y": 0.5,
+        "detector_limit": 256,
+        "detector_limit_type": "max",
+        "recognition_profile": "en-ppocrv5",
+        "rec_batch_num": 8,
+        "min_text_area": 2300.0,
+        "classifier_retry": False,
+        "header_region_filter": True,
+        "label_confidence_p50": 98.4,
+        "calls_detail": [
+            {
+                "input_s": 0.02,
+                "det_elapsed_s": 0.12,
+                "rec_elapsed_s": 0.18,
+                "total_s": 0.34,
+                "input_kind": "array",
+                "input_shape": [1400, 1400],
+                "scale_x": 0.5,
+                "scale_y": 0.5,
+                "detector_limit": 256,
+                "detector_limit_type": "max",
+                "recognition_profile": "en-ppocrv5",
+                "rec_batch_num": 8,
+                "min_text_area": 2300.0,
+                "classifier_retry": False,
+                "header_region_filter": True,
+                "raw_box_count": 16,
+                "selected_box_count": 7,
+                "label_confidence_p50": 98.4,
+            }
+        ],
+    }
 
 
 def test_compare_stress_reports_records_signature_and_latency_delta() -> None:

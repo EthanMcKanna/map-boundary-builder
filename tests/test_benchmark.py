@@ -3786,6 +3786,17 @@ def test_in_process_full_fixture_can_record_ocr_engine_profile(tmp_path: Path, m
         def __enter__(self):
             self.events = [
                 {
+                    "input_kind": "array",
+                    "input_shape": [1400, 1400],
+                    "scale_x": 0.5,
+                    "scale_y": 0.5,
+                    "detector_limit": 256,
+                    "detector_limit_type": "max",
+                    "recognition_profile": "en-ppocrv5",
+                    "rec_batch_num": 8,
+                    "min_text_area": 2300.0,
+                    "classifier_retry": False,
+                    "header_region_filter": True,
                     "det_elapsed_s": 0.32,
                     "rec_elapsed_s": 0.21,
                     "raw_box_count": 30,
@@ -3839,6 +3850,17 @@ def test_in_process_full_fixture_can_record_ocr_engine_profile(tmp_path: Path, m
     assert score.passed is True
     assert score.ocr_engine_profile == {
         "calls": 1,
+        "input_kind": "array",
+        "input_shape": [1400, 1400],
+        "scale_x": 0.5,
+        "scale_y": 0.5,
+        "detector_limit": 256,
+        "detector_limit_type": "max",
+        "recognition_profile": "en-ppocrv5",
+        "rec_batch_num": 8,
+        "min_text_area": 2300.0,
+        "classifier_retry": False,
+        "header_region_filter": True,
         "det_elapsed_s": 0.32,
         "rec_elapsed_s": 0.21,
         "raw_box_count": 30,
@@ -3846,6 +3868,17 @@ def test_in_process_full_fixture_can_record_ocr_engine_profile(tmp_path: Path, m
         "label_count": 16,
         "calls_detail": [
             {
+                "input_kind": "array",
+                "input_shape": [1400, 1400],
+                "scale_x": 0.5,
+                "scale_y": 0.5,
+                "detector_limit": 256,
+                "detector_limit_type": "max",
+                "recognition_profile": "en-ppocrv5",
+                "rec_batch_num": 8,
+                "min_text_area": 2300.0,
+                "classifier_retry": False,
+                "header_region_filter": True,
                 "det_elapsed_s": 0.32,
                 "rec_elapsed_s": 0.21,
                 "raw_box_count": 30,

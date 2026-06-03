@@ -17000,3 +17000,20 @@ with zero failures in 0.531s.
   passed `108 passed in 0.29s`, the full suite passed
   `684 passed, 31 subtests passed in 6.34s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Rechecked the next OCR-tail lane and kept dark-teal full-frame text-area
+  filtering closed. Current full-gate tails still show Grand Rapids May
+  Mobility on a default dark-teal OCR path with `min_text_area=0.0`, but the
+  notes already have multiple concrete rejections where adding a dark-teal area
+  filter preserved narrow rows while making Grand Rapids fail or pay retries.
+  Instead, the profiler now copies single-call OCR context (`input_kind`,
+  `input_shape`, detector limit/type, recognition profile, recognition batch,
+  `min_text_area`, classifier/header-filter flags) into row-level
+  `ocr_engine_profile` summaries and the generic benchmark profiler. A real
+  two-case focused gate at `out/ocr-context-summary-smoke-20260603` passed
+  `2/2` with primary max `0.452s`, repeat p95 `0.305s`, and first-class saved
+  row evidence: `grand-rapids-may-mobility array [1012,1280] 608/default
+  default rec_batch=8 min_area=0.0 header_filter=true` and `dallas-waymo array
+  [1400,1400] 256/max en-ppocrv5 rec_batch=12 min_area=2300.0`. Focused
+  benchmark/stress tests passed `198 passed in 0.64s`, the full suite passed
+  `685 passed, 31 subtests passed in 6.00s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.
