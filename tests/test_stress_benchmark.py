@@ -1592,6 +1592,55 @@ def test_compare_stress_reports_rebuilds_repeat_hidden_overlap_from_samples() ->
     assert stage_delta["max_duration_s"]["delta_s"] == 0.02
 
 
+def test_compare_stress_reports_rebuilds_primary_stage_deltas_from_rows() -> None:
+    baseline = {
+        "summary": {"total": 2},
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.4,
+                "stages": {"extract": 0.1, "ocr": 0.22, "georeference": 0.08},
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "stages": {"extract": 0.12, "ocr": 0.28, "georeference": 0.1},
+            },
+        ],
+    }
+    candidate = {
+        "summary": {"total": 2},
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.43,
+                "stages": {"extract": 0.09, "ocr": 0.26, "georeference": 0.08},
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.47,
+                "stages": {"extract": 0.11, "ocr": 0.27, "georeference": 0.09},
+            },
+        ],
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["stage_duration_delta_s"] == {
+        "extract": {"baseline": 0.22, "candidate": 0.2, "delta_s": -0.02},
+        "ocr": {"baseline": 0.5, "candidate": 0.53, "delta_s": 0.03},
+        "georeference": {"baseline": 0.18, "candidate": 0.17, "delta_s": -0.01},
+    }
+    assert (
+        stress_module.baseline_primary_stage_delta_text(comparison)
+        == "extract=-0.020s, ocr=+0.030s, georeference=-0.010s"
+    )
+
+
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     report = {
         "summary": {

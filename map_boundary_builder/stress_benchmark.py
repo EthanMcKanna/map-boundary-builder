@@ -1797,13 +1797,9 @@ def stress_stage_duration_total_deltas(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
 ) -> dict[str, dict[str, float]]:
-    baseline_summary = baseline_report.get("summary")
-    candidate_summary = candidate_report.get("summary")
-    if not isinstance(baseline_summary, dict) or not isinstance(candidate_summary, dict):
-        return {}
-    baseline_stage = baseline_summary.get("stage_duration_s")
-    candidate_stage = candidate_summary.get("stage_duration_s")
-    if not isinstance(baseline_stage, dict) or not isinstance(candidate_stage, dict):
+    baseline_stage = stress_report_primary_stage_duration_totals(baseline_report)
+    candidate_stage = stress_report_primary_stage_duration_totals(candidate_report)
+    if not baseline_stage or not candidate_stage:
         return {}
     shared_stages = {
         stage
@@ -1812,10 +1808,63 @@ def stress_stage_duration_total_deltas(
     }
     deltas: dict[str, dict[str, float]] = {}
     for stage in sorted(shared_stages, key=pipeline_stage_sort_key):
-        metric_delta = stress_scalar_delta(baseline_stage, candidate_stage, stage, delta_key="delta_s")
+        metric_delta = stress_scalar_delta(
+            baseline_stage,
+            candidate_stage,
+            stage,
+            delta_key="delta_s",
+        )
         if metric_delta is not None:
             deltas[stage] = metric_delta
     return deltas
+
+
+def stress_report_primary_stage_duration_totals(report: dict[str, Any]) -> dict[str, float]:
+    summary = report.get("summary")
+    if isinstance(summary, dict):
+        summary_totals = stress_flat_stage_duration_totals(summary.get("stage_duration_s"))
+        if summary_totals:
+            return summary_totals
+    rows = report.get("rows")
+    if not isinstance(rows, list):
+        return {}
+    stage_totals: dict[str, float] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        stages = row.get("stages")
+        if not isinstance(stages, dict):
+            continue
+        for stage, elapsed_s in stages.items():
+            if not isinstance(stage, str) or not stage:
+                continue
+            parsed = parse_nonnegative_float(elapsed_s)
+            if parsed is None:
+                continue
+            stage_totals[stage] = stage_totals.get(stage, 0.0) + parsed
+    return {
+        stage: round(elapsed_s, 6)
+        for stage, elapsed_s in sorted(
+            stage_totals.items(),
+            key=lambda item: pipeline_stage_sort_key(item[0]),
+        )
+    }
+
+
+def stress_flat_stage_duration_totals(value: Any) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    totals: dict[str, float] = {}
+    for stage, elapsed_s in value.items():
+        if not isinstance(stage, str) or not stage:
+            continue
+        parsed = parse_nonnegative_float(elapsed_s)
+        if parsed is not None:
+            totals[stage] = round(parsed, 6)
+    return {
+        stage: totals[stage]
+        for stage in sorted(totals, key=pipeline_stage_sort_key)
+    }
 
 
 def stress_nested_metric_deltas(

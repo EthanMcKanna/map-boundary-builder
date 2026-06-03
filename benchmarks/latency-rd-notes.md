@@ -17508,3 +17508,15 @@ with zero failures in 0.531s.
   `export=-0.006s`, and `inspect=+0.005s`, which explains why the apparent
   repeat-profile win was not a runtime default worth shipping. This is
   benchmark feedback-loop reliability only; no runtime default changed.
+- Made primary aggregate pipeline-stage deltas rebuild from row-level `stages`
+  when older or partial saved reports omit `summary.stage_duration_s`. This is
+  the primary-report counterpart to the repeat-profile fallback above: reports
+  with authoritative row timings should not lose `baseline primary stage delta`
+  just because their summary block is sparse. Focused stress tests passed
+  (`134 passed in 0.37s`) and the full suite passed (`710 passed, 31 subtests
+  passed in 5.80s`). A saved-report proof stripped `stage_duration_s` from both
+  `out/current-v11-full49-hard-rerun-20260603` and
+  `out/full49-bright-blue-det240-20260603`, then rebuilt the exact same primary
+  stage deltas: `extract=+0.016358s`, `ocr=+0.148557s`,
+  `georeference=+0.020202s`, `export=-0.006254s`, and `inspect=+0.005400s`.
+  This is benchmark feedback-loop reliability only; no runtime default changed.
