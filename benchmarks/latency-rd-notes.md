@@ -16788,3 +16788,19 @@ with zero failures in 0.531s.
   lines for primary total, primary OCR, repeat p95, and repeat OCR p95; the
   saved JSON still recorded all 12 violations. This is benchmark feedback-loop
   reliability only; no runtime deploy is needed.
+- Added per-fixture leader rows to repeat-profile reports and CLI output.
+  `repeat_profile.summary.slowest_cases` now ranks case summaries by
+  per-slug total-latency p95/max, and
+  `repeat_profile.summary.ocr_engine_slowest_cases` ranks per-slug OCR engine
+  total p95/max while carrying rec/det p95 and selected-box p95/max context.
+  This makes the next latency experiment target visible without manually
+  scraping `repeat_profile.cases`. Focused stress benchmark tests passed
+  `103 passed in 0.28s`, the full suite passed `679 passed in 6.80s`, and
+  `git diff --check` was clean. A focused real-screenshot gate at
+  `out/repeat-case-leaders-focused-20260603` passed `4/4` expectations with
+  repeat p95 `0.358s`, max `0.379s`, and printed
+  `repeat slowest cases: tesla-austin-route-receipt-long p95=0.376s max=0.379s`
+  plus OCR leader `tesla-austin-route-receipt-long` with `ocr_p95=0.338s`,
+  `ocr_max=0.340s`, `rec_p95=0.248s`, `det_p95=0.077s`, and
+  `selected_p95=29.0`. This is benchmark feedback-loop reliability only; no
+  runtime deploy is needed.

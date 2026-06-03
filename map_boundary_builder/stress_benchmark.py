@@ -2639,10 +2639,12 @@ def summarize_repeat_profile_samples(
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
             "slowest_samples": repeat_profile_slowest_samples(analyzed_samples),
+            "slowest_cases": repeat_profile_slowest_cases(case_summaries),
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
             "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
             "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
             "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
+            "ocr_engine_slowest_cases": repeat_profile_ocr_engine_slowest_cases(case_summaries),
         },
         "cases": case_summaries,
         "samples": samples,
@@ -2779,6 +2781,117 @@ def repeat_profile_slowest_samples(
         repeat_profile_slowest_sample_summary(sample, total_elapsed_s)
         for total_elapsed_s, sample in ranked[: max(0, limit)]
     ]
+
+
+def repeat_profile_slowest_cases(
+    case_summaries: dict[str, dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, float, str, dict[str, Any]]] = []
+    for slug, summary in case_summaries.items():
+        if not isinstance(summary, dict):
+            continue
+        p95_total = parse_nonnegative_float(summary.get("p95_total_elapsed_s"))
+        max_total = parse_nonnegative_float(summary.get("max_total_elapsed_s"))
+        if p95_total is None:
+            continue
+        ranked.append((p95_total, max_total or p95_total, slug, summary))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    return [
+        repeat_profile_slowest_case_summary(slug, summary, p95_total, max_total)
+        for p95_total, max_total, slug, summary in ranked[: max(0, limit)]
+    ]
+
+
+def repeat_profile_slowest_case_summary(
+    slug: str,
+    summary: dict[str, Any],
+    p95_total: float,
+    max_total: float,
+) -> dict[str, Any]:
+    result = {
+        "slug": slug,
+        "p95_total_elapsed_s": round(p95_total, 6),
+        "max_total_elapsed_s": round(max_total, 6),
+    }
+    for key in ("samples", "analyzed_samples", "expectation_passed_samples", "unexpected_samples"):
+        value = summary.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            result[key] = value
+    return result
+
+
+def repeat_profile_ocr_engine_slowest_cases(
+    case_summaries: dict[str, dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, float, str, dict[str, Any]]] = []
+    for slug, summary in case_summaries.items():
+        if not isinstance(summary, dict):
+            continue
+        total_stats = repeat_profile_case_ocr_engine_metric(summary, "total_s")
+        if total_stats is None:
+            continue
+        p95_total = parse_nonnegative_float(total_stats.get("p95_duration_s"))
+        max_total = parse_nonnegative_float(total_stats.get("max_duration_s"))
+        if p95_total is None:
+            continue
+        ranked.append((p95_total, max_total or p95_total, slug, summary))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    return [
+        repeat_profile_ocr_engine_slowest_case_summary(slug, summary, p95_total, max_total)
+        for p95_total, max_total, slug, summary in ranked[: max(0, limit)]
+    ]
+
+
+def repeat_profile_ocr_engine_slowest_case_summary(
+    slug: str,
+    summary: dict[str, Any],
+    p95_total: float,
+    max_total: float,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "slug": slug,
+        "p95_total_s": round(p95_total, 6),
+        "max_total_s": round(max_total, 6),
+    }
+    rec_stats = repeat_profile_case_ocr_engine_metric(summary, "rec_elapsed_s")
+    if rec_stats is not None:
+        rec_p95 = parse_nonnegative_float(rec_stats.get("p95_duration_s"))
+        if rec_p95 is not None:
+            result["p95_rec_elapsed_s"] = round(rec_p95, 6)
+    det_stats = repeat_profile_case_ocr_engine_metric(summary, "det_elapsed_s")
+    if det_stats is not None:
+        det_p95 = parse_nonnegative_float(det_stats.get("p95_duration_s"))
+        if det_p95 is not None:
+            result["p95_det_elapsed_s"] = round(det_p95, 6)
+    count_stats = repeat_profile_case_ocr_engine_count_metric(summary, "selected_box_count")
+    if count_stats is not None:
+        selected_p95 = parse_nonnegative_float(count_stats.get("p95_count"))
+        selected_max = parse_nonnegative_float(count_stats.get("max_count"))
+        if selected_p95 is not None:
+            result["p95_selected_box_count"] = round(selected_p95, 6)
+        if selected_max is not None:
+            result["max_selected_box_count"] = round(selected_max, 6)
+    return result
+
+
+def repeat_profile_case_ocr_engine_metric(summary: dict[str, Any], metric: str) -> dict[str, Any] | None:
+    stage_stats = summary.get("ocr_engine_stage_duration_s")
+    if not isinstance(stage_stats, dict):
+        return None
+    metric_stats = stage_stats.get(metric)
+    return metric_stats if isinstance(metric_stats, dict) else None
+
+
+def repeat_profile_case_ocr_engine_count_metric(summary: dict[str, Any], metric: str) -> dict[str, Any] | None:
+    count_stats = summary.get("ocr_engine_count_metric")
+    if not isinstance(count_stats, dict):
+        return None
+    metric_stats = count_stats.get(metric)
+    return metric_stats if isinstance(metric_stats, dict) else None
 
 
 def repeat_profile_slowest_sample_summary(
@@ -4119,6 +4232,24 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 )
                 if slow_text:
                     print(f"repeat slowest: {slow_text}")
+            slowest_cases = repeat_summary.get("slowest_cases")
+            if isinstance(slowest_cases, list) and slowest_cases:
+                slow_case_text = ", ".join(
+                    repeat_profile_slow_case_text(case)
+                    for case in slowest_cases[:5]
+                    if isinstance(case, dict)
+                )
+                if slow_case_text:
+                    print(f"repeat slowest cases: {slow_case_text}")
+            ocr_slowest_cases = repeat_summary.get("ocr_engine_slowest_cases")
+            if isinstance(ocr_slowest_cases, list) and ocr_slowest_cases:
+                ocr_slow_case_text = ", ".join(
+                    repeat_profile_ocr_engine_slow_case_text(case)
+                    for case in ocr_slowest_cases[:5]
+                    if isinstance(case, dict)
+                )
+                if ocr_slow_case_text:
+                    print(f"repeat ocr slowest cases: {ocr_slow_case_text}")
             unstable_signature_cases = repeat_summary.get("unstable_signature_cases")
             if isinstance(unstable_signature_cases, list) and unstable_signature_cases:
                 print(
@@ -4203,6 +4334,42 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
         if parts:
             ocr_text = " " + " ".join(parts)
     return f"{slug}{repeat_text}={elapsed_text}{stage_text}{ocr_text}"
+
+
+def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:
+    slug = case.get("slug") or "-"
+    p95_total = parse_nonnegative_float(case.get("p95_total_elapsed_s"))
+    max_total = parse_nonnegative_float(case.get("max_total_elapsed_s"))
+    parts = [str(slug)]
+    if p95_total is not None:
+        parts.append(f"p95={p95_total:.3f}s")
+    if max_total is not None:
+        parts.append(f"max={max_total:.3f}s")
+    unexpected = case.get("unexpected_samples")
+    if isinstance(unexpected, int) and unexpected:
+        parts.append(f"unexpected={unexpected}")
+    return " ".join(parts)
+
+
+def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
+    slug = case.get("slug") or "-"
+    p95_total = parse_nonnegative_float(case.get("p95_total_s"))
+    max_total = parse_nonnegative_float(case.get("max_total_s"))
+    p95_rec = parse_nonnegative_float(case.get("p95_rec_elapsed_s"))
+    p95_det = parse_nonnegative_float(case.get("p95_det_elapsed_s"))
+    p95_selected = parse_nonnegative_float(case.get("p95_selected_box_count"))
+    parts = [str(slug)]
+    if p95_total is not None:
+        parts.append(f"ocr_p95={p95_total:.3f}s")
+    if max_total is not None:
+        parts.append(f"ocr_max={max_total:.3f}s")
+    if p95_rec is not None:
+        parts.append(f"rec_p95={p95_rec:.3f}s")
+    if p95_det is not None:
+        parts.append(f"det_p95={p95_det:.3f}s")
+    if p95_selected is not None:
+        parts.append(f"selected_p95={p95_selected:.1f}")
+    return " ".join(parts)
 
 
 def repeat_profile_ocr_engine_count_metric_text(ocr_engine_counts: dict[str, Any]) -> str:
