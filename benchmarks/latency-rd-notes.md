@@ -16446,3 +16446,18 @@ with zero failures in 0.531s.
   `{"complete":38,"failed":11}`, prewarm `1.060s`, primary max `0.405s`,
   repeat p95 `0.366s`, repeat max `0.410s`, repeat OCR-engine p95 `0.303s`,
   stable signatures, and all manifest latency/OCR-count contracts.
+- Derived API run-cache generation env defaults from the shared
+  `GENERATION_ENV_DEFAULTS` table, with explicit exclusions only for non-output
+  keys (`MAP_BOUNDARY_CACHE_DIR`, `MAP_BOUNDARY_EXTRACTION_CACHE`), values
+  already represented in the cache key (`MAP_BOUNDARY_PIPELINE_VERSION`), and
+  OCR knobs covered by `ocr_runtime_config()`. This keeps current cache-key
+  behavior stable while making future generation env knobs cache-keyed by
+  default instead of silently relying on a duplicated API table. Validation
+  passed with `git diff --check`, focused API/runtime/benchmark/stress tests
+  (`262 passed in 0.96s`), the full suite (`657 passed, 31 subtests passed in
+  8.09s`), and the full real-screenshot hard gate at
+  `out/shared-generation-env-cache-full49-hard-20260603`: `49/49`, statuses
+  `{"complete":38,"failed":11}`, prewarm `0.931s`, primary max `0.509s`
+  (Dallas detector spike, still within budget), repeat p95 `0.351s`, repeat max
+  `0.415s`, repeat OCR-engine p95 `0.310s`, stable signatures, and all manifest
+  latency/OCR-count contracts.

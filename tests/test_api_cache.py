@@ -489,6 +489,27 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(defaults["MAP_BOUNDARY_GEOCODE_WORKERS"], "6")
         self.assertEqual(changed["MAP_BOUNDARY_GEOCODE_WORKERS"], "1")
 
+    def test_run_cache_generation_env_defaults_derive_from_shared_runtime_defaults(self) -> None:
+        expected_exclusions = {
+            "MAP_BOUNDARY_CACHE_DIR",
+            "MAP_BOUNDARY_EXTRACTION_CACHE",
+            "MAP_BOUNDARY_GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
+            "MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
+            "MAP_BOUNDARY_PIPELINE_VERSION",
+            "MAP_BOUNDARY_RAPIDOCR_GRAY_FILL_MAX_DIMENSION",
+            "MAP_BOUNDARY_SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION",
+        }
+        expected_defaults = {
+            name: default
+            for name, default in api_index.GENERATION_ENV_DEFAULTS.items()
+            if name not in expected_exclusions
+        }
+
+        self.assertEqual(api_index.RUN_RESULT_RUNTIME_ENV_EXCLUDED_DEFAULTS, expected_exclusions)
+        self.assertEqual(api_index.RUN_RESULT_RUNTIME_ENV_DEFAULTS, expected_defaults)
+        self.assertIn("MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION", api_index.RUN_RESULT_RUNTIME_ENV_DEFAULTS)
+        self.assertIn("MAP_BOUNDARY_GEOCODE_WORKERS", api_index.RUN_RESULT_RUNTIME_ENV_DEFAULTS)
+
     def test_run_cache_key_uses_decoded_pixels(self) -> None:
         first = BytesIO()
         second = BytesIO()
