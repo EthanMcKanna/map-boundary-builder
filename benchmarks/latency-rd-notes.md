@@ -16133,3 +16133,23 @@ with zero failures in 0.531s.
   recognition confidence further to `label_confidence_lt_90_count=3`. Keep
   `PROFILE_APP_UI_OCR_MAX_DIMENSION=1000`; the smaller caps preserve the final
   non-map UI rejection but weaken OCR quality evidence.
+- Added work-volume and confidence-count contracts for the remaining unbounded
+  no-catalog Waymo OCR rows rather than revisiting rejected rescue/aspect
+  filters. Current notes already show that the rescued small wide boxes on
+  LA/Bay/Houston/Orlando/Miami are mostly real labels, so this pass locks
+  Dallas Waymo (`16/7/7/7`), San Antonio Waymo (`22/14/14/14`), Bay Area
+  JPEG-small (`22/16/16/16`), Houston Waymo (`22/17/17/17`), and Nashville
+  Waymo (`14/11/11/11`) to their current raw/selected/result/label counts plus
+  zero labels below `90` confidence. The focused validation at
+  `out/waymo-remaining-count-contract-focused-20260603` passed `5/5`, primary
+  max `0.515481s`, repeat `10/10` expected/subsecond, repeat p95 `0.460s`,
+  repeat max `0.491s`, repeat OCR-engine p95 `0.380s`, raw/selected/result/label
+  p95/max `22`/`17`/`17`/`17`, and `label_confidence_lt_90_count` p95/max
+  `0`/`0`. The full hard gate at
+  `out/waymo-remaining-count-contract-full49-hard-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, primary max `0.583846s`, repeat
+  `98/98` expected/subsecond, repeat p95 `0.467s`, repeat max `0.506s`, repeat
+  OCR-engine p95 `0.404s`, repeat OCR-engine max `0.444s`, full-suite
+  `label_confidence_lt_90_count` p95/max `2.2`/`3`, prewarm `1.182s`, and
+  stable repeat signatures. This completes row-level OCR work-volume locks for
+  the current no-catalog Waymo OCR set; no runtime deploy is needed.
