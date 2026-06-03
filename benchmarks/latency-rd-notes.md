@@ -16409,3 +16409,40 @@ with zero failures in 0.531s.
   `0.316s`, repeat max `0.400s`, repeat OCR-engine p95 `0.270s`, and all
   manifest latency/OCR-count contracts. This reduces health/cron warmup CPU
   without weakening the actual large-map OCR path.
+- Rejected lowering the generic/default RapidOCR synthetic warm sample below
+  `608`. A matched 12-row default/dark/route-control subset at
+  `out/generic-warm608-control-focused-20260603` passed `12/12`, statuses
+  `{"complete":7,"failed":5}`, prewarm `1.855s`, primary max `0.445s`, repeat
+  p95 `0.403s`, repeat max `0.573s`, and repeat OCR-engine p95 `0.367s`.
+  Lowering only `MAP_BOUNDARY_RAPIDOCR_WARM_SAMPLE_MAX_DIMENSION` to `512` at
+  `out/generic-warm512-focused-20260603` cut prewarm to `1.246s`, but failed
+  the latency/behavior gate (`9/12`, three primary rows above `1s`, repeat p95
+  `0.993s`, repeat max `1.447s`, and an Ann Arbor repeat expectation miss).
+  The conservative `576` probe at `out/generic-warm576-focused-20260603` still
+  failed (`11/12`, Zoox SF service-area primary `1.077s`) and did not improve
+  prewarm (`1.855s`, `rapidocr_s=1.705s`). Keep the generic warm sample at
+  `608`; it is carrying real first-primary stability for default and dark-teal
+  OCR engines.
+- Rejected lowering the light-fill route-UI OCR cap from `1000` to `950`.
+  The matched six-route control at `out/route-ui-light-cap1000-control-20260603`
+  passed `6/6`, OCR stage total `1.165s`, primary max `0.419s`, repeat p95
+  `0.418s`, and repeat OCR-engine p95 `0.388s`. The `950` override at
+  `out/route-ui-light-cap950-focused-20260603` failed `5/6`: the primary
+  `tesla-austin-route-receipt` row exceeded its locked raw-box contract
+  (`30 > 28`), two repeats for the same row were unexpected, OCR stage total
+  worsened to `1.229s`, and repeat OCR-engine p95 stayed roughly tied at
+  `0.388s`. Keep light-fill route UI at `1000`; the earlier `900` cliff and
+  this `950` probe both show the active/receipt evidence is too sensitive for a
+  smaller light-fill cap.
+- Added the active PPOCRv5 recognition-asset signature to OCR cache keys and
+  runtime health/config payloads. This is a cache-correctness hardening for
+  `en-ppocrv5`: changing custom/bundled recognition model or key files now
+  changes cached OCR/run-result keys instead of relying only on the profile
+  label. The exposed signature is an opaque path/stat digest, not raw filesystem
+  paths. Validation passed with `git diff --check`, focused OCR/API/pipeline
+  tests (`236 passed in 0.90s`), the full suite (`656 passed, 31 subtests
+  passed in 7.97s`), and the full real-screenshot hard gate at
+  `out/ppocrv5-asset-signature-full49-hard-20260603`: `49/49`, statuses
+  `{"complete":38,"failed":11}`, prewarm `1.060s`, primary max `0.405s`,
+  repeat p95 `0.366s`, repeat max `0.410s`, repeat OCR-engine p95 `0.303s`,
+  stable signatures, and all manifest latency/OCR-count contracts.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.resources as importlib_resources
 import os
 from pathlib import Path
@@ -429,6 +430,22 @@ def rapidocr_english_ppocrv5_assets_available() -> bool:
     return asset_paths is not None and all(path.is_file() for path in asset_paths)
 
 
+def rapidocr_english_ppocrv5_asset_signature() -> str:
+    asset_paths = rapidocr_english_ppocrv5_asset_paths()
+    if asset_paths is None:
+        return "missing"
+    digest = hashlib.sha256()
+    for path in asset_paths:
+        digest.update(str(path).encode("utf-8", errors="surrogateescape"))
+        try:
+            stat = path.stat()
+        except OSError:
+            digest.update(b":missing")
+            continue
+        digest.update(f":{stat.st_size}:{stat.st_mtime_ns}".encode("ascii"))
+    return f"ppocrv5-assets-{digest.hexdigest()[:16]}"
+
+
 def rapidocr_bright_blue_recognition_assets_available() -> bool:
     profile = RAPIDOCR_BRIGHT_BLUE_RECOGNITION_PROFILE.strip().lower()
     if profile in {"", "default", "ppocrv4", "ch-ppocrv4"}:
@@ -443,6 +460,12 @@ def rapidocr_bright_blue_effective_recognition_profile() -> str:
     if profile in {"en-ppocrv5", "ppocrv5-en", "v5-en"} and rapidocr_english_ppocrv5_assets_available():
         return "en-ppocrv5"
     return "default"
+
+
+def rapidocr_bright_blue_recognition_asset_signature() -> str:
+    if rapidocr_bright_blue_effective_recognition_profile() != "en-ppocrv5":
+        return ""
+    return rapidocr_english_ppocrv5_asset_signature()
 
 
 def ocr_runtime_config() -> dict[str, Any]:
@@ -473,6 +496,9 @@ def ocr_runtime_config() -> dict[str, Any]:
         ),
         "rapidocr_bright_blue_effective_recognition_profile": (
             rapidocr_bright_blue_effective_recognition_profile()
+        ),
+        "rapidocr_bright_blue_recognition_asset_signature": (
+            rapidocr_bright_blue_recognition_asset_signature()
         ),
         "rapidocr_large_image_detector_limit_min_dimension": RAPIDOCR_LARGE_IMAGE_DET_LIMIT_MIN_DIMENSION,
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,

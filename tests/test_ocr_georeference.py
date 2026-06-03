@@ -899,6 +899,10 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertTrue(config["rapidocr_bright_blue_recognition_assets_available"])
         self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "en-ppocrv5")
+        self.assertRegex(
+            config["rapidocr_bright_blue_recognition_asset_signature"],
+            r"^ppocrv5-assets-[0-9a-f]{16}$",
+        )
 
     def test_runtime_config_prefers_bundled_v5_recognition_assets(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -949,6 +953,7 @@ class OcrGroupingTests(unittest.TestCase):
 
         self.assertFalse(config["rapidocr_bright_blue_recognition_assets_available"])
         self.assertEqual(config["rapidocr_bright_blue_effective_recognition_profile"], "default")
+        self.assertEqual(config["rapidocr_bright_blue_recognition_asset_signature"], "")
 
     def test_runtime_config_reports_bright_blue_full_detail_retry_cap(self) -> None:
         with patch.object(runtime_config_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500):
@@ -1008,6 +1013,25 @@ class OcrGroupingTests(unittest.TestCase):
                     (rec_model, rec_keys),
                 )
                 self.assertTrue(runtime_config_module.rapidocr_english_ppocrv5_assets_available())
+
+    def test_runtime_config_v5_recognition_asset_signature_tracks_asset_metadata(self) -> None:
+        with TemporaryDirectory() as workdir:
+            rec_model = Path(workdir) / "rec.onnx"
+            rec_keys = Path(workdir) / "keys.txt"
+            rec_model.write_bytes(b"model")
+            rec_keys.write_text("a\nb\n", encoding="utf-8")
+
+            with (
+                patch.object(runtime_config_module, "RAPIDOCR_EN_PPOCRV5_REC_MODEL_PATH", str(rec_model)),
+                patch.object(runtime_config_module, "RAPIDOCR_EN_PPOCRV5_REC_KEYS_PATH", str(rec_keys)),
+            ):
+                first = runtime_config_module.rapidocr_english_ppocrv5_asset_signature()
+                rec_keys.write_text("a\nb\nc\n", encoding="utf-8")
+                second = runtime_config_module.rapidocr_english_ppocrv5_asset_signature()
+
+        self.assertRegex(first, r"^ppocrv5-assets-[0-9a-f]{16}$")
+        self.assertRegex(second, r"^ppocrv5-assets-[0-9a-f]{16}$")
+        self.assertNotEqual(first, second)
 
     def test_ocr_cache_key_depends_on_fast_text_rescue_filter(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -1393,6 +1417,26 @@ class OcrGroupingTests(unittest.TestCase):
                 key_24 = ocr_cache_key(image_path, use_tesseract=False)
 
         self.assertNotEqual(key_6, key_24)
+
+    def test_ocr_cache_key_depends_on_ppocrv5_recognition_asset_signature(self) -> None:
+        with TemporaryDirectory() as workdir:
+            image_path = Path(workdir) / "input.png"
+            Image.new("RGB", (20, 10), (255, 255, 255)).save(image_path)
+
+            with patch.object(ocr_module, "rapidocr_english_ppocrv5_asset_signature", return_value="asset-a"):
+                key_a = ocr_cache_key(
+                    image_path,
+                    use_tesseract=False,
+                    rapidocr_recognition_profile="en-ppocrv5",
+                )
+            with patch.object(ocr_module, "rapidocr_english_ppocrv5_asset_signature", return_value="asset-b"):
+                key_b = ocr_cache_key(
+                    image_path,
+                    use_tesseract=False,
+                    rapidocr_recognition_profile="en-ppocrv5",
+                )
+
+        self.assertNotEqual(key_a, key_b)
 
     def test_ocr_cache_key_depends_on_rapidocr_classifier_retry_threshold(self) -> None:
         with TemporaryDirectory() as workdir:

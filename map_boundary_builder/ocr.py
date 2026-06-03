@@ -47,6 +47,7 @@ from .runtime_config import (
     RAPIDOCR_REC_BATCH_NUM,
     TESSERACT_FALLBACK_MIN_USEFUL_LABELS,
     rapidocr_english_ppocrv5_asset_paths,
+    rapidocr_english_ppocrv5_asset_signature,
     rapidocr_warm_detector_limits,
 )
 
@@ -929,6 +930,12 @@ def effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num: int | None = None) 
     return max(1, int(rapidocr_rec_batch_num))
 
 
+def rapidocr_recognition_profile_asset_signature(rapidocr_recognition_profile: str) -> str:
+    if rapidocr_recognition_profile != RAPIDOCR_RECOGNITION_PROFILE_EN_PPOCRV5:
+        return ""
+    return rapidocr_english_ppocrv5_asset_signature()
+
+
 def ocr_cache_key_for_digest(
     digest_kind: str,
     digest: str,
@@ -946,12 +953,14 @@ def ocr_cache_key_for_digest(
     effective_detector_limit_type = normalized_rapidocr_detector_limit_type(rapidocr_detector_limit_type)
     effective_recognition_profile = normalized_rapidocr_recognition_profile(rapidocr_recognition_profile)
     effective_rec_batch_num = effective_rapidocr_rec_batch_num(rapidocr_rec_batch_num)
+    recognition_asset_signature = rapidocr_recognition_profile_asset_signature(effective_recognition_profile)
     return hashlib.sha256(
         (
             f"{OCR_CACHE_VERSION}:{engine}:rapidocr-max-dim={effective_max_dimension}:"
             f"rapidocr-det-limit-override={effective_rapidocr_detector_limit_override(rapidocr_detector_limit_side_len)}:"
             f"rapidocr-det-limit-type-override={effective_detector_limit_type}:"
             f"rapidocr-recognition-profile={effective_recognition_profile}:"
+            f"rapidocr-recognition-asset={recognition_asset_signature}:"
             f"rapidocr-det-limit={RAPIDOCR_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-large-det-limit={RAPIDOCR_LARGE_IMAGE_DET_LIMIT_SIDE_LEN}:"
             f"rapidocr-bright-blue-det-limit={RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN}:"

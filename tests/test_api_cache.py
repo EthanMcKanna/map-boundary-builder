@@ -1376,6 +1376,7 @@ class ApiRunCacheTests(unittest.TestCase):
             cold["ocr"]["rapidocr_bright_blue_effective_recognition_profile"],
             {"default", "en-ppocrv5"},
         )
+        self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_asset_signature"], str)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_rec_batch_num"], 16)
         self.assertEqual(cold["ocr"]["current_catalog_label_ocr_max_dimension"], 875)
