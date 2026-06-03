@@ -42,7 +42,10 @@ OCR_ENGINE_DETAIL_CONTEXT_KEYS = (
     "detector_limit",
     "detector_limit_type",
     "recognition_profile",
+    "rec_batch_num",
     "min_text_area",
+    "classifier_retry",
+    "header_region_filter",
 )
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
@@ -3086,7 +3089,25 @@ def repeat_profile_ocr_engine_slowest_case_summary(
             result["p95_selected_box_area_lt_1300_count"] = round(small_area_p95, 6)
         if small_area_max is not None:
             result["max_selected_box_area_lt_1300_count"] = round(small_area_max, 6)
+    result.update(repeat_profile_ocr_engine_context(summary))
     return result
+
+
+def repeat_profile_ocr_engine_context(summary: dict[str, Any]) -> dict[str, Any]:
+    stage_max_rows = summary.get("ocr_engine_stage_max_rows")
+    if not isinstance(stage_max_rows, dict):
+        return {}
+    row = stage_max_rows.get("total_s")
+    if not isinstance(row, dict):
+        row = next((value for value in stage_max_rows.values() if isinstance(value, dict)), None)
+    if not isinstance(row, dict):
+        return {}
+    context: dict[str, Any] = {}
+    for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS:
+        value = row.get(key)
+        if value is not None:
+            context[key] = value
+    return context
 
 
 def repeat_profile_case_ocr_engine_metric(summary: dict[str, Any], metric: str) -> dict[str, Any] | None:
@@ -4108,6 +4129,63 @@ def repeat_profile_slowest_samples_include_input_kind(samples: list[dict[str, An
     return False
 
 
+def repeat_profile_ocr_engine_slowest_cases_include_detail_context(cases: list[dict[str, Any]]) -> bool:
+    return any(
+        any(case.get(key) is not None for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS)
+        for case in cases
+        if isinstance(case, dict)
+    )
+
+
+def repeat_profile_ocr_engine_slowest_cases_include_recent_context(cases: list[dict[str, Any]]) -> bool:
+    recent_keys = ("rec_batch_num", "classifier_retry", "header_region_filter")
+    return any(
+        any(case.get(key) is not None for key in recent_keys)
+        for case in cases
+        if isinstance(case, dict)
+    )
+
+
+def rebuilt_repeat_profile_ocr_engine_slowest_cases(repeat_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    repeat_samples = repeat_profile.get("samples")
+    if not isinstance(repeat_samples, list):
+        return []
+    runs_per_case = repeat_profile.get("runs_per_case")
+    warmup_runs_per_case = repeat_profile.get("warmup_runs_per_case")
+    rebuilt = summarize_repeat_profile_samples(
+        [sample for sample in repeat_samples if isinstance(sample, dict)],
+        runs_per_case=(
+            runs_per_case
+            if isinstance(runs_per_case, int) and not isinstance(runs_per_case, bool)
+            else 0
+        ),
+        warmup_runs_per_case=(
+            warmup_runs_per_case
+            if isinstance(warmup_runs_per_case, int) and not isinstance(warmup_runs_per_case, bool)
+            else 0
+        ),
+    )
+    rebuilt_summary = rebuilt.get("summary")
+    if not isinstance(rebuilt_summary, dict):
+        return []
+    rebuilt_cases = rebuilt_summary.get("ocr_engine_slowest_cases")
+    return rebuilt_cases if isinstance(rebuilt_cases, list) else []
+
+
+def should_use_rebuilt_repeat_ocr_slowest_cases(
+    current_cases: list[dict[str, Any]],
+    rebuilt_cases: list[dict[str, Any]],
+) -> bool:
+    if not repeat_profile_ocr_engine_slowest_cases_include_detail_context(rebuilt_cases):
+        return False
+    if not repeat_profile_ocr_engine_slowest_cases_include_detail_context(current_cases):
+        return True
+    return (
+        not repeat_profile_ocr_engine_slowest_cases_include_recent_context(current_cases)
+        and repeat_profile_ocr_engine_slowest_cases_include_recent_context(rebuilt_cases)
+    )
+
+
 def ocr_engine_stage_max_rows_include_input_kind(max_rows: Any) -> bool:
     if not isinstance(max_rows, dict):
         return False
@@ -4561,6 +4639,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
                     print(f"repeat slowest cases: {slow_case_text}")
             ocr_slowest_cases = repeat_summary.get("ocr_engine_slowest_cases")
             if isinstance(ocr_slowest_cases, list) and ocr_slowest_cases:
+                rebuilt_ocr_slowest_cases = rebuilt_repeat_profile_ocr_engine_slowest_cases(repeat_profile)
+                if should_use_rebuilt_repeat_ocr_slowest_cases(ocr_slowest_cases, rebuilt_ocr_slowest_cases):
+                    ocr_slowest_cases = rebuilt_ocr_slowest_cases
                 ocr_slow_case_text = ", ".join(
                     repeat_profile_ocr_engine_slow_case_text(case)
                     for case in ocr_slowest_cases[:5]
@@ -4857,6 +4938,26 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"rec_p95={p95_rec:.3f}s")
     if p95_det is not None:
         parts.append(f"det_p95={p95_det:.3f}s")
+    shape_text = ocr_engine_input_shape_text(case.get("input_shape"))
+    if shape_text:
+        parts.append(f"shape={shape_text}")
+    input_kind = case.get("input_kind")
+    if isinstance(input_kind, str) and input_kind:
+        parts.append(f"kind={input_kind}")
+    detector_limit = case.get("detector_limit")
+    if isinstance(detector_limit, int) and not isinstance(detector_limit, bool):
+        detector_type = case.get("detector_limit_type")
+        type_suffix = f"/{detector_type}" if isinstance(detector_type, str) and detector_type else ""
+        parts.append(f"det_limit={detector_limit}{type_suffix}")
+    recognition_profile = case.get("recognition_profile")
+    if isinstance(recognition_profile, str) and recognition_profile:
+        parts.append(f"rec_profile={recognition_profile}")
+    rec_batch_num = case.get("rec_batch_num")
+    if isinstance(rec_batch_num, int) and not isinstance(rec_batch_num, bool):
+        parts.append(f"rec_batch={rec_batch_num}")
+    min_text_area = parse_nonnegative_float(case.get("min_text_area"))
+    if min_text_area is not None:
+        parts.append(f"min_area={min_text_area:.0f}")
     if p95_selected is not None:
         parts.append(f"selected_p95={p95_selected:.1f}")
     if p95_small_selected is not None:

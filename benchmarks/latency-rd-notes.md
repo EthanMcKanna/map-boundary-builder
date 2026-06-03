@@ -17017,3 +17017,21 @@ with zero failures in 0.531s.
   benchmark/stress tests passed `198 passed in 0.64s`, the full suite passed
   `685 passed, 31 subtests passed in 6.00s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Preserved the new OCR context on repeat-profile OCR slow-case summaries and
+  made old saved reports printable with the richer context by rebuilding that
+  line from raw repeat samples when the stored snippet predates the detail
+  fields. The fresh full hard gate at
+  `out/ocr-context-full49-hard-20260603` passed `49/49` with primary max
+  `0.452s`, repeat median/p95/max `0.171s/0.314s/0.344s`, and repeat OCR
+  p95 leaders now explain their path directly in the CLI: `los-angeles-waymo`
+  was `1400x1400 kind=array det_limit=256/max rec_profile=en-ppocrv5
+  rec_batch=12 min_area=2300`, while `tesla-austin-route-receipt-long` was
+  `639x1000 kind=array det_limit=608/default rec_profile=default
+  rec_batch=12 min_area=1500`. Replaying the saved report through the updated
+  printer now shows the same context for the top five repeat OCR tails, which
+  points the next speed work at bright-blue detector/recognizer tails and the
+  route-UI recognizer tail instead of another blind broad filter experiment.
+  Focused stress benchmark tests passed `109 passed in 0.59s`, the full suite
+  passed `685 passed, 31 subtests passed in 6.72s`, and `git diff --check`
+  was clean. This is benchmark feedback-loop reliability only; no runtime
+  deploy is needed.

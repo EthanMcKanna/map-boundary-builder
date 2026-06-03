@@ -364,6 +364,13 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                         "p95_input_s": 0.02,
                         "p95_rec_elapsed_s": 0.12,
                         "p95_det_elapsed_s": 0.07,
+                        "input_kind": "array",
+                        "input_shape": [1000, 607],
+                        "detector_limit": 608,
+                        "detector_limit_type": "default",
+                        "recognition_profile": "default",
+                        "rec_batch_num": 12,
+                        "min_text_area": 500.0,
                         "p95_selected_box_count": 12.0,
                         "p95_selected_box_area_lt_1300_count": 5.0,
                     }
@@ -421,6 +428,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
         "input_p95=0.020s rec_p95=0.120s det_p95=0.070s "
+        "shape=607x1000 kind=array det_limit=608/default rec_profile=default rec_batch=12 min_area=500 "
         "selected_p95=12.0 sel_lt1300_p95=5.0"
     ) in output
     assert "repeat ocr engine: input=p95 0.020s max 0.020s" in output
@@ -488,6 +496,16 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
                         },
                     }
                 ],
+                "ocr_engine_slowest_cases": [
+                    {
+                        "slug": "kept",
+                        "p95_total_s": 0.3,
+                        "max_total_s": 0.3,
+                        "p95_input_s": 0.02,
+                        "p95_rec_elapsed_s": 0.12,
+                        "p95_det_elapsed_s": 0.07,
+                    }
+                ],
             },
             "samples": [
                 {
@@ -501,12 +519,20 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
                         "total_s": 0.3,
                         "input_s": 0.02,
                         "rec_elapsed_s": 0.12,
+                        "det_elapsed_s": 0.07,
                         "calls_detail": [
                             {
                                 "total_s": 0.3,
                                 "input_s": 0.02,
                                 "rec_elapsed_s": 0.12,
+                                "det_elapsed_s": 0.07,
                                 "input_kind": "array",
+                                "input_shape": [1000, 607],
+                                "detector_limit": 608,
+                                "detector_limit_type": "default",
+                                "recognition_profile": "default",
+                                "rec_batch_num": 12,
+                                "min_text_area": 500.0,
                             }
                         ],
                     },
@@ -554,6 +580,11 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
     assert "total=0.300s@kept shape=607x1000 kind=array" in output
     assert "primary ocr slowest cases: kept ocr=0.300s" in output
     assert "primary ocr slowest cases: " in output and "shape=607x1000 kind=array" in output
+    assert (
+        "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
+        "input_p95=0.020s rec_p95=0.120s det_p95=0.070s "
+        "shape=607x1000 kind=array det_limit=608/default rec_profile=default rec_batch=12 min_area=500"
+    ) in output
 
 
 def test_summarize_rapidocr_profile_events_copies_single_call_context() -> None:
@@ -2708,6 +2739,9 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "p95_det_elapsed_s": 0.08,
             "p95_selected_box_count": 3,
             "max_selected_box_count": 3,
+            "input_kind": "array",
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
         }
     ]
     assert repeat_profile["summary"]["ocr_engine_profile"] == {
@@ -5050,6 +5084,19 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
                 "rec_elapsed_s": {"p95_duration_s": 0.43, "max_duration_s": 0.45},
                 "total_s": {"p95_duration_s": 0.62, "max_duration_s": 0.72},
             },
+            "ocr_engine_stage_max_rows": {
+                "total_s": {
+                    "slug": "slow",
+                    "elapsed_s": 0.72,
+                    "input_kind": "array",
+                    "input_shape": [900, 1200],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "rec_batch_num": 8,
+                    "min_text_area": 1500.0,
+                }
+            },
             "ocr_engine_count_metric": {
                 "selected_box_count": {"p95_count": 37.0, "max_count": 38.0},
                 "selected_box_area_lt_1300_count": {"p95_count": 21.0, "max_count": 22.0},
@@ -5077,6 +5124,13 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "p95_input_s": 0.04,
             "p95_rec_elapsed_s": 0.43,
             "p95_det_elapsed_s": 0.12,
+            "input_kind": "array",
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "detector_limit_type": "default",
+            "recognition_profile": "default",
+            "rec_batch_num": 8,
+            "min_text_area": 1500.0,
             "p95_selected_box_count": 37.0,
             "max_selected_box_count": 38.0,
             "p95_selected_box_area_lt_1300_count": 21.0,
@@ -5091,7 +5145,9 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     assert (
         stress_module.repeat_profile_ocr_engine_slow_case_text(ocr_cases[0])
         == "slow ocr_p95=0.620s ocr_max=0.720s input_p95=0.040s "
-        "rec_p95=0.430s det_p95=0.120s selected_p95=37.0 sel_lt1300_p95=21.0"
+        "rec_p95=0.430s det_p95=0.120s shape=1200x900 kind=array "
+        "det_limit=608/default rec_profile=default rec_batch=8 min_area=1500 "
+        "selected_p95=37.0 sel_lt1300_p95=21.0"
     )
 
 
