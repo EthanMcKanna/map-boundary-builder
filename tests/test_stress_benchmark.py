@@ -434,6 +434,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["missing_in_baseline"] == ["candidate-only"]
     assert comparison["missing_in_candidate"] == ["baseline-only"]
     assert comparison["signature_change_count"] == 1
+    assert comparison["signature_changes"][0]["changed_fields"] == ["city"]
     assert stress_module.baseline_comparison_signature_drift_cases(
         {"baseline_comparison": comparison}
     ) == ["houston"]
@@ -503,6 +504,7 @@ def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
     assert comparison["signature_change_count"] == 1
     change = comparison["signature_changes"][0]
     assert change["slug"] == "route-ui"
+    assert change["changed_fields"] == ["route_metric_labels", "route_ui_categories"]
     assert change["baseline"]["route_ui_categories"] == ["dropoff", "pickup", "plate", "receipt"]
     assert change["candidate"]["route_ui_categories"] == ["dropoff", "pickup", "receipt"]
     assert change["baseline"]["route_metric_labels"] == ["8 08 mi 32 min License Plate XFY5869"]
@@ -521,7 +523,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "compared_rows": 2,
             "missing_in_baseline": ["new"],
             "missing_in_candidate": [],
-            "signature_changes": [{"slug": "houston"}],
+            "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
             "candidate_scope": {
                 "baseline_rows_outside_candidate_scope_count": 3,
@@ -551,7 +553,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
-    assert "signature drift: houston" in output
+    assert "signature drift: houston fields=city,control_points" in output
 
 
 def test_run_stress_benchmark_can_attach_baseline_comparison(tmp_path, monkeypatch) -> None:

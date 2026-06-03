@@ -16711,3 +16711,15 @@ with zero failures in 0.531s.
   and now exposes route metric-label drift for the active-later and active-dark
   rows directly in the baseline/candidate signatures. This is harness
   reliability only; no runtime deploy is needed.
+- Added `changed_fields` metadata to each baseline signature drift record and
+  printed those fields beside the first five `signature drift` CLI rows. This
+  keeps future focused A/B failures from requiring a manual JSON diff just to
+  learn whether a candidate changed bbox, city inference, OCR labels, route UI
+  evidence, or non-map rejection evidence. Focused stress benchmark tests
+  passed `100 passed in 0.29s`, the full suite passed `676 passed in 5.71s`,
+  and `git diff --check` was clean. A direct real-report comparison of
+  `out/route-recbatch12-control-20260603` against
+  `out/route-recbatch8-candidate-20260603` still found six compared rows and
+  four signature changes; the new metadata identified two `ocr_top_labels`-only
+  drifts and two rows where both `ocr_top_labels` and `route_metric_labels`
+  changed. This is harness reliability only; no runtime deploy is needed.

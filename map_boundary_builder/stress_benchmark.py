@@ -724,6 +724,10 @@ def compare_stress_reports(
             signature_changes.append(
                 {
                     "slug": slug,
+                    "changed_fields": stress_signature_changed_fields(
+                        baseline_signature,
+                        candidate_signature,
+                    ),
                     "baseline": baseline_signature,
                     "candidate": candidate_signature,
                 }
@@ -847,6 +851,18 @@ def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | N
         seen.add(value)
         slugs.append(value)
     return slugs
+
+
+def stress_signature_changed_fields(
+    baseline_signature: dict[str, Any],
+    candidate_signature: dict[str, Any],
+) -> list[str]:
+    fields = sorted(set(baseline_signature) | set(candidate_signature))
+    return [
+        field
+        for field in fields
+        if baseline_signature.get(field) != candidate_signature.get(field)
+    ]
 
 
 def stress_scalar_delta(
@@ -3576,7 +3592,13 @@ def print_stress_table(report: dict[str, Any]) -> None:
             for change in signature_changes[:5]:
                 if not isinstance(change, dict):
                     continue
-                print(f"   - signature drift: {change.get('slug')}")
+                fields = change.get("changed_fields")
+                fields_text = (
+                    f" fields={','.join(fields)}"
+                    if isinstance(fields, list) and all(isinstance(field, str) for field in fields)
+                    else ""
+                )
+                print(f"   - signature drift: {change.get('slug')}{fields_text}")
     if summary.get("stage_duration_s"):
         stage_total_text = ", ".join(
             f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()
