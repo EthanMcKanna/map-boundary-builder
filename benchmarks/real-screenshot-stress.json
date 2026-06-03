@@ -49,6 +49,16 @@
         "min_ocr_labels": 3,
         "ocr_top_labels_contain": ["las vegas", "paradise"],
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 3,
+          "selected_box_count": 3,
+          "result_count": 3,
+          "label_count": 2,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
         "max_total_elapsed_s": 1.0
       }
     },
@@ -63,6 +73,16 @@
         "min_ocr_labels": 12,
         "ocr_top_labels_contain": ["las vegas", "paradise", "spring mountain"],
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 14,
+          "selected_box_count": 13,
+          "result_count": 12,
+          "label_count": 11,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 2
+        },
         "max_total_elapsed_s": 1.0
       }
     },
@@ -78,6 +98,16 @@
         "route_ui_categories_include": ["pickup", "plate", "ride"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 28,
+          "selected_box_count": 21,
+          "result_count": 21,
+          "label_count": 19,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
         "max_total_elapsed_s": 1.5
       }
     },
@@ -93,6 +123,16 @@
         "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 20,
+          "selected_box_count": 19,
+          "result_count": 19,
+          "label_count": 16,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 1
+        },
         "max_total_elapsed_s": 1.5
       }
     },
@@ -108,6 +148,16 @@
         "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 19,
+          "selected_box_count": 17,
+          "result_count": 17,
+          "label_count": 14,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 1
+        },
         "max_total_elapsed_s": 1.5
       }
     },
@@ -173,6 +223,16 @@
         "route_ui_categories_include": ["pickup", "plate", "ride"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 44,
+          "selected_box_count": 18,
+          "result_count": 18,
+          "label_count": 16,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 1
+        },
         "max_total_elapsed_s": 1.0
       }
     },
@@ -188,6 +248,16 @@
         "non_map_ui_categories_include": ["account", "import", "privacy", "stats", "sync"],
         "min_non_map_ui_labels": 3,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 18,
+          "selected_box_count": 15,
+          "result_count": 15,
+          "label_count": 14,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
         "max_total_elapsed_s": 1.0
       }
     },
@@ -228,6 +298,16 @@
         "min_thematic_map_labels": 1,
         "thematic_map_labels_contain": ["vulnerability index"],
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 6,
+          "selected_box_count": 2,
+          "result_count": 2,
+          "label_count": 2,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
         "max_total_elapsed_s": 1.0
       }
     },

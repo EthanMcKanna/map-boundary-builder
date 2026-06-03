@@ -16279,3 +16279,27 @@ with zero failures in 0.531s.
   `49/49` expected, primary max `0.551366s`, repeat p95 `0.469s`, repeat max
   `0.537s`, repeat OCR-engine p95/max `0.409s`/`0.480s`, manifest contract
   budget passed, and all latency/OCR/prewarm budgets passed.
+- Rejected a current-code RapidOCR recognition batch-size retest on the
+  remaining bright-blue tail. A matched 9-row control at
+  `out/current-brightblue-tail-control-20260603c` was locally noisy but useful
+  as an A/B baseline: primary `7/9`, repeat p95 `1.132s`, and repeat OCR-engine
+  p95 `0.944s`. `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=16` at
+  `out/brightblue-tail-recbatch16-20260603c` improved the primary slice to
+  `9/9`, but did not meet the repeat standard: repeat p95 worsened to `1.155s`
+  and repeat OCR-engine p95 to `0.979s`. Keep the default batch size; no
+  runtime change was made from this noisy probe.
+- Added OCR work-volume and confidence-count contracts for the remaining
+  fail-closed negative controls that depend on OCR evidence but previously only
+  capped OCR calls. The real screenshot manifest now count-caps `20` rows
+  instead of `12`, adding the two Zoox sparse-label negatives, three light-fill
+  Tesla route negatives, the gray active route negative, Tesla Sync non-map UI,
+  and the thematic-map negative. The focused contract-only pass at
+  `out/negative-ocr-count-contracts-contractonly-20260603` passed `8/8`
+  expected with `8/8` count-capped rows, manifest contract budget passed, and
+  max total `0.680816s`. A full hard-gate attempt at
+  `out/real-screenshot-hard-gate-neg-count-contracts-20260603` confirmed the
+  updated contract coverage (`count-capped=20/38`) and manifest contract budget
+  but is rejected as latency evidence because the local RapidOCR prewarm spiked
+  to `6.945s` and many timing budgets failed. The full suite passed `651` tests
+  plus `31` subtests. This is a stress-manifest reliability change only; no
+  runtime deploy is needed.
