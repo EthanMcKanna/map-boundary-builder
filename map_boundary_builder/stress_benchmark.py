@@ -7060,7 +7060,9 @@ def repeat_profile_ocr_engine_count_stats(samples: list[dict[str, Any]]) -> dict
 def repeat_profile_ocr_overlap_hidden_stats(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
     durations = [
         hidden_s
-        for hidden_s in (stress_row_ocr_overlap_hidden_value(sample) for sample in samples)
+        for hidden_s in (
+            stress_row_ocr_overlap_hidden_comparison_value(sample) for sample in samples
+        )
         if hidden_s is not None
     ]
     if not durations:

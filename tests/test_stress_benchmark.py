@@ -3014,6 +3014,79 @@ def test_compare_stress_reports_rebuilds_repeat_hidden_overlap_from_samples() ->
     assert stage_delta["max_duration_s"]["delta_s"] == 0.02
 
 
+def test_baseline_repeat_ocr_hidden_budget_treats_scoped_measured_no_overlap_as_zero() -> None:
+    baseline = {
+        "rows": [
+            {"slug": "bay-3-svg", "observed_status": "complete", "total_elapsed_s": 0.33},
+            {"slug": "other-map", "observed_status": "complete", "total_elapsed_s": 0.41},
+        ],
+        "repeat_profile": {
+            "summary": {"analyzed_samples": 3},
+            "samples": [
+                {
+                    "slug": "bay-3-svg",
+                    "warmup": False,
+                    "total_elapsed_s": 0.30,
+                    "ocr_engine_profile": {"total_s": 0.18},
+                    "stages": {"ocr": 0.24},
+                },
+                {
+                    "slug": "bay-3-svg",
+                    "warmup": False,
+                    "total_elapsed_s": 0.31,
+                    "ocr_engine_profile": {"total_s": 0.19},
+                    "stages": {"ocr": 0.25},
+                },
+                {
+                    "slug": "other-map",
+                    "warmup": False,
+                    "total_elapsed_s": 0.40,
+                    "ocr_engine_profile": {"total_s": 0.30},
+                    "stages": {"ocr": 0.20},
+                },
+            ],
+        },
+    }
+    candidate = {
+        "preset": {"only": ["bay-3-svg"]},
+        "rows": [{"slug": "bay-3-svg", "observed_status": "complete", "total_elapsed_s": 0.29}],
+        "repeat_profile": {
+            "summary": {"analyzed_samples": 2},
+            "samples": [
+                {
+                    "slug": "bay-3-svg",
+                    "warmup": False,
+                    "total_elapsed_s": 0.28,
+                    "ocr_engine_profile": {"total_s": 0.16},
+                    "stages": {"ocr": 0.22},
+                },
+                {
+                    "slug": "bay-3-svg",
+                    "warmup": False,
+                    "total_elapsed_s": 0.29,
+                    "ocr_engine_profile": {"total_s": 0.17},
+                    "stages": {"ocr": 0.23},
+                },
+            ],
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_ocr_overlap_hidden_total_regression_s=0.01,
+    )
+
+    repeat_hidden = comparison["repeat_profile_delta"]["ocr_overlap_hidden_s"]
+    assert repeat_hidden["p95_duration_s"]["baseline"] == 0.0
+    assert repeat_hidden["p95_duration_s"]["candidate"] == 0.0
+    assert repeat_hidden["total_s"]["baseline"] == 0.0
+    assert repeat_hidden["total_s"]["candidate"] == 0.0
+    assert repeat_hidden["total_s"]["delta_s"] == 0.0
+    assert comparison["regression_budget"]["passed"] is True
+    assert comparison["regression_budget"]["violations"] == []
+
+
 def test_compare_stress_reports_rebuilds_primary_stage_deltas_from_rows() -> None:
     baseline = {
         "summary": {"total": 2},

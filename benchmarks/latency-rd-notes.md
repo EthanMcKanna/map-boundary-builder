@@ -18431,3 +18431,17 @@ with zero failures in 0.531s.
   `0.866 -> 0.862`, OCR labels `42 -> 41`, and the bbox shifted by up to about
   `584m`. Since this trades accuracy/stability for a narrow SVG speed win, no
   runtime default changed.
+- Fixed the focused repeat hidden-OCR comparator edge exposed by the rejected
+  SVG label-layer OCR probe. Repeat hidden-overlap summaries now use the same
+  comparison semantics as primary row deltas: if a sample has OCR engine total
+  and OCR stage timing, but the stage fully contains the engine work, the hidden
+  overlap is an explicit `0.0s` rather than missing telemetry. This keeps
+  missing-profile rows strict while letting focused comparisons ignore
+  full-baseline out-of-scope hidden overlap. Replaying
+  `out/svg-label-id-full73-hard-gate-green-20260603/stress-summary.json`
+  against `out/svg-label-layer-default1300-bay3-focused-20260603/stress-summary.json`
+  with a `0.050s` repeat hidden-overlap budget now reports
+  `baseline regression budget: passed repeat_ocr_hidden_total<=0.050s` and a
+  scoped `bay-3-svg` hidden delta of `0.0s -> 0.0s`, with no violations.
+  Targeted comparator tests passed `5 passed`; the full stress benchmark test
+  module passed `151 passed`.
