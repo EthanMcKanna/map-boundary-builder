@@ -16570,3 +16570,14 @@ with zero failures in 0.531s.
   0.85s`), and the full suite (`668 passed, 31 subtests passed in 6.21s`). No
   screenshot hard gate was rerun because this preserves parsed request behavior
   and does not touch extraction or georeferencing.
+- Added the catalog toggles (`allow_catalog`, `no_catalog`) to the browser
+  local-history run-cache settings signature and bumped the local cache namespace
+  to raw `image-to-geojson-v5` / pixel `image-to-geojson-v7`. The server output
+  cache already keys catalog enablement because it can change whether a run
+  returns a catalog match or a no-catalog OCR/georeference result; the browser
+  cache had omitted those fields and could restore a default catalog-enabled
+  history entry for a stricter no-catalog request. Validation passed with
+  `git diff --check`, `node --check map_boundary_builder/web_assets/app.js`,
+  focused API/frontend cache tests (`85 passed in 0.74s`), and the full suite
+  (`668 passed, 31 subtests passed in 6.07s`). No screenshot hard gate was rerun
+  because this only changes browser-local cache admission/keying.

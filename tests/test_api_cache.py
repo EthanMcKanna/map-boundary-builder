@@ -1947,8 +1947,8 @@ class ApiRunCacheTests(unittest.TestCase):
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
-        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v4";', app_js)
-        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v6";', app_js)
+        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v5";', app_js)
+        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v7";', app_js)
         self.assertIn(
             b'const RUN_CACHE_AUTO_CITY_TOKENS = new Set(["auto", "automatic", "autodetect", "detect"]);',
             app_js,
@@ -1976,8 +1976,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(bool_helper, float_helper)
         self.assertLess(float_helper, int_helper)
         self.assertIn(b'const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;', app_js)
+        self.assertIn(b'if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);', app_js)
         self.assertIn(b'if (field === "city") return normalizedRunCacheCity(rawValue);', app_js)
         self.assertIn(b'if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);', app_js)
+        self.assertIn(b'if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(b'if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(b'if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);', app_js)
         self.assertIn(b'if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);', app_js)

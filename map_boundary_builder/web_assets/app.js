@@ -96,13 +96,15 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_RAW_VERSION = "image-to-geojson-v4";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v6";
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v5";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v7";
 const RUN_CACHE_SETTING_FIELDS = [
+  "allow_catalog",
   "city",
   "include_overlay",
   "min_confidence",
   "min_control_points",
+  "no_catalog",
   "simplify_px",
   "source_was_svg",
 ];
@@ -1279,8 +1281,10 @@ function runCacheSettingsSignature(file, formData) {
 
 function normalizedRunCacheSettingValue(field, formData) {
   const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
+  if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "city") return normalizedRunCacheCity(rawValue);
   if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
+  if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);
   if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
   if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);
   if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);
