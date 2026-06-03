@@ -16527,3 +16527,15 @@ with zero failures in 0.531s.
   `{"complete":38,"failed":11}`, primary max `0.532s`, repeat p95 `0.413s`,
   repeat max `0.534s`, repeat OCR-engine p95 `0.376s`, and all manifest
   latency/OCR-count contracts.
+- Normalized API city hints so UI/client placeholder values such as `Auto`,
+  `automatic`, and `Auto-detect` are treated as no city hint instead of literal
+  geocoding targets. This came from a production smoke where the same Dallas
+  upload failed with `city=Auto` but completed when the city field was omitted;
+  preserving the auto/no-hint path keeps catalog matching and OCR-inferred city
+  context available for generic clients. Validation passed with focused API
+  cache/request tests (`84 passed in 0.76s`), the full suite (`663 passed, 31
+  subtests passed in 7.20s`), and the full hard gate at
+  `out/auto-city-normalization-full49-hard-20260603`: `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.583s`, repeat p95 `0.360s`,
+  repeat max `0.395s`, repeat OCR-engine p95 `0.316s`, and all manifest
+  latency/OCR-count contracts.

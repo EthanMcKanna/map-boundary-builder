@@ -289,7 +289,7 @@ class handler(BaseHTTPRequestHandler):
             "parse_upload_s": elapsed_seconds(request_started),
             "upload_encoding": upload_encoding,
         }
-        city = fields.get("city", "").strip() or None
+        city = city_hint_for_request(fields)
         upload = files.get("image")
         if upload is None:
             raise RequestError(HTTPStatus.BAD_REQUEST, "Image upload is required.")
@@ -985,6 +985,15 @@ def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def city_hint_for_request(fields: dict[str, str]) -> str | None:
+    city = fields.get("city", "").strip()
+    if not city:
+        return None
+    if re.sub(r"[^a-z0-9]+", "", city.lower()) in {"auto", "automatic", "autodetect", "detect"}:
+        return None
+    return city
 
 
 def include_overlay_for_request(fields: dict[str, str], *, catalog_probe_only: bool) -> bool:

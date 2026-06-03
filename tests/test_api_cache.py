@@ -25,6 +25,7 @@ from api.index import (
     cached_payload_satisfies_success_options,
     cached_run_payload,
     cached_run_response_status,
+    city_hint_for_request,
     cron_warm_generation_payload,
     event_stage_elapsed_seconds,
     generation_error_payload,
@@ -1075,6 +1076,51 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(profile["ocr_engine_profile"]["rec_elapsed_s"], 0.3)
         self.assertEqual(profile["ocr_engine_profile"]["raw_box_count"], 4)
         self.assertEqual(profile["ocr_engine_profile"]["selected_box_count"], 2)
+
+    def test_create_run_treats_auto_city_as_no_hint(self) -> None:
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {"city": "Auto", "include_overlay": "0"},
+            {"image": ("Dallas.png", b"image-bytes")},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+        seen: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        def build_boundary_ok(image_path, city, output_path, *, debug_dir, options, progress):
+            seen["city"] = city
+            return SimpleNamespace(
+                summary={"city": "Dallas", "combined_confidence": 0.94, "control_points": 8},
+                geojson={"type": "FeatureCollection", "features": []},
+                overlay_path=None,
+            )
+
+        request.send_json = send_json
+        with (
+            patch("api.index.read_run_result_cache_with_success_fallback", return_value=(None, False)),
+            patch("api.index.write_run_result_cache"),
+            patch("api.index.write_success_run_result_cache_keys"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=build_boundary_ok),
+        ):
+            request.handle_create_run()
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertIsNone(seen["city"])
+        self.assertEqual(payload["summary"]["city"], "Dallas")
+
+    def test_city_hint_for_request_normalizes_auto_placeholders(self) -> None:
+        self.assertIsNone(city_hint_for_request({}))
+        self.assertIsNone(city_hint_for_request({"city": ""}))
+        self.assertIsNone(city_hint_for_request({"city": "Auto"}))
+        self.assertIsNone(city_hint_for_request({"city": "Auto-detect"}))
+        self.assertIsNone(city_hint_for_request({"city": "automatic"}))
+        self.assertEqual(city_hint_for_request({"city": " Dallas "}), "Dallas")
 
     def test_create_run_uses_success_cache_when_thresholds_still_pass(self) -> None:
         image_bytes = b"image-bytes"
