@@ -997,6 +997,18 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         "rec_elapsed_s": 0.07,
         "total_s": 0.15,
     }
+    assert comparison["largest_total_regressions"][0]["baseline_ocr_engine_stage_s"] == {
+        "input_s": 0.03,
+        "det_elapsed_s": 0.18,
+        "rec_elapsed_s": 0.24,
+        "total_s": 0.45,
+    }
+    assert comparison["largest_total_regressions"][0]["candidate_ocr_engine_stage_s"] == {
+        "input_s": 0.04,
+        "det_elapsed_s": 0.25,
+        "rec_elapsed_s": 0.31,
+        "total_s": 0.6,
+    }
     assert comparison["largest_total_improvements"][0]["slug"] == "dallas"
     assert comparison["largest_total_improvements"][0]["stage_delta_s"] == {"ocr": -0.05}
     assert comparison["largest_total_improvements"][0]["baseline_stage_duration_s"] == {
@@ -1011,6 +1023,18 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         "input_s": 0.0,
         "rec_elapsed_s": -0.06,
         "total_s": -0.08,
+    }
+    assert comparison["largest_total_improvements"][0]["baseline_ocr_engine_stage_s"] == {
+        "input_s": 0.02,
+        "det_elapsed_s": 0.1,
+        "rec_elapsed_s": 0.16,
+        "total_s": 0.28,
+    }
+    assert comparison["largest_total_improvements"][0]["candidate_ocr_engine_stage_s"] == {
+        "input_s": 0.02,
+        "det_elapsed_s": 0.08,
+        "rec_elapsed_s": 0.1,
+        "total_s": 0.2,
     }
     assert comparison["largest_ocr_engine_total_regressions"][0]["slug"] == "houston"
     assert comparison["largest_ocr_engine_total_regressions"][0]["ocr_engine_total_delta_s"] == 0.15
@@ -1153,6 +1177,97 @@ def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None
     assert (
         stress_module.baseline_regression_budget_text(comparison["regression_budget"])
         == "baseline regression budget: passed primary_ocr<=0.010s skipped_primary_ocr_zero_call=1"
+    )
+
+
+def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "stage-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "input_s": 0.01,
+                    "det_elapsed_s": 0.2,
+                    "rec_elapsed_s": 0.2,
+                    "total_s": 0.41,
+                },
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "stage-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.49,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "input_s": 0.01,
+                    "det_elapsed_s": 0.27,
+                    "rec_elapsed_s": 0.12,
+                    "total_s": 0.4,
+                },
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_engine_total_regression_s=0.05,
+    )
+
+    assert comparison["latency_deltas"] == [
+        {
+            "slug": "stage-only",
+            "baseline_total_elapsed_s": 0.5,
+            "candidate_total_elapsed_s": 0.49,
+            "total_elapsed_delta_s": -0.01,
+            "baseline_ocr_engine_calls": 1.0,
+            "candidate_ocr_engine_calls": 1.0,
+            "baseline_ocr_engine_total_s": 0.41,
+            "candidate_ocr_engine_total_s": 0.4,
+            "ocr_engine_total_delta_s": -0.01,
+            "ocr_engine_stage_delta_s": {
+                "input_s": 0.0,
+                "det_elapsed_s": 0.07,
+                "rec_elapsed_s": -0.08,
+                "total_s": -0.01,
+            },
+            "baseline_ocr_engine_stage_s": {
+                "input_s": 0.01,
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": 0.2,
+                "total_s": 0.41,
+            },
+            "candidate_ocr_engine_stage_s": {
+                "input_s": 0.01,
+                "det_elapsed_s": 0.27,
+                "rec_elapsed_s": 0.12,
+                "total_s": 0.4,
+            },
+        }
+    ]
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_ocr_stage_regression_exceeded",
+            "slug": "stage-only",
+            "stage": "det_elapsed_s",
+            "delta_s": 0.07,
+            "max_ocr_engine_total_regression_s": 0.05,
+            "baseline_ocr_engine_stage_s": 0.2,
+            "candidate_ocr_engine_stage_s": 0.27,
+        }
+    ]
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "primary ocr stage stage-only det +0.070s > budget 0.050s"
     )
 
 
@@ -2175,6 +2290,13 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
                 "max_ocr_engine_total_regression_s": 0.03,
             },
             {
+                "kind": "primary_ocr_stage_regression_exceeded",
+                "slug": "ocr-stage-slow",
+                "stage": "det_elapsed_s",
+                "delta_s": 0.09,
+                "max_ocr_engine_total_regression_s": 0.03,
+            },
+            {
                 "kind": "primary_stage_total_regression_exceeded",
                 "stage": "ocr",
                 "delta_s": 0.11,
@@ -2225,12 +2347,13 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         ]
     )
 
-    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=10)
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=11)
     sample_kinds = [sample["kind"] for sample in samples]
 
     assert sample_kinds == [
         "primary_total_regression_exceeded",
         "primary_ocr_total_regression_exceeded",
+        "primary_ocr_stage_regression_exceeded",
         "primary_stage_total_regression_exceeded",
         "primary_stage_row_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
@@ -2241,37 +2364,42 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         "repeat_ocr_case_total_p95_regression_exceeded",
     ]
     assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
-        " by_kind=primary:6,primary_ocr:1,primary_stage:1,primary_stage_row:1,"
+        " by_kind=primary:6,primary_ocr:1,primary_ocr_stage:1,"
+        "primary_stage:1,primary_stage_row:1,"
         "repeat_p95:1,repeat_case_p95:1,repeat_stage_p95:1,repeat_stage_case_p95:1,"
         "repeat_ocr_p95:1,"
         "repeat_ocr_case_p95:1"
     )
     assert (
-        stress_module.baseline_regression_budget_violation_text(violations[9])
+        stress_module.baseline_regression_budget_violation_text(violations[10])
         == "repeat p95 +0.120s > budget 0.020s"
     )
     assert (
-        stress_module.baseline_regression_budget_violation_text(violations[10])
+        stress_module.baseline_regression_budget_violation_text(violations[11])
         == "repeat case p95 case-slow +0.080s > budget 0.020s"
     )
     assert (
-        stress_module.baseline_regression_budget_violation_text(violations[11])
+        stress_module.baseline_regression_budget_violation_text(violations[12])
         == "repeat stage ocr p95 +0.060s > budget 0.020s"
     )
     assert (
-        stress_module.baseline_regression_budget_violation_text(violations[12])
+        stress_module.baseline_regression_budget_violation_text(violations[13])
         == "repeat stage case p95 stage-case-slow georeference +0.050s > budget 0.020s"
     )
     assert (
-        stress_module.baseline_regression_budget_violation_text(violations[14])
+        stress_module.baseline_regression_budget_violation_text(violations[15])
         == "repeat ocr case p95 ocr-case-slow +0.070s > budget 0.010s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[7])
-        == "primary stage ocr +0.110s > budget 0.040s"
+        == "primary ocr stage ocr-stage-slow det +0.090s > budget 0.030s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[8])
+        == "primary stage ocr +0.110s > budget 0.040s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[9])
         == "primary stage row stage-row-slow georeference +0.120s > budget 0.040s"
     )
 

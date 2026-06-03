@@ -239,7 +239,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Exit non-zero when any compared primary row has OCR engine total "
-            "runtime more than this many seconds slower than --compare-baseline-report."
+            "or substage runtime more than this many seconds slower than "
+            "--compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -1194,20 +1195,58 @@ def baseline_regression_budget(
                     if candidate_calls is not None:
                         violation["candidate_ocr_engine_calls"] = round(candidate_calls, 6)
                     violations.append(violation)
+                elif ocr_total_delta > max_ocr_engine_total_regression_s:
+                    violation = {
+                        "kind": "primary_ocr_total_regression_exceeded",
+                        "slug": delta.get("slug"),
+                        "ocr_engine_total_delta_s": round(ocr_total_delta, 6),
+                        "max_ocr_engine_total_regression_s": max_ocr_total,
+                    }
+                    for key in ("baseline_ocr_engine_total_s", "candidate_ocr_engine_total_s"):
+                        value = parse_nonnegative_float(delta.get(key))
+                        if value is not None:
+                            violation[key] = round(value, 6)
+                    violations.append(violation)
+                ocr_stage_deltas = delta.get("ocr_engine_stage_delta_s")
+                if not isinstance(ocr_stage_deltas, dict):
                     continue
-                if ocr_total_delta <= max_ocr_engine_total_regression_s:
-                    continue
-                violation = {
-                    "kind": "primary_ocr_total_regression_exceeded",
-                    "slug": delta.get("slug"),
-                    "ocr_engine_total_delta_s": round(ocr_total_delta, 6),
-                    "max_ocr_engine_total_regression_s": max_ocr_total,
-                }
-                for key in ("baseline_ocr_engine_total_s", "candidate_ocr_engine_total_s"):
-                    value = parse_nonnegative_float(delta.get(key))
-                    if value is not None:
-                        violation[key] = round(value, 6)
-                violations.append(violation)
+                baseline_stage_values = delta.get("baseline_ocr_engine_stage_s")
+                candidate_stage_values = delta.get("candidate_ocr_engine_stage_s")
+                for stage in OCR_ENGINE_STAGE_MAX_KEYS:
+                    if stage == "total_s":
+                        continue
+                    stage_delta = parse_signed_float(ocr_stage_deltas.get(stage))
+                    if (
+                        stage_delta is None
+                        or stage_delta <= max_ocr_engine_total_regression_s
+                    ):
+                        continue
+                    violation = {
+                        "kind": "primary_ocr_stage_regression_exceeded",
+                        "slug": delta.get("slug"),
+                        "stage": stage,
+                        "delta_s": round(stage_delta, 6),
+                        "max_ocr_engine_total_regression_s": max_ocr_total,
+                    }
+                    if isinstance(baseline_stage_values, dict):
+                        baseline_stage_value = parse_nonnegative_float(
+                            baseline_stage_values.get(stage)
+                        )
+                        if baseline_stage_value is not None:
+                            violation["baseline_ocr_engine_stage_s"] = round(
+                                baseline_stage_value,
+                                6,
+                            )
+                    if isinstance(candidate_stage_values, dict):
+                        candidate_stage_value = parse_nonnegative_float(
+                            candidate_stage_values.get(stage)
+                        )
+                        if candidate_stage_value is not None:
+                            violation["candidate_ocr_engine_stage_s"] = round(
+                                candidate_stage_value,
+                                6,
+                            )
+                    violations.append(violation)
         if skipped_primary_ocr_zero_call_rows:
             budget["skipped_primary_ocr_zero_call_row_count"] = len(
                 skipped_primary_ocr_zero_call_rows
@@ -2340,6 +2379,18 @@ def stress_row_latency_delta(
     ocr_stage_deltas = stress_row_ocr_engine_stage_deltas(baseline_row, candidate_row)
     if ocr_stage_deltas:
         delta["ocr_engine_stage_delta_s"] = ocr_stage_deltas
+        baseline_ocr_stage_values = stress_row_ocr_engine_stage_values(
+            baseline_row,
+            ocr_stage_deltas,
+        )
+        candidate_ocr_stage_values = stress_row_ocr_engine_stage_values(
+            candidate_row,
+            ocr_stage_deltas,
+        )
+        if baseline_ocr_stage_values:
+            delta["baseline_ocr_engine_stage_s"] = baseline_ocr_stage_values
+        if candidate_ocr_stage_values:
+            delta["candidate_ocr_engine_stage_s"] = candidate_ocr_stage_values
     ocr_hidden_values = stress_row_ocr_overlap_hidden_values(baseline_row, candidate_row)
     if ocr_hidden_values is not None:
         baseline_hidden, candidate_hidden = ocr_hidden_values
@@ -2424,6 +2475,23 @@ def stress_row_ocr_engine_stage_deltas(
         if delta is not None:
             deltas[key] = delta
     return deltas
+
+
+def stress_row_ocr_engine_stage_values(
+    row: dict[str, Any],
+    ocr_stage_deltas: dict[str, float],
+) -> dict[str, float]:
+    profile = row.get("ocr_engine_profile")
+    if not isinstance(profile, dict):
+        return {}
+    values: dict[str, float] = {}
+    for key in OCR_ENGINE_STAGE_MAX_KEYS:
+        if key not in ocr_stage_deltas:
+            continue
+        value = parse_nonnegative_float(profile.get(key))
+        if value is not None:
+            values[key] = round(value, 6)
+    return values
 
 
 def stress_row_ocr_engine_calls(row: dict[str, Any]) -> float | None:
@@ -7164,6 +7232,13 @@ def baseline_primary_ocr_stage_delta_text(
     return f" ({', '.join(parts)})"
 
 
+def baseline_primary_ocr_stage_delta_label(stage: str) -> str:
+    for key, label in BASELINE_PRIMARY_OCR_STAGE_DELTA_DISPLAY:
+        if stage == key:
+            return label
+    return stage
+
+
 def baseline_signature_field_counts_text(baseline_comparison: dict[str, Any], *, limit: int = 4) -> str:
     counts = baseline_comparison.get("signature_changed_field_counts")
     if not isinstance(counts, dict) or not counts:
@@ -7262,6 +7337,7 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
     labels = {
         "primary_total_regression_exceeded": "primary",
         "primary_ocr_total_regression_exceeded": "primary_ocr",
+        "primary_ocr_stage_regression_exceeded": "primary_ocr_stage",
         "primary_ocr_total_delta_missing": "primary_ocr_missing",
         "primary_stage_total_regression_exceeded": "primary_stage",
         "primary_stage_total_delta_missing": "primary_stage_missing",
@@ -7329,6 +7405,20 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         slug_text = f" {slug}" if isinstance(slug, str) and slug else ""
         budget_text = f" budget {budget:.3f}s" if budget is not None else ""
         return f"primary ocr{slug_text} delta missing{budget_text}"
+    if kind == "primary_ocr_stage_regression_exceeded":
+        slug = violation.get("slug")
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_ocr_engine_total_regression_s"))
+        if (
+            not isinstance(slug, str)
+            or not isinstance(stage, str)
+            or delta is None
+            or budget is None
+        ):
+            return ""
+        stage_label = baseline_primary_ocr_stage_delta_label(stage)
+        return f"primary ocr stage {slug} {stage_label} {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "primary_stage_total_regression_exceeded":
         stage = violation.get("stage")
         delta = parse_signed_float(violation.get("delta_s"))

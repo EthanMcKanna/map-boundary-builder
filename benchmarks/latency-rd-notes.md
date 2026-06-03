@@ -17604,3 +17604,19 @@ with zero failures in 0.531s.
   (`-0.018145s`), but the new row-stage gate failed four row regressions,
   including `bay-area-waymo ocr +0.063s > budget 0.020s`. Benchmark acceptance
   reliability only; no runtime default changed.
+- Extended the primary OCR regression budget to compared-row OCR engine
+  substages and enriched row latency deltas with baseline/candidate OCR substage
+  timings. This closes the OCR-specific counterpart to the row-stage gate: a
+  detector, recognizer, or input-prep substage can regress while total OCR stays
+  inside budget or improves. Focused stress tests passed (`135 passed in 0.43s`)
+  and the full suite passed (`711 passed, 31 subtests passed in 5.28s`). A saved
+  proof in `out/primary-ocr-stage-budget-proof-20260603/comparison.json`
+  compared `out/brightblue-det248-control-slow8-20260603` against
+  `out/brightblue-det248-candidate-slow8-20260603` with
+  `max_ocr_engine_total_regression_s=0.010`; the new budget failed
+  `primary_ocr_stage:16` and `primary_ocr:6`, including three stage-only
+  violations that the old total-only gate would have missed:
+  `dallas-waymo rec +0.030845s` with total OCR `-0.081892s`,
+  `san-antonio-waymo input +0.029775s` with total OCR `+0.005856s`, and
+  `san-antonio-waymo rec +0.018168s` with total OCR `+0.005856s`. Benchmark
+  acceptance reliability only; no runtime default changed.
