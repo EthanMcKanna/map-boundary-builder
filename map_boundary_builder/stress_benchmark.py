@@ -8613,8 +8613,21 @@ def baseline_configuration_changes_text(
     display_parts = parts[:display_limit]
     remaining = len(parts) - len(display_parts)
     if remaining > 0:
-        display_parts.append(f"+{remaining} more")
+        hidden_sections_text = config_change_section_counts_text(parts[display_limit:])
+        suffix = f" ({hidden_sections_text})" if hidden_sections_text else ""
+        display_parts.append(f"+{remaining} more{suffix}")
     return ", ".join(display_parts)
+
+
+def config_change_section_counts_text(parts: list[str]) -> str:
+    counts: Counter[str] = Counter()
+    for part in parts:
+        field = part.split("=", 1)[0]
+        section = field.split(".", 1)[0]
+        if not section:
+            continue
+        counts[section] += 1
+    return ", ".join(f"{section}={count}" for section, count in sorted(counts.items()))
 
 
 def config_change_value_text(value: Any) -> str:

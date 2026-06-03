@@ -18508,3 +18508,12 @@ with zero failures in 0.531s.
   This is benchmark evidence reliability only; no generation defaults changed.
   Full stress benchmark tests passed `152 passed`; compileall and
   `git diff --check` passed.
+- Enriched the truncated config-drift marker with hidden section counts so a
+  compact console line distinguishes hidden `generation_env`, `ocr`, `preset`,
+  or top-level drift. The same saved area-floor replay now reports the visible
+  cache-dir/area-floor/focused-detector/warm-key changes plus
+  `+2 more (ocr=1, preset=1)`, making it clear the hidden fields still include
+  an OCR runtime knob and the focused preset label. This is reporting-only
+  benchmark reliability; no generation defaults changed. Targeted formatter
+  tests passed `5 passed`; full stress benchmark tests passed `153 passed`;
+  compileall and `git diff --check` passed.

@@ -3657,7 +3657,36 @@ def test_baseline_configuration_changes_text_reports_truncation_count() -> None:
     assert text == (
         "runner_ocr_cache=true->false, "
         "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION=1600->1500, "
-        "+1 more"
+        "+1 more (ocr=1)"
+    )
+
+
+def test_baseline_configuration_changes_text_counts_hidden_sections() -> None:
+    text = stress_module.baseline_configuration_changes_text(
+        {
+            "configuration_changes": [
+                {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+                {"field": "generation_env.MAP_BOUNDARY_CACHE_DIR", "baseline": "a", "candidate": "b"},
+                {
+                    "field": "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION",
+                    "baseline": "1600",
+                    "candidate": "1500",
+                },
+                {
+                    "field": "ocr.rapidocr_bright_blue_max_dimension",
+                    "baseline": 1400,
+                    "candidate": 1300,
+                },
+                {"field": "preset", "baseline": None, "candidate": "focused@v1"},
+            ]
+        },
+        limit=2,
+    )
+
+    assert text == (
+        "runner_ocr_cache=true->false, "
+        "generation_env.MAP_BOUNDARY_CACHE_DIR=a->b, "
+        "+3 more (generation_env=1, ocr=1, preset=1)"
     )
 
 
