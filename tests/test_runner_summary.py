@@ -1657,6 +1657,48 @@ def test_svg_label_layer_document_includes_city_name_variants() -> None:
     assert b'fill="#07f"' in slim
 
 
+def test_svg_label_layer_catalog_hints_ignore_generic_layer_names() -> None:
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<g id="City_names"><path d="M20 20h12v8H20z"/></g>
+<g id="Neighborhood_names"><path d="M30 30h12v8H30z"/></g>
+</svg>"""
+
+    assert runner.svg_label_layer_catalog_hint_texts(svg) == ()
+
+
+def test_svg_label_layer_id_catalog_match_uses_area_named_layer(tmp_path) -> None:
+    image_path = tmp_path / "bay.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}.label{fill:#111}</style></defs>
+<path class="st2" d="M10 10h60v40H10z"/>
+<g id="SF_City_names_LARGE_black"><path class="label" d="M20 20h12v8H20z"/></g>
+</svg>""",
+        encoding="utf-8",
+    )
+    entry = next(item for item in load_catalog_entries() if item.slug == "bay-area-waymo")
+    extraction = ExtractionResult(
+        mask=np.zeros((1000, 1000), dtype=np.uint8),
+        style="bright-blue",
+        pixel_geometry=mercator_geometry_to_pixel(entry.mercator_geometry),
+        coverage_ratio=0.2,
+        contour_count=1,
+        confidence=1.0,
+    )
+    candidate = runner.SvgServicePathCandidate(
+        extraction=extraction,
+        width=1000,
+        height=1000,
+        rgb=np.full((1000, 1000, 3), 255, dtype=np.uint8),
+    )
+
+    match = runner.match_svg_label_layer_id_catalog(image_path, candidate)
+
+    assert match is not None
+    assert match.entry.slug == "bay-area-waymo"
+    assert match.confidence == pytest.approx(runner.PROVIDER_UI_LABEL_CONFIDENCE)
+
+
 def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "known.svg"
     image_path.write_text(

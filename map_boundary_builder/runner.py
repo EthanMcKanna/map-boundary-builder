@@ -117,6 +117,16 @@ CATALOG_MISS_REFINE_MAX_DIMENSION = max(
 SVG_CATALOG_PATH_FILL = "#07f"
 SVG_PROVIDER_UI_LABEL_LAYER_IDS = ("City_names", "City_Name", "Neighborhoods")
 SVG_LABEL_LAYER_ID_TOKENS = ("city_name", "neighborhood")
+SVG_GENERIC_LABEL_LAYER_HINTS = frozenset(
+    {
+        "city name",
+        "city names",
+        "neighborhood",
+        "neighborhoods",
+        "neighborhood name",
+        "neighborhood names",
+    }
+)
 SVG_PROVIDER_UI_LABEL_LAYER_BACKGROUND_FILL = "#fff"
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
@@ -583,6 +593,32 @@ def svg_file_has_discovered_label_layer(image_path: Path) -> bool:
         return False
 
 
+def svg_label_layer_catalog_hint_texts(svg_bytes: bytes) -> tuple[str, ...]:
+    text = svg_bytes.decode("utf-8", "replace")
+    hints: list[str] = []
+    seen: set[str] = set()
+
+    def add(hint: str) -> None:
+        cleaned = " ".join(hint.replace("_", " ").split())
+        if not cleaned:
+            return
+        key = cleaned.lower()
+        if key in SVG_GENERIC_LABEL_LAYER_HINTS or key in seen:
+            return
+        seen.add(key)
+        hints.append(cleaned)
+
+    for group_id in svg_label_layer_group_ids(text):
+        if svg_group_fragment_by_id(text, group_id) is None:
+            continue
+        normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", group_id.lower()).split())
+        if normalized in SVG_GENERIC_LABEL_LAYER_HINTS:
+            continue
+        add(group_id)
+        add(normalized)
+    return tuple(hints)
+
+
 def svg_provider_ui_label_layer_document(
     svg_bytes: bytes,
     viewbox: tuple[float, float, float, float],
@@ -736,6 +772,52 @@ def match_svg_service_path_candidate_catalog(
         candidate.extraction.pixel_geometry,
         style=candidate.extraction.style,
         city_input=city_input,
+    )
+
+
+def match_svg_label_layer_id_catalog(
+    image_path: Path,
+    candidate: SvgServicePathCandidate,
+) -> ServiceAreaCatalogMatch | None:
+    if not catalog_style_supported(candidate.extraction.style):
+        return None
+    try:
+        hint_texts = svg_label_layer_catalog_hint_texts(read_svg_bytes(image_path))
+    except Exception:
+        return None
+    if not hint_texts:
+        return None
+
+    provider_hint = catalog_provider_hint(" ".join(hint_texts))
+    provider = provider_hint or unique_catalog_provider_for_style(candidate.extraction.style)
+    if provider is not None and candidate.extraction.style not in PROVIDER_STYLES.get(provider, set()):
+        return None
+
+    entries = [
+        entry
+        for entry in load_catalog_entries()
+        if (
+            entry.is_active
+            and (provider is None or entry.provider == provider)
+            and candidate.extraction.style in PROVIDER_STYLES.get(entry.provider, set())
+        )
+    ]
+    candidates = {}
+    for hint in hint_texts:
+        text_candidates = [entry for entry in entries if catalog_area_matches_text(entry.area, hint)]
+        if len(text_candidates) == 1:
+            candidates[text_candidates[0].slug] = text_candidates[0]
+    if len(candidates) != 1:
+        return None
+
+    entry = next(iter(candidates.values()))
+    return match_catalog_entry(
+        candidate.extraction.pixel_geometry,
+        entry,
+        min_iou=PROVIDER_UI_LABEL_MIN_IOU,
+        min_area_ratio=PROVIDER_UI_LABEL_MIN_AREA_RATIO,
+        max_area_ratio=PROVIDER_UI_LABEL_MAX_AREA_RATIO,
+        confidence_override=PROVIDER_UI_LABEL_CONFIDENCE,
     )
 
 
@@ -1078,6 +1160,26 @@ def build_boundary(
             tried_label_layer_catalog = False
             if svg_file_has_discovered_label_layer(image_path):
                 tried_label_layer_catalog = True
+                label_layer_id_match = (
+                    match_svg_label_layer_id_catalog(image_path, svg_service_path_candidate)
+                    if city_input is None
+                    else None
+                )
+                if label_layer_id_match is not None:
+                    return finish_catalog_boundary_result(
+                        svg_service_path_candidate.extraction,
+                        label_layer_id_match,
+                        width=svg_service_path_candidate.width,
+                        height=svg_service_path_candidate.height,
+                        image_path=image_path,
+                        city_input="Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=svg_service_path_candidate.rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match:svg-label-layer-id",
+                    )
                 label_layer_catalog_result = try_svg_label_layer_catalog_shortcut(
                     image_path,
                     svg_service_path_candidate,

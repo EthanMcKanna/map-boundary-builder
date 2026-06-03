@@ -18356,3 +18356,22 @@ with zero failures in 0.531s.
   (`3 passed`), `tests/test_ocr_georeference.py` passed (`153 passed`),
   `python -m compileall -q map_boundary_builder tests` passed, and full pytest
   passed `735 passed, 31 subtests passed`.
+- Removed OCR from the Bay Area SVG UI-default catalog path when the SVG label
+  group ID itself carries a unique area hint. `/Users/ethanmckanna/Downloads/bay 3.svg`
+  has the real labels under `SF_City_names_LARGE_black`, so the runner now
+  extracts non-generic label-layer IDs, requires a unique catalog area/provider
+  match, and still gates the result with the provider UI-label shape thresholds
+  before returning `catalog-shape-match:svg-label-layer-id`. Focused proof at
+  `out/bay3-svg-label-id-focused-green-20260603` passed `1/1`, primary
+  `0.104364s`, repeat p95 `0.097s`, and `0` OCR engine calls. The full
+  baseline comparison at `out/svg-label-id-full73-hard-gate-20260603` passed
+  the stress expectations (`73/73`), statuses `{"complete":62,"failed":11}`,
+  max primary `0.377773s`, manifest OCR contracts `45/45`, and expectation
+  delta `0`; its comparator exited nonzero only because the intentional
+  zero-OCR row no longer has baseline OCR-delta fields. The green full hard
+  gate at `out/svg-label-id-full73-hard-gate-green-20260603` passed `73/73`,
+  statuses `{"complete":62,"failed":11}`, max primary `0.334652s`, repeat p95
+  `0.297s`, repeat max `0.321s`, and manifest OCR contracts `45/45`. The
+  `bay-3-svg-ui-default` row stayed on `bay-area-waymo` with the same bbox
+  `[-122.4980521,37.3075553,-121.8590466,37.7981715]` while dropping from
+  `0.325236s` with one OCR call to `0.093431s` with zero OCR calls.
