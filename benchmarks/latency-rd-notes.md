@@ -15971,3 +15971,20 @@ with zero failures in 0.531s.
   repeat OCR-engine p95 `0.411s`, prewarm `1.464s`, and stable repeat
   signatures. This is another reliability-contract change only; no runtime
   deploy is needed.
+- Accepted generic OCR top-label evidence locks and applied them to the two
+  sparse Zoox Las Vegas expected failures. These rows already reported
+  `ocr_top_labels`, but the manifest only required the final `sparse OCR
+  labels` error plus a label floor, so wrong sparse text could still pass. The
+  expectation schema now supports `ocr_top_labels_contain` as a case-insensitive
+  substring check for any row. `zoox-las-vegas-mobile` requires `las vegas` and
+  `paradise`; `zoox-las-vegas-mobile-tall` additionally requires
+  `spring mountain`. Focused validation at
+  `out/sparse-ocr-label-evidence-focused-20260603` passed `2/2`, stable
+  signatures, repeat p95 `0.271s`, and repeat OCR-engine p95 `0.159s`, with
+  evidence labels `Paradise` / `Las Vegas Paradise` / `Las Vegas` and
+  `Las Vegas` / `Paradise` / `Spring Mountain Rd`. The full hard gate at
+  `out/sparse-ocr-label-evidence-full49-hard-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, primary max `0.619532s`, repeat p95
+  `0.433s`, repeat OCR-engine p95 `0.397s`, prewarm `1.333s`, and stable
+  repeat signatures. This closes the last current expected-failure class that
+  only had a generic error/label-count assertion.

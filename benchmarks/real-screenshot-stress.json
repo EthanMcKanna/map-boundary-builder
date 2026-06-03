@@ -45,6 +45,7 @@
         "status": "failed",
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 3,
+        "ocr_top_labels_contain": ["las vegas", "paradise"],
         "max_total_elapsed_s": 1.0
       }
     },
@@ -57,6 +58,7 @@
         "status": "failed",
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 12,
+        "ocr_top_labels_contain": ["las vegas", "paradise", "spring mountain"],
         "max_total_elapsed_s": 1.0
       }
     },

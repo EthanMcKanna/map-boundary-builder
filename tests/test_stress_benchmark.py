@@ -702,6 +702,42 @@ def test_check_expectations_rejects_thematic_map_evidence_drift() -> None:
     ]
 
 
+def test_check_expectations_rejects_ocr_top_label_evidence_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a reliable map location from sparse OCR labels.",
+            "ocr_label_count": 3,
+            "ocr_top_labels": ["Downtown", "Arts District"],
+        },
+        {
+            "status": "failed",
+            "error_contains": "sparse OCR labels",
+            "min_ocr_labels": 3,
+            "ocr_top_labels_contain": ["las vegas", "paradise"],
+        },
+    )
+
+    assert issues == ["ocr_top_labels missing snippets ['las vegas', 'paradise']"]
+
+
+def test_check_expectations_rejects_missing_ocr_top_label_evidence() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "ocr_label_count": 4,
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "ocr_top_labels_contain": ["dallas"],
+        },
+    )
+
+    assert issues == ["ocr_top_labels missing"]
+
+
 def test_check_expectations_rejects_low_confidence() -> None:
     issues = stress_module.check_expectations(
         {

@@ -1201,6 +1201,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         if isinstance(expected_error, str) and expected_error not in error:
             issues.append(f"error did not contain {expected_error!r}")
         append_min_ocr_labels_expectation_issue(row, expect, issues)
+        append_ocr_top_labels_expectation_issues(row, expect, issues)
         append_route_ui_expectation_issues(row, expect, issues)
         append_non_map_ui_expectation_issues(row, expect, issues)
         append_thematic_map_expectation_issues(row, expect, issues)
@@ -1231,6 +1232,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
             issues.append(f"control_points {control_points!r} below {min_control_points}")
 
     append_min_ocr_labels_expectation_issue(row, expect, issues)
+    append_ocr_top_labels_expectation_issues(row, expect, issues)
     append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
 
     append_min_confidence_expectation_issue(
@@ -1267,6 +1269,24 @@ def append_min_ocr_labels_expectation_issue(row: dict[str, Any], expect: dict[st
         ocr_label_count = row.get("ocr_label_count")
         if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
             issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
+
+
+def append_ocr_top_labels_expectation_issues(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
+    expected_snippets = expect.get("ocr_top_labels_contain")
+    if not isinstance(expected_snippets, list):
+        return
+    top_labels = row.get("ocr_top_labels")
+    if not isinstance(top_labels, list):
+        issues.append("ocr_top_labels missing")
+        return
+    normalized_labels = [str(label).lower() for label in top_labels if isinstance(label, str)]
+    missing = [
+        snippet
+        for snippet in expected_snippets
+        if isinstance(snippet, str) and not any(snippet.lower() in label for label in normalized_labels)
+    ]
+    if missing:
+        issues.append(f"ocr_top_labels missing snippets {missing!r}")
 
 
 def append_route_ui_expectation_issues(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
