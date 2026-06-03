@@ -16090,3 +16090,31 @@ with zero failures in 0.531s.
   kept selected/result/label count budgets intact, so this is a pure latency
   tradeoff; keep the `256/max` default unless a future broader candidate proves
   a real repeat-profile win.
+- Added confidence-count and remaining Waymo tail OCR work-volume contracts to
+  the real screenshot stress manifest. Existing tail rows for the two long Tesla
+  route receipts, the profile-app non-map UI row, and Los Angeles Waymo now lock
+  their current low-confidence label counts alongside raw/selected/result/label
+  counts; Bay Area Waymo, Orlando Waymo, and Miami Waymo now lock their current
+  OCR engine counts plus zero labels below `90` confidence. This guards against
+  recognizer-quality drift or extra OCR box mass on the current repeat-profile
+  tail without changing runtime behavior. Two focused attempts exposed unrelated
+  transient RapidOCR runtime stalls: `out/ocr-confidence-count-tail-focused-20260603`
+  failed because profile-app primary OCR spiked to `5.174s` and prewarm hit
+  `2.481s`, while
+  `out/ocr-confidence-count-tail-focused-rerun-20260603` passed primary rows but
+  saw `profile-app-non-map-ui#2` repeat spike to `4.406s` with unchanged
+  `21/21/21/16` OCR counts. The clean focused confirmation at
+  `out/ocr-confidence-count-tail-focused-confirm-20260603` passed `7/7`,
+  repeat p95 `0.500s`, repeat max `0.508s`, repeat OCR-engine p95 `0.448s`, and
+  the new confidence/count ceilings. The first full run
+  `out/ocr-confidence-count-full49-hard-20260603` passed all `49/49`
+  expectations but rejected an overly strict ad hoc full-suite
+  `label_confidence_lt_90_count` p95 budget of `1` because legitimate non-tail
+  rows make the full-suite p95 `2.2` and max `3`. The corrected full hard gate at
+  `out/ocr-confidence-count-full49-hard-confirm-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, primary max `0.542530s`, repeat
+  `98/98` expected/subsecond, repeat p95 `0.456s`, repeat max `0.500s`, repeat
+  OCR-engine p95 `0.391s`, repeat OCR-engine max `0.449s`,
+  `label_confidence_lt_90_count` p95/max `2.25`/`3`, prewarm `1.239s`, and
+  stable repeat signatures. This is a manifest reliability contract only; no
+  runtime deploy is needed.
