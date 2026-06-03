@@ -17142,3 +17142,19 @@ with zero failures in 0.531s.
   full suite passed `685 passed, 31 subtests passed in 5.70s` with
   `PYTHONPATH=.`, and `git diff --check` was clean. This is benchmark
   feedback-loop reliability only; no runtime deploy is needed.
+- Rejected route/profile-specific default detector reductions on the current
+  fail-closed route/profile OCR lane. The matched control at
+  `out/route-det608-control-20260603` passed `8/8` expected failures with
+  primary max `0.287s`, repeat p95 `0.285s`, repeat OCR p95 `0.249s`, and
+  stable OCR count contracts. Lowering the default detector to `544` at
+  `out/route-det544-candidate-20260603` failed the focused gate (`6/8`
+  expected), produced `3` signature-drift rows, and made
+  `tesla-austin-route-receipt-gray-long` exceed the low-confidence count
+  contract plus `tesla-austin-route-active-dark` miss the label floor, even
+  though repeat OCR p95 moved by `-0.008s`. The less aggressive `576` candidate
+  at `out/route-det576-candidate-20260603` also failed (`7/8` expected), kept
+  `3` signature-drift rows, made `tesla-austin-route-active-dark` exceed
+  label/result/selected-count ceilings, and slowed `profile-app-non-map-ui`
+  primary OCR by `+0.030s`; its repeat OCR p95 gain was only `-0.009s`.
+  Keep the default detector at `608` for route/profile UI OCR unless a future
+  selector can preserve the dark active/gray receipt/non-map signatures.
