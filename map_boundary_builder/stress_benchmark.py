@@ -1654,19 +1654,25 @@ def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, An
     summary = repeat_profile.get("summary")
     if not isinstance(summary, dict):
         return None
-    if isinstance(summary.get("ocr_overlap_hidden_s"), dict):
-        return summary
     samples = repeat_profile.get("samples")
     if not isinstance(samples, list):
         return summary
-    hidden_stats = repeat_profile_ocr_overlap_hidden_stats(
-        repeat_profile_analyzed_samples([sample for sample in samples if isinstance(sample, dict)])
+    analyzed_samples = repeat_profile_analyzed_samples(
+        [sample for sample in samples if isinstance(sample, dict)]
     )
-    if hidden_stats is None:
-        return summary
-    enriched = dict(summary)
-    enriched["ocr_overlap_hidden_s"] = hidden_stats
-    return enriched
+    enriched: dict[str, Any] | None = None
+    if not isinstance(summary.get("stage_duration_s"), dict):
+        stage_stats = repeat_profile_stage_duration_stats(analyzed_samples)
+        if stage_stats:
+            enriched = dict(summary)
+            enriched["stage_duration_s"] = stage_stats
+    if not isinstance(summary.get("ocr_overlap_hidden_s"), dict):
+        hidden_stats = repeat_profile_ocr_overlap_hidden_stats(analyzed_samples)
+        if hidden_stats is not None:
+            if enriched is None:
+                enriched = dict(summary)
+            enriched["ocr_overlap_hidden_s"] = hidden_stats
+    return enriched or summary
 
 
 def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | None:

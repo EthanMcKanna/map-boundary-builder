@@ -17479,3 +17479,15 @@ with zero failures in 0.531s.
   `inspect_p95=-0.000s`, plus repeat case text naming
   `ocr_p95=+0.005s (0.101->0.107s)`. This is benchmark feedback-loop
   reliability only; no runtime default changed.
+- Made baseline repeat-profile summary access rebuild aggregate pipeline
+  `stage_duration_s` stats from raw repeat samples when older or partial saved
+  summaries omit them. This keeps the new repeat-stage deltas available from
+  authoritative raw samples instead of silently disappearing when comparing
+  summary-poor reports. Focused stress tests passed (`133 passed in 0.50s`) and
+  the full suite passed (`709 passed, 31 subtests passed in 6.31s`). A
+  saved-report proof stripped `stage_duration_s` from both Ann Arbor repeat
+  summaries and still recovered aggregate deltas
+  `ocr=+0.005140s`, `georeference=-0.004554s`, `extract=+0.002337s`,
+  `export=+0.001113s`, and `inspect=-0.000011s`, plus the per-case OCR p95
+  delta `0.101410s->0.106550s`. This is benchmark feedback-loop reliability
+  only; no runtime default changed.

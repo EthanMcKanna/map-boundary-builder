@@ -1566,6 +1566,11 @@ def test_compare_stress_reports_rebuilds_repeat_hidden_overlap_from_samples() ->
     assert hidden_delta["p95_duration_s"]["candidate"] == 0.0985
     assert hidden_delta["p95_duration_s"]["delta_s"] == 0.0395
     assert hidden_delta["total_s"]["delta_s"] == 0.07
+    stage_delta = comparison["repeat_profile_delta"]["stage_duration_s"]["ocr"]
+    assert stage_delta["p95_duration_s"]["baseline"] == 0.179
+    assert stage_delta["p95_duration_s"]["candidate"] == 0.1995
+    assert stage_delta["p95_duration_s"]["delta_s"] == 0.0205
+    assert stage_delta["max_duration_s"]["delta_s"] == 0.02
 
 
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
