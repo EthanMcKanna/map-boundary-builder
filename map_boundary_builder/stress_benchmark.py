@@ -843,6 +843,11 @@ def row_from_process(
         stage="georeference",
         message="Rejecting non-map app UI",
     )
+    thematic_map_reject_details = latest_message_details(
+        events,
+        stage="georeference",
+        message="Rejecting thematic map",
+    )
     raw_ocr_engine_profile = summary.get("ocr_engine_profile")
     ocr_engine_profile = raw_ocr_engine_profile if isinstance(raw_ocr_engine_profile, dict) else None
     row = base_row(case, expected_status=expected_status, observed_status=observed_status)
@@ -908,6 +913,11 @@ def row_from_process(
             "non_map_ui_labels": (
                 non_map_ui_reject_details.get("non_map_ui_labels")
                 if isinstance(non_map_ui_reject_details.get("non_map_ui_labels"), list)
+                else None
+            ),
+            "thematic_map_labels": (
+                thematic_map_reject_details.get("thematic_map_labels")
+                if isinstance(thematic_map_reject_details.get("thematic_map_labels"), list)
                 else None
             ),
             "ocr_full_detail_retry": any(
@@ -1193,6 +1203,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         append_min_ocr_labels_expectation_issue(row, expect, issues)
         append_route_ui_expectation_issues(row, expect, issues)
         append_non_map_ui_expectation_issues(row, expect, issues)
+        append_thematic_map_expectation_issues(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
         append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
         return issues
@@ -1302,6 +1313,31 @@ def append_non_map_ui_expectation_issues(row: dict[str, Any], expect: dict[str, 
     label_count = len(labels) if isinstance(labels, list) else None
     if label_count is None or label_count < min_non_map_ui_labels:
         issues.append(f"non_map_ui_labels count {label_count!r} below {min_non_map_ui_labels:g}")
+
+
+def append_thematic_map_expectation_issues(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
+    min_thematic_map_labels = parse_nonnegative_count_metric(expect.get("min_thematic_map_labels"))
+    labels = row.get("thematic_map_labels")
+    label_count = len(labels) if isinstance(labels, list) else None
+    if min_thematic_map_labels is not None and (
+        label_count is None or label_count < min_thematic_map_labels
+    ):
+        issues.append(f"thematic_map_labels count {label_count!r} below {min_thematic_map_labels:g}")
+
+    expected_snippets = expect.get("thematic_map_labels_contain")
+    if not isinstance(expected_snippets, list):
+        return
+    if not isinstance(labels, list):
+        issues.append("thematic_map_labels missing")
+        return
+    normalized_labels = [str(label).lower() for label in labels if isinstance(label, str)]
+    missing = [
+        snippet
+        for snippet in expected_snippets
+        if isinstance(snippet, str) and not any(snippet.lower() in label for label in normalized_labels)
+    ]
+    if missing:
+        issues.append(f"thematic_map_labels missing snippets {missing!r}")
 
 
 def append_max_ocr_engine_calls_expectation_issue(

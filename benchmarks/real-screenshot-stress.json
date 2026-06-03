@@ -181,6 +181,8 @@
         "status": "failed",
         "error_contains": "thematic map",
         "min_ocr_labels": 2,
+        "min_thematic_map_labels": 1,
+        "thematic_map_labels_contain": ["vulnerability index"],
         "max_total_elapsed_s": 1.0
       }
     },

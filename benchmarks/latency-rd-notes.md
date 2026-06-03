@@ -15954,3 +15954,20 @@ with zero failures in 0.531s.
   repeat OCR-engine p95 `0.403s`, prewarm `1.330s`, and stable repeat
   signatures. This is a reliability-contract change only; no runtime deploy is
   needed.
+- Accepted matching stress-harness evidence locks for thematic-map rejection.
+  The runtime's `Rejecting thematic map` event already carried
+  `thematic_map_labels`, but the stress row only asserted the final
+  `thematic map` error and a `2`-label OCR floor. The harness now records those
+  labels and supports `min_thematic_map_labels` plus
+  `thematic_map_labels_contain`, using substring matching so improved OCR text
+  such as `Climate Change Vulnerability Index` can still satisfy the fixture.
+  The climate vulnerability stress row now requires at least one thematic
+  evidence label containing `vulnerability index`. Focused validation at
+  `out/thematic-evidence-focused-locked-20260603` passed `1/1`, primary
+  `0.316305s`, repeat p95 `0.102s`, and repeat OCR-engine p95 `0.072s` with
+  evidence label `nge Vulnerability Index`. The full hard gate at
+  `out/thematic-evidence-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.579285s`, repeat p95 `0.474s`,
+  repeat OCR-engine p95 `0.411s`, prewarm `1.464s`, and stable repeat
+  signatures. This is another reliability-contract change only; no runtime
+  deploy is needed.

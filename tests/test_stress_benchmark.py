@@ -187,6 +187,39 @@ def test_row_from_process_records_non_map_ui_reject_details() -> None:
     assert row["non_map_ui_labels"] == ["Tesla Sync", "Secure&Private"]
 
 
+def test_row_from_process_records_thematic_map_reject_details() -> None:
+    row = stress_module.row_from_process(
+        {"slug": "thematic", "image": "climate.jpg"},
+        command=["in-process"],
+        completed=subprocess.CompletedProcess(["in-process"], 1, stdout="", stderr="thematic error"),
+        wall_s=0.2,
+        summary={
+            "status": "failed",
+            "error": "Could not infer a service-area boundary from a thematic map.",
+            "event_profile": {
+                "total_elapsed_s": 0.2,
+                "stage_elapsed_s": {"ocr": 0.1},
+                "events": [
+                    {
+                        "stage": "ocr",
+                        "message": "Map labels read",
+                        "details": {"label_count": 2, "top_labels": ["Vulnerability Index"]},
+                    },
+                    {
+                        "stage": "georeference",
+                        "message": "Rejecting thematic map",
+                        "details": {"thematic_map_labels": ["Climate Change Vulnerability Index"]},
+                    },
+                ],
+            },
+        },
+        parse_error=None,
+        expected_status="failed",
+    )
+
+    assert row["thematic_map_labels"] == ["Climate Change Vulnerability Index"]
+
+
 def test_repeat_profile_ocr_engine_count_metric_text_includes_confidence_counts() -> None:
     text = stress_module.repeat_profile_ocr_engine_count_metric_text(
         {
@@ -645,6 +678,27 @@ def test_check_expectations_rejects_non_map_ui_evidence_drift() -> None:
     assert issues == [
         "non_map_ui_categories missing ['stats']",
         "non_map_ui_labels count 0 below 1",
+    ]
+
+
+def test_check_expectations_rejects_thematic_map_evidence_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a service-area boundary from a thematic map.",
+            "thematic_map_labels": ["Khartoum"],
+        },
+        {
+            "status": "failed",
+            "error_contains": "thematic map",
+            "min_thematic_map_labels": 2,
+            "thematic_map_labels_contain": ["vulnerability index"],
+        },
+    )
+
+    assert issues == [
+        "thematic_map_labels count 1 below 2",
+        "thematic_map_labels missing snippets ['vulnerability index']",
     ]
 
 
