@@ -18375,3 +18375,25 @@ with zero failures in 0.531s.
   `bay-3-svg-ui-default` row stayed on `bay-area-waymo` with the same bbox
   `[-122.4980521,37.3075553,-121.8590466,37.7981715]` while dropping from
   `0.325236s` with one OCR call to `0.093431s` with zero OCR calls.
+- Added a focused-benchmark escape hatch for fast R&D loops:
+  `--allow-focused-baseline-preset-drift` lets a selected-row
+  `--focused-real-screenshot-gate` compare against a full
+  `--real-screenshot-hard-gate` baseline without failing solely because the
+  preset labels differ (`real-screenshot-hard-gate@v13` vs
+  `focused-real-screenshot-gate@v11:onlyN`). It still fails real config drift,
+  signature drift, expectation regressions, and latency-budget violations. This
+  came out of the next OCR-tail probe: the remaining Waymo no-catalog rows are
+  intentionally forced away from catalog shortcuts, and the tail is mostly
+  overlapped bright-blue OCR around `0.30-0.35s` primary. Negative probes:
+  detector limit `224` preserved signatures but made `dallas-waymo` hit the
+  primary regression budget; max dimension `1300` was faster in places but
+  changed signatures and failed `4/8` expectations; min text area `2600` did
+  not reduce selected boxes and then failed repeat hidden-OCR overlap
+  (`+0.142s > 0.100s`); trying to reuse focused-crop OCR for bright-blue
+  forfeited early OCR overlap and made repeat latency worse. The harness change
+  was verified with the unit slice covering default config-drift failure, the
+  new preset-drift allowance, and non-preset drift rejection (`4 passed`), plus
+  a real scoped no-op comparison at
+  `out/focused-waymo-baseline-allow-preset-green-20260603` (`8/8`, signature
+  changes `0`, exit `0` with the preset-drift allowance and a `0.25s`
+  repeat hidden-overlap budget for focused-slice variance).

@@ -7151,6 +7151,161 @@ def test_real_screenshot_gate_baseline_comparison_fails_signature_drift_by_defau
     assert exit_code == 1
 
 
+def test_focused_gate_can_allow_full_baseline_preset_drift(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "configuration_changes": [
+                    {
+                        "field": "preset",
+                        "baseline": "real-screenshot-hard-gate@v13",
+                        "candidate": "focused-real-screenshot-gate@v11:only1",
+                    }
+                ],
+                "signature_changes": [],
+                "regression_budget": {
+                    "passed": True,
+                    "max_total_elapsed_regression_s": 0.25,
+                    "max_repeat_p95_regression_s": 0.25,
+                    "max_ocr_engine_total_regression_s": 0.25,
+                    "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
+                    "violations": [],
+                },
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+            "--allow-focused-baseline-preset-drift",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_focused_gate_preset_drift_flag_still_fails_other_config_drift(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "configuration_changes": [
+                    {
+                        "field": "preset",
+                        "baseline": "real-screenshot-hard-gate@v13",
+                        "candidate": "focused-real-screenshot-gate@v11:only1",
+                    },
+                    {
+                        "field": "runner_ocr_cache",
+                        "baseline": False,
+                        "candidate": True,
+                    },
+                ],
+                "signature_changes": [],
+                "regression_budget": {
+                    "passed": True,
+                    "max_total_elapsed_regression_s": 0.25,
+                    "max_repeat_p95_regression_s": 0.25,
+                    "max_ocr_engine_total_regression_s": 0.25,
+                    "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
+                    "violations": [],
+                },
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+            "--allow-focused-baseline-preset-drift",
+        ]
+    )
+
+    assert exit_code == 1
+
+
 def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_default(
     tmp_path,
     monkeypatch,

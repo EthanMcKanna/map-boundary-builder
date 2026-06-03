@@ -199,6 +199,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero when --compare-baseline-report has incompatible timing/cache settings.",
     )
     parser.add_argument(
+        "--allow-focused-baseline-preset-drift",
+        action="store_true",
+        help=(
+            "Allow the expected preset label difference when a focused gate compares "
+            "selected rows against a full real-screenshot hard-gate baseline."
+        ),
+    )
+    parser.add_argument(
         "--fail-on-baseline-coverage-gap",
         action="store_true",
         help="Exit non-zero when --compare-baseline-report did not compare every selected row.",
@@ -764,7 +772,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.fail_on_baseline_signature_drift and baseline_comparison_signature_drift_cases(report):
         return 1
-    if args.fail_on_baseline_config_drift and baseline_comparison_configuration_changes(report):
+    if args.fail_on_baseline_config_drift and baseline_comparison_configuration_changes(
+        report,
+        allow_focused_baseline_preset_drift=args.allow_focused_baseline_preset_drift,
+    ):
         return 1
     if args.fail_on_baseline_coverage_gap and baseline_comparison_coverage_gaps(report):
         return 1
@@ -6037,14 +6048,38 @@ def baseline_comparison_signature_drift_cases(report: dict[str, Any]) -> list[st
     return slugs
 
 
-def baseline_comparison_configuration_changes(report: dict[str, Any]) -> list[dict[str, Any]]:
+def baseline_comparison_configuration_changes(
+    report: dict[str, Any],
+    *,
+    allow_focused_baseline_preset_drift: bool = False,
+) -> list[dict[str, Any]]:
     comparison = report.get("baseline_comparison")
     if not isinstance(comparison, dict):
         return []
     changes = comparison.get("configuration_changes")
     if not isinstance(changes, list):
         return []
-    return [change for change in changes if isinstance(change, dict)]
+    config_changes = [change for change in changes if isinstance(change, dict)]
+    if allow_focused_baseline_preset_drift:
+        config_changes = [
+            change
+            for change in config_changes
+            if not focused_baseline_preset_drift_is_expected(change)
+        ]
+    return config_changes
+
+
+def focused_baseline_preset_drift_is_expected(change: dict[str, Any]) -> bool:
+    if change.get("field") != "preset":
+        return False
+    baseline = change.get("baseline")
+    candidate = change.get("candidate")
+    return (
+        isinstance(baseline, str)
+        and isinstance(candidate, str)
+        and baseline.startswith(f"{REAL_SCREENSHOT_HARD_GATE_PRESET_NAME}@")
+        and candidate.startswith(f"{FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME}@")
+    )
 
 
 def baseline_comparison_expectation_regressions(report: dict[str, Any]) -> list[str]:
