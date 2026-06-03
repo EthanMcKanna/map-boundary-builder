@@ -17991,3 +17991,26 @@ with zero failures in 0.531s.
   worse (`0.632s` versus the `0.622s` clean baseline; one focused run measured
   `0.745s`). Keep the existing dark-teal batch `8` and avoid a focus-only batch
   knob unless production evidence shows a larger cold OCR win.
+- Accepted a focused in-memory georeference-result cache for production-shaped
+  dark-teal auto-georef repeats. The cache is deliberately narrow: enabled only
+  for credible focused OCR fits with no city hint, no sparse regional fit, no
+  road-distance constraint, three minimum controls, and marker-dot anchoring.
+  The key includes image dimensions, focused label-y bounds, the extracted
+  pixel geometry WKB, and the rounded OCR label text/box/confidence tuple, so
+  different crops or maps must refit. The first prototype missed Ann Arbor
+  because `label_y_max=1246.04` made the fit ineligible; the accepted version
+  keys on that bound instead. A same-process production-variant probe using
+  `out/prod-ann-arbor-refresh-20260603/aa-mm-variant*.avif` emitted
+  `Using cached map transform` on the second image and finished at `0.049092s`
+  with unchanged Ann Arbor confidence `0.805` and three controls after a normal
+  first run at `0.362064s`. The focused Ann Arbor comparison at
+  `out/focused-georef-cache-bounded-ann-arbor-20260603` preserved
+  `signature_changes=0` and expectations; it exited nonzero only because the
+  older partial baseline lacks hidden-overlap fields. Repeat georeference p95
+  improved by about `-0.0026s` to `-0.0033s` with cache-hit events, while total
+  repeat timing was dominated by OCR noise. Full pytest passed
+  `726 passed, 31 subtests passed`, `git diff --check` passed, and the full
+  real-screenshot hard gate at `out/focused-georef-cache-hard-gate-20260603`
+  passed `50/50` expectations with statuses `{"complete":39,"failed":11}`,
+  max primary `0.350876s`, repeat p95 `0.310s`, repeat max `0.372s`, and
+  prewarm `0.637s`.

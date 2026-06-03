@@ -527,6 +527,64 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
     }
 
 
+def test_focused_georeference_cache_reuses_matching_dark_teal_fit(tmp_path, monkeypatch) -> None:
+    labels = [OcrLabel("Ann Arbor", x=100, y=120, width=80, height=24, confidence=98)]
+    pixel_geometry = Polygon([(10, 10), (200, 20), (190, 180), (10, 10)])
+    rgb = np.zeros((240, 320, 3), dtype=np.uint8)
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Ann Arbor",
+            lon=-83.74,
+            lat=42.28,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=4.0,
+            rotation_radians=0.0,
+            confidence=0.8,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+    calls: list[tuple] = []
+    events: list[dict] = []
+
+    def fake_georeference_from_labels(*args, **kwargs):
+        calls.append((args, kwargs))
+        return georef
+
+    monkeypatch.setattr(runner, "road_contexts_from_labels", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(runner, "georeference_from_labels", fake_georeference_from_labels)
+    runner.clear_focused_georeference_cache()
+    try:
+        for _ in range(2):
+            result = runner.fit_georeference(
+                labels,
+                tmp_path / "map.png",
+                pixel_geometry,
+                rgb=rgb,
+                city_input=None,
+                width=320,
+                height=240,
+                coverage_ratio=0.12,
+                min_control_points=3,
+                label_y_min=None,
+                label_y_max=224.5,
+                road_feature_distance=None,
+                anchor_marker_dots=True,
+                style="dark-teal",
+                allow_credible_cached_fit=True,
+                progress=events.append,
+            )
+            assert result is georef
+    finally:
+        runner.clear_focused_georeference_cache()
+
+    assert len(calls) == 1
+    assert any(event["message"] == "Using cached map transform" for event in events)
+
+
 def test_provider_ui_label_catalog_match_rejects_only_ambiguous_area_text() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))

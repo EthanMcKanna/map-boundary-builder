@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
 import json
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import threading
 from typing import Any, Callable
 
 import cv2
@@ -319,6 +321,12 @@ EARLY_OCR_STYLE_MAX_DIMENSION = max(
     0,
     int(os.environ.get("MAP_BOUNDARY_EARLY_OCR_STYLE_MAX_DIMENSION", "800")),
 )
+FOCUSED_GEOREFERENCE_CACHE_MAX = max(
+    0,
+    int(os.environ.get("MAP_BOUNDARY_FOCUSED_GEOREFERENCE_CACHE_MAX", "64")),
+)
+_FOCUSED_GEOREFERENCE_CACHE: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
+_FOCUSED_GEOREFERENCE_CACHE_LOCK = threading.RLock()
 
 
 @dataclass(frozen=True)
@@ -4607,22 +4615,49 @@ def fit_georeference(
         )
 
     if georef is None:
-        georef = georeference_from_labels(
+        cache_key = focused_georeference_cache_key(
             labels,
-            str(image_path),
-            city_input,
-            width,
-            height,
-            rgb=rgb,
+            pixel_geometry,
+            city_input=city_input,
+            width=width,
+            height=height,
             min_control_points=min_control_points,
             label_y_min=label_y_min,
             label_y_max=label_y_max,
             road_feature_distance=road_feature_distance,
             anchor_marker_dots=anchor_marker_dots,
-            allow_road_refinement=should_allow_label_fit_road_refinement(style),
-            allow_sparse_regional_fit=sparse_regional_fit,
+            style=style,
             allow_credible_cached_fit=allow_credible_cached_fit,
+            allow_sparse_regional_fit=sparse_regional_fit,
         )
+        if cache_key is not None:
+            georef = read_focused_georeference_cache(cache_key)
+            if georef is not None:
+                emit_progress(
+                    progress,
+                    stage="georeference",
+                    message="Using cached map transform",
+                    percent=76,
+                )
+        if georef is None:
+            georef = georeference_from_labels(
+                labels,
+                str(image_path),
+                city_input,
+                width,
+                height,
+                rgb=rgb,
+                min_control_points=min_control_points,
+                label_y_min=label_y_min,
+                label_y_max=label_y_max,
+                road_feature_distance=road_feature_distance,
+                anchor_marker_dots=anchor_marker_dots,
+                allow_road_refinement=should_allow_label_fit_road_refinement(style),
+                allow_sparse_regional_fit=sparse_regional_fit,
+                allow_credible_cached_fit=allow_credible_cached_fit,
+            )
+            if cache_key is not None and georef is not None:
+                write_focused_georeference_cache(cache_key, georef)
 
     if georef is None and road_context_candidates and road_network_context_fallback_enabled():
         georef = georeference_from_road_contexts(
@@ -4633,6 +4668,80 @@ def fit_georeference(
             progress=progress,
         )
     return georef
+
+
+def focused_georeference_cache_key(
+    labels: list[Any],
+    pixel_geometry,
+    *,
+    city_input: str | None,
+    width: int,
+    height: int,
+    min_control_points: int,
+    label_y_min: float | None,
+    label_y_max: float | None,
+    road_feature_distance: Any | None,
+    anchor_marker_dots: bool,
+    style: str | None,
+    allow_credible_cached_fit: bool,
+    allow_sparse_regional_fit: bool,
+) -> tuple[Any, ...] | None:
+    if FOCUSED_GEOREFERENCE_CACHE_MAX <= 0:
+        return None
+    if not allow_credible_cached_fit or style != "dark-teal" or city_input is not None:
+        return None
+    if road_feature_distance is not None:
+        return None
+    if allow_sparse_regional_fit or min_control_points != 3 or not anchor_marker_dots:
+        return None
+    try:
+        geometry_key = pixel_geometry.wkb_hex
+    except Exception:
+        return None
+    label_key = tuple(
+        (
+            str(getattr(label, "text", "")),
+            round(float(getattr(label, "x", 0.0)), 3),
+            round(float(getattr(label, "y", 0.0)), 3),
+            round(float(getattr(label, "width", 0.0)), 3),
+            round(float(getattr(label, "height", 0.0)), 3),
+            round(float(getattr(label, "confidence", 0.0)), 3),
+        )
+        for label in labels
+    )
+    if not label_key:
+        return None
+    return (
+        "focused-dark-teal-v2",
+        int(width),
+        int(height),
+        None if label_y_min is None else round(float(label_y_min), 3),
+        None if label_y_max is None else round(float(label_y_max), 3),
+        geometry_key,
+        label_key,
+    )
+
+
+def read_focused_georeference_cache(cache_key: tuple[Any, ...]):
+    with _FOCUSED_GEOREFERENCE_CACHE_LOCK:
+        georef = _FOCUSED_GEOREFERENCE_CACHE.get(cache_key)
+        if georef is None:
+            return None
+        _FOCUSED_GEOREFERENCE_CACHE.move_to_end(cache_key)
+        return georef
+
+
+def write_focused_georeference_cache(cache_key: tuple[Any, ...], georef) -> None:
+    with _FOCUSED_GEOREFERENCE_CACHE_LOCK:
+        _FOCUSED_GEOREFERENCE_CACHE[cache_key] = georef
+        _FOCUSED_GEOREFERENCE_CACHE.move_to_end(cache_key)
+        while len(_FOCUSED_GEOREFERENCE_CACHE) > FOCUSED_GEOREFERENCE_CACHE_MAX:
+            _FOCUSED_GEOREFERENCE_CACHE.popitem(last=False)
+
+
+def clear_focused_georeference_cache() -> None:
+    with _FOCUSED_GEOREFERENCE_CACHE_LOCK:
+        _FOCUSED_GEOREFERENCE_CACHE.clear()
 
 
 def is_fast_context_hint_georeference(result) -> bool:
