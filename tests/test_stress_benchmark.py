@@ -2986,6 +2986,96 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
     assert exit_code == 0
 
 
+def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("benchmarks/real-screenshot-stress.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["only_slugs"] == ["dallas-waymo", "los-angeles-waymo"]
+        assert kwargs["execution"] == "in-process"
+        assert kwargs["profile_ocr_engine"] is True
+        assert kwargs["prewarm_runtime"] is True
+        assert kwargs["runner_ocr_cache"] is False
+        assert kwargs["extraction_cache"] is False
+        assert kwargs["repeat_profile_runs"] == 3
+        assert kwargs["repeat_profile_warmups"] == 1
+        assert kwargs["max_total_elapsed_s"] == 1.0
+        assert kwargs["max_repeat_profile_p95_duration_s"] == 0.8
+        assert kwargs["max_prewarm_runtime_s"] == 2.0
+        assert kwargs["max_prewarm_stage_s"] == {
+            "rapidocr_s": 1.8,
+            "total_s": 2.0,
+        }
+        assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
+            "total_s": 0.7,
+        }
+        expected_count_budget = {
+            "label_confidence_lt_90_count": 3.0,
+            "label_count": 29.0,
+            "raw_box_count": 50.0,
+            "result_count": 29.0,
+            "selected_box_count": 30.0,
+        }
+        assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
+        assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
+        assert kwargs["min_ocr_call_contract_rows"] is None
+        assert kwargs["min_ocr_count_contract_rows"] is None
+        assert kwargs["max_positive_ocr_call_only_rows"] is None
+        assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
+        assert kwargs["preset"] == {
+            "name": "focused-real-screenshot-gate",
+            "version": 1,
+            "only": ["dallas-waymo", "los-angeles-waymo"],
+        }
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 2,
+                "expectation_passed": 2,
+                "unexpected": [],
+                "statuses": {"complete": 2},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 4,
+                    "expectation_passed_samples": 4,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 4,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--only",
+            "los-angeles-waymo",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monkeypatch) -> None:
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["max_prewarm_stage_s"] == {
@@ -3065,6 +3155,37 @@ def test_main_rejects_real_screenshot_hard_gate_with_only(monkeypatch) -> None:
 
     with pytest.raises(SystemExit) as exc:
         stress_module.main(["--real-screenshot-hard-gate", "--only", "dallas-waymo"])
+
+    assert exc.value.code == 2
+
+
+def test_main_rejects_focused_real_screenshot_gate_without_only(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run without a focused slug")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--focused-real-screenshot-gate"])
+
+    assert exc.value.code == 2
+
+
+def test_main_rejects_combined_real_screenshot_gate_presets(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run with conflicting presets")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(
+            [
+                "--real-screenshot-hard-gate",
+                "--focused-real-screenshot-gate",
+                "--only",
+                "dallas-waymo",
+            ]
+        )
 
     assert exc.value.code == 2
 

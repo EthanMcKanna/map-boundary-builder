@@ -16594,3 +16594,33 @@ with zero failures in 0.531s.
   cache tests (`85 passed in 0.61s`), and the full suite (`668 passed, 31
   subtests passed in 5.78s`). No screenshot hard gate was rerun because this
   only changes browser-local cache admission/keying.
+- Fresh continuation baseline
+  `out/current-continuation-full49-hard-20260603` passed the full real-screenshot
+  hard gate: `49/49`, statuses `{"complete":38,"failed":11}`, prewarm `0.781s`,
+  primary max `0.537s`, repeat p95 `0.372s`, repeat max `0.454s`, repeat
+  OCR-engine p95 `0.331s`, stable signatures, and all manifest latency/OCR-count
+  contracts. The slowest primary row was `dallas-waymo`, dominated by bright-blue
+  detector time.
+- Rejected lowering the non-SVG bright-blue detector limit from `256`.
+  Focused Waymo controls and candidates all preserved behavior contracts, but
+  none produced a matched latency win: `out/brightblue-det256-control-20260603`
+  passed `7/7` with primary max `0.441s` and repeat p95 `0.397s`; `224` passed
+  but pushed Miami primary to `0.474s`; `208` passed but worsened repeat p95 to
+  `0.493s`; and `192` passed but repeat p95 was still worse at `0.427s`. A
+  parallel loader microbench also rejected switching large PNG decode from
+  Pillow to OpenCV because Pillow was faster on the 2400px PNG Waymo rows and a
+  few alpha/metadata cases were not byte-identical.
+- Added a focused real-screenshot gate preset for repeatable A/B sweeps:
+  `--focused-real-screenshot-gate` applies the same production-warm in-process
+  execution, OCR profiling, prewarm, disabled OCR/extraction cache, repeat
+  signature, latency, and OCR-count budgets as the full hard gate, while
+  requiring explicit `--only` slugs and skipping only the full-manifest OCR
+  contract coverage counts. The full `--real-screenshot-hard-gate` remains
+  full-manifest-only. Focused stress benchmark tests passed `95 passed in
+  0.31s`, and the real bright-blue smoke
+  `out/focused-gate-brightblue-control-20260603` passed `7/7` with primary max
+  `0.429s`, repeat p95 `0.420s`, and stable signatures. The post-patch full
+  hard gate `out/focused-gate-tooling-full49-hard-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, prewarm `0.659s`, primary max
+  `0.469s`, repeat p95 `0.361s`, repeat max `0.392s`, repeat OCR-engine p95
+  `0.330s`, stable signatures, and all manifest latency/OCR-count contracts.

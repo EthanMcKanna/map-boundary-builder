@@ -33,6 +33,8 @@ DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
 REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 2
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 1
 OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
@@ -150,6 +152,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Apply the current full real-screenshot production-warm hard gate preset: "
             "in-process execution, OCR profiling, prewarm, repeat signatures, latency/OCR "
             "budgets, and manifest OCR contract coverage budgets."
+        ),
+    )
+    parser.add_argument(
+        "--focused-real-screenshot-gate",
+        action="store_true",
+        help=(
+            "Apply the real-screenshot production-warm gate settings to selected rows. "
+            "Unlike --real-screenshot-hard-gate, this allows --only and skips full-manifest "
+            "OCR contract coverage budgets."
         ),
     )
     parser.add_argument(
@@ -404,10 +415,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    if not args.real_screenshot_hard_gate:
+    if args.real_screenshot_hard_gate and args.focused_real_screenshot_gate:
+        parser.error("--real-screenshot-hard-gate and --focused-real-screenshot-gate cannot be combined")
+    if not args.real_screenshot_hard_gate and not args.focused_real_screenshot_gate:
         return
-    if args.only:
+    if args.real_screenshot_hard_gate and args.only:
         parser.error("--real-screenshot-hard-gate targets the full manifest and cannot be combined with --only")
+    if args.focused_real_screenshot_gate and not args.only:
+        parser.error("--focused-real-screenshot-gate requires at least one --only slug")
     args.execution = "in-process"
     args.profile_ocr_engine = True
     args.prewarm_runtime = True
@@ -441,22 +456,30 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET],
         args.max_repeat_ocr_engine_max_count,
     )
+    args.fail_on_invalid_ocr_count_contracts = True
+    if args.focused_real_screenshot_gate:
+        return
     if args.min_ocr_call_contract_rows is None:
         args.min_ocr_call_contract_rows = 49
     if args.min_ocr_count_contract_rows is None:
         args.min_ocr_count_contract_rows = 38
     if args.max_positive_ocr_call_only_rows is None:
         args.max_positive_ocr_call_only_rows = 0
-    args.fail_on_invalid_ocr_count_contracts = True
 
 
 def stress_preset_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
-    if not args.real_screenshot_hard_gate:
-        return None
-    return {
-        "name": REAL_SCREENSHOT_HARD_GATE_PRESET_NAME,
-        "version": REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION,
-    }
+    if args.real_screenshot_hard_gate:
+        return {
+            "name": REAL_SCREENSHOT_HARD_GATE_PRESET_NAME,
+            "version": REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION,
+        }
+    if args.focused_real_screenshot_gate:
+        return {
+            "name": FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME,
+            "version": FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION,
+            "only": list(args.only),
+        }
+    return None
 
 
 def prepend_default_budget_entries(defaults: list[str], values: list[str]) -> list[str]:
