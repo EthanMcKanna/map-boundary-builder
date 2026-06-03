@@ -292,6 +292,23 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                     "label_confidence_lt_90_count": 1,
                 }
             ],
+            "slowest_cases": [
+                {
+                    "slug": "kept",
+                    "total_elapsed_s": 0.5,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
+                    "ocr_engine": {
+                        "total_s": 0.3,
+                        "rec_elapsed_s": 0.12,
+                        "det_elapsed_s": 0.07,
+                        "selected_box_count": 12,
+                        "selected_box_area_lt_1300_count": 5,
+                        "label_confidence_p50": 88.25,
+                    },
+                }
+            ],
         },
         "repeat_profile": {
             "summary": {
@@ -376,6 +393,10 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert (
         "ocr engine max: det=0.070s@kept shape=607x1000 det_limit=608/default "
         "rec=default min_area=500 selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
+    ) in output
+    assert (
+        "primary slowest cases: kept=0.500s ocr=0.400s ocr_total=0.300s "
+        "rec=0.120s det=0.070s selected=12 sel_lt1300=5 conf_p50=88.2"
     ) in output
     assert (
         "primary ocr slowest cases: kept ocr=0.300s rec=0.120s det=0.070s "
@@ -931,6 +952,23 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "calls": 1,
             "raw_box_count": 4,
             "selected_box_count": 3,
+        }
+    ]
+    assert report["summary"]["slowest_cases"] == [
+        {
+            "slug": "profiled-map",
+            "total_elapsed_s": 0.7,
+            "observed_status": "failed",
+            "expectation_passed": True,
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.6},
+            "ocr_engine": {
+                "det_elapsed_s": 0.2,
+                "rec_elapsed_s": 0.3,
+                "total_s": 0.55,
+                "calls": 1,
+                "raw_box_count": 4,
+                "selected_box_count": 3,
+            },
         }
     ]
 
@@ -1845,6 +1883,14 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["ocr_full_detail_retry_rows"] == []
     assert saved["summary"]["ocr_engine_stage_max_rows"] == {}
     assert saved["summary"]["ocr_engine_slowest_cases"] == []
+    assert saved["summary"]["slowest_cases"] == [
+        {
+            "slug": "kept",
+            "total_elapsed_s": 0.5,
+            "observed_status": "complete",
+            "expectation_passed": True,
+        }
+    ]
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
     assert "preset" not in saved
@@ -4766,6 +4812,59 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
         == "slow ocr=0.620s rec=0.350s det=0.180s shape=1400x1400 det_limit=256/max "
         "rec_profile=en-ppocrv5 min_area=2300 selected=37 raw=44 labels=31 sel_lt1300=5 "
         "conf_lt90=4"
+    )
+
+
+def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
+    rows = [
+        {
+            "slug": "fast",
+            "total_elapsed_s": 0.2,
+            "observed_status": "complete",
+            "expectation_passed": True,
+        },
+        {
+            "slug": "slow",
+            "total_elapsed_s": 0.62,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "stages": {"ocr": 0.4, "georeference": 0.11},
+            "ocr_engine_profile": {
+                "calls": 1,
+                "total_s": 0.36,
+                "rec_elapsed_s": 0.15,
+                "det_elapsed_s": 0.17,
+                "selected_box_count": 18,
+                "selected_box_area_lt_1300_count": 3,
+                "label_confidence_p50": 98.25,
+            },
+        },
+    ]
+
+    cases = stress_module.primary_slowest_cases_from_rows(rows, limit=1)
+
+    assert cases == [
+        {
+            "slug": "slow",
+            "total_elapsed_s": 0.62,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
+            "ocr_engine": {
+                "det_elapsed_s": 0.17,
+                "rec_elapsed_s": 0.15,
+                "total_s": 0.36,
+                "calls": 1,
+                "selected_box_count": 18,
+                "selected_box_area_lt_1300_count": 3,
+                "label_confidence_p50": 98.25,
+            },
+        }
+    ]
+    assert (
+        stress_module.primary_slow_case_text_from_summary(cases[0])
+        == "slow=0.620s ocr=0.400s ocr_total=0.360s rec=0.150s det=0.170s "
+        "selected=18 sel_lt1300=3 conf_p50=98.2"
     )
 
 

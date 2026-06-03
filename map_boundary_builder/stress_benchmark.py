@@ -2511,6 +2511,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_engine_profile": summarize_rapidocr_profile_summaries(ocr_engine_profiles),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(rows),
         "ocr_engine_slowest_cases": primary_ocr_engine_slowest_cases(rows),
+        "slowest_cases": primary_slowest_cases_from_rows(rows),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
@@ -2563,6 +2564,43 @@ def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) 
         if value is not None:
             row[key] = value
     return row
+
+
+def primary_slowest_cases_from_rows(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, str, dict[str, Any]]] = []
+    for row in rows:
+        total_elapsed_s = parse_nonnegative_float(row.get("total_elapsed_s"))
+        if total_elapsed_s is None:
+            continue
+        ranked.append((total_elapsed_s, str(row.get("slug") or ""), row))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [
+        primary_slowest_case_summary(row, total_elapsed_s)
+        for total_elapsed_s, _slug, row in ranked[: max(0, limit)]
+    ]
+
+
+def primary_slowest_case_summary(
+    row: dict[str, Any],
+    total_elapsed_s: float,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "slug": row.get("slug"),
+        "total_elapsed_s": round(total_elapsed_s, 6),
+        "observed_status": row.get("observed_status"),
+        "expectation_passed": row.get("expectation_passed"),
+    }
+    top_stage = slowest_stage_summary(row)
+    if top_stage is not None:
+        result["top_stage"] = top_stage
+    ocr_engine = slowest_sample_ocr_engine_summary(row)
+    if ocr_engine:
+        result["ocr_engine"] = ocr_engine
+    return result
 
 
 def primary_ocr_engine_slowest_cases(
@@ -4157,6 +4195,18 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"{stage}={row['elapsed_s']:.3f}s@{row['slug']}" for stage, row in summary["stage_max_rows"].items()
         )
         print(f"stage max: {stage_max_text}")
+    primary_slowest_cases = summary.get("slowest_cases")
+    if not isinstance(primary_slowest_cases, list):
+        rows = report.get("rows")
+        primary_slowest_cases = primary_slowest_cases_from_rows(rows) if isinstance(rows, list) else []
+    if primary_slowest_cases:
+        primary_slow_case_text = ", ".join(
+            primary_slow_case_text_from_summary(case)
+            for case in primary_slowest_cases[:5]
+            if isinstance(case, dict)
+        )
+        if primary_slow_case_text:
+            print(f"primary slowest cases: {primary_slow_case_text}")
     if summary.get("ocr_full_detail_retry_count"):
         retry_rows = ", ".join(summary.get("ocr_full_detail_retry_rows", []))
         print(f"ocr full-detail retries: {summary['ocr_full_detail_retry_count']} ({retry_rows})")
@@ -4592,6 +4642,44 @@ def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     confidence_lt_90 = case.get("label_confidence_lt_90_count")
     if isinstance(confidence_lt_90, int) and not isinstance(confidence_lt_90, bool):
         parts.append(f"conf_lt90={confidence_lt_90}")
+    return " ".join(parts)
+
+
+def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
+    slug = case.get("slug") or "-"
+    total_elapsed_s = parse_nonnegative_float(case.get("total_elapsed_s"))
+    parts = [str(slug)]
+    if total_elapsed_s is not None:
+        parts[0] = f"{slug}={total_elapsed_s:.3f}s"
+    top_stage = case.get("top_stage")
+    if isinstance(top_stage, dict):
+        stage = top_stage.get("stage")
+        stage_elapsed_s = parse_nonnegative_float(top_stage.get("elapsed_s"))
+        if isinstance(stage, str) and stage and stage_elapsed_s is not None:
+            parts.append(f"{stage}={stage_elapsed_s:.3f}s")
+    ocr_engine = case.get("ocr_engine")
+    if isinstance(ocr_engine, dict):
+        total_s = parse_nonnegative_float(ocr_engine.get("total_s"))
+        rec_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
+        det_s = parse_nonnegative_float(ocr_engine.get("det_elapsed_s"))
+        selected_count = ocr_engine.get("selected_box_count")
+        selected_lt_1300 = ocr_engine.get("selected_box_area_lt_1300_count")
+        confidence_p50 = parse_nonnegative_float(ocr_engine.get("label_confidence_p50"))
+        if total_s is not None:
+            parts.append(f"ocr_total={total_s:.3f}s")
+        if rec_s is not None:
+            parts.append(f"rec={rec_s:.3f}s")
+        if det_s is not None:
+            parts.append(f"det={det_s:.3f}s")
+        if isinstance(selected_count, int) and not isinstance(selected_count, bool):
+            parts.append(f"selected={selected_count}")
+        if isinstance(selected_lt_1300, int) and not isinstance(selected_lt_1300, bool):
+            parts.append(f"sel_lt1300={selected_lt_1300}")
+        if confidence_p50 is not None:
+            parts.append(f"conf_p50={confidence_p50:.1f}")
+    expectation_passed = case.get("expectation_passed")
+    if expectation_passed is False:
+        parts.append("unexpected")
     return " ".join(parts)
 
 

@@ -16906,3 +16906,17 @@ with zero failures in 0.531s.
   stress benchmark tests passed `104 passed in 0.44s`, the full suite passed
   `680 passed, 31 subtests passed in 6.10s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Added primary total-latency leader rows to stress summaries and CLI output,
+  parallel to the repeat slow-case leaders. `summary.slowest_cases` now ranks
+  primary rows by `total_elapsed_s`, includes the slowest event-profile stage,
+  and carries OCR-engine total/rec/det plus selected-box/confidence context
+  when profiling is available; old saved reports get the same line through a
+  print-time fallback from `rows`. Replaying
+  `out/current-leaders-full49-hard-20260603/stress-summary.json` now prints
+  `primary slowest cases` headed by `dallas-waymo=0.476s ocr=0.385s
+  ocr_total=0.420s rec=0.065s det=0.319s selected=7`, followed by
+  `san-antonio-waymo=0.390s`, `los-angeles-waymo=0.384s`,
+  `houston-waymo=0.347s`, and `bay-area-waymo=0.334s`. Focused stress
+  benchmark tests passed `105 passed in 0.44s`, the full suite passed
+  `681 passed, 31 subtests passed in 6.16s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.
