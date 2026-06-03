@@ -1729,6 +1729,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 (608, "default", "default", 12, 608),
                 (608, "default", "default", 16, 608),
+                (320, "default", "default", 16, 608),
                 (256, "en-ppocrv5", "max", 12, 1400),
                 (208, "en-ppocrv5", "max", 12, 1400),
             ],
@@ -1791,6 +1792,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 (608, "default", "default", 12),
                 (608, "default", "default", 16),
+                (320, "default", "default", 16),
             ],
         )
 

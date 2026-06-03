@@ -1478,6 +1478,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_asset_signature"], str)
         self.assertEqual(cold["ocr"]["rapidocr_large_image_detector_limit_min_dimension"], 1000)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_rec_batch_num"], 8)
+        self.assertEqual(cold["ocr"]["focus_georef_ocr_detector_limit_side_len"], 320)
         self.assertEqual(cold["ocr"]["current_catalog_label_ocr_max_dimension"], 875)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
@@ -1489,6 +1490,7 @@ class ApiRunCacheTests(unittest.TestCase):
                 [256, "en-ppocrv5", "max", 12],
                 [208, "en-ppocrv5", "max", 12],
                 [608, "default", "default", 8],
+                [320, "default", "default", 8],
             ],
         )
         self.assertEqual(
@@ -1496,6 +1498,7 @@ class ApiRunCacheTests(unittest.TestCase):
             [
                 [608, "default", "default", 12, 608],
                 [608, "default", "default", 8, 608],
+                [320, "default", "default", 8, 608],
                 [256, "en-ppocrv5", "max", 12, 1000],
                 [208, "en-ppocrv5", "max", 12, 1000],
             ],

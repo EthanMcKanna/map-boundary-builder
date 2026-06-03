@@ -27,6 +27,7 @@ from .pipeline_version import runtime_dependency_signature
 from .runtime_config import (
     FAST_TEXT_OCR_RESCUE_MIN_AREA,
     FAST_TEXT_OCR_RESCUE_MIN_ASPECT,
+    FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN,
     ONNXRUNTIME_ALLOW_SPINNING,
     ONNXRUNTIME_ENABLE_CPU_MEM_ARENA,
     RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,
@@ -1598,6 +1599,14 @@ def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:
             )
             if detector_limit > 0 and key not in keys:
                 keys.append(key)
+        key = (
+            FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN,
+            RAPIDOCR_RECOGNITION_PROFILE_DEFAULT,
+            RAPIDOCR_DETECTOR_LIMIT_TYPE_DEFAULT,
+            RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+        )
+        if FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN > 0 and key not in keys:
+            keys.append(key)
     return keys
 
 

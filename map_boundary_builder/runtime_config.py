@@ -187,6 +187,10 @@ RAPIDOCR_DARK_TEAL_REC_BATCH_NUM = env_int(
     8,
     minimum=0,
 )
+FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN = env_int(
+    "MAP_BOUNDARY_FOCUS_GEOREF_OCR_DET_LIMIT_SIDE_LEN",
+    320,
+)
 LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION = env_int(
     "MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
     1000,
@@ -302,6 +306,14 @@ def rapidocr_warm_engine_keys_config() -> list[list[int | str]]:
             ]
             if detector_limit > 0 and key not in keys:
                 keys.append(key)
+        key = [
+            FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN,
+            "default",
+            "default",
+            RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+        ]
+        if FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN > 0 and key not in keys:
+            keys.append(key)
     return keys
 
 
@@ -504,6 +516,7 @@ def ocr_runtime_config() -> dict[str, Any]:
         "rapidocr_cls_batch_num": RAPIDOCR_CLS_BATCH_NUM,
         "rapidocr_rec_batch_num": RAPIDOCR_REC_BATCH_NUM,
         "rapidocr_dark_teal_rec_batch_num": RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+        "focus_georef_ocr_detector_limit_side_len": FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN,
         "light_fill_route_ui_ocr_max_dimension": LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
         "gray_fill_route_ui_ocr_max_dimension": GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION,
         "rapidocr_classifier_retry_min_labels": RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS,

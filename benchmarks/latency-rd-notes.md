@@ -17768,3 +17768,22 @@ with zero failures in 0.531s.
   primary `0.343631s`, repeat p95 `0.286258s`, repeat max `0.315582s`, and
   Ann Arbor primary `0.243397s`. Full suite passed (`720 passed, 31 subtests
   passed in 5.78s`).
+- Covered the focused dark-teal OCR engine in generation prewarm after a
+  production Ann Arbor cache-miss smoke showed the correct post-seed path still
+  paying a cold focused OCR stage (`1.146175s` OCR,
+  `ocr-georeference:nominatim-label-fit`, run `1780502765-f4dffa67`). The
+  focused path uses detector `320/default` with dark-teal rec batch `8`, while
+  the previous warm key set only covered `608/default/default/8`. The runtime
+  warm keys now include `[320, "default", "default", 8]` and expose
+  `focus_georef_ocr_detector_limit_side_len` in the OCR runtime config. Targeted
+  tests passed (`151` OCR/georeference tests and `85` API cache tests). A
+  fresh-cache/network-blocked focused Ann Arbor gate at
+  `out/focus-warm-key-ann-arbor-20260603` passed with prewarm `0.651584s`,
+  primary `0.212261s`, OCR `0.106750s`, and repeat p95 `0.207537s`, compared
+  with the prior post-seed focused gate at `0.330126s` primary and prewarm
+  `0.560937s`. The full fresh-cache/network-blocked hard gate at
+  `out/focus-warm-key-full49-hard-20260603` passed `49/49`, max primary
+  `0.355487s`, repeat p95 `0.287526s`, repeat max `0.315666s`, and prewarm
+  `0.654165s`; the full suite passed (`720 passed, 31 subtests passed in
+  5.42s`). This is production cold-start coverage for an existing focused OCR
+  path, not a general Waymo OCR tuning change.
