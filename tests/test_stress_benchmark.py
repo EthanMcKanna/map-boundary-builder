@@ -930,6 +930,14 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         == 0.06
     )
     assert comparison["largest_repeat_profile_case_p95_improvements"][0]["slug"] == "dallas"
+    assert comparison["largest_repeat_profile_case_ocr_p95_regressions"][0]["slug"] == "houston"
+    assert (
+        comparison["largest_repeat_profile_case_ocr_p95_regressions"][0][
+            "ocr_engine_stage_duration_s"
+        ]["total_s"]["p95_duration_s"]["delta_s"]
+        == 0.05
+    )
+    assert comparison["largest_repeat_profile_case_ocr_p95_improvements"][0]["slug"] == "dallas"
     regression_budget = comparison["regression_budget"]
     assert regression_budget["passed"] is False
     assert regression_budget["max_total_elapsed_regression_s"] == 0.1
@@ -942,6 +950,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         "repeat_profile_p95_regression_exceeded",
         "repeat_profile_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
+        "repeat_ocr_case_total_p95_regression_exceeded",
     ]
     assert regression_budget["violations"][0]["slug"] == "houston"
     assert regression_budget["violations"][0]["total_elapsed_delta_s"] == 0.2
@@ -955,6 +964,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert regression_budget["violations"][3]["baseline_p95_total_elapsed_s"] == 0.68
     assert regression_budget["violations"][3]["candidate_p95_total_elapsed_s"] == 0.74
     assert regression_budget["violations"][4]["delta_s"] == 0.02
+    assert regression_budget["violations"][5]["slug"] == "houston"
+    assert regression_budget["violations"][5]["delta_s"] == 0.05
+    assert regression_budget["violations"][5]["baseline_ocr_engine_total_p95_duration_s"] == 0.31
+    assert regression_budget["violations"][5]["candidate_ocr_engine_total_p95_duration_s"] == 0.36
 
 
 def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None:
@@ -1392,8 +1405,20 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                         "max_repeat_p95_regression_s": 0.02,
                     },
                     {
+                        "kind": "repeat_profile_case_p95_regression_exceeded",
+                        "slug": "houston",
+                        "delta_s": 0.06,
+                        "max_repeat_p95_regression_s": 0.02,
+                    },
+                    {
                         "kind": "repeat_ocr_total_p95_regression_exceeded",
                         "delta_s": 0.02,
+                        "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
+                    },
+                    {
+                        "kind": "repeat_ocr_case_total_p95_regression_exceeded",
+                        "slug": "houston",
+                        "delta_s": 0.05,
                         "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                     },
                 ],
@@ -1421,6 +1446,34 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                             "baseline": 0.5,
                             "candidate": 0.46,
                             "delta_s": -0.04,
+                        }
+                    },
+                }
+            ],
+            "largest_repeat_profile_case_ocr_p95_regressions": [
+                {
+                    "slug": "houston",
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {
+                            "p95_duration_s": {
+                                "baseline": 0.31,
+                                "candidate": 0.36,
+                                "delta_s": 0.05,
+                            }
+                        }
+                    },
+                }
+            ],
+            "largest_repeat_profile_case_ocr_p95_improvements": [
+                {
+                    "slug": "dallas",
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {
+                            "p95_duration_s": {
+                                "baseline": 0.25,
+                                "candidate": 0.22,
+                                "delta_s": -0.03,
+                            }
                         }
                     },
                 }
@@ -1486,17 +1539,25 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "(baseline=0.680s, candidate=0.740s), best_case=dallas -0.040s "
         "(baseline=0.500s, candidate=0.460s)"
     ) in output
+    assert (
+        "baseline repeat OCR case delta: worst_ocr_case=houston +0.050s "
+        "(baseline=0.310s, candidate=0.360s), best_ocr_case=dallas -0.030s "
+        "(baseline=0.250s, candidate=0.220s)"
+    ) in output
     assert "full_detail_retries=+1" in output
     assert "hidden_ocr_p95=+0.012s" in output
     assert (
         "baseline regression budget: failed primary<=0.100s primary_ocr<=0.100s "
-        "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4 "
-        "by_kind=primary:1,primary_ocr:1,repeat_p95:1,repeat_ocr_p95:1"
+        "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=6 "
+        "by_kind=primary:1,primary_ocr:1,repeat_p95:1,repeat_case_p95:1,"
+        "repeat_ocr_p95:1,repeat_ocr_case_p95:1"
     ) in output
     assert "primary houston +0.200s > budget 0.100s" in output
     assert "primary ocr houston +0.150s > budget 0.100s" in output
     assert "repeat p95 +0.030s > budget 0.020s" in output
+    assert "repeat case p95 houston +0.060s > budget 0.020s" in output
     assert "repeat ocr p95 +0.020s > budget 0.010s" in output
+    assert "repeat ocr case p95 houston +0.050s > budget 0.010s" in output
     assert (
         "baseline repeat OCR stage delta: input_p95=+0.005s, det_p95=-0.010s, "
         "rec_p95=+0.040s, total_p95=+0.020s"
@@ -1544,26 +1605,38 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
                 "delta_s": 0.09,
                 "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
             },
+            {
+                "kind": "repeat_ocr_case_total_p95_regression_exceeded",
+                "slug": "ocr-case-slow",
+                "delta_s": 0.07,
+                "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
+            },
         ]
     )
 
-    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=6)
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=7)
     sample_kinds = [sample["kind"] for sample in samples]
 
-    assert sample_kinds[:5] == [
+    assert sample_kinds[:6] == [
         "primary_total_regression_exceeded",
         "primary_ocr_total_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
         "repeat_profile_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
+        "repeat_ocr_case_total_p95_regression_exceeded",
     ]
-    assert sample_kinds[5] == "primary_total_regression_exceeded"
+    assert sample_kinds[6] == "primary_total_regression_exceeded"
     assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
-        " by_kind=primary:6,primary_ocr:1,repeat_p95:1,repeat_case_p95:1,repeat_ocr_p95:1"
+        " by_kind=primary:6,primary_ocr:1,repeat_p95:1,repeat_case_p95:1,"
+        "repeat_ocr_p95:1,repeat_ocr_case_p95:1"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[8])
         == "repeat case p95 case-slow +0.080s > budget 0.020s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[10])
+        == "repeat ocr case p95 ocr-case-slow +0.070s > budget 0.010s"
     )
 
 
@@ -4687,7 +4760,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 7,
+            "version": 8,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -4780,7 +4853,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 6,
+            "version": 7,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {

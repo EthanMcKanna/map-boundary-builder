@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 7
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 8
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 6
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 7
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -997,6 +997,18 @@ def compare_stress_reports(
             repeat_case_deltas,
             reverse=False,
         )
+        comparison["largest_repeat_profile_case_ocr_p95_regressions"] = (
+            ranked_repeat_profile_case_ocr_deltas(
+                repeat_case_deltas,
+                reverse=True,
+            )
+        )
+        comparison["largest_repeat_profile_case_ocr_p95_improvements"] = (
+            ranked_repeat_profile_case_ocr_deltas(
+                repeat_case_deltas,
+                reverse=False,
+            )
+        )
     if (
         max_total_elapsed_regression_s is not None
         or max_repeat_p95_regression_s is not None
@@ -1212,6 +1224,51 @@ def baseline_regression_budget(
             if repeat_ocr_p95 is not None:
                 violation["candidate_ocr_engine_total_p95_duration_s"] = round(repeat_ocr_p95, 6)
             violations.append(violation)
+        case_deltas = comparison.get("repeat_profile_case_deltas")
+        if isinstance(case_deltas, list):
+            for case_delta in case_deltas:
+                if not isinstance(case_delta, dict):
+                    continue
+                p95_delta = repeat_case_delta_ocr_stage_value(
+                    case_delta,
+                    "total_s",
+                    "p95_duration_s",
+                    "delta_s",
+                )
+                if (
+                    p95_delta is None
+                    or p95_delta <= max_repeat_ocr_engine_total_p95_regression_s
+                ):
+                    continue
+                violation = {
+                    "kind": "repeat_ocr_case_total_p95_regression_exceeded",
+                    "slug": case_delta.get("slug"),
+                    "delta_s": round(p95_delta, 6),
+                    "max_repeat_ocr_engine_total_p95_regression_s": max_repeat_ocr_total,
+                }
+                baseline_case_p95 = repeat_case_delta_ocr_stage_value(
+                    case_delta,
+                    "total_s",
+                    "p95_duration_s",
+                    "baseline",
+                )
+                candidate_case_p95 = repeat_case_delta_ocr_stage_value(
+                    case_delta,
+                    "total_s",
+                    "p95_duration_s",
+                    "candidate",
+                )
+                if baseline_case_p95 is not None:
+                    violation["baseline_ocr_engine_total_p95_duration_s"] = round(
+                        baseline_case_p95,
+                        6,
+                    )
+                if candidate_case_p95 is not None:
+                    violation["candidate_ocr_engine_total_p95_duration_s"] = round(
+                        candidate_case_p95,
+                        6,
+                    )
+                violations.append(violation)
     budget["violations"] = violations
     budget["passed"] = not violations
     return budget
@@ -1364,6 +1421,41 @@ def ranked_repeat_profile_case_deltas(
     return ranked[: max(0, limit)]
 
 
+def ranked_repeat_profile_case_ocr_deltas(
+    case_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in case_deltas
+        if repeat_case_delta_ocr_stage_value(
+            delta,
+            "total_s",
+            "p95_duration_s",
+            "delta_s",
+        )
+        is not None
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(
+                repeat_case_delta_ocr_stage_value(
+                    delta,
+                    "total_s",
+                    "p95_duration_s",
+                    "delta_s",
+                )
+                or 0.0
+            ),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
 def repeat_case_delta_metric_value(
     case_delta: dict[str, Any],
     metric: str,
@@ -1376,6 +1468,24 @@ def repeat_case_delta_metric_value(
     if not isinstance(metric_delta, dict):
         return None
     return parse_signed_float(metric_delta.get(value_key))
+
+
+def repeat_case_delta_ocr_stage_value(
+    case_delta: dict[str, Any],
+    metric: str,
+    stat: str,
+    value_key: str,
+) -> float | None:
+    stage_duration = case_delta.get("ocr_engine_stage_duration_s")
+    if not isinstance(stage_duration, dict):
+        return None
+    metric_delta = stage_duration.get(metric)
+    if not isinstance(metric_delta, dict):
+        return None
+    stat_delta = metric_delta.get(stat)
+    if not isinstance(stat_delta, dict):
+        return None
+    return parse_signed_float(stat_delta.get(value_key))
 
 
 def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, Any] | None:
@@ -4955,6 +5065,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         repeat_case_delta_text = baseline_repeat_case_delta_text(baseline_comparison)
         if repeat_case_delta_text:
             print(f"baseline repeat case delta: {repeat_case_delta_text}")
+        repeat_ocr_case_delta_text = baseline_repeat_ocr_case_delta_text(baseline_comparison)
+        if repeat_ocr_case_delta_text:
+            print(f"baseline repeat OCR case delta: {repeat_ocr_case_delta_text}")
         repeat_ocr_stage_delta_text = baseline_repeat_ocr_stage_delta_text(
             repeat_delta if isinstance(repeat_delta, dict) else None
         )
@@ -4965,7 +5078,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             print(baseline_regression_budget_text(regression_budget))
             violations = regression_budget.get("violations")
             if regression_budget.get("passed") is False and isinstance(violations, list):
-                for violation in baseline_regression_budget_violation_samples(violations, limit=5):
+                for violation in baseline_regression_budget_violation_samples(violations, limit=6):
                     violation_text = baseline_regression_budget_violation_text(violation)
                     if violation_text:
                         print(f"   - {violation_text}")
@@ -5788,6 +5901,53 @@ def repeat_case_delta_summary_text(label: str, case_delta: dict[str, Any] | None
     return " ".join(parts)
 
 
+def baseline_repeat_ocr_case_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    worst = first_repeat_case_delta(
+        baseline_comparison.get("largest_repeat_profile_case_ocr_p95_regressions")
+    )
+    best = first_repeat_case_delta(
+        baseline_comparison.get("largest_repeat_profile_case_ocr_p95_improvements")
+    )
+    parts = []
+    worst_text = repeat_case_ocr_delta_summary_text("worst_ocr_case", worst)
+    if worst_text:
+        parts.append(worst_text)
+    best_text = repeat_case_ocr_delta_summary_text("best_ocr_case", best)
+    if best_text:
+        parts.append(best_text)
+    return ", ".join(parts)
+
+
+def repeat_case_ocr_delta_summary_text(label: str, case_delta: dict[str, Any] | None) -> str:
+    if not case_delta:
+        return ""
+    slug = case_delta.get("slug")
+    delta = repeat_case_delta_ocr_stage_value(
+        case_delta,
+        "total_s",
+        "p95_duration_s",
+        "delta_s",
+    )
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    parts = [f"{label}={slug} {delta:+.3f}s"]
+    baseline = repeat_case_delta_ocr_stage_value(
+        case_delta,
+        "total_s",
+        "p95_duration_s",
+        "baseline",
+    )
+    candidate = repeat_case_delta_ocr_stage_value(
+        case_delta,
+        "total_s",
+        "p95_duration_s",
+        "candidate",
+    )
+    if baseline is not None and candidate is not None:
+        parts.append(f"(baseline={baseline:.3f}s, candidate={candidate:.3f}s)")
+    return " ".join(parts)
+
+
 def baseline_configuration_changes_text(
     baseline_comparison: dict[str, Any],
     *,
@@ -6108,6 +6268,7 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_profile_case_p95_regression_exceeded": "repeat_case_p95",
         "repeat_ocr_total_p95_regression_exceeded": "repeat_ocr_p95",
         "repeat_ocr_total_p95_delta_missing": "repeat_ocr_p95_missing",
+        "repeat_ocr_case_total_p95_regression_exceeded": "repeat_ocr_case_p95",
     }
     return labels.get(kind, kind)
 
@@ -6189,6 +6350,15 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         budget = parse_nonnegative_float(violation.get("max_repeat_ocr_engine_total_p95_regression_s"))
         budget_text = f" budget {budget:.3f}s" if budget is not None else ""
         return f"repeat ocr p95 delta missing{budget_text}"
+    if kind == "repeat_ocr_case_total_p95_regression_exceeded":
+        slug = violation.get("slug")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(
+            violation.get("max_repeat_ocr_engine_total_p95_regression_s")
+        )
+        if not isinstance(slug, str) or delta is None or budget is None:
+            return ""
+        return f"repeat ocr case p95 {slug} {delta:+.3f}s > budget {budget:.3f}s"
     return ""
 
 

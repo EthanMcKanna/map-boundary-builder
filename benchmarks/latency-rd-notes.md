@@ -17339,3 +17339,23 @@ with zero failures in 0.531s.
   the older route-detector control/candidate reports produced `8` per-case
   repeat deltas while preserving the existing `-2` expectation-regression
   signal; this is benchmark acceptance reliability only.
+- Added the matching per-case repeat OCR p95 guard. Baseline comparisons now
+  rank `largest_repeat_profile_case_ocr_p95_*` deltas, print
+  `baseline repeat OCR case delta`, and fail the existing repeat OCR p95
+  regression budget when any compared slug's OCR-total repeat tail exceeds the
+  budget, even if the aggregate repeat OCR p95 remains within limits. Because
+  default comparison semantics changed again, hard/focused preset metadata
+  moved to v8/v7. Focused stress tests passed (`126 passed in 0.33s`), the full
+  suite passed (`702 passed, 31 subtests passed in 5.76s`), and two fresh v8
+  hard-gate runs validated the stricter harness. The v8 baseline at
+  `out/current-v8-full49-hard-20260603` passed `49/49` expectations with
+  primary max `0.489988s`, repeat p95/max `0.310s/0.342s`, and repeat OCR-total
+  p95/max `0.268s/0.303s`. The same-version comparison at
+  `out/repeat-ocr-case-budget-current-v8-20260603` passed `49/49`,
+  `signature_changes=0`, median primary delta `-0.001s`, aggregate repeat p95
+  delta `-0.014s`, aggregate repeat OCR-total p95 delta `-0.023s`, and zero
+  regression-budget violations. It stored `49` per-case deltas; worst repeat
+  case was `robotaxi-austin +0.028369s`, worst repeat OCR case was also
+  `robotaxi-austin +0.027985s`, and the best repeat OCR case was
+  `grand-rapids-may-mobility -0.038167s`. This is benchmark acceptance
+  reliability only.
