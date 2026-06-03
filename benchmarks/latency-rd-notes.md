@@ -16833,3 +16833,19 @@ with zero failures in 0.531s.
   `full_detail_retries=+4` in `baseline repeat delta`, along with repeat p95
   `+0.321s`, OCR p95 `+0.136s`, and selected-box p95 `+20.0`. This is
   benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Added selected-small-box context to repeat OCR slow-case leaders. The
+  `repeat_profile.summary.ocr_engine_slowest_cases` rows now carry
+  `p95_selected_box_area_lt_1300_count` and
+  `max_selected_box_area_lt_1300_count`, and the CLI prints
+  `sel_lt1300_p95=...` beside `selected_p95=...`. This makes dark-teal filter
+  damage visible in the same line as per-fixture OCR p95/max instead of forcing
+  JSON scraping. Focused stress benchmark tests passed `103 passed in 0.47s`,
+  the full suite passed `679 passed, 31 subtests passed in 6.01s`, and
+  `git diff --check` was clean. A focused real dark-teal/Grand Rapids gate at
+  `out/repeat-ocr-smallbox-leaders-darkteal-20260603` passed all five expected
+  outcomes with repeat p95 `0.283s`, max `0.287s`, and printed
+  `repeat ocr slowest cases` with `zoox-sf ... selected_p95=17.0
+  sel_lt1300_p95=14.0`, `grand-rapids-may-mobility ... selected_p95=20.0
+  sel_lt1300_p95=3.0`, and May Mobility/Zoox tail rows carrying the same
+  small-box count. This is benchmark feedback-loop reliability only; no runtime
+  deploy is needed.

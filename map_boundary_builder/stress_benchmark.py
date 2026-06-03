@@ -2921,6 +2921,16 @@ def repeat_profile_ocr_engine_slowest_case_summary(
             result["p95_selected_box_count"] = round(selected_p95, 6)
         if selected_max is not None:
             result["max_selected_box_count"] = round(selected_max, 6)
+    small_area_stats = repeat_profile_case_ocr_engine_count_metric(
+        summary, "selected_box_area_lt_1300_count"
+    )
+    if small_area_stats is not None:
+        small_area_p95 = parse_nonnegative_float(small_area_stats.get("p95_count"))
+        small_area_max = parse_nonnegative_float(small_area_stats.get("max_count"))
+        if small_area_p95 is not None:
+            result["p95_selected_box_area_lt_1300_count"] = round(small_area_p95, 6)
+        if small_area_max is not None:
+            result["max_selected_box_area_lt_1300_count"] = round(small_area_max, 6)
     return result
 
 
@@ -4434,6 +4444,7 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     p95_rec = parse_nonnegative_float(case.get("p95_rec_elapsed_s"))
     p95_det = parse_nonnegative_float(case.get("p95_det_elapsed_s"))
     p95_selected = parse_nonnegative_float(case.get("p95_selected_box_count"))
+    p95_small_selected = parse_nonnegative_float(case.get("p95_selected_box_area_lt_1300_count"))
     parts = [str(slug)]
     if p95_total is not None:
         parts.append(f"ocr_p95={p95_total:.3f}s")
@@ -4445,6 +4456,8 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"det_p95={p95_det:.3f}s")
     if p95_selected is not None:
         parts.append(f"selected_p95={p95_selected:.1f}")
+    if p95_small_selected is not None:
+        parts.append(f"sel_lt1300_p95={p95_small_selected:.1f}")
     return " ".join(parts)
 
 

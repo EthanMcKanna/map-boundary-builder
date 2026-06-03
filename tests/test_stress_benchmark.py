@@ -305,6 +305,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                         "p95_rec_elapsed_s": 0.12,
                         "p95_det_elapsed_s": 0.07,
                         "p95_selected_box_count": 12.0,
+                        "p95_selected_box_area_lt_1300_count": 5.0,
                     }
                 ],
                 "ocr_engine_stage_duration_s": {
@@ -342,7 +343,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert "repeat slowest cases: kept p95=0.500s max=0.500s" in output
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
-        "rec_p95=0.120s det_p95=0.070s selected_p95=12.0"
+        "rec_p95=0.120s det_p95=0.070s selected_p95=12.0 sel_lt1300_p95=5.0"
     ) in output
     assert "repeat ocr engine counts:" in output
     assert "label_count=p95 12.0 max 14.0" in output
@@ -4588,6 +4589,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             },
             "ocr_engine_count_metric": {
                 "selected_box_count": {"p95_count": 37.0, "max_count": 38.0},
+                "selected_box_area_lt_1300_count": {"p95_count": 21.0, "max_count": 22.0},
             },
         },
     }
@@ -4613,6 +4615,8 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "p95_det_elapsed_s": 0.12,
             "p95_selected_box_count": 37.0,
             "max_selected_box_count": 38.0,
+            "p95_selected_box_area_lt_1300_count": 21.0,
+            "max_selected_box_area_lt_1300_count": 22.0,
         }
     ]
     slow_cases = stress_module.repeat_profile_slowest_cases(case_summaries, limit=1)
@@ -4622,7 +4626,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     )
     assert (
         stress_module.repeat_profile_ocr_engine_slow_case_text(ocr_cases[0])
-        == "slow ocr_p95=0.620s ocr_max=0.720s rec_p95=0.430s det_p95=0.120s selected_p95=37.0"
+        == "slow ocr_p95=0.620s ocr_max=0.720s rec_p95=0.430s det_p95=0.120s selected_p95=37.0 sel_lt1300_p95=21.0"
     )
 
 
