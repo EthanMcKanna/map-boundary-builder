@@ -433,6 +433,8 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         candidate,
         max_total_elapsed_regression_s=0.1,
         max_repeat_p95_regression_s=0.02,
+        max_ocr_engine_total_regression_s=0.1,
+        max_repeat_ocr_engine_total_p95_regression_s=0.01,
     )
 
     assert comparison["compared_rows"] == 2
@@ -457,13 +459,22 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert regression_budget["passed"] is False
     assert regression_budget["max_total_elapsed_regression_s"] == 0.1
     assert regression_budget["max_repeat_p95_regression_s"] == 0.02
+    assert regression_budget["max_ocr_engine_total_regression_s"] == 0.1
+    assert regression_budget["max_repeat_ocr_engine_total_p95_regression_s"] == 0.01
     assert [violation["kind"] for violation in regression_budget["violations"]] == [
         "primary_total_regression_exceeded",
+        "primary_ocr_total_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
+        "repeat_ocr_total_p95_regression_exceeded",
     ]
     assert regression_budget["violations"][0]["slug"] == "houston"
     assert regression_budget["violations"][0]["total_elapsed_delta_s"] == 0.2
-    assert regression_budget["violations"][1]["delta_s"] == 0.03
+    assert regression_budget["violations"][1]["slug"] == "houston"
+    assert regression_budget["violations"][1]["ocr_engine_total_delta_s"] == 0.15
+    assert regression_budget["violations"][1]["baseline_ocr_engine_total_s"] == 0.45
+    assert regression_budget["violations"][1]["candidate_ocr_engine_total_s"] == 0.6
+    assert regression_budget["violations"][2]["delta_s"] == 0.03
+    assert regression_budget["violations"][3]["delta_s"] == 0.02
 
 
 def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -> None:
@@ -550,7 +561,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "regression_budget": {
                 "passed": False,
                 "max_total_elapsed_regression_s": 0.1,
+                "max_ocr_engine_total_regression_s": 0.1,
                 "max_repeat_p95_regression_s": 0.02,
+                "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                 "violations": [
                     {
                         "kind": "primary_total_regression_exceeded",
@@ -559,9 +572,20 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                         "max_total_elapsed_regression_s": 0.1,
                     },
                     {
+                        "kind": "primary_ocr_total_regression_exceeded",
+                        "slug": "houston",
+                        "ocr_engine_total_delta_s": 0.15,
+                        "max_ocr_engine_total_regression_s": 0.1,
+                    },
+                    {
                         "kind": "repeat_profile_p95_regression_exceeded",
                         "delta_s": 0.03,
                         "max_repeat_p95_regression_s": 0.02,
+                    },
+                    {
+                        "kind": "repeat_ocr_total_p95_regression_exceeded",
+                        "delta_s": 0.02,
+                        "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                     },
                 ],
             },
@@ -592,9 +616,14 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "median_delta=-0.040s" in output
     assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
-    assert "baseline regression budget: failed primary<=0.100s repeat_p95<=0.020s violations=2" in output
+    assert (
+        "baseline regression budget: failed primary<=0.100s primary_ocr<=0.100s "
+        "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4"
+    ) in output
     assert "primary houston +0.200s > budget 0.100s" in output
+    assert "primary ocr houston +0.150s > budget 0.100s" in output
     assert "repeat p95 +0.030s > budget 0.020s" in output
+    assert "repeat ocr p95 +0.020s > budget 0.010s" in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston fields=city,control_points" in output
@@ -3201,6 +3230,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.05
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.02
+        assert kwargs["max_baseline_ocr_total_regression_s"] == 0.03
+        assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.01
         return {
             "summary": {
                 "total": 1,
@@ -3219,6 +3250,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "passed": False,
                     "max_total_elapsed_regression_s": 0.05,
                     "max_repeat_p95_regression_s": 0.02,
+                    "max_ocr_engine_total_regression_s": 0.03,
+                    "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                     "violations": [
                         {
                             "kind": "primary_total_regression_exceeded",
@@ -3245,6 +3278,10 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "0.05",
             "--max-baseline-repeat-p95-regression-s",
             "0.02",
+            "--max-baseline-ocr-total-regression-s",
+            "0.03",
+            "--max-baseline-repeat-ocr-total-p95-regression-s",
+            "0.01",
         ]
     )
 

@@ -16755,3 +16755,23 @@ with zero failures in 0.531s.
   `out/baseline-regression-gate-pass-route-20260603` passed with
   `primary<=0.250s` and `repeat_p95<=0.250s`. This is A/B harness acceptance
   hardening only; no runtime deploy is needed.
+- Extended those relative baseline gates to OCR-specific regressions:
+  `--max-baseline-ocr-total-regression-s` checks per-row primary OCR engine
+  total deltas, and
+  `--max-baseline-repeat-ocr-total-p95-regression-s` checks repeat-profile OCR
+  engine total p95 deltas. Primary latency deltas now store baseline and
+  candidate OCR totals beside `ocr_engine_total_delta_s`, so failing reports
+  show the actual OCR runtime change rather than only the aggregate case time.
+  Focused stress benchmark tests passed `101 passed in 0.45s`, the full suite
+  passed `677 passed in 6.20s`, and `git diff --check` was clean. A strict real
+  six-route smoke at `out/baseline-ocr-regression-gate-fail-route-20260603`
+  intentionally exited nonzero with all four thresholds set to `0.001s`;
+  the saved JSON recorded five `primary_ocr_total_regression_exceeded`
+  violations plus one `repeat_ocr_total_p95_regression_exceeded` violation
+  (`ocr_total_p95 +0.081859s`), alongside the total-time violations. The
+  matched loose-threshold smoke at
+  `out/baseline-ocr-regression-gate-pass-route-20260603` passed with
+  `primary<=0.500s`, `primary_ocr<=0.500s`, `repeat_p95<=0.500s`, and
+  `repeat_ocr_p95<=0.500s`, with `signature_changes=0` and no regression-budget
+  violations. This is harness acceptance hardening only; no runtime deploy is
+  needed.
