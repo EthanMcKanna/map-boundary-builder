@@ -17281,3 +17281,19 @@ with zero failures in 0.531s.
   latency-regression budget. Keep
   `MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION=550`; this is rejected
   speed-tuning evidence, not a runtime change.
+- Added expectation-pass deltas to baseline stress comparisons so speed
+  candidates that lose manifest behavior are visible directly in the comparator
+  output, not only in the top-level stress summary. The comparator now stores
+  `expectation_compared_rows`, baseline/candidate pass counts, signed pass
+  delta, and per-row expectation drift details with expectation issues. Replaying
+  the saved route-detector comparison between
+  `out/route-det608-control-20260603/stress-summary.json` and
+  `out/route-det544-candidate-20260603/stress-summary.json` now prints
+  `baseline expectation delta: baseline=8/8, candidate=6/8, delta=-2,
+  changes=2`, followed by expectation drift rows for
+  `tesla-austin-route-receipt-gray-long` and `tesla-austin-route-active-dark`.
+  This closes the route-detector failure-shape feedback loop: the candidate
+  appeared slightly faster on repeat OCR p95, but the comparator now foregrounds
+  the two lost expected rows before the timing details. Focused stress
+  comparator tests passed (`122 passed in 0.19s`); this is benchmark
+  feedback-loop reliability only.

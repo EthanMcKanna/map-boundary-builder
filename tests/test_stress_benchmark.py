@@ -676,6 +676,8 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             {
                 "slug": "dallas",
                 "observed_status": "complete",
+                "expected_status": "complete",
+                "expectation_passed": True,
                 "city": "Dallas",
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": 7,
@@ -699,6 +701,8 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             {
                 "slug": "houston",
                 "observed_status": "complete",
+                "expected_status": "complete",
+                "expectation_passed": True,
                 "city": "Houston",
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": 6,
@@ -745,6 +749,8 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             {
                 "slug": "dallas",
                 "observed_status": "complete",
+                "expected_status": "complete",
+                "expectation_passed": True,
                 "city": "Dallas",
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": 7,
@@ -768,6 +774,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             {
                 "slug": "houston",
                 "observed_status": "complete",
+                "expected_status": "complete",
+                "expectation_passed": False,
+                "expectation_issues": ["city Houston != Inferred map area"],
                 "city": "Inferred map area",
                 "source": "ocr-georeference:nominatim-label-fit",
                 "control_points": 6,
@@ -822,6 +831,23 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["compared_rows"] == 2
     assert comparison["missing_in_baseline"] == ["candidate-only"]
     assert comparison["missing_in_candidate"] == ["baseline-only"]
+    assert comparison["expectation_compared_rows"] == 2
+    assert comparison["baseline_expectation_passed_rows"] == 2
+    assert comparison["candidate_expectation_passed_rows"] == 1
+    assert comparison["expectation_passed_delta"] == -1
+    assert comparison["expectation_change_count"] == 1
+    assert comparison["expectation_changes"] == [
+        {
+            "slug": "houston",
+            "baseline_expectation_passed": True,
+            "candidate_expectation_passed": False,
+            "baseline_observed_status": "complete",
+            "baseline_expected_status": "complete",
+            "candidate_observed_status": "complete",
+            "candidate_expected_status": "complete",
+            "candidate_expectation_issues": ["city Houston != Inferred map area"],
+        }
+    ]
     assert comparison["signature_change_count"] == 1
     assert comparison["signature_changed_field_counts"] == {"city": 1}
     assert comparison["signature_changes"][0]["changed_fields"] == ["city"]
@@ -1203,6 +1229,19 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                 {"field": "extraction_cache", "baseline": True, "candidate": False},
                 {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v6"},
             ],
+            "expectation_compared_rows": 2,
+            "baseline_expectation_passed_rows": 2,
+            "candidate_expectation_passed_rows": 1,
+            "expectation_passed_delta": -1,
+            "expectation_change_count": 1,
+            "expectation_changes": [
+                {
+                    "slug": "houston",
+                    "baseline_expectation_passed": True,
+                    "candidate_expectation_passed": False,
+                    "candidate_expectation_issues": ["city Houston != Inferred map area"],
+                }
+            ],
             "signature_changed_field_counts": {"city": 1, "control_points": 1},
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
@@ -1345,6 +1384,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v6"
     ) in output
     assert (
+        "baseline expectation delta: baseline=2/2, candidate=1/2, delta=-1, changes=1"
+    ) in output
+    assert (
         "baseline primary delta: worst_total=houston +0.200s "
         "(ocr_total=+0.150s, input=+0.010s, det=+0.070s, rec=+0.070s), "
         "best_total=dallas -0.100s "
@@ -1379,6 +1421,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston fields=city,control_points" in output
+    assert (
+        "expectation drift: houston baseline=pass candidate=fail "
+        "candidate_issues=1 first=city Houston != Inferred map area"
+    ) in output
 
 
 def test_baseline_regression_budget_violation_samples_include_each_kind() -> None:

@@ -875,11 +875,27 @@ def compare_stress_reports(
             slug for slug in baseline_rows if slug not in candidate_scope_set
         )
     signature_changes: list[dict[str, Any]] = []
+    expectation_changes: list[dict[str, Any]] = []
     latency_deltas: list[dict[str, Any]] = []
+    expectation_compared_rows = 0
+    baseline_expectation_passed_rows = 0
+    candidate_expectation_passed_rows = 0
 
     for slug in compared_slugs:
         baseline_row = baseline_rows[slug]
         candidate_row = candidate_rows[slug]
+        expectation_change = stress_row_expectation_change(slug, baseline_row, candidate_row)
+        if expectation_change is not None:
+            expectation_compared_rows += 1
+            if expectation_change["baseline_expectation_passed"]:
+                baseline_expectation_passed_rows += 1
+            if expectation_change["candidate_expectation_passed"]:
+                candidate_expectation_passed_rows += 1
+            if (
+                expectation_change["baseline_expectation_passed"]
+                != expectation_change["candidate_expectation_passed"]
+            ):
+                expectation_changes.append(expectation_change)
         baseline_signature = repeat_profile_output_signature(baseline_row)
         candidate_signature = repeat_profile_output_signature(candidate_row)
         if baseline_signature != candidate_signature:
@@ -912,6 +928,13 @@ def compare_stress_reports(
             baseline_report,
             candidate_report,
         ),
+        "expectation_compared_rows": expectation_compared_rows,
+        "baseline_expectation_passed_rows": baseline_expectation_passed_rows,
+        "candidate_expectation_passed_rows": candidate_expectation_passed_rows,
+        "expectation_passed_delta": candidate_expectation_passed_rows
+        - baseline_expectation_passed_rows,
+        "expectation_change_count": len(expectation_changes),
+        "expectation_changes": expectation_changes,
         "signature_change_count": len(signature_changes),
         "signature_changed_field_counts": signature_changed_field_counts(signature_changes),
         "signature_changes": signature_changes,
@@ -1455,6 +1478,35 @@ def stress_row_latency_delta(
         delta["candidate_ocr_overlap_hidden_s"] = round(candidate_hidden, 6)
         delta["ocr_overlap_hidden_delta_s"] = round(candidate_hidden - baseline_hidden, 6)
     return delta
+
+
+def stress_row_expectation_change(
+    slug: str,
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+) -> dict[str, Any] | None:
+    baseline_passed = baseline_row.get("expectation_passed")
+    candidate_passed = candidate_row.get("expectation_passed")
+    if not isinstance(baseline_passed, bool) or not isinstance(candidate_passed, bool):
+        return None
+    change: dict[str, Any] = {
+        "slug": slug,
+        "baseline_expectation_passed": baseline_passed,
+        "candidate_expectation_passed": candidate_passed,
+    }
+    for prefix, row in (("baseline", baseline_row), ("candidate", candidate_row)):
+        observed_status = row.get("observed_status")
+        if isinstance(observed_status, str) and observed_status:
+            change[f"{prefix}_observed_status"] = observed_status
+        expected_status = row.get("expected_status")
+        if isinstance(expected_status, str) and expected_status:
+            change[f"{prefix}_expected_status"] = expected_status
+        issues = row.get("expectation_issues")
+        if isinstance(issues, list):
+            text_issues = [issue for issue in issues if isinstance(issue, str) and issue]
+            if text_issues:
+                change[f"{prefix}_expectation_issues"] = text_issues
+    return change
 
 
 def stress_row_stage_deltas(
@@ -4707,6 +4759,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         config_changes_text = baseline_configuration_changes_text(baseline_comparison)
         if config_changes_text:
             print(f"baseline config changes: {config_changes_text}")
+        expectation_delta_text = baseline_expectation_delta_text(baseline_comparison)
+        if expectation_delta_text:
+            print(f"baseline expectation delta: {expectation_delta_text}")
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
             print(f"baseline primary delta: {primary_delta_text}")
@@ -4747,6 +4802,14 @@ def print_stress_table(report: dict[str, Any]) -> None:
                     else ""
                 )
                 print(f"   - signature drift: {change.get('slug')}{fields_text}")
+        expectation_changes = baseline_comparison.get("expectation_changes")
+        if isinstance(expectation_changes, list):
+            for change in expectation_changes[:5]:
+                if not isinstance(change, dict):
+                    continue
+                change_text = baseline_expectation_change_text(change)
+                if change_text:
+                    print(f"   - expectation drift: {change_text}")
     if summary.get("stage_duration_s"):
         stage_total_text = ", ".join(
             f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()
@@ -5543,6 +5606,62 @@ def config_change_value_text(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def baseline_expectation_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    compared = parse_nonnegative_int(baseline_comparison.get("expectation_compared_rows"))
+    baseline_passed = parse_nonnegative_int(
+        baseline_comparison.get("baseline_expectation_passed_rows")
+    )
+    candidate_passed = parse_nonnegative_int(
+        baseline_comparison.get("candidate_expectation_passed_rows")
+    )
+    delta = parse_signed_int(baseline_comparison.get("expectation_passed_delta"))
+    change_count = parse_nonnegative_int(baseline_comparison.get("expectation_change_count"))
+    if (
+        compared is None
+        or compared == 0
+        or baseline_passed is None
+        or candidate_passed is None
+        or delta is None
+    ):
+        return ""
+    if delta == 0 and (change_count is None or change_count == 0):
+        return ""
+    parts = [
+        f"baseline={baseline_passed}/{compared}",
+        f"candidate={candidate_passed}/{compared}",
+        f"delta={delta:+d}",
+    ]
+    if change_count is not None:
+        parts.append(f"changes={change_count}")
+    return ", ".join(parts)
+
+
+def baseline_expectation_change_text(change: dict[str, Any]) -> str:
+    slug = change.get("slug")
+    if not isinstance(slug, str) or not slug:
+        return ""
+    baseline_passed = change.get("baseline_expectation_passed")
+    candidate_passed = change.get("candidate_expectation_passed")
+    if not isinstance(baseline_passed, bool) or not isinstance(candidate_passed, bool):
+        return ""
+    parts = [
+        slug,
+        f"baseline={expectation_passed_text(baseline_passed)}",
+        f"candidate={expectation_passed_text(candidate_passed)}",
+    ]
+    candidate_issues = change.get("candidate_expectation_issues")
+    if isinstance(candidate_issues, list):
+        issues = [issue for issue in candidate_issues if isinstance(issue, str) and issue]
+        if issues:
+            parts.append(f"candidate_issues={len(issues)}")
+            parts.append(f"first={issues[0]}")
+    return " ".join(parts)
+
+
+def expectation_passed_text(value: bool) -> str:
+    return "pass" if value else "fail"
+
+
 def baseline_repeat_ocr_stage_delta_text(repeat_delta: dict[str, Any] | None) -> str:
     if not repeat_delta:
         return ""
@@ -5871,6 +5990,18 @@ def parse_signed_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if math.isfinite(parsed) else None
+
+
+def parse_nonnegative_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value >= 0 else None
+
+
+def parse_signed_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
 
 
 def parse_summary(stdout: str | bytes | None) -> tuple[dict[str, Any], str | None]:
