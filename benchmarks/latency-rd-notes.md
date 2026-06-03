@@ -17237,3 +17237,19 @@ with zero failures in 0.531s.
   `signature_changes=1` and `signature_fields=control_points:1`. Focused stress
   benchmark tests passed `118 passed in 0.55s`; this is benchmark feedback-loop
   reliability only.
+- Promoted conservative relative latency regression budgets into hard/focused
+  preset baseline comparisons. When `--compare-baseline-report` is supplied and
+  the caller has not set tighter thresholds, the presets now default primary
+  total, repeat p95, primary OCR total, and repeat OCR p95 regression budgets to
+  `0.250s`; preset metadata moved to `--real-screenshot-hard-gate` version `5`
+  and `--focused-real-screenshot-gate` version `4`. A same-config focused
+  baseline at `out/baseline-regression-current-20260603` passed, then
+  `out/baseline-regression-drift-20260603/stress-summary.json` intentionally
+  lowered only the saved `dallas-waymo` primary total by `0.300s`. The current
+  comparison at `out/baseline-regression-default-gate-smoke-20260603` still
+  passed behavior (`1/1`, primary `0.315s`, repeat analyzed `2`, repeat
+  subsecond `2/2`) and had `signature_changes=0`, but exited `1` without
+  explicit baseline-regression flags because the default budget reported
+  `primary dallas-waymo +0.254s > budget 0.250s`. Focused stress benchmark tests
+  passed `119 passed in 0.33s`; this is benchmark feedback-loop reliability
+  only.

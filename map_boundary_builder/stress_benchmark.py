@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 4
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 5
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 3
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 4
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -141,6 +141,7 @@ REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET = (
     "label_count=29,"
     "label_confidence_lt_90_count=3"
 )
+REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S = 0.25
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -561,6 +562,16 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     if args.compare_baseline_report:
         args.fail_on_baseline_signature_drift = True
         args.fail_on_baseline_config_drift = True
+        if args.max_baseline_total_regression_s is None:
+            args.max_baseline_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_repeat_p95_regression_s is None:
+            args.max_baseline_repeat_p95_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_ocr_total_regression_s is None:
+            args.max_baseline_ocr_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_repeat_ocr_total_p95_regression_s is None:
+            args.max_baseline_repeat_ocr_total_p95_regression_s = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+            )
     if args.repeat_profile_runs == 0:
         args.repeat_profile_runs = 3
     if args.repeat_profile_warmups == 0:
