@@ -3633,6 +3633,34 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     ) in output
 
 
+def test_baseline_configuration_changes_text_reports_truncation_count() -> None:
+    text = stress_module.baseline_configuration_changes_text(
+        {
+            "configuration_changes": [
+                {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+                {
+                    "field": "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION",
+                    "baseline": "1600",
+                    "candidate": "1500",
+                },
+                {
+                    "field": "ocr.rapidocr_bright_blue_max_dimension",
+                    "baseline": 1400,
+                    "candidate": 1300,
+                },
+                {"baseline": "ignored", "candidate": "missing field"},
+            ]
+        },
+        limit=2,
+    )
+
+    assert text == (
+        "runner_ocr_cache=true->false, "
+        "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION=1600->1500, "
+        "+1 more"
+    )
+
+
 def test_baseline_regression_budget_violation_samples_include_each_kind() -> None:
     violations = [
         {

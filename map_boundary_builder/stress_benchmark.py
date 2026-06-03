@@ -8609,9 +8609,12 @@ def baseline_configuration_changes_text(
         baseline_value = config_change_value_text(change.get("baseline"))
         candidate_value = config_change_value_text(change.get("candidate"))
         parts.append(f"{field}={baseline_value}->{candidate_value}")
-        if len(parts) >= limit:
-            break
-    return ", ".join(parts)
+    display_limit = max(0, limit)
+    display_parts = parts[:display_limit]
+    remaining = len(parts) - len(display_parts)
+    if remaining > 0:
+        display_parts.append(f"+{remaining} more")
+    return ", ".join(display_parts)
 
 
 def config_change_value_text(value: Any) -> str:

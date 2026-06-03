@@ -18496,3 +18496,15 @@ with zero failures in 0.531s.
   ignores only the expected preset label change and continues to fail on nested
   runtime config drift. Full stress benchmark tests passed `151 passed`;
   compileall and `git diff --check` passed.
+- Tightened the compact config-drift console formatter after adding nested
+  runtime config drift. `baseline config changes` now appends `+N more` when
+  the valid change list exceeds the display limit, instead of silently hiding
+  additional environment or OCR knob drift. Saved-report replay against the
+  rejected area-floor probe
+  (`out/svg-label-id-full73-hard-gate-green-20260603/stress-summary.json`
+  versus `out/waymo-tail-area3000-candidate-20260603/stress-summary.json`)
+  produced `6` config changes and the compact text now ends with `+2 more`
+  after showing cache-dir, area-floor, focused-detector, and warm-key drift.
+  This is benchmark evidence reliability only; no generation defaults changed.
+  Full stress benchmark tests passed `152 passed`; compileall and
+  `git diff --check` passed.
