@@ -247,8 +247,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "Exit non-zero when any aggregate primary pipeline stage total is "
-            "more than this many seconds slower than --compare-baseline-report."
+            "Exit non-zero when any aggregate or compared-row primary pipeline "
+            "stage is more than this many seconds slower than "
+            "--compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -1247,6 +1248,48 @@ def baseline_regression_budget(
                     "max_stage_total_regression_s": max_stage_total,
                 }
             )
+        if isinstance(latency_deltas, list):
+            for row_delta in latency_deltas:
+                if not isinstance(row_delta, dict):
+                    continue
+                stage_deltas_for_row = row_delta.get("stage_delta_s")
+                if not isinstance(stage_deltas_for_row, dict):
+                    continue
+                baseline_stage_values = row_delta.get("baseline_stage_duration_s")
+                candidate_stage_values = row_delta.get("candidate_stage_duration_s")
+                for stage in sorted(
+                    (
+                        stage
+                        for stage in stage_deltas_for_row
+                        if isinstance(stage, str) and stage
+                    ),
+                    key=pipeline_stage_sort_key,
+                ):
+                    stage_delta = parse_signed_float(stage_deltas_for_row.get(stage))
+                    if stage_delta is None or stage_delta <= max_stage_total_regression_s:
+                        continue
+                    violation = {
+                        "kind": "primary_stage_row_regression_exceeded",
+                        "slug": row_delta.get("slug"),
+                        "stage": stage,
+                        "delta_s": round(stage_delta, 6),
+                        "max_stage_total_regression_s": max_stage_total,
+                    }
+                    baseline_stage = (
+                        parse_nonnegative_float(baseline_stage_values.get(stage))
+                        if isinstance(baseline_stage_values, dict)
+                        else None
+                    )
+                    candidate_stage = (
+                        parse_nonnegative_float(candidate_stage_values.get(stage))
+                        if isinstance(candidate_stage_values, dict)
+                        else None
+                    )
+                    if baseline_stage is not None:
+                        violation["baseline_stage_duration_s"] = round(baseline_stage, 6)
+                    if candidate_stage is not None:
+                        violation["candidate_stage_duration_s"] = round(candidate_stage, 6)
+                    violations.append(violation)
     if max_repeat_p95_regression_s is not None:
         max_repeat = round(float(max_repeat_p95_regression_s), 6)
         budget["max_repeat_p95_regression_s"] = max_repeat
@@ -2276,6 +2319,12 @@ def stress_row_latency_delta(
     stage_deltas = stress_row_stage_deltas(baseline_row, candidate_row)
     if stage_deltas:
         delta["stage_delta_s"] = stage_deltas
+        baseline_stage_values = stress_row_stage_values(baseline_row, stage_deltas)
+        candidate_stage_values = stress_row_stage_values(candidate_row, stage_deltas)
+        if baseline_stage_values:
+            delta["baseline_stage_duration_s"] = baseline_stage_values
+        if candidate_stage_values:
+            delta["candidate_stage_duration_s"] = candidate_stage_values
     baseline_ocr_calls = stress_row_ocr_engine_calls(baseline_row)
     candidate_ocr_calls = stress_row_ocr_engine_calls(candidate_row)
     if baseline_ocr_calls is not None:
@@ -2345,6 +2394,24 @@ def stress_row_stage_deltas(
             continue
         deltas[str(stage)] = round(candidate_stage - baseline_stage, 6)
     return deltas
+
+
+def stress_row_stage_values(
+    row: dict[str, Any],
+    stage_deltas: dict[str, float],
+) -> dict[str, float]:
+    stages = row.get("stages")
+    if not isinstance(stages, dict):
+        return {}
+    values: dict[str, float] = {}
+    for stage in sorted(
+        (stage for stage in stage_deltas if isinstance(stage, str) and stage),
+        key=pipeline_stage_sort_key,
+    ):
+        value = parse_nonnegative_float(stages.get(stage))
+        if value is not None:
+            values[stage] = round(value, 6)
+    return values
 
 
 def stress_row_ocr_engine_stage_deltas(
@@ -7198,6 +7265,7 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "primary_ocr_total_delta_missing": "primary_ocr_missing",
         "primary_stage_total_regression_exceeded": "primary_stage",
         "primary_stage_total_delta_missing": "primary_stage_missing",
+        "primary_stage_row_regression_exceeded": "primary_stage_row",
         "repeat_profile_p95_regression_exceeded": "repeat_p95",
         "repeat_profile_p95_delta_missing": "repeat_p95_missing",
         "repeat_profile_case_p95_regression_exceeded": "repeat_case_p95",
@@ -7272,6 +7340,19 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         budget = parse_nonnegative_float(violation.get("max_stage_total_regression_s"))
         budget_text = f" budget {budget:.3f}s" if budget is not None else ""
         return f"primary stage delta missing{budget_text}"
+    if kind == "primary_stage_row_regression_exceeded":
+        slug = violation.get("slug")
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_stage_total_regression_s"))
+        if (
+            not isinstance(slug, str)
+            or not isinstance(stage, str)
+            or delta is None
+            or budget is None
+        ):
+            return ""
+        return f"primary stage row {slug} {stage} {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "repeat_profile_p95_regression_exceeded":
         delta = parse_signed_float(violation.get("delta_s"))
         budget = parse_nonnegative_float(violation.get("max_repeat_p95_regression_s"))

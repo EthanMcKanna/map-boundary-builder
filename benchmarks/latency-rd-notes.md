@@ -17591,3 +17591,16 @@ with zero failures in 0.531s.
   `+0.000216s`, but the new per-case gate failed six case-stage regressions,
   including `houston-waymo ocr +0.043s > budget 0.020s`. Benchmark acceptance
   reliability only; no runtime default changed.
+- Extended the primary stage regression budget to compared-row stage deltas and
+  enriched row latency deltas with baseline/candidate stage timings. This is
+  the primary-run counterpart to the repeat case-stage gate: aggregate stage
+  totals can look acceptable while a specific screenshot slows in one pipeline
+  stage. Focused stress tests passed (`134 passed in 0.42s`) and the full suite
+  passed (`710 passed, 31 subtests passed in 4.95s`). A saved proof in
+  `out/primary-stage-row-budget-proof-20260603/comparison.json` compared
+  `out/waymo-tail-current-control-20260603` against
+  `out/waymo-bright-blue-det240-20260603` with
+  `max_stage_total_regression_s=0.020`; aggregate primary OCR improved
+  (`-0.018145s`), but the new row-stage gate failed four row regressions,
+  including `bay-area-waymo ocr +0.063s > budget 0.020s`. Benchmark acceptance
+  reliability only; no runtime default changed.
