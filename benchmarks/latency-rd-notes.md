@@ -16653,3 +16653,18 @@ with zero failures in 0.531s.
   `2/2`, reported `signature_changes=0`, repeat p95 `0.285s`, repeat
   OCR-engine p95 `0.237s`, and all focused latency/OCR-count budgets. This is
   harness reliability only; no runtime deploy is needed.
+- Rejected a route-UI-only recognition batch override after using the new
+  baseline comparator on the six locked Tesla route negatives. The matched
+  current-control run at `out/route-recbatch12-control-20260603` passed `6/6`,
+  had `signature_changes=0` against the latest full hard gate, repeat p95
+  `0.286s`, and repeat OCR-engine p95 `0.258s`. A candidate with
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=8`
+  (`out/route-recbatch8-candidate-20260603`) still passed manifest
+  expectations, but `--fail-on-baseline-signature-drift` correctly failed it:
+  four route rows changed output signatures, median primary delta was
+  `+0.012s`, repeat p95 regressed to `0.317s`, and repeat OCR-engine p95
+  regressed to `0.289s`. The adjacent `10` candidate at
+  `out/route-recbatch10-candidate-20260603` was worse: three signature changes,
+  median primary delta `+0.039s`, repeat p95 `0.378s`, and repeat OCR-engine
+  p95 `0.349s`. Keep route UI OCR on the generic `12` batch; the rejected
+  global `8` batch is not salvageable as a narrow route-only override.
