@@ -16983,3 +16983,20 @@ with zero failures in 0.531s.
   `primary ocr slowest cases: dallas-waymo ocr=0.318s input=0.005s ...`, and
   `repeat ocr slowest cases: los-angeles-waymo ... input_p95=0.025s ...`.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Closed the fresh `input_s` full-gate read as a measurement lane rather than
+  a runtime optimization target. The full hard gate at
+  `out/input-stage-metric-full49-hard-20260603` passed `49/49` with primary
+  max `0.418s`, repeat p95 `0.331s`, repeat OCR p95 `0.282s`, and repeat OCR
+  input p95/max `0.033s/0.034s`. Primary input preparation topped out at
+  `0.033s@bay-area-waymo`, while the real tails were still detector/recognizer
+  dominated (`dallas-waymo` OCR total `0.362s`, detector `0.310s`; repeat
+  `los-angeles-waymo` OCR p95 `0.328s`, recognizer p95 `0.147s`, detector p95
+  `0.155s`). To keep future native-array/path experiments auditable, stress
+  table output now includes OCR `input_kind` in primary slowest cases, OCR
+  engine stage maxima, primary OCR slowest cases, and repeat slow samples; old
+  saved reports are enriched from raw `rows`/repeat samples when their saved
+  summary snippets predate this field. Replaying the full hard report now
+  shows `kind=array` on the slow-path lines. Focused stress benchmark tests
+  passed `108 passed in 0.29s`, the full suite passed
+  `684 passed, 31 subtests passed in 6.34s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.

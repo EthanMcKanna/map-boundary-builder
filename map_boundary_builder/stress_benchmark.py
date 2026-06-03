@@ -36,6 +36,14 @@ REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 2
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 1
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
+OCR_ENGINE_DETAIL_CONTEXT_KEYS = (
+    "input_kind",
+    "input_shape",
+    "detector_limit",
+    "detector_limit_type",
+    "recognition_profile",
+    "min_text_area",
+)
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
 }
@@ -2580,11 +2588,7 @@ def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) 
         "elapsed_s": round(elapsed_s, 6),
     }
     for key in (
-        "input_shape",
-        "detector_limit",
-        "detector_limit_type",
-        "recognition_profile",
-        "min_text_area",
+        *OCR_ENGINE_DETAIL_CONTEXT_KEYS,
         "raw_box_count",
         "selected_box_count",
         "result_count",
@@ -2676,13 +2680,7 @@ def primary_ocr_engine_slowest_case_summary(
     if isinstance(calls, int) and not isinstance(calls, bool):
         result["calls"] = calls
     detail_profile = slowest_ocr_engine_detail_profile(ocr_engine_profile) or ocr_engine_profile
-    for key in (
-        "input_shape",
-        "detector_limit",
-        "detector_limit_type",
-        "recognition_profile",
-        "min_text_area",
-    ):
+    for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS:
         value = detail_profile.get(key)
         if value is not None:
             result[key] = value
@@ -3173,6 +3171,11 @@ def slowest_sample_ocr_engine_summary(sample: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, int):
             summary[key] = value
     detail_profile = slowest_ocr_engine_detail_profile(ocr_engine_profile)
+    context_profile = detail_profile or ocr_engine_profile
+    for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS:
+        value = context_profile.get(key)
+        if value is not None:
+            summary[key] = value
     for key in (*OCR_ENGINE_BOX_AREA_KEYS, *OCR_ENGINE_CONFIDENCE_KEYS):
         value = ocr_engine_profile.get(key)
         if value is None and detail_profile is not None:
@@ -4085,6 +4088,35 @@ def parse_nonnegative_float(value: Any) -> float | None:
     return parsed if parsed >= 0.0 else None
 
 
+def primary_slowest_cases_include_input_kind(cases: list[dict[str, Any]]) -> bool:
+    for case in cases:
+        ocr_engine = case.get("ocr_engine")
+        if isinstance(ocr_engine, dict) and isinstance(ocr_engine.get("input_kind"), str):
+            return True
+    return False
+
+
+def primary_ocr_engine_slowest_cases_include_input_kind(cases: list[dict[str, Any]]) -> bool:
+    return any(isinstance(case.get("input_kind"), str) for case in cases)
+
+
+def repeat_profile_slowest_samples_include_input_kind(samples: list[dict[str, Any]]) -> bool:
+    for sample in samples:
+        ocr_engine = sample.get("ocr_engine")
+        if isinstance(ocr_engine, dict) and isinstance(ocr_engine.get("input_kind"), str):
+            return True
+    return False
+
+
+def ocr_engine_stage_max_rows_include_input_kind(max_rows: Any) -> bool:
+    if not isinstance(max_rows, dict):
+        return False
+    return any(
+        isinstance(row, dict) and isinstance(row.get("input_kind"), str)
+        for row in max_rows.values()
+    )
+
+
 def print_stress_table(report: dict[str, Any]) -> None:
     summary = report["summary"]
     print(
@@ -4234,9 +4266,16 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         print(f"stage max: {stage_max_text}")
     primary_slowest_cases = summary.get("slowest_cases")
+    rows = report.get("rows")
     if not isinstance(primary_slowest_cases, list):
-        rows = report.get("rows")
         primary_slowest_cases = primary_slowest_cases_from_rows(rows) if isinstance(rows, list) else []
+    elif (
+        not primary_slowest_cases_include_input_kind(primary_slowest_cases)
+        and isinstance(rows, list)
+    ):
+        enriched_primary_slowest_cases = primary_slowest_cases_from_rows(rows)
+        if primary_slowest_cases_include_input_kind(enriched_primary_slowest_cases):
+            primary_slowest_cases = enriched_primary_slowest_cases
     if primary_slowest_cases:
         primary_slow_case_text = ", ".join(
             primary_slow_case_text_from_summary(case)
@@ -4260,6 +4299,13 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
     if summary.get("ocr_engine_stage_max_rows"):
         max_rows = summary["ocr_engine_stage_max_rows"]
+        if (
+            not ocr_engine_stage_max_rows_include_input_kind(max_rows)
+            and isinstance(rows, list)
+        ):
+            enriched_max_rows = ocr_engine_stage_max_rows(rows)
+            if ocr_engine_stage_max_rows_include_input_kind(enriched_max_rows):
+                max_rows = enriched_max_rows
         labels = {
             "input_s": "input",
             "det_elapsed_s": "det",
@@ -4275,10 +4321,16 @@ def print_stress_table(report: dict[str, Any]) -> None:
             print(f"ocr engine max: {max_text}")
     primary_ocr_slowest_cases = summary.get("ocr_engine_slowest_cases")
     if not isinstance(primary_ocr_slowest_cases, list):
-        rows = report.get("rows")
         primary_ocr_slowest_cases = (
             primary_ocr_engine_slowest_cases(rows) if isinstance(rows, list) else []
         )
+    elif (
+        not primary_ocr_engine_slowest_cases_include_input_kind(primary_ocr_slowest_cases)
+        and isinstance(rows, list)
+    ):
+        enriched_primary_ocr_slowest_cases = primary_ocr_engine_slowest_cases(rows)
+        if primary_ocr_engine_slowest_cases_include_input_kind(enriched_primary_ocr_slowest_cases):
+            primary_ocr_slowest_cases = enriched_primary_ocr_slowest_cases
     if primary_ocr_slowest_cases:
         primary_ocr_slow_case_text = ", ".join(
             primary_ocr_engine_slow_case_text(case)
@@ -4466,7 +4518,17 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
             )
             slowest_samples = repeat_summary.get("slowest_samples")
+            repeat_samples = repeat_profile.get("samples")
             if isinstance(slowest_samples, list) and slowest_samples:
+                if (
+                    not repeat_profile_slowest_samples_include_input_kind(slowest_samples)
+                    and isinstance(repeat_samples, list)
+                ):
+                    enriched_slowest_samples = repeat_profile_slowest_samples(
+                        [sample for sample in repeat_samples if isinstance(sample, dict)]
+                    )
+                    if repeat_profile_slowest_samples_include_input_kind(enriched_slowest_samples):
+                        slowest_samples = enriched_slowest_samples
                 slow_text = ", ".join(
                     repeat_profile_slow_sample_text(sample)
                     for sample in slowest_samples[:5]
@@ -4579,6 +4641,9 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
             parts.append(f"input={input_elapsed_s:.3f}s")
         if rec_elapsed_s is not None:
             parts.append(f"rec={rec_elapsed_s:.3f}s")
+        input_kind = ocr_engine.get("input_kind")
+        if isinstance(input_kind, str) and input_kind:
+            parts.append(f"kind={input_kind}")
         selected_area_p50 = parse_nonnegative_float(ocr_engine.get("selected_box_area_p50"))
         selected_lt_1300 = ocr_engine.get("selected_box_area_lt_1300_count")
         if selected_area_p50 is not None:
@@ -4604,6 +4669,9 @@ def ocr_engine_stage_max_row_text(stage_label: str, row: dict[str, Any]) -> str:
     shape_text = ocr_engine_input_shape_text(row.get("input_shape"))
     if shape_text:
         parts.append(f"shape={shape_text}")
+    input_kind = row.get("input_kind")
+    if isinstance(input_kind, str) and input_kind:
+        parts.append(f"kind={input_kind}")
     detector_limit = row.get("detector_limit")
     if isinstance(detector_limit, int):
         detector_type = row.get("detector_limit_type")
@@ -4662,6 +4730,9 @@ def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     shape_text = ocr_engine_input_shape_text(case.get("input_shape"))
     if shape_text:
         parts.append(f"shape={shape_text}")
+    input_kind = case.get("input_kind")
+    if isinstance(input_kind, str) and input_kind:
+        parts.append(f"kind={input_kind}")
     detector_limit = case.get("detector_limit")
     if isinstance(detector_limit, int) and not isinstance(detector_limit, bool):
         detector_type = case.get("detector_limit_type")
@@ -4720,6 +4791,9 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
             parts.append(f"rec={rec_s:.3f}s")
         if det_s is not None:
             parts.append(f"det={det_s:.3f}s")
+        input_kind = ocr_engine.get("input_kind")
+        if isinstance(input_kind, str) and input_kind:
+            parts.append(f"kind={input_kind}")
         if isinstance(selected_count, int) and not isinstance(selected_count, bool):
             parts.append(f"selected={selected_count}")
         if isinstance(selected_lt_1300, int) and not isinstance(selected_lt_1300, bool):
