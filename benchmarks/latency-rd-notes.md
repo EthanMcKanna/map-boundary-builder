@@ -17787,3 +17787,27 @@ with zero failures in 0.531s.
   `0.654165s`; the full suite passed (`720 passed, 31 subtests passed in
   5.42s`). This is production cold-start coverage for an existing focused OCR
   path, not a general Waymo OCR tuning change.
+- Reduced the focused dark-teal warm sample to the detector-sized bounded
+  minimum after isolating that the actual crop shape was not the useful signal.
+  A fresh-process shape probe at `out/shape-warmup-probe-v2` showed that no
+  focused warm left Ann Arbor OCR around `0.200-0.203s`, while square `608`,
+  actual-ish `550x216`, and transposed `216x550` focused warms all landed in the
+  same `0.109-0.115s` OCR band. A follow-up focused-key sample-side probe at
+  `out/focused-warm-side-probe` showed `384px` preserving the primary OCR band
+  while lowering focused Ann Arbor prewarm versus the current `608px` plan
+  (`384px` median prewarm `0.610s`; current non-outlier runs `0.625-0.652s`).
+  The runtime warm plan now keeps the same focused key
+  `[320, "default", "default", 8]` but uses sample side `384`, and health/runtime
+  config reports the same plan. Targeted OCR/API tests passed
+  (`236 passed in 0.67s`). The fresh-cache/network-blocked focused Ann Arbor
+  gate at `out/focus-warm384-ann-arbor-20260603` passed with primary `0.208466s`,
+  OCR `0.095802s`, repeat p95 `0.183609s`, and warm plan
+  `[320, "default", "default", 8, 384]`. The full v12 hard gate at
+  `out/focus-warm384-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, max primary `0.367096s`, repeat p95
+  `0.300513s`, repeat max `0.325498s`, prewarm `0.634087s`, and Ann Arbor
+  primary `0.197s`. Comparing that full report against
+  `out/focus-warm-key-full49-hard-20260603` without the older report's missing
+  hidden-overlap budget passed the regression budget and showed prewarm total
+  `0.654165s -> 0.634087s` and RapidOCR warm `0.615736s -> 0.591502s`. Full
+  suite passed (`720 passed, 31 subtests passed in 6.08s`).

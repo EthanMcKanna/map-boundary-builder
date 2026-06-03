@@ -1498,7 +1498,7 @@ class ApiRunCacheTests(unittest.TestCase):
             [
                 [608, "default", "default", 12, 608],
                 [608, "default", "default", 8, 608],
-                [320, "default", "default", 8, 608],
+                [320, "default", "default", 8, 384],
                 [256, "en-ppocrv5", "max", 12, 1000],
                 [208, "en-ppocrv5", "max", 12, 1000],
             ],

@@ -366,13 +366,27 @@ def rapidocr_svg_bright_blue_warm_key_config() -> list[int | str]:
     ]
 
 
+def rapidocr_focus_georef_warm_key_config() -> list[int | str]:
+    return [
+        FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN,
+        "default",
+        "default",
+        RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+    ]
+
+
 def rapidocr_warm_engine_sample_plan_config() -> list[list[int | str]]:
     generic_side = rapidocr_generic_warm_sample_side_config()
+    focus_georef_warm_side = rapidocr_focus_georef_warm_sample_side_config()
+    focus_georef_key = rapidocr_focus_georef_warm_key_config()
     bright_blue_warm_side = rapidocr_bright_blue_large_warm_sample_side_config()
     bright_blue_key = rapidocr_bright_blue_warm_key_config()
     svg_bright_blue_warm_side = rapidocr_svg_bright_blue_large_warm_sample_side_config()
     svg_bright_blue_key = rapidocr_svg_bright_blue_warm_key_config()
     large_warm_keys: dict[tuple[int | str, ...], int] = {}
+    focused_warm_keys: dict[tuple[int | str, ...], int] = {}
+    if focus_georef_warm_side > 0:
+        focused_warm_keys[tuple(focus_georef_key)] = focus_georef_warm_side
     if bright_blue_warm_side > 0:
         large_warm_keys[tuple(bright_blue_key)] = bright_blue_warm_side
     if svg_bright_blue_warm_side > 0:
@@ -382,10 +396,20 @@ def rapidocr_warm_engine_sample_plan_config() -> list[list[int | str]]:
     for key in rapidocr_warm_engine_keys_config():
         if tuple(key) in large_warm_keys:
             continue
-        plan.append([*key, generic_side])
+        plan.append([*key, focused_warm_keys.get(tuple(key), generic_side)])
     for key, warm_side in large_warm_keys.items():
         plan.append([*key, warm_side])
     return plan
+
+
+def rapidocr_focus_georef_warm_sample_side_config() -> int:
+    if FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN <= 0:
+        return 0
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM <= 0:
+        return 0
+    if RAPIDOCR_DARK_TEAL_REC_BATCH_NUM == RAPIDOCR_REC_BATCH_NUM:
+        return 0
+    return bounded_rapidocr_warm_sample_side(FOCUS_GEOREF_OCR_DETECTOR_LIMIT_SIDE_LEN)
 
 
 def bounded_rapidocr_warm_sample_side(warm_side: int) -> int:
