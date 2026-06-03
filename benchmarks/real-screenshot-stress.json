@@ -1274,6 +1274,61 @@
       }
     },
     {
+      "slug": "bay-3-svg",
+      "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Inferred map area",
+        "min_control_points": 16,
+        "min_ocr_labels": 40,
+        "min_combined_confidence": 0.86,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 20,
+          "selected_box_count": 20,
+          "result_count": 20,
+          "label_count": 20,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-122.5117405, 37.2400556, -121.8370661, 37.8145499],
+        "max_bbox_error_m": 1500
+      }
+    },
+    {
+      "slug": "bay-3-svg-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match:svg-label-layer",
+        "city_equals": "Bay Area",
+        "catalog_slug_equals": "bay-area-waymo",
+        "min_combined_confidence": 0.72,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 20,
+          "selected_box_count": 20,
+          "result_count": 20,
+          "label_count": 20,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "bay-area-waymo-jpeg-small",
       "image": "/Users/ethanmckanna/Downloads/input.jpg",
       "no_catalog": true,

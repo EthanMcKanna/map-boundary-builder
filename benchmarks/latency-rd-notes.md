@@ -18281,3 +18281,33 @@ with zero failures in 0.531s.
   `-0.000340s`, and only the eight new alternate rows missing from the
   baseline. The hard-gate default was raised from `39` to `43`
   `min_ocr_count_contract_rows` so future runs protect this added OCR coverage.
+- Closed the earlier `bay 3.svg` SVG gap with a label-layer shortcut instead
+  of lowering the global SVG raster size. Profiling showed the Bay SVG has a
+  zero-area blue path artifact plus the real service-area path, and its usable
+  labels live under the Illustrator group `SF_City_names_LARGE_black`; the full
+  SVG rasterization was the old bottleneck. The runner now ignores degenerate
+  blue paths, discovers city/neighborhood label-layer groups by normalized ID,
+  and can rasterize a slim SVG made from the service-area path plus labels.
+  With OCR cache disabled and debug artifacts enabled, `/Users/ethanmckanna/Downloads/bay 3.svg`
+  now completes as `bay-3-svg-ui-default` in `0.496899s` through
+  `catalog-shape-match:svg-label-layer` with the existing `bay-area-waymo`
+  catalog bbox, and as forced no-catalog `bay-3-svg` in `0.424764s` through
+  `ocr-georeference:nominatim-label-fit` with `17` controls, bbox
+  `[-122.5117405,37.2400556,-121.8370661,37.8145499]`, and confidence `0.866`.
+  The paired rows are now in `benchmarks/real-screenshot-stress.json` with OCR
+  count caps of `20` boxes/labels and no low-confidence labels. Focused proof
+  at `out/bay3-svg-focused-profiled-counts-20260603` passed `2/2`, max primary
+  `0.525334s`, and count-capped OCR contracts `2/2`. Existing SVG focused
+  rows still passed at
+  `out/svg-label-layer-existing-focused-profiled-rerun-20260603` (`4/4`).
+  The full hard gate at `out/svg-label-layer-full72-hard-gate-20260603` passed
+  `72/72` expected outcomes, statuses `{"complete":61,"failed":11}`, max
+  primary `0.599232s`, repeat p95 `0.428s`, repeat max `0.449s`, prewarm
+  `0.638s`, and manifest OCR contracts `45/45` count-capped positive rows.
+  Common-row comparison against
+  `out/alternate-service-area-full70-hard-rerun2-20260603/stress-summary.json`
+  showed `70` compared rows, `signature_change_count=0`, and
+  `expectation_passed_delta=0`. Verification: focused SVG tests passed
+  (`9 passed`), `tests/test_runner_summary.py` passed (`115 passed`),
+  `python -m compileall map_boundary_builder tests` passed, and full pytest
+  passed `734 passed`.

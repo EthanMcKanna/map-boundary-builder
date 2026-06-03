@@ -116,6 +116,7 @@ CATALOG_MISS_REFINE_MAX_DIMENSION = max(
 )
 SVG_CATALOG_PATH_FILL = "#07f"
 SVG_PROVIDER_UI_LABEL_LAYER_IDS = ("City_names", "City_Name", "Neighborhoods")
+SVG_LABEL_LAYER_ID_TOKENS = ("city_name", "neighborhood")
 SVG_PROVIDER_UI_LABEL_LAYER_BACKGROUND_FILL = "#fff"
 CATALOG_LABEL_HINT_MIN_CONFIDENCE = 85.0
 CATALOG_LABEL_HINT_MAX_IMAGE_DIMENSION = 900
@@ -431,6 +432,7 @@ def svg_catalog_service_path_tag(text: str) -> str | None:
         tag
         for tag in path_tags
         if svg_path_tag_matches_fill(tag, fill_classes=fill_classes, fill=SVG_CATALOG_PATH_FILL)
+        and svg_path_tag_has_area(tag)
     ]
     if len(service_paths) != 1:
         return None
@@ -438,6 +440,23 @@ def svg_catalog_service_path_tag(text: str) -> str | None:
     if path_tag is None:
         return None
     return path_tag
+
+
+def svg_path_tag_has_area(tag: str) -> bool:
+    path_data = svg_tag_attribute(tag, "d") or ""
+    numbers = [
+        float(value)
+        for value in re.findall(
+            r"[-+]?(?:\d+\.\d+|\d+|\.\d+)(?:e[-+]?\d+)?",
+            path_data,
+            flags=re.IGNORECASE,
+        )
+    ]
+    if len(numbers) < 4:
+        return False
+    xs = numbers[0::2]
+    ys = numbers[1::2]
+    return max(xs) > min(xs) and max(ys) > min(ys)
 
 
 def svg_classes_with_fill(text: str, fill: str) -> set[str]:
@@ -527,6 +546,43 @@ def svg_group_fragment_by_id(text: str, group_id: str) -> str | None:
     return None
 
 
+def svg_label_layer_group_ids(text: str) -> tuple[str, ...]:
+    ids: list[str] = []
+    seen: set[str] = set()
+
+    def add(group_id: str) -> None:
+        if group_id not in seen:
+            seen.add(group_id)
+            ids.append(group_id)
+
+    for group_id in SVG_PROVIDER_UI_LABEL_LAYER_IDS:
+        add(group_id)
+    for match in re.finditer(r"<g\b[^>]*>", text, flags=re.IGNORECASE | re.DOTALL):
+        group_id = svg_tag_attribute(match.group(0), "id")
+        if group_id is None:
+            continue
+        normalized = re.sub(r"[^a-z0-9]+", "_", group_id.lower()).strip("_")
+        if any(token in normalized for token in SVG_LABEL_LAYER_ID_TOKENS):
+            add(group_id)
+    return tuple(ids)
+
+
+def svg_has_discovered_label_layer(svg_bytes: bytes) -> bool:
+    text = svg_bytes.decode("utf-8", "replace")
+    configured_ids = set(SVG_PROVIDER_UI_LABEL_LAYER_IDS)
+    return any(
+        group_id not in configured_ids and svg_group_fragment_by_id(text, group_id) is not None
+        for group_id in svg_label_layer_group_ids(text)
+    )
+
+
+def svg_file_has_discovered_label_layer(image_path: Path) -> bool:
+    try:
+        return svg_has_discovered_label_layer(read_svg_bytes(image_path))
+    except Exception:
+        return False
+
+
 def svg_provider_ui_label_layer_document(
     svg_bytes: bytes,
     viewbox: tuple[float, float, float, float],
@@ -537,7 +593,7 @@ def svg_provider_ui_label_layer_document(
         return None
     label_groups = [
         group
-        for group_id in SVG_PROVIDER_UI_LABEL_LAYER_IDS
+        for group_id in svg_label_layer_group_ids(text)
         if (group := svg_group_fragment_by_id(text, group_id)) is not None
     ]
     if not label_groups:
@@ -760,6 +816,178 @@ def try_svg_provider_ui_label_catalog_shortcut(
     )
 
 
+def try_svg_label_layer_catalog_shortcut(
+    image_path: Path,
+    candidate: SvgServicePathCandidate,
+    *,
+    city_input: str | None,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult | None:
+    if city_input is not None:
+        return None
+    extraction = candidate.extraction
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="Reading SVG label layer",
+        percent=43,
+        details={"source": "svg-label-layer"},
+    )
+    try:
+        labels = extract_svg_label_layer_labels_from_svg(
+            image_path,
+            extraction=extraction,
+            width=candidate.width,
+            height=candidate.height,
+        )
+    except Exception:
+        return None
+    catalog_match = provider_ui_label_catalog_match(extraction, labels)
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="SVG label layer read",
+        percent=46,
+        details={
+            "label_count": len(labels),
+            "top_labels": [label.text for label in labels[:8]],
+            "matched_catalog": catalog_match.entry.slug if catalog_match is not None else None,
+        },
+    )
+    if catalog_match is None:
+        return None
+    return finish_catalog_boundary_result(
+        extraction,
+        catalog_match,
+        width=candidate.width,
+        height=candidate.height,
+        image_path=image_path,
+        city_input="Auto",
+        output_path=output_path,
+        debug_path=debug_path,
+        opts=opts,
+        rgb=candidate.rgb,
+        progress=progress,
+        georeference_source="catalog-shape-match:svg-label-layer",
+    )
+
+
+def try_svg_label_layer_georeference_shortcut(
+    image_path: Path,
+    candidate: SvgServicePathCandidate,
+    *,
+    city_input: str | None,
+    output_path: Path,
+    debug_path: Path | None,
+    opts: BoundaryBuildOptions,
+    progress: ProgressCallback | None,
+) -> BoundaryBuildResult | None:
+    if city_input is not None:
+        return None
+    extraction = candidate.extraction
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="Reading SVG label layer",
+        percent=43,
+        details={"source": "svg-label-layer"},
+    )
+    try:
+        labels = extract_svg_label_layer_labels_from_svg(
+            image_path,
+            extraction=extraction,
+            width=candidate.width,
+            height=candidate.height,
+        )
+    except Exception:
+        return None
+    emit_progress(
+        progress,
+        stage="ocr",
+        message="SVG label layer read",
+        percent=47,
+        details={
+            "label_count": len(labels),
+            "top_labels": [label.text for label in labels[:8]],
+        },
+    )
+    georef = fit_georeference(
+        labels,
+        image_path,
+        extraction.pixel_geometry,
+        rgb=candidate.rgb,
+        city_input=None,
+        context_hints=None,
+        width=candidate.width,
+        height=candidate.height,
+        coverage_ratio=extraction.coverage_ratio,
+        min_control_points=opts.min_control_points,
+        label_y_min=None,
+        label_y_max=None,
+        road_feature_distance=None,
+        anchor_marker_dots=should_anchor_marker_dots(extraction.style),
+        style=extraction.style,
+        allow_credible_cached_fit=False,
+        progress=progress,
+    )
+    if georef is None or sparse_ocr_georeference_lacks_support(
+        georef,
+        width=candidate.width,
+        height=candidate.height,
+    ):
+        return None
+
+    data = feature_collection(
+        extraction,
+        candidate.width,
+        candidate.height,
+        georef.transform,
+        str(image_path),
+        "Auto",
+    )
+    geom = shape(data["features"][0]["geometry"])
+    properties = data["features"][0]["properties"]
+    combined_confidence = min(extraction.confidence, georef.transform.confidence)
+    properties["combined_confidence"] = combined_confidence
+    properties["geodesic_bbox_lonlat"] = list(geom.bounds)
+    properties["georeference_control_points"] = len(georef.control_points)
+    properties["georeference_residual_median_m"] = georef.residual_median_m
+    properties["georeference_residual_p90_m"] = georef.residual_p90_m
+    if should_label_as_regional_area(geom.bounds, properties["city"], georef):
+        properties["city"] = "Inferred map area"
+    emit_progress(
+        progress,
+        stage="georeference",
+        message="Map transform fitted",
+        percent=78,
+        details={
+            "source": georef.transform.source,
+            "combined_confidence": combined_confidence,
+            "control_points": len(georef.control_points),
+            "median_residual_m": round(georef.residual_median_m, 1),
+            "p90_residual_m": round(georef.residual_p90_m, 1),
+        },
+    )
+    if combined_confidence < opts.min_confidence:
+        return None
+    return finish_boundary_result(
+        data,
+        extraction,
+        image_path,
+        output_path,
+        debug_path,
+        opts,
+        candidate.width,
+        candidate.height,
+        city_input="Auto",
+        rgb=candidate.rgb,
+        progress=progress,
+    )
+
+
 def svg_service_path_extraction_for_raster(
     candidate: SvgServicePathCandidate | None,
     *,
@@ -847,6 +1075,20 @@ def build_boundary(
                     progress=progress,
                     georeference_source=catalog_match_source or "catalog-shape-match",
                 )
+            tried_label_layer_catalog = False
+            if svg_file_has_discovered_label_layer(image_path):
+                tried_label_layer_catalog = True
+                label_layer_catalog_result = try_svg_label_layer_catalog_shortcut(
+                    image_path,
+                    svg_service_path_candidate,
+                    city_input=city_input,
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    progress=progress,
+                )
+                if label_layer_catalog_result is not None:
+                    return label_layer_catalog_result
             provider_ui_result = try_svg_provider_ui_label_catalog_shortcut(
                 image_path,
                 svg_service_path_candidate,
@@ -858,6 +1100,30 @@ def build_boundary(
             )
             if provider_ui_result is not None:
                 return provider_ui_result
+            if not tried_label_layer_catalog:
+                label_layer_catalog_result = try_svg_label_layer_catalog_shortcut(
+                    image_path,
+                    svg_service_path_candidate,
+                    city_input=city_input,
+                    output_path=output_path,
+                    debug_path=debug_path,
+                    opts=opts,
+                    progress=progress,
+                )
+                if label_layer_catalog_result is not None:
+                    return label_layer_catalog_result
+        if svg_service_path_candidate is not None and not allow_catalog:
+            label_layer_georef_result = try_svg_label_layer_georeference_shortcut(
+                image_path,
+                svg_service_path_candidate,
+                city_input=city_input,
+                output_path=output_path,
+                debug_path=debug_path,
+                opts=opts,
+                progress=progress,
+            )
+            if label_layer_georef_result is not None:
+                return label_layer_georef_result
 
     emit_progress(
         progress,
@@ -2511,6 +2777,62 @@ def extract_provider_ui_labels_from_svg(
         )
         for label in labels
     ]
+
+
+def extract_svg_label_layer_labels_from_svg(
+    image_path: str | Path,
+    *,
+    extraction,
+    width: int,
+    height: int,
+) -> list[Any]:
+    svg_bytes = read_svg_bytes(Path(image_path))
+    viewbox = svg_viewbox(svg_bytes)
+    if viewbox is None:
+        raise ValueError("SVG upload does not expose a usable viewBox for label-layer OCR.")
+    svg_document = svg_provider_ui_label_layer_document(svg_bytes, viewbox)
+    if svg_document is None:
+        raise ValueError("SVG upload does not expose a usable label layer.")
+    with tempfile.TemporaryDirectory(prefix="map-boundary-svg-label-layer-") as tmp_dir:
+        label_path = Path(tmp_dir) / f"{Path(image_path).stem}.label-layer.png"
+        rasterize_svg_bytes_to_png(
+            svg_document,
+            label_path,
+            max_dimension=SVG_RASTER_MAX_DIMENSION,
+            source_path=Path(image_path),
+        )
+        rgb = load_rgb(label_path)
+        return extract_ocr_labels_from_rgb(
+            str(label_path),
+            rgb,
+            **svg_label_layer_ocr_kwargs(extraction.style, width=width, height=height),
+        )
+
+
+def svg_label_layer_ocr_kwargs(style: str | None, *, width: int, height: int) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {"cache": runner_ocr_cache_enabled()}
+    rapidocr_max_dimension = rapidocr_max_dimension_for_ocr_style(
+        style,
+        width=width,
+        height=height,
+        source_is_svg=True,
+    )
+    if rapidocr_max_dimension is not None:
+        kwargs["rapidocr_max_dimension"] = rapidocr_max_dimension
+    rapidocr_detector_limit = rapidocr_detector_limit_for_ocr_style(style, source_is_svg=True)
+    if rapidocr_detector_limit is not None:
+        kwargs["rapidocr_detector_limit_side_len"] = rapidocr_detector_limit
+    rapidocr_detector_limit_type = rapidocr_detector_limit_type_for_ocr_style(style, source_is_svg=True)
+    if rapidocr_detector_limit_type is not None:
+        kwargs["rapidocr_detector_limit_type"] = rapidocr_detector_limit_type
+    rapidocr_recognition_profile = rapidocr_recognition_profile_for_ocr_style(style)
+    if rapidocr_recognition_profile is not None:
+        kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
+    rapidocr_min_text_area = fast_text_ocr_min_area_for_style(style, source_is_svg=True)
+    if rapidocr_min_text_area is not None:
+        kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
+    add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
+    return kwargs
 
 
 def svg_provider_ui_crop_document(

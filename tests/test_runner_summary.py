@@ -1619,6 +1619,20 @@ def test_svg_catalog_service_path_document_extracts_single_blue_class_path() -> 
     assert b'M10 10h60v40H10z' in slim
 
 
+def test_svg_catalog_service_path_document_ignores_degenerate_blue_path() -> None:
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<path class="st2" d="M15,15"/>
+<path class="st2" d="M10 10h60v40H10z"/>
+</svg>"""
+
+    slim = runner.svg_catalog_service_path_document(svg)
+
+    assert slim is not None
+    assert b'M15,15' not in slim
+    assert b'M10 10h60v40H10z' in slim
+
+
 def test_svg_catalog_service_path_document_rejects_multiple_blue_paths() -> None:
     svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
 <defs><style>.st2{fill:#07f}</style></defs>
@@ -1627,6 +1641,20 @@ def test_svg_catalog_service_path_document_rejects_multiple_blue_paths() -> None
 </svg>"""
 
     assert runner.svg_catalog_service_path_document(svg) is None
+
+
+def test_svg_label_layer_document_includes_city_name_variants() -> None:
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}.label{fill:#111}</style></defs>
+<path class="st2" d="M10 10h60v40H10z"/>
+<g id="SF_City_names_LARGE_black"><path class="label" d="M20 20h12v8H20z"/></g>
+</svg>"""
+
+    slim = runner.svg_provider_ui_label_layer_document(svg, (0, 0, 100, 80))
+
+    assert slim is not None
+    assert b'id="SF_City_names_LARGE_black"' in slim
+    assert b'fill="#07f"' in slim
 
 
 def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, monkeypatch) -> None:
@@ -1867,6 +1895,155 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
     assert provider_ocr_calls[0]["kwargs"]["rapidocr_max_dimension"] == runner.PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
     assert any(event["message"] == "Using SVG service-area path" for event in events)
     assert any(event["message"] == "Reading provider area labels" for event in events)
+
+
+def test_svg_label_layer_catalog_shortcut_avoids_full_raster_after_crop_miss(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<path class="st2" d="M15,15"/>
+<path class="st2" d="M10 10h60v40H10z"/>
+<g id="SF_City_names_LARGE_black"><path d="M20 20h12v8H20z"/></g>
+</svg>""",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+    mask = np.zeros((80, 100), dtype=bool)
+    mask[10:50, 10:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    events: list[dict] = []
+    fake_match = SimpleNamespace(iou=0.61, entry=SimpleNamespace(slug="bay-area-waymo"))
+
+    def fake_rasterize(_svg_bytes, target_path, **_kwargs):
+        Image.fromarray(rgb).save(target_path)
+
+    def fake_finish_catalog_boundary_result(*_args, **kwargs):
+        return BoundaryBuildResult(
+            geojson={"type": "FeatureCollection", "features": []},
+            summary={
+                "status": "complete",
+                "catalog_slug": fake_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(runner, "try_svg_provider_ui_label_catalog_shortcut", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        runner,
+        "extract_svg_label_layer_labels_from_svg",
+        lambda *_args, **_kwargs: [OcrLabel("Atherton", x=20, y=20, width=60, height=18, confidence=99)],
+    )
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+    monkeypatch.setattr(
+        runner,
+        "normalize_image_for_processing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("full SVG rasterization should be skipped after label-layer catalog match")
+        ),
+    )
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(filename_hint="upload.png", write_mask_artifact=False),
+        progress=events.append,
+    )
+
+    assert result.summary["catalog_slug"] == "bay-area-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:svg-label-layer"
+    assert any(event["message"] == "Reading SVG label layer" for event in events)
+
+
+def test_svg_label_layer_georef_shortcut_avoids_full_raster_when_catalog_disabled(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "unknown.svg"
+    image_path.write_text(
+        """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
+<defs><style>.st2{fill:#07f}</style></defs>
+<path class="st2" d="M10 10h60v40H10z"/>
+<g id="SF_City_names_LARGE_black"><path d="M20 20h12v8H20z"/></g>
+</svg>""",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+    mask = np.zeros((80, 100), dtype=bool)
+    mask[10:50, 10:70] = True
+    extraction = ExtractionResult(
+        mask=mask,
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    transform = GeoreferenceTransform(
+        city="Bay Area",
+        lon=-122.1,
+        lat=37.5,
+        origin_x_ratio=0.5,
+        origin_y_ratio=0.5,
+        meters_per_pixel=100.0,
+        rotation_radians=0.0,
+        confidence=0.88,
+        source="ocr-georeference:nominatim-label-fit",
+    )
+    controls = [
+        SimpleNamespace(
+            label=OcrLabel(f"Place {index}", x=20 + index, y=20, width=10, height=8, confidence=99),
+            geocode=SimpleNamespace(display_name=f"Place {index}, CA"),
+        )
+        for index in range(6)
+    ]
+    georef = GeoreferenceResult(
+        transform=transform,
+        control_points=controls,
+        residual_median_m=400.0,
+        residual_p90_m=900.0,
+    )
+
+    def fake_rasterize(_svg_bytes, target_path, **_kwargs):
+        Image.fromarray(rgb).save(target_path)
+
+    monkeypatch.setattr(runner, "rasterize_svg_bytes_to_png", fake_rasterize)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(
+        runner,
+        "extract_svg_label_layer_labels_from_svg",
+        lambda *_args, **_kwargs: [control.label for control in controls],
+    )
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
+    monkeypatch.setattr(
+        runner,
+        "normalize_image_for_processing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("full SVG rasterization should be skipped after label-layer georef")
+        ),
+    )
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(allow_catalog=False, write_mask_artifact=False),
+    )
+
+    assert result.summary["georeference_source"] == "ocr-georeference:nominatim-label-fit"
+    assert result.summary["control_points"] == 6
 
 
 def test_current_catalog_candidate_uses_provider_crop_before_generic_ocr(tmp_path, monkeypatch) -> None:
