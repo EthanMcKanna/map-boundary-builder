@@ -17186,3 +17186,15 @@ with zero failures in 0.531s.
   comparison crossed cache/preset policies instead of proving a pure runtime
   regression. Focused stress benchmark tests passed `112 passed in 0.45s`;
   this is benchmark feedback-loop reliability only.
+- Added `--fail-on-baseline-config-drift` so candidate gates can reject those
+  cross-policy comparisons automatically instead of only printing the warning.
+  The gate requires `--compare-baseline-report` and exits non-zero when the
+  baseline comparison records timing/cache/preset configuration drift. A real
+  focused smoke at `out/config-drift-gate-smoke-20260603` intentionally compared
+  current `dallas-waymo` focused-hard-gate output against the older cached full
+  report; the row itself passed `1/1` expectations with primary `0.335s`, but
+  the command exited `1` because the saved comparison contained
+  `runner_ocr_cache=true->false`, `extraction_cache=true->false`, and
+  `preset=none->focused-real-screenshot-gate@v1:only1`. Focused stress
+  benchmark tests passed `115 passed in 0.33s`; this is benchmark
+  feedback-loop reliability only.

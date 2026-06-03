@@ -3864,6 +3864,92 @@ def test_main_requires_repeat_runs_for_repeat_signature_drift_gate(monkeypatch) 
     assert exc.value.code == 2
 
 
+def test_main_requires_baseline_for_config_drift_gate(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run without baseline comparison")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--fail-on-baseline-config-drift"])
+
+    assert exc.value.code == 2
+
+
+def test_main_fails_when_baseline_config_drift_is_detected(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "baseline_comparison": {
+                "configuration_changes": [
+                    {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+                ],
+                "signature_changes": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--compare-baseline-report",
+            "baseline.json",
+            "--fail-on-baseline-config-drift",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_main_passes_baseline_config_drift_gate_when_configuration_matches(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "baseline_comparison": {
+                "configuration_changes": [],
+                "signature_changes": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--compare-baseline-report",
+            "baseline.json",
+            "--fail-on-baseline-config-drift",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_main_fails_when_repeat_signature_drift_is_detected(tmp_path, monkeypatch) -> None:
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert manifest_path == Path("manifest.json")

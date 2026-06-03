@@ -188,6 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero when --compare-baseline-report finds output signature changes.",
     )
     parser.add_argument(
+        "--fail-on-baseline-config-drift",
+        action="store_true",
+        help="Exit non-zero when --compare-baseline-report has incompatible timing/cache settings.",
+    )
+    parser.add_argument(
         "--max-baseline-total-regression-s",
         type=float,
         default=None,
@@ -406,6 +411,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-repeat-signature-drift requires --repeat-profile-runs")
     if args.fail_on_baseline_signature_drift and not args.compare_baseline_report:
         parser.error("--fail-on-baseline-signature-drift requires --compare-baseline-report")
+    if args.fail_on_baseline_config_drift and not args.compare_baseline_report:
+        parser.error("--fail-on-baseline-config-drift requires --compare-baseline-report")
     if args.max_baseline_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
@@ -523,6 +530,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
         return 1
     if args.fail_on_baseline_signature_drift and baseline_comparison_signature_drift_cases(report):
+        return 1
+    if args.fail_on_baseline_config_drift and baseline_comparison_configuration_changes(report):
         return 1
     if baseline_comparison_regression_budget_failed(report):
         return 1
@@ -3541,6 +3550,16 @@ def baseline_comparison_signature_drift_cases(report: dict[str, Any]) -> list[st
         if isinstance(slug, str) and slug:
             slugs.append(slug)
     return slugs
+
+
+def baseline_comparison_configuration_changes(report: dict[str, Any]) -> list[dict[str, Any]]:
+    comparison = report.get("baseline_comparison")
+    if not isinstance(comparison, dict):
+        return []
+    changes = comparison.get("configuration_changes")
+    if not isinstance(changes, list):
+        return []
+    return [change for change in changes if isinstance(change, dict)]
 
 
 def baseline_comparison_regression_budget_failed(report: dict[str, Any]) -> bool:
