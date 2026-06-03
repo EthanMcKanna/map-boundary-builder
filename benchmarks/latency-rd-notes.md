@@ -17158,3 +17158,18 @@ with zero failures in 0.531s.
   primary OCR by `+0.030s`; its repeat OCR p95 gain was only `-0.009s`.
   Keep the default detector at `608` for route/profile UI OCR unless a future
   selector can preserve the dark active/gray receipt/non-map signatures.
+- Added hidden OCR overlap deltas to baseline comparison reports so future
+  speed candidates cannot look cleaner merely because OCR work moved behind
+  extraction overlap. `compare_stress_reports` now records primary
+  `ocr_overlap_hidden_delta_s`, ranks the largest hidden-overlap regressions and
+  improvements, enriches old repeat-profile summaries from raw repeat samples
+  when needed, and prints `hidden_ocr_p95` in the repeat delta line. Recomputing
+  the saved route-detector comparison between
+  `out/route-det608-control-20260603` and
+  `out/route-det544-candidate-20260603` now exposes the missing tradeoff:
+  `tesla-austin-route-receipt` had the worst primary hidden OCR regression
+  (`+0.025s`, `0.038s` to `0.063s`) and repeat hidden OCR p95 moved `+0.003s`
+  even though repeat OCR p95 moved `-0.008s`. Focused stress benchmark tests
+  passed `111 passed in 0.33s`, the full suite passed
+  `687 passed, 31 subtests passed in 5.83s`, and this is benchmark
+  feedback-loop reliability only; no runtime deploy is needed.

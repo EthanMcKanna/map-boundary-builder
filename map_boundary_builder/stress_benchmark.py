@@ -887,6 +887,12 @@ def compare_stress_reports(
         "largest_ocr_engine_total_improvements": ranked_ocr_engine_total_deltas(
             latency_deltas, reverse=False
         ),
+        "largest_ocr_overlap_hidden_regressions": ranked_ocr_overlap_hidden_deltas(
+            latency_deltas, reverse=True
+        ),
+        "largest_ocr_overlap_hidden_improvements": ranked_ocr_overlap_hidden_deltas(
+            latency_deltas, reverse=False
+        ),
     }
     if candidate_scope_slugs is not None:
         comparison["candidate_scope"] = {
@@ -1146,6 +1152,15 @@ def stress_repeat_profile_delta(
     )
     if ocr_count_fields:
         delta["ocr_engine_count_metric"] = ocr_count_fields
+    hidden_overlap_delta = stress_metric_group_delta(
+        baseline_summary,
+        candidate_summary,
+        section_key="ocr_overlap_hidden_s",
+        stat_keys=("p95_duration_s", "max_duration_s", "total_s"),
+        delta_key="delta_s",
+    )
+    if hidden_overlap_delta:
+        delta["ocr_overlap_hidden_s"] = hidden_overlap_delta
     return delta or None
 
 
@@ -1154,7 +1169,21 @@ def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, An
     if not isinstance(repeat_profile, dict):
         return None
     summary = repeat_profile.get("summary")
-    return summary if isinstance(summary, dict) else None
+    if not isinstance(summary, dict):
+        return None
+    if isinstance(summary.get("ocr_overlap_hidden_s"), dict):
+        return summary
+    samples = repeat_profile.get("samples")
+    if not isinstance(samples, list):
+        return summary
+    hidden_stats = repeat_profile_ocr_overlap_hidden_stats(
+        repeat_profile_analyzed_samples([sample for sample in samples if isinstance(sample, dict)])
+    )
+    if hidden_stats is None:
+        return summary
+    enriched = dict(summary)
+    enriched["ocr_overlap_hidden_s"] = hidden_stats
+    return enriched
 
 
 def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | None:
@@ -1245,6 +1274,26 @@ def stress_nested_metric_deltas(
     return deltas
 
 
+def stress_metric_group_delta(
+    baseline_summary: dict[str, Any],
+    candidate_summary: dict[str, Any],
+    *,
+    section_key: str,
+    stat_keys: tuple[str, ...],
+    delta_key: str,
+) -> dict[str, dict[str, float]]:
+    baseline_section = baseline_summary.get(section_key)
+    candidate_section = candidate_summary.get(section_key)
+    if not isinstance(baseline_section, dict) or not isinstance(candidate_section, dict):
+        return {}
+    deltas: dict[str, dict[str, float]] = {}
+    for stat in stat_keys:
+        metric_delta = stress_scalar_delta(baseline_section, candidate_section, stat, delta_key=delta_key)
+        if metric_delta is not None:
+            deltas[stat] = metric_delta
+    return deltas
+
+
 def stress_report_rows_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     rows = report.get("rows")
     if not isinstance(rows, list):
@@ -1306,6 +1355,12 @@ def stress_row_latency_delta(
     ocr_stage_deltas = stress_row_ocr_engine_stage_deltas(baseline_row, candidate_row)
     if ocr_stage_deltas:
         delta["ocr_engine_stage_delta_s"] = ocr_stage_deltas
+    ocr_hidden_values = stress_row_ocr_overlap_hidden_values(baseline_row, candidate_row)
+    if ocr_hidden_values is not None:
+        baseline_hidden, candidate_hidden = ocr_hidden_values
+        delta["baseline_ocr_overlap_hidden_s"] = round(baseline_hidden, 6)
+        delta["candidate_ocr_overlap_hidden_s"] = round(candidate_hidden, 6)
+        delta["ocr_overlap_hidden_delta_s"] = round(candidate_hidden - baseline_hidden, 6)
     return delta
 
 
@@ -1374,6 +1429,24 @@ def stress_row_ocr_engine_metric_values(
     return baseline_value, candidate_value
 
 
+def stress_row_ocr_overlap_hidden_values(
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+) -> tuple[float, float] | None:
+    baseline_hidden = stress_row_ocr_overlap_hidden_value(baseline_row)
+    candidate_hidden = stress_row_ocr_overlap_hidden_value(candidate_row)
+    if baseline_hidden is None or candidate_hidden is None:
+        return None
+    return baseline_hidden, candidate_hidden
+
+
+def stress_row_ocr_overlap_hidden_value(row: dict[str, Any]) -> float | None:
+    hidden_s = parse_nonnegative_float(row.get("ocr_overlap_hidden_s"))
+    if hidden_s is not None:
+        return hidden_s
+    return ocr_overlap_hidden_seconds(row)
+
+
 def ranked_latency_deltas(
     latency_deltas: list[dict[str, Any]],
     *,
@@ -1409,6 +1482,27 @@ def ranked_ocr_engine_total_deltas(
     ranked.sort(
         key=lambda delta: (
             float(delta["ocr_engine_total_delta_s"]),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
+def ranked_ocr_overlap_hidden_deltas(
+    latency_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in latency_deltas
+        if isinstance(delta.get("ocr_overlap_hidden_delta_s"), (int, float))
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(delta["ocr_overlap_hidden_delta_s"]),
             str(delta.get("slug") or ""),
         ),
         reverse=reverse,
@@ -2898,6 +2992,7 @@ def summarize_repeat_profile_samples(
             "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
             "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
             "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
+            "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
             "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
             "ocr_engine_slowest_cases": repeat_profile_ocr_engine_slowest_cases(case_summaries),
         },
@@ -2922,6 +3017,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
         "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
         "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
+        "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
     }
 
@@ -4211,6 +4307,21 @@ def repeat_profile_ocr_engine_count_stats(samples: list[dict[str, Any]]) -> dict
     }
 
 
+def repeat_profile_ocr_overlap_hidden_stats(samples: list[dict[str, Any]]) -> dict[str, Any] | None:
+    durations = [
+        hidden_s
+        for hidden_s in (stress_row_ocr_overlap_hidden_value(sample) for sample in samples)
+        if hidden_s is not None
+    ]
+    if not durations:
+        return None
+    return {
+        "samples": len(durations),
+        "total_s": round(sum(durations), 6),
+        **repeat_profile_stage_duration_distribution(durations),
+    }
+
+
 def repeat_profile_count_distribution(counts: list[float]) -> dict[str, float | None]:
     if not counts:
         return {
@@ -4475,6 +4586,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_ocr_delta_text = baseline_primary_ocr_delta_text(baseline_comparison)
         if primary_ocr_delta_text:
             print(f"baseline primary OCR delta: {primary_ocr_delta_text}")
+        primary_hidden_delta_text = baseline_primary_ocr_overlap_hidden_delta_text(baseline_comparison)
+        if primary_hidden_delta_text:
+            print(f"baseline primary hidden OCR delta: {primary_hidden_delta_text}")
         repeat_delta = baseline_comparison.get("repeat_profile_delta")
         repeat_delta_text = baseline_repeat_delta_text(
             repeat_delta if isinstance(repeat_delta, dict) else None
@@ -5241,6 +5355,12 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
             "{:+.3f}s",
         ),
         (
+            "hidden_ocr_p95",
+            ("ocr_overlap_hidden_s", "p95_duration_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
             "selected_box_p95",
             ("ocr_engine_count_metric", "selected_box_count", "p95_count"),
             "delta_count",
@@ -5306,6 +5426,21 @@ def baseline_primary_ocr_delta_text(baseline_comparison: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def baseline_primary_ocr_overlap_hidden_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    parts: list[str] = []
+    worst = baseline_primary_ocr_overlap_hidden_delta_item_text(
+        baseline_comparison.get("largest_ocr_overlap_hidden_regressions")
+    )
+    if worst:
+        parts.append(f"worst_hidden={worst}")
+    best = baseline_primary_ocr_overlap_hidden_delta_item_text(
+        baseline_comparison.get("largest_ocr_overlap_hidden_improvements")
+    )
+    if best:
+        parts.append(f"best_hidden={best}")
+    return ", ".join(parts)
+
+
 def baseline_primary_delta_item_text(items: Any) -> str:
     if not isinstance(items, list) or not items:
         return ""
@@ -5335,6 +5470,26 @@ def baseline_primary_ocr_delta_item_text(items: Any) -> str:
         return ""
     stage_delta_text = baseline_primary_ocr_stage_delta_text(item, include_total=False)
     return f"{slug} {delta:+.3f}s{stage_delta_text}"
+
+
+def baseline_primary_ocr_overlap_hidden_delta_item_text(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return ""
+    item = items[0]
+    if not isinstance(item, dict):
+        return ""
+    slug = item.get("slug")
+    delta = parse_signed_float(item.get("ocr_overlap_hidden_delta_s"))
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    baseline_hidden = parse_nonnegative_float(item.get("baseline_ocr_overlap_hidden_s"))
+    candidate_hidden = parse_nonnegative_float(item.get("candidate_ocr_overlap_hidden_s"))
+    hidden_text = (
+        f" (baseline={baseline_hidden:.3f}s, candidate={candidate_hidden:.3f}s)"
+        if baseline_hidden is not None and candidate_hidden is not None
+        else ""
+    )
+    return f"{slug} {delta:+.3f}s{hidden_text}"
 
 
 def baseline_primary_ocr_stage_delta_text(

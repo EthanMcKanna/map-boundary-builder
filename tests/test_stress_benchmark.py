@@ -1033,6 +1033,126 @@ def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
     assert change["candidate"]["route_metric_labels"] == []
 
 
+def test_compare_stress_reports_tracks_ocr_overlap_hidden_delta() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "route-ui",
+                "observed_status": "failed",
+                "total_elapsed_s": 0.32,
+                "ocr_engine_profile": {"total_s": 0.24},
+                "stages": {"ocr": 0.20},
+            },
+            {
+                "slug": "waymo",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.45,
+                "ocr_overlap_hidden_s": 0.08,
+            },
+        ],
+        "repeat_profile": {
+            "summary": {
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.06,
+                    "max_duration_s": 0.07,
+                    "total_s": 0.20,
+                }
+            }
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "route-ui",
+                "observed_status": "failed",
+                "total_elapsed_s": 0.30,
+                "ocr_engine_profile": {"total_s": 0.25},
+                "stages": {"ocr": 0.18},
+            },
+            {
+                "slug": "waymo",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.40,
+                "ocr_overlap_hidden_s": 0.02,
+            },
+        ],
+        "repeat_profile": {
+            "summary": {
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.09,
+                    "max_duration_s": 0.11,
+                    "total_s": 0.27,
+                }
+            }
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    hidden_delta = comparison["latency_deltas"][0]
+    assert hidden_delta["slug"] == "route-ui"
+    assert hidden_delta["baseline_ocr_overlap_hidden_s"] == 0.04
+    assert hidden_delta["candidate_ocr_overlap_hidden_s"] == 0.07
+    assert hidden_delta["ocr_overlap_hidden_delta_s"] == 0.03
+    assert comparison["largest_ocr_overlap_hidden_regressions"][0]["slug"] == "route-ui"
+    assert comparison["largest_ocr_overlap_hidden_improvements"][0]["slug"] == "waymo"
+    repeat_hidden = comparison["repeat_profile_delta"]["ocr_overlap_hidden_s"]
+    assert repeat_hidden["p95_duration_s"]["delta_s"] == 0.03
+    assert repeat_hidden["max_duration_s"]["delta_s"] == 0.04
+    assert repeat_hidden["total_s"]["delta_s"] == 0.07
+
+
+def test_compare_stress_reports_rebuilds_repeat_hidden_overlap_from_samples() -> None:
+    baseline = {
+        "rows": [{"slug": "route-ui", "observed_status": "failed", "total_elapsed_s": 0.3}],
+        "repeat_profile": {
+            "summary": {"analyzed_samples": 2},
+            "samples": [
+                {
+                    "slug": "route-ui",
+                    "warmup": False,
+                    "ocr_engine_profile": {"total_s": 0.20},
+                    "stages": {"ocr": 0.16},
+                },
+                {
+                    "slug": "route-ui",
+                    "warmup": False,
+                    "ocr_engine_profile": {"total_s": 0.24},
+                    "stages": {"ocr": 0.18},
+                },
+            ],
+        },
+    }
+    candidate = {
+        "rows": [{"slug": "route-ui", "observed_status": "failed", "total_elapsed_s": 0.28}],
+        "repeat_profile": {
+            "summary": {"analyzed_samples": 2},
+            "samples": [
+                {
+                    "slug": "route-ui",
+                    "warmup": False,
+                    "ocr_engine_profile": {"total_s": 0.26},
+                    "stages": {"ocr": 0.19},
+                },
+                {
+                    "slug": "route-ui",
+                    "warmup": False,
+                    "ocr_engine_profile": {"total_s": 0.30},
+                    "stages": {"ocr": 0.20},
+                },
+            ],
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    hidden_delta = comparison["repeat_profile_delta"]["ocr_overlap_hidden_s"]
+    assert hidden_delta["p95_duration_s"]["baseline"] == 0.059
+    assert hidden_delta["p95_duration_s"]["candidate"] == 0.0985
+    assert hidden_delta["p95_duration_s"]["delta_s"] == 0.0395
+    assert hidden_delta["total_s"]["delta_s"] == 0.07
+
+
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     report = {
         "summary": {
@@ -1100,6 +1220,22 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     },
                 },
             ],
+            "largest_ocr_overlap_hidden_regressions": [
+                {
+                    "slug": "houston",
+                    "ocr_overlap_hidden_delta_s": 0.06,
+                    "baseline_ocr_overlap_hidden_s": 0.02,
+                    "candidate_ocr_overlap_hidden_s": 0.08,
+                },
+            ],
+            "largest_ocr_overlap_hidden_improvements": [
+                {
+                    "slug": "dallas",
+                    "ocr_overlap_hidden_delta_s": -0.03,
+                    "baseline_ocr_overlap_hidden_s": 0.04,
+                    "candidate_ocr_overlap_hidden_s": 0.01,
+                },
+            ],
             "regression_budget": {
                 "passed": False,
                 "max_total_elapsed_regression_s": 0.1,
@@ -1148,6 +1284,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "rec_elapsed_s": {"p95_duration_s": {"delta_s": 0.04}},
                     "total_s": {"p95_duration_s": {"delta_s": 0.02}},
                 },
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": {"delta_s": 0.012},
+                },
                 "ocr_engine_count_metric": {
                     "selected_box_count": {"p95_count": {"delta_count": 2.0}},
                 },
@@ -1174,8 +1313,14 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "(input=+0.010s, det=+0.070s, rec=+0.070s), "
         "best_ocr=dallas -0.080s (input=+0.000s, det=-0.020s, rec=-0.060s)"
     ) in output
+    assert (
+        "baseline primary hidden OCR delta: worst_hidden=houston +0.060s "
+        "(baseline=0.020s, candidate=0.080s), best_hidden=dallas -0.030s "
+        "(baseline=0.040s, candidate=0.010s)"
+    ) in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "full_detail_retries=+1" in output
+    assert "hidden_ocr_p95=+0.012s" in output
     assert (
         "baseline regression budget: failed primary<=0.100s primary_ocr<=0.100s "
         "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4 "
