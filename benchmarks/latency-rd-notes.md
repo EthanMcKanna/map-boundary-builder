@@ -17921,3 +17921,41 @@ with zero failures in 0.531s.
   `0.315s`, and prewarm `0.622s`. The accepted claim is intentionally narrow:
   less thread fanout for cached seed lookups with no output-signature drift,
   not a broad OCR-speed win.
+- Rejected reordering focused credible-cache georeference to build cached
+  geocoded controls before launching the OSM-place worker. The hypothesis was
+  that Ann Arbor focused runs were paying avoidable OSM-place thread setup even
+  when cached geocoded controls were already credible. A prototype preserved
+  both Ann Arbor AVIF row signatures in
+  `out/focus-credible-cache-place-skip-ann-arbor-20260603` and passed
+  expectations, but it did not improve the target stage: compared with
+  `out/cached-geocode-single-worker-ann-arbor-20260603`, median primary delta
+  was only `-0.002s`, primary georeference stage total regressed
+  `+0.004s`, and repeat p95 improved only `-0.003s`. The candidate was
+  reverted because changing fit ordering without a measured georeference win is
+  not worth the semantic risk.
+- Rejected adding AVIF decode or dark-teal extraction to generation prewarm for
+  the Ann Arbor production-default AVIF path. A tiny AVIF warm decode reduced
+  local fresh-process AVIF metadata open time from about `0.0021s` to
+  `0.00008s` and fixture RGB load from about `0.0080s` to `0.0076s`, which is
+  far below the production-stage gap and not worth adding prewarm work. A
+  synthetic dark-teal extraction warmup was also counterproductive: current
+  prewarm plus Ann Arbor runs landed around `0.164-0.169s` total with extract
+  `0.048-0.052s`, while injecting a dark-teal extraction warmup cost about
+  `0.0024s` and moved total to `0.173-0.175s` with extract `0.053-0.054s`.
+  Keep health prewarm focused on OCR and the existing synthetic extraction path
+  until production evidence points to a real decoder/kernel cold-start win.
+- Production user-facing Ann Arbor AVIF timing is materially better without
+  diagnostic OCR profiling. The deployed `pipeline-f2079bc03f62e2c8` profile
+  smoke with `profile_ocr_engine=1` completed a raw AVIF cache miss at
+  `1.154837s`, but a no-profile request with unchanged visual pixels hit warm
+  runner OCR/geocoder state and completed in `0.160-0.166s`. To force a more
+  realistic fresh visual path, two one-pixel-modified AVIF variants were
+  uploaded with `normalized_cache_lookup=0` and no OCR profiling. The first
+  visual variant was a cache miss with fresh OCR and completed at `0.869144s`
+  (`inspect=0.026707s`, `extract=0.292354s`, `ocr=0.375636s`,
+  `georeference=0.173233s`, city `Ann Arbor`, source
+  `ocr-georeference:nominatim-label-fit`, confidence `0.805`). The second
+  variant reused OCR work but still paid georeference setup, completing at
+  `0.330237s`. Treat the profiled production smoke as diagnostic overhead; the
+  warmed no-profile production path for this arbitrary AVIF case is already
+  subsecond, while first-use georeference setup remains the next visible tail.
