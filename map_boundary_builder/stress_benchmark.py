@@ -881,6 +881,12 @@ def compare_stress_reports(
         "latency_deltas": latency_deltas,
         "largest_total_regressions": ranked_latency_deltas(latency_deltas, reverse=True),
         "largest_total_improvements": ranked_latency_deltas(latency_deltas, reverse=False),
+        "largest_ocr_engine_total_regressions": ranked_ocr_engine_total_deltas(
+            latency_deltas, reverse=True
+        ),
+        "largest_ocr_engine_total_improvements": ranked_ocr_engine_total_deltas(
+            latency_deltas, reverse=False
+        ),
     }
     if candidate_scope_slugs is not None:
         comparison["candidate_scope"] = {
@@ -1382,6 +1388,27 @@ def ranked_latency_deltas(
     ranked.sort(
         key=lambda delta: (
             float(delta["total_elapsed_delta_s"]),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
+def ranked_ocr_engine_total_deltas(
+    latency_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in latency_deltas
+        if isinstance(delta.get("ocr_engine_total_delta_s"), (int, float))
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(delta["ocr_engine_total_delta_s"]),
             str(delta.get("slug") or ""),
         ),
         reverse=reverse,
@@ -4380,6 +4407,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
             print(f"baseline primary delta: {primary_delta_text}")
+        primary_ocr_delta_text = baseline_primary_ocr_delta_text(baseline_comparison)
+        if primary_ocr_delta_text:
+            print(f"baseline primary OCR delta: {primary_ocr_delta_text}")
         repeat_delta = baseline_comparison.get("repeat_profile_delta")
         repeat_delta_text = baseline_repeat_delta_text(
             repeat_delta if isinstance(repeat_delta, dict) else None
@@ -5167,6 +5197,21 @@ def baseline_primary_delta_text(baseline_comparison: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def baseline_primary_ocr_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    parts: list[str] = []
+    worst = baseline_primary_ocr_delta_item_text(
+        baseline_comparison.get("largest_ocr_engine_total_regressions")
+    )
+    if worst:
+        parts.append(f"worst_ocr={worst}")
+    best = baseline_primary_ocr_delta_item_text(
+        baseline_comparison.get("largest_ocr_engine_total_improvements")
+    )
+    if best:
+        parts.append(f"best_ocr={best}")
+    return ", ".join(parts)
+
+
 def baseline_primary_delta_item_text(items: Any) -> str:
     if not isinstance(items, list) or not items:
         return ""
@@ -5181,13 +5226,34 @@ def baseline_primary_delta_item_text(items: Any) -> str:
     return f"{slug} {delta:+.3f}s{ocr_delta_text}"
 
 
-def baseline_primary_ocr_stage_delta_text(item: dict[str, Any]) -> str:
+def baseline_primary_ocr_delta_item_text(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return ""
+    item = items[0]
+    if not isinstance(item, dict):
+        return ""
+    slug = item.get("slug")
+    delta = parse_signed_float(item.get("ocr_engine_total_delta_s"))
+    stage_deltas = item.get("ocr_engine_stage_delta_s")
+    if delta is None and isinstance(stage_deltas, dict):
+        delta = parse_signed_float(stage_deltas.get("total_s"))
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    stage_delta_text = baseline_primary_ocr_stage_delta_text(item, include_total=False)
+    return f"{slug} {delta:+.3f}s{stage_delta_text}"
+
+
+def baseline_primary_ocr_stage_delta_text(
+    item: dict[str, Any],
+    *,
+    include_total: bool = True,
+) -> str:
     parts: list[str] = []
     total_delta = parse_signed_float(item.get("ocr_engine_total_delta_s"))
     stage_deltas = item.get("ocr_engine_stage_delta_s")
     if total_delta is None and isinstance(stage_deltas, dict):
         total_delta = parse_signed_float(stage_deltas.get("total_s"))
-    if total_delta is not None:
+    if include_total and total_delta is not None:
         parts.append(f"ocr_total={total_delta:+.3f}s")
     if isinstance(stage_deltas, dict):
         for key, label in BASELINE_PRIMARY_OCR_STAGE_DELTA_DISPLAY:

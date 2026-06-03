@@ -17103,3 +17103,14 @@ with zero failures in 0.531s.
   passed `109 passed in 0.21s`, the full suite passed
   `685 passed, 31 subtests passed in 5.92s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Added explicit primary OCR-total regression/improvement rankings to baseline
+  comparisons, separate from wall-clock total rankings. Rebuilding the same
+  saved `248/max` control/candidate pair now shows why this matters: the worst
+  total row remains `los-angeles-waymo +0.134s`, but the worst OCR-total row is
+  `nashville-waymo +0.130s (input=-0.013s, det=+0.077s, rec=+0.065s)`, while the
+  best OCR row is `dallas-waymo -0.082s (input=-0.000s, det=-0.110s,
+  rec=+0.031s)`. That keeps OCR-specific drift visible when georeference/export
+  noise changes the wall-clock ordering. Focused stress benchmark tests passed
+  `109 passed in 0.19s`, the full suite passed
+  `685 passed, 31 subtests passed in 5.92s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.

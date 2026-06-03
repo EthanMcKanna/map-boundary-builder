@@ -837,6 +837,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         "rec_elapsed_s": -0.06,
         "total_s": -0.08,
     }
+    assert comparison["largest_ocr_engine_total_regressions"][0]["slug"] == "houston"
+    assert comparison["largest_ocr_engine_total_regressions"][0]["ocr_engine_total_delta_s"] == 0.15
+    assert comparison["largest_ocr_engine_total_improvements"][0]["slug"] == "dallas"
+    assert comparison["largest_ocr_engine_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
     repeat_delta = comparison["repeat_profile_delta"]
     assert repeat_delta["sample_counts"]["ocr_full_detail_retry_samples"]["delta"] == 1.0
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
@@ -1061,6 +1065,32 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     },
                 },
             ],
+            "largest_ocr_engine_total_regressions": [
+                {
+                    "slug": "houston",
+                    "total_elapsed_delta_s": 0.2,
+                    "ocr_engine_total_delta_s": 0.15,
+                    "ocr_engine_stage_delta_s": {
+                        "input_s": 0.01,
+                        "det_elapsed_s": 0.07,
+                        "rec_elapsed_s": 0.07,
+                        "total_s": 0.15,
+                    },
+                },
+            ],
+            "largest_ocr_engine_total_improvements": [
+                {
+                    "slug": "dallas",
+                    "total_elapsed_delta_s": -0.1,
+                    "ocr_engine_total_delta_s": -0.08,
+                    "ocr_engine_stage_delta_s": {
+                        "input_s": 0.0,
+                        "det_elapsed_s": -0.02,
+                        "rec_elapsed_s": -0.06,
+                        "total_s": -0.08,
+                    },
+                },
+            ],
             "regression_budget": {
                 "passed": False,
                 "max_total_elapsed_regression_s": 0.1,
@@ -1129,6 +1159,11 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "(ocr_total=+0.150s, input=+0.010s, det=+0.070s, rec=+0.070s), "
         "best_total=dallas -0.100s "
         "(ocr_total=-0.080s, input=+0.000s, det=-0.020s, rec=-0.060s)"
+    ) in output
+    assert (
+        "baseline primary OCR delta: worst_ocr=houston +0.150s "
+        "(input=+0.010s, det=+0.070s, rec=+0.070s), "
+        "best_ocr=dallas -0.080s (input=+0.000s, det=-0.020s, rec=-0.060s)"
     ) in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "full_detail_retries=+1" in output
