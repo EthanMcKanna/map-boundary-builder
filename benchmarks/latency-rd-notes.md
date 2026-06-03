@@ -15988,3 +15988,15 @@ with zero failures in 0.531s.
   `0.433s`, repeat OCR-engine p95 `0.397s`, prewarm `1.333s`, and stable
   repeat signatures. This closes the last current expected-failure class that
   only had a generic error/label-count assertion.
+- Locked the current fail-closed stress rows to one OCR engine call each using
+  the existing `max_ocr_engine_calls` expectation. This guards against future
+  candidates that preserve the final sparse/route/non-map/thematic error while
+  silently adding a full-detail retry or second OCR pass. The focused
+  expected-failure gate at `out/fail-closed-one-ocr-call-focused-20260603`
+  passed `11/11`, statuses `{"failed":11}`, primary max `0.565603s`, stable
+  signatures, repeat p95 `0.426s`, and repeat OCR-engine p95 `0.390s`. The
+  full hard gate at `out/fail-closed-one-ocr-call-full49-hard-20260603` passed
+  `49/49`, statuses `{"complete":38,"failed":11}`, primary max `0.618708s`,
+  repeat p95 `0.444s`, repeat OCR-engine p95 `0.383s`, prewarm `1.222s`, and
+  stable repeat signatures. All 11 failed rows reported `ocr_engine_profile`
+  `calls=1` and `ocr_full_detail_retry=false`.

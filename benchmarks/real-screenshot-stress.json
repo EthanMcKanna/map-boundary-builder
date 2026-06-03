@@ -46,6 +46,7 @@
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 3,
         "ocr_top_labels_contain": ["las vegas", "paradise"],
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -59,6 +60,7 @@
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 12,
         "ocr_top_labels_contain": ["las vegas", "paradise", "spring mountain"],
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -73,6 +75,7 @@
         "min_ocr_labels": 25,
         "route_ui_categories_include": ["pickup", "plate", "ride"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -87,6 +90,7 @@
         "min_ocr_labels": 20,
         "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -101,6 +105,7 @@
         "min_ocr_labels": 20,
         "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -115,6 +120,7 @@
         "min_ocr_labels": 20,
         "route_ui_categories_include": ["dropoff", "plate", "receipt"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -129,6 +135,7 @@
         "min_ocr_labels": 20,
         "route_ui_categories_include": ["dropoff", "plate", "receipt"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -143,6 +150,7 @@
         "min_ocr_labels": 20,
         "route_ui_categories_include": ["pickup", "plate", "ride"],
         "min_route_metric_labels": 1,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -157,6 +165,7 @@
         "min_ocr_labels": 20,
         "non_map_ui_categories_include": ["account", "import", "privacy", "stats", "sync"],
         "min_non_map_ui_labels": 3,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -171,6 +180,7 @@
         "min_ocr_labels": 20,
         "non_map_ui_categories_include": ["followers", "following", "media"],
         "min_non_map_ui_labels": 3,
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -185,6 +195,7 @@
         "min_ocr_labels": 2,
         "min_thematic_map_labels": 1,
         "thematic_map_labels_contain": ["vulnerability index"],
+        "max_ocr_engine_calls": 1,
         "max_total_elapsed_s": 1.0
       }
     },
