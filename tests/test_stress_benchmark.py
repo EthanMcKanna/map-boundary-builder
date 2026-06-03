@@ -4356,18 +4356,18 @@ def test_real_screenshot_manifest_preserves_ocr_contract_coverage() -> None:
     budget = stress_module.build_manifest_contract_budget_summary(
         contracts,
         min_ocr_call_contract_rows=50,
-        min_ocr_count_contract_rows=43,
+        min_ocr_count_contract_rows=46,
         max_positive_ocr_call_only_rows=0,
         fail_on_invalid_ocr_count_contracts=True,
     )
 
-    assert contracts["total_cases"] == 72
+    assert contracts["total_cases"] == 73
     assert contracts["ocr_call_contract_rows"] == contracts["total_cases"]
     assert contracts["ocr_call_contract_missing_rows"] == []
-    assert contracts["ocr_positive_call_contract_rows"] == 45
+    assert contracts["ocr_positive_call_contract_rows"] == 46
     assert contracts["ocr_zero_call_contract_rows"] == 27
     assert contracts["ocr_count_contract_rows"] == contracts["ocr_positive_call_contract_rows"]
-    assert len(contracts["ocr_count_contract_slugs"]) == 45
+    assert len(contracts["ocr_count_contract_slugs"]) == 46
     assert contracts["ocr_positive_call_rows_without_count_contract"] == []
     assert contracts["invalid_ocr_count_contract_rows"] == []
     assert budget["passed"] is True
@@ -6873,7 +6873,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
         assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
         assert kwargs["min_ocr_call_contract_rows"] == 50
-        assert kwargs["min_ocr_count_contract_rows"] == 43
+        assert kwargs["min_ocr_count_contract_rows"] == 46
         assert kwargs["max_positive_ocr_call_only_rows"] == 0
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
@@ -6885,9 +6885,9 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
             "manifest_contracts": {
                 "total_cases": 50,
                 "ocr_call_contract_rows": 50,
-                "ocr_positive_call_contract_rows": 43,
-                "ocr_zero_call_contract_rows": 7,
-                "ocr_count_contract_rows": 43,
+                "ocr_positive_call_contract_rows": 46,
+                "ocr_zero_call_contract_rows": 4,
+                "ocr_count_contract_rows": 46,
                 "ocr_positive_call_rows_without_count_contract": [],
             },
             "manifest_contract_budget": {

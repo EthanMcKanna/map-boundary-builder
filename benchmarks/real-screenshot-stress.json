@@ -529,6 +529,35 @@
       }
     },
     {
+      "slug": "nashville-waymo-svg-forced",
+      "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "source_was_svg": true,
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Nashville",
+        "min_control_points": 4,
+        "min_ocr_labels": 24,
+        "min_combined_confidence": 0.78,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 15,
+          "selected_box_count": 15,
+          "result_count": 15,
+          "label_count": 15,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-86.8416146, 36.1049219, -86.676782, 36.246163],
+        "max_bbox_error_m": 1500
+      }
+    },
+    {
       "slug": "nashville-waymo-svg",
       "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
       "no_catalog": false,

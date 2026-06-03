@@ -18311,3 +18311,27 @@ with zero failures in 0.531s.
   (`9 passed`), `tests/test_runner_summary.py` passed (`115 passed`),
   `python -m compileall map_boundary_builder tests` passed, and full pytest
   passed `734 passed`.
+- Added the paired forced no-catalog stress row for
+  `/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg`, closing the other
+  SVG that had been skipped before the label-layer shortcut. The patched
+  no-edit probe at `out/nash-svg-label-layer-probe-20260603/summary.json`
+  showed both `nash.svg` and `Nashville_ServiceArea.svg` using the discovered
+  `Neighborhood_names` / `CITY_NAME` label layers instead of full SVG
+  rasterization. With OCR cache disabled and debug artifacts enabled, the new
+  `nashville-waymo-svg-forced` row completed in `0.557693-0.682245s` depending
+  on path spelling, through `ocr-georeference:nominatim-label-fit`, with
+  `4` controls, `27` pipeline labels, bbox
+  `[-86.8416146,36.1049219,-86.676782,36.246163]`, and confidence `0.781`.
+  Focused hard-gate proof at `out/nash-svg-forced-focused-gate-20260603`
+  passed `1/1`, max primary `0.614051s`, repeat p95 `0.575s`, and a capped
+  OCR-engine contract of `15` boxes/labels with no low-confidence labels. The
+  full hard gate at `out/nash-svg-full73-hard-gate-20260603` passed `73/73`
+  expected outcomes, statuses `{"complete":62,"failed":11}`, max primary
+  `0.601795s`, repeat p95 `0.432s`, repeat max `0.585s`, prewarm `0.635s`,
+  and manifest OCR contracts `46/46` count-capped positive rows. Common-row
+  comparison against `out/svg-label-layer-full72-hard-gate-20260603` showed
+  `72` compared rows, `signature_change_count=0`, and
+  `expectation_passed_delta=0`. The hard-gate default was raised from `43` to
+  `46` `min_ocr_count_contract_rows` to protect the expanded OCR-contract
+  surface. Verification: manifest contract test passed, focused preset test
+  passed, and full pytest passed `734 passed`.
