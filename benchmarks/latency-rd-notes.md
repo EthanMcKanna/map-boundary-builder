@@ -17309,3 +17309,16 @@ with zero failures in 0.531s.
   baseline expectation regressions for `tesla-austin-route-receipt-gray-long`
   and `tesla-austin-route-active-dark`. Focused stress benchmark tests passed
   (`126 passed in 0.20s`); this is benchmark acceptance reliability only.
+- Re-ran the full current hard gate after adding baseline
+  expectation-regression failure and bumping preset metadata to hard v7/focused
+  v6. `out/current-v7-full49-hard-20260603` passed `49/49` expectations,
+  statuses `{"complete": 38, "failed": 11}`, manifest OCR contracts `49/49`
+  and `38/38` count-capped positive-call rows, primary max `0.603495s`, repeat
+  median/p95/max `0.166s/0.322s/0.352s`, prewarm `0.738s`, zero repeat
+  expectation/signature issues, and all analyzed repeats subsecond. The fresh
+  tail remains bright-blue Waymo OCR work (`los-angeles-waymo` repeat OCR p95
+  `0.313s`, `bay-area-waymo` `0.273s`, `houston-waymo` `0.264s`) plus Ann
+  Arbor's focused georeference primary path (`0.603s`, georeference `0.288s`),
+  with fail-closed route/non-map/thematic rows still one-OCR-call and
+  subsecond. This is current-state validation for the v7 acceptance harness,
+  not a runtime change.
