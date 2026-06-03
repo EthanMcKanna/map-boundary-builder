@@ -4095,7 +4095,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             "total_s": "total",
         }
         max_text = ", ".join(
-            f"{labels.get(key, key)}={row['elapsed_s']:.3f}s@{row['slug']}"
+            ocr_engine_stage_max_row_text(labels.get(key, key), row)
             for key, row in max_rows.items()
             if isinstance(row, dict) and isinstance(row.get("elapsed_s"), (int, float))
         )
@@ -4404,6 +4404,54 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
         if parts:
             ocr_text = " " + " ".join(parts)
     return f"{slug}{repeat_text}={elapsed_text}{stage_text}{ocr_text}"
+
+
+def ocr_engine_stage_max_row_text(stage_label: str, row: dict[str, Any]) -> str:
+    slug = row.get("slug") or "-"
+    elapsed_s = parse_nonnegative_float(row.get("elapsed_s"))
+    elapsed_text = f"{elapsed_s:.3f}s" if elapsed_s is not None else "-"
+    parts = [f"{stage_label}={elapsed_text}@{slug}"]
+    shape_text = ocr_engine_input_shape_text(row.get("input_shape"))
+    if shape_text:
+        parts.append(f"shape={shape_text}")
+    detector_limit = row.get("detector_limit")
+    if isinstance(detector_limit, int):
+        detector_type = row.get("detector_limit_type")
+        type_suffix = f"/{detector_type}" if isinstance(detector_type, str) and detector_type else ""
+        parts.append(f"det_limit={detector_limit}{type_suffix}")
+    recognition_profile = row.get("recognition_profile")
+    if isinstance(recognition_profile, str) and recognition_profile:
+        parts.append(f"rec={recognition_profile}")
+    min_text_area = parse_nonnegative_float(row.get("min_text_area"))
+    if min_text_area is not None:
+        parts.append(f"min_area={min_text_area:.0f}")
+    raw_count = row.get("raw_box_count")
+    selected_count = row.get("selected_box_count")
+    label_count = row.get("label_count")
+    if isinstance(selected_count, int):
+        parts.append(f"selected={selected_count}")
+    if isinstance(raw_count, int):
+        parts.append(f"raw={raw_count}")
+    if isinstance(label_count, int):
+        parts.append(f"labels={label_count}")
+    selected_lt_1300 = row.get("selected_box_area_lt_1300_count")
+    if isinstance(selected_lt_1300, int):
+        parts.append(f"sel_lt1300={selected_lt_1300}")
+    confidence_lt_90 = row.get("label_confidence_lt_90_count")
+    if isinstance(confidence_lt_90, int):
+        parts.append(f"conf_lt90={confidence_lt_90}")
+    return " ".join(parts)
+
+
+def ocr_engine_input_shape_text(shape: Any) -> str | None:
+    if not isinstance(shape, (list, tuple)) or len(shape) < 2:
+        return None
+    height, width = shape[0], shape[1]
+    if not isinstance(height, int) or not isinstance(width, int):
+        return None
+    if height <= 0 or width <= 0:
+        return None
+    return f"{width}x{height}"
 
 
 def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:

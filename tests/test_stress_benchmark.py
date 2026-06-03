@@ -258,6 +258,22 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
             "expectation_passed": 1,
             "statuses": {"complete": 1},
             "max_total_elapsed_s": 0.5,
+            "ocr_engine_stage_max_rows": {
+                "det_elapsed_s": {
+                    "slug": "kept",
+                    "elapsed_s": 0.07,
+                    "input_shape": [1000, 607],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "min_text_area": 500.0,
+                    "raw_box_count": 14,
+                    "selected_box_count": 12,
+                    "label_count": 12,
+                    "selected_box_area_lt_1300_count": 5,
+                    "label_confidence_lt_90_count": 1,
+                }
+            },
         },
         "repeat_profile": {
             "summary": {
@@ -339,6 +355,10 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
     assert "manifest contract budget: passed" in output
     assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
+    assert (
+        "ocr engine max: det=0.070s@kept shape=607x1000 det_limit=608/default "
+        "rec=default min_area=500 selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
+    ) in output
     assert "repeat full-detail retries: 1 sample(s): kept 1/1" in output
     assert "repeat slowest cases: kept p95=0.500s max=0.500s" in output
     assert (

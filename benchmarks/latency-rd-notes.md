@@ -16849,3 +16849,21 @@ with zero failures in 0.531s.
   sel_lt1300_p95=3.0`, and May Mobility/Zoox tail rows carrying the same
   small-box count. This is benchmark feedback-loop reliability only; no runtime
   deploy is needed.
+- Added primary OCR stage-max context to the stress CLI so first-primary spikes
+  get the same immediate evidence as repeat leaders. The `ocr engine max` line
+  now prints input shape, detector limit/type, recognition profile, min text
+  area, raw/selected/label counts, selected small-box count, and low-confidence
+  count for the max det/rec/total rows already saved in
+  `summary.ocr_engine_stage_max_rows`. Focused stress benchmark tests passed
+  `103 passed in 0.34s`, the full suite passed
+  `679 passed, 31 subtests passed in 5.96s`, and `git diff --check` was clean.
+  The fresh no-env full hard gate at `out/current-leaders-full49-hard-20260603`
+  passed `49/49`, statuses `{"complete":38,"failed":11}`, prewarm `0.706s`,
+  primary max `0.476s`, repeat p95 `0.350s`, repeat max `0.389s`, repeat
+  OCR-engine p95 `0.293s`, stable signatures, and all manifest
+  latency/OCR-count contracts. Re-rendering that saved report with the new
+  formatter now identifies the primary detector tail as `dallas-waymo
+  shape=1400x1400 det_limit=256/max rec=en-ppocrv5 min_area=2300 selected=7
+  raw=16 labels=7 sel_lt1300=0 conf_lt90=0`, while the primary rec tail is
+  `tesla-austin-route-receipt-long ... rec=default min_area=1500 selected=29`.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.
