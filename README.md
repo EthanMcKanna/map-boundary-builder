@@ -114,3 +114,21 @@ Use `--neutral-filename-hint` with `--mode full` when you want an image-only
 generalization gate. It replaces market/provider fixture filenames with a
 generic upload hint so the benchmark cannot lean on names like
 `Waymo Phoenix.png` while fitting OCR labels.
+
+## Real Screenshot Stress Gate
+
+The stress runner exercises the real screenshot manifest end to end and can run
+the current production-warm hard gate as a single preset:
+
+```bash
+.venv/bin/map-boundary-stress \
+  --out-dir out/real-screenshot-hard-gate \
+  --real-screenshot-hard-gate
+```
+
+The preset targets the full `benchmarks/real-screenshot-stress.json` manifest.
+It enables in-process production-style execution, runtime prewarm, OCR engine
+profiling, cache-disabled repeat samples, signature-drift checks, latency/OCR
+budgets, and the manifest OCR contract coverage gate. It fails closed on
+unexpected status, output-signature drift, latency or OCR work-volume
+regressions, prewarm stalls, or missing row-level OCR contracts.

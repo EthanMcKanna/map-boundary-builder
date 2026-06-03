@@ -16195,3 +16195,21 @@ with zero failures in 0.531s.
   positive-call-only `26`, invalid contracts `[]`, and `budget_passed=true`.
   The full suite passed `646` tests plus `31` subtests. This is a manifest
   regression-test hardening only; no runtime deploy is needed.
+- Added a `--real-screenshot-hard-gate` stress preset so the current full
+  manifest production-warm gate no longer has to be reconstructed from a long
+  command line. The preset applies in-process execution, prewarm, OCR engine
+  profiling, three repeat samples with one warmup, signature-drift and
+  unexpected-sample gates, latency/OCR count budgets, cache-disabled repeats,
+  and exact real-manifest OCR contract coverage budgets. A first full preset
+  proof at `out/real-screenshot-hard-gate-preset-full49-20260603` failed
+  intentionally useful validation: the preset had left OCR/extraction caches
+  enabled, so count-capped rows produced repeat samples without OCR metrics and
+  `repeat unexpected` reached `24`. After fixing the preset to disable both
+  caches, `out/real-screenshot-hard-gate-preset-full49-fixed-20260603` passed
+  the full `49/49` gate with `98/98` analyzed repeats expected/subsecond,
+  stable signatures, primary max `0.562843s`, repeat p95 `0.455s`, repeat max
+  `0.545s`, repeat OCR-engine p95/max `0.404s`/`0.495s`, prewarm `1.222s`,
+  manifest contract budget passed, and all latency/OCR/prewarm budgets passed.
+  Focused stress tests passed `90` tests and the full suite passed `648` tests
+  plus `31` subtests. This is harness ergonomics and reliability only; no
+  runtime deploy is needed.

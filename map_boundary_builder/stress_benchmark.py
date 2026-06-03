@@ -98,6 +98,13 @@ OCR_ENGINE_COUNT_DISPLAY_LABELS = {
     "label_confidence_lt_80_count": "conf_lt80",
     "label_confidence_lt_90_count": "conf_lt90",
 }
+REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET = (
+    "raw_box_count=50,"
+    "selected_box_count=30,"
+    "result_count=29,"
+    "label_count=29,"
+    "label_confidence_lt_90_count=3"
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,6 +140,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on-repeat-signature-drift",
         action="store_true",
         help="Exit non-zero when analyzed repeat-profile samples produce different output signatures.",
+    )
+    parser.add_argument(
+        "--real-screenshot-hard-gate",
+        action="store_true",
+        help=(
+            "Apply the current full real-screenshot production-warm hard gate preset: "
+            "in-process execution, OCR profiling, prewarm, repeat signatures, latency/OCR "
+            "budgets, and manifest OCR contract coverage budgets."
+        ),
     )
     parser.add_argument(
         "--profile-ocr-engine",
@@ -290,6 +306,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    apply_real_screenshot_hard_gate_preset(args, parser)
     if args.repeat_profile_runs < 0:
         parser.error("--repeat-profile-runs must be non-negative")
     if args.repeat_profile_warmups < 0:
@@ -381,6 +398,45 @@ def main(argv: list[str] | None = None) -> int:
     ):
         return 1
     return 0
+
+
+def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if not args.real_screenshot_hard_gate:
+        return
+    if args.only:
+        parser.error("--real-screenshot-hard-gate targets the full manifest and cannot be combined with --only")
+    args.execution = "in-process"
+    args.profile_ocr_engine = True
+    args.prewarm_runtime = True
+    args.disable_ocr_cache = True
+    args.disable_extraction_cache = True
+    args.fail_on_unexpected = True
+    args.fail_on_repeat_signature_drift = True
+    if args.repeat_profile_runs == 0:
+        args.repeat_profile_runs = 3
+    if args.repeat_profile_warmups == 0:
+        args.repeat_profile_warmups = 1
+    if args.max_total_elapsed_s is None:
+        args.max_total_elapsed_s = 1.0
+    if args.max_repeat_profile_p95_duration_s is None:
+        args.max_repeat_profile_p95_duration_s = 0.8
+    if args.max_prewarm_runtime_s is None:
+        args.max_prewarm_runtime_s = 2.0
+    if not args.max_prewarm_stage_s:
+        args.max_prewarm_stage_s = ["rapidocr_s=1.8,total_s=2.0"]
+    if not args.max_repeat_ocr_engine_p95_duration_s:
+        args.max_repeat_ocr_engine_p95_duration_s = ["total_s=0.7"]
+    if not args.max_repeat_ocr_engine_p95_count:
+        args.max_repeat_ocr_engine_p95_count = [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET]
+    if not args.max_repeat_ocr_engine_max_count:
+        args.max_repeat_ocr_engine_max_count = [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET]
+    if args.min_ocr_call_contract_rows is None:
+        args.min_ocr_call_contract_rows = 49
+    if args.min_ocr_count_contract_rows is None:
+        args.min_ocr_count_contract_rows = 12
+    if args.max_positive_ocr_call_only_rows is None:
+        args.max_positive_ocr_call_only_rows = 26
+    args.fail_on_invalid_ocr_count_contracts = True
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
