@@ -397,6 +397,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "expectation_passed_samples": 2,
                 "unexpected_samples": 0,
                 "subsecond_samples": 2,
+                "ocr_full_detail_retry_samples": 0,
                 "median_total_elapsed_s": 0.55,
                 "p95_total_elapsed_s": 0.7,
                 "max_total_elapsed_s": 0.8,
@@ -455,6 +456,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "expectation_passed_samples": 2,
                 "unexpected_samples": 0,
                 "subsecond_samples": 2,
+                "ocr_full_detail_retry_samples": 1,
                 "median_total_elapsed_s": 0.56,
                 "p95_total_elapsed_s": 0.73,
                 "max_total_elapsed_s": 0.84,
@@ -492,6 +494,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["largest_total_improvements"][0]["stage_delta_s"] == {"ocr": -0.05}
     assert comparison["largest_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
     repeat_delta = comparison["repeat_profile_delta"]
+    assert repeat_delta["sample_counts"]["ocr_full_detail_retry_samples"]["delta"] == 1.0
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
     assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
@@ -633,6 +636,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                 "baseline_rows_outside_candidate_scope_count": 3,
             },
             "repeat_profile_delta": {
+                "sample_counts": {
+                    "ocr_full_detail_retry_samples": {"delta": 1.0},
+                },
                 "duration_s": {
                     "p95_total_elapsed_s": {"delta_s": 0.03},
                     "max_total_elapsed_s": {"delta_s": 0.04},
@@ -656,6 +662,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "median_delta=-0.040s" in output
     assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
+    assert "full_detail_retries=+1" in output
     assert (
         "baseline regression budget: failed primary<=0.100s primary_ocr<=0.100s "
         "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4 "

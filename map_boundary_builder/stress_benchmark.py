@@ -1050,6 +1050,7 @@ def stress_repeat_profile_delta(
         "expectation_passed_samples",
         "unexpected_samples",
         "subsecond_samples",
+        "ocr_full_detail_retry_samples",
     ):
         metric_delta = stress_scalar_delta(baseline_summary, candidate_summary, key, delta_key="delta")
         if metric_delta is not None:
@@ -4489,6 +4490,12 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
             ("ocr_engine_count_metric", "selected_box_count", "p95_count"),
             "delta_count",
             "{:+.1f}",
+        ),
+        (
+            "full_detail_retries",
+            ("sample_counts", "ocr_full_detail_retry_samples"),
+            "delta",
+            "{:+.0f}",
         ),
     )
     parts: list[str] = []

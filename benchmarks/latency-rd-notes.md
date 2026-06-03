@@ -16818,7 +16818,18 @@ with zero failures in 0.531s.
   smoke at `out/repeat-full-detail-retry-visibility-reject-20260603` printed
   repeat full-detail retry cases for `tesla-austin-route-active` at `2/2`
   with `unexpected=2`, and `tesla-austin-route-active-later` at `2/2` with
-  `unexpected=2`; the accepted
-  default smoke at `out/repeat-full-detail-retry-visibility-default-20260603`
+  `unexpected=2`; the accepted default smoke at
+  `out/repeat-full-detail-retry-visibility-default-20260603`
   passed `5/5`, repeat p95 `0.323s`, and stayed quiet on repeat retries. This
   is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Added repeat full-detail retry deltas to baseline repeat comparisons, so
+  retry regressions show up beside repeat p95, OCR p95, and selected-box p95
+  when comparing candidate OCR shortcuts. Focused stress benchmark tests passed
+  `103 passed in 0.44s`, the full suite passed `679 passed in 5.68s`, and
+  `git diff --check` was clean. Comparing the accepted default route/profile
+  report at `out/repeat-full-detail-retry-visibility-default-20260603` against
+  the rejected crop report at
+  `out/repeat-full-detail-retry-visibility-reject-20260603` now prints
+  `full_detail_retries=+4` in `baseline repeat delta`, along with repeat p95
+  `+0.321s`, OCR p95 `+0.136s`, and selected-box p95 `+20.0`. This is
+  benchmark feedback-loop reliability only; no runtime deploy is needed.
