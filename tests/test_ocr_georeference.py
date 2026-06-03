@@ -1256,7 +1256,10 @@ class OcrGroupingTests(unittest.TestCase):
             patch.object(ocr_module, "RAPIDOCR_CLASSIFIER_RETRY_MIN_LABELS", 1),
             ocr_module.collect_rapidocr_profiles() as profiles,
         ):
-            labels = ocr_module.run_rapidocr_words("unused.png", rapidocr_rec_batch_num=16)
+            labels = ocr_module.run_rapidocr_words(
+                "unused.png",
+                rapidocr_rec_batch_num=ocr_module.RAPIDOCR_DARK_TEAL_REC_BATCH_NUM,
+            )
 
         self.assertGreater(len(labels), 0)
         self.assertLess(len(engine.selected_boxes), len(engine.boxes))

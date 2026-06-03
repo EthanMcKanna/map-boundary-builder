@@ -297,7 +297,7 @@ def test_style_aware_rapidocr_max_dimension_caps_large_map_ocr_without_tall_dark
     assert runner.rapidocr_max_dimension_for_ocr_style("purple-fill", width=1400, height=933) == 800
     assert runner.rapidocr_max_dimension_for_ocr_style("gray-fill", width=1200, height=1014) == 800
     assert runner.rapidocr_rec_batch_num_for_ocr_style("bright-blue") is None
-    assert runner.rapidocr_rec_batch_num_for_ocr_style("dark-teal") == 16
+    assert runner.rapidocr_rec_batch_num_for_ocr_style("dark-teal") == 8
 
 
 def test_route_ui_fast_ocr_cap_only_targets_tall_phone_route_screens(monkeypatch) -> None:
@@ -522,7 +522,7 @@ def test_focus_georef_ocr_uses_focused_max_dimension(monkeypatch) -> None:
             "rapidocr_detector_limit_side_len": 384,
             "rapidocr_max_dimension": 550,
             "rapidocr_min_text_area": 500.0,
-            "rapidocr_rec_batch_num": 16,
+            "rapidocr_rec_batch_num": 8,
         },
     }
 
@@ -1284,7 +1284,7 @@ def test_profile_app_ui_label_extraction_offsets_cropped_labels(monkeypatch) -> 
             "shape": (1160, 696),
             "kwargs": {
                 "cache": True,
-                "rapidocr_rec_batch_num": 16,
+                "rapidocr_rec_batch_num": 8,
                 "rapidocr_max_dimension": runner.PROFILE_APP_UI_OCR_MAX_DIMENSION,
             },
         }

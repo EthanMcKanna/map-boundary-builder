@@ -16624,3 +16624,19 @@ with zero failures in 0.531s.
   statuses `{"complete":38,"failed":11}`, prewarm `0.659s`, primary max
   `0.469s`, repeat p95 `0.361s`, repeat max `0.392s`, repeat OCR-engine p95
   `0.330s`, stable signatures, and all manifest latency/OCR-count contracts.
+- Lowered the dark-teal RapidOCR recognition batch default from `16` to `8`
+  after a focused repeat-profile A/B. Default-engine rec-batch probes were
+  rejected first: `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=8` looked faster on a
+  Tesla/Avride/Zoox slice but drifted OCR top labels plus Avride control
+  counts/bbox, while `16` and `24` were slower or drifted. For the separate
+  dark-teal override, `out/dark-rec16-control-20260603` passed `4/4` with repeat
+  p95 `0.397s`; `MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=12` failed OCR
+  count/confidence contracts; `24` was much slower with repeat p95 `0.613s`; and
+  `8` at `out/dark-rec8-focused-20260603` preserved the control summaries
+  exactly while cutting repeat p95 to `0.342s`. After patching the default,
+  `out/dark-rec8-patched-focused-20260603` passed `4/4` with repeat p95
+  `0.328s` and repeat OCR-engine p95 `0.262s`. The full hard gate
+  `out/dark-rec8-patched-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, prewarm `0.683s`, primary max `0.425s`, repeat
+  p95 `0.372s`, repeat max `0.433s`, repeat OCR-engine p95 `0.339s`, stable
+  signatures, and all manifest latency/OCR-count contracts.
