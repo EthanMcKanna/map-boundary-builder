@@ -16889,3 +16889,20 @@ with zero failures in 0.531s.
   tests passed `103 passed in 0.21s`, the full suite passed
   `679 passed, 31 subtests passed in 5.77s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Closed the native-array/input-load OCR lane as already-settled on the current
+  full hard report and added primary OCR slow-case leaders instead. The saved
+  `out/current-leaders-full49-hard-20260603` summary shows the largest OCR
+  input conversion rows already use `input_kind=array` under the current
+  `RAPIDOCR_NATIVE_ARRAY_MIN_DIMENSION=1000` policy, while earlier forced-array
+  and forced-file variants either hurt Austin Tesla accuracy or failed to beat
+  the current threshold. The harness now saves
+  `summary.ocr_engine_slowest_cases` for primary rows and falls back to
+  computing it from saved `rows` when older reports are re-rendered. Replaying
+  `out/current-leaders-full49-hard-20260603/stress-summary.json` now prints
+  `primary ocr slowest cases` with `dallas-waymo ocr=0.420s rec=0.065s
+  det=0.319s shape=1400x1400 det_limit=256/max rec_profile=en-ppocrv5
+  min_area=2300 selected=7 raw=16 labels=7`, followed by
+  `san-antonio-waymo ocr=0.317s` and `los-angeles-waymo ocr=0.301s`. Focused
+  stress benchmark tests passed `104 passed in 0.44s`, the full suite passed
+  `680 passed, 31 subtests passed in 6.10s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.

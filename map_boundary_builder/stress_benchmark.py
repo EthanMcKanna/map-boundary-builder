@@ -2510,6 +2510,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_full_detail_retry_rows": ocr_full_detail_retry_rows,
         "ocr_engine_profile": summarize_rapidocr_profile_summaries(ocr_engine_profiles),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(rows),
+        "ocr_engine_slowest_cases": primary_ocr_engine_slowest_cases(rows),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
@@ -2562,6 +2563,73 @@ def ocr_engine_stage_max_row(slug: Any, elapsed_s: float, call: dict[str, Any]) 
         if value is not None:
             row[key] = value
     return row
+
+
+def primary_ocr_engine_slowest_cases(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, str, dict[str, Any]]] = []
+    for row in rows:
+        ocr_engine_profile = row.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        total_s = parse_nonnegative_float(ocr_engine_profile.get("total_s"))
+        if total_s is None:
+            continue
+        ranked.append((total_s, str(row.get("slug") or ""), row))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [
+        primary_ocr_engine_slowest_case_summary(row, total_s)
+        for total_s, _slug, row in ranked[: max(0, limit)]
+    ]
+
+
+def primary_ocr_engine_slowest_case_summary(
+    row: dict[str, Any],
+    total_s: float,
+) -> dict[str, Any]:
+    ocr_engine_profile = row.get("ocr_engine_profile")
+    if not isinstance(ocr_engine_profile, dict):
+        return {}
+    result: dict[str, Any] = {
+        "slug": row.get("slug"),
+        "total_s": round(total_s, 6),
+    }
+    for key in ("rec_elapsed_s", "det_elapsed_s"):
+        elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
+        if elapsed_s is not None:
+            result[key] = round(elapsed_s, 6)
+    calls = ocr_engine_profile.get("calls")
+    if isinstance(calls, int) and not isinstance(calls, bool):
+        result["calls"] = calls
+    detail_profile = slowest_ocr_engine_detail_profile(ocr_engine_profile) or ocr_engine_profile
+    for key in (
+        "input_shape",
+        "detector_limit",
+        "detector_limit_type",
+        "recognition_profile",
+        "min_text_area",
+    ):
+        value = detail_profile.get(key)
+        if value is not None:
+            result[key] = value
+    for key in ("raw_box_count", "selected_box_count", "result_count", "label_count", "useful_label_count"):
+        value = ocr_engine_profile.get(key)
+        if value is None:
+            value = detail_profile.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            result[key] = value
+    for key in (*OCR_ENGINE_BOX_AREA_KEYS, *OCR_ENGINE_CONFIDENCE_KEYS):
+        value = ocr_engine_profile.get(key)
+        if value is None:
+            value = detail_profile.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            result[key] = value
+        elif isinstance(value, float):
+            result[key] = round(value, 6)
+    return result
 
 
 def build_repeat_profile(
@@ -4116,6 +4184,20 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if max_text:
             print(f"ocr engine max: {max_text}")
+    primary_ocr_slowest_cases = summary.get("ocr_engine_slowest_cases")
+    if not isinstance(primary_ocr_slowest_cases, list):
+        rows = report.get("rows")
+        primary_ocr_slowest_cases = (
+            primary_ocr_engine_slowest_cases(rows) if isinstance(rows, list) else []
+        )
+    if primary_ocr_slowest_cases:
+        primary_ocr_slow_case_text = ", ".join(
+            primary_ocr_engine_slow_case_text(case)
+            for case in primary_ocr_slowest_cases[:5]
+            if isinstance(case, dict)
+        )
+        if primary_ocr_slow_case_text:
+            print(f"primary ocr slowest cases: {primary_ocr_slow_case_text}")
     if report.get("runner_ocr_cache") is False:
         print("note: runner OCR cache is disabled; repeat samples keep paying OCR cost")
     if report.get("extraction_cache") is False:
@@ -4467,6 +4549,50 @@ def ocr_engine_input_shape_text(shape: Any) -> str | None:
     if height <= 0 or width <= 0:
         return None
     return f"{width}x{height}"
+
+
+def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
+    slug = case.get("slug") or "-"
+    total_s = parse_nonnegative_float(case.get("total_s"))
+    rec_s = parse_nonnegative_float(case.get("rec_elapsed_s"))
+    det_s = parse_nonnegative_float(case.get("det_elapsed_s"))
+    parts = [str(slug)]
+    if total_s is not None:
+        parts.append(f"ocr={total_s:.3f}s")
+    if rec_s is not None:
+        parts.append(f"rec={rec_s:.3f}s")
+    if det_s is not None:
+        parts.append(f"det={det_s:.3f}s")
+    shape_text = ocr_engine_input_shape_text(case.get("input_shape"))
+    if shape_text:
+        parts.append(f"shape={shape_text}")
+    detector_limit = case.get("detector_limit")
+    if isinstance(detector_limit, int) and not isinstance(detector_limit, bool):
+        detector_type = case.get("detector_limit_type")
+        type_suffix = f"/{detector_type}" if isinstance(detector_type, str) and detector_type else ""
+        parts.append(f"det_limit={detector_limit}{type_suffix}")
+    recognition_profile = case.get("recognition_profile")
+    if isinstance(recognition_profile, str) and recognition_profile:
+        parts.append(f"rec_profile={recognition_profile}")
+    min_text_area = parse_nonnegative_float(case.get("min_text_area"))
+    if min_text_area is not None:
+        parts.append(f"min_area={min_text_area:.0f}")
+    selected_count = case.get("selected_box_count")
+    raw_count = case.get("raw_box_count")
+    label_count = case.get("label_count")
+    if isinstance(selected_count, int) and not isinstance(selected_count, bool):
+        parts.append(f"selected={selected_count}")
+    if isinstance(raw_count, int) and not isinstance(raw_count, bool):
+        parts.append(f"raw={raw_count}")
+    if isinstance(label_count, int) and not isinstance(label_count, bool):
+        parts.append(f"labels={label_count}")
+    selected_lt_1300 = case.get("selected_box_area_lt_1300_count")
+    if isinstance(selected_lt_1300, int) and not isinstance(selected_lt_1300, bool):
+        parts.append(f"sel_lt1300={selected_lt_1300}")
+    confidence_lt_90 = case.get("label_confidence_lt_90_count")
+    if isinstance(confidence_lt_90, int) and not isinstance(confidence_lt_90, bool):
+        parts.append(f"conf_lt90={confidence_lt_90}")
+    return " ".join(parts)
 
 
 def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:
