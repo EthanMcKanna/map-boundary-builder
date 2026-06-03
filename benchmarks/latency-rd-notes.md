@@ -18123,3 +18123,16 @@ with zero failures in 0.531s.
   the fix removed the SVG row's spurious primary hidden-missing violation while
   preserving the real repeat hidden-total violation, so `1200px` remains
   rejected.
+- Added report-only baseline prewarm deltas to stress comparisons so warm-path
+  probes show startup tradeoffs alongside row and workload deltas. The
+  comparison now stores `prewarm_delta_s` for total, RapidOCR, extraction, seed,
+  and catalog prewarm metrics when both reports include them, and console output
+  prints a compact `baseline prewarm delta` line. No runtime default changed.
+  Saved-report proof against the bright-blue warm-side probes showed `608px` at
+  `total=-0.061s, rapidocr=-0.061s`, `1200px` at `total=+0.076s,
+  rapidocr=+0.074s`, and `1400px` at `total=+0.156s, rapidocr=+0.156s`, making
+  the rejected candidates' startup cost visible without adding a new gate.
+  Verification: focused prewarm comparison/print tests passed (`2 passed`),
+  `python3 -m py_compile map_boundary_builder/stress_benchmark.py` passed, the
+  full stress benchmark module passed (`146 passed`), and full pytest passed
+  `730 passed, 31 subtests passed`.

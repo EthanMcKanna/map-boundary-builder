@@ -1322,6 +1322,9 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
+    prewarm_delta = stress_prewarm_delta(baseline_report, candidate_report)
+    if prewarm_delta:
+        comparison["prewarm_delta_s"] = prewarm_delta
     scoped_compared_slugs = compared_slugs if candidate_scope_slugs is not None else None
     stage_duration_delta = stress_stage_duration_total_deltas(
         baseline_report,
@@ -3119,6 +3122,22 @@ def stress_scalar_delta(
         "candidate": round(candidate_value, 6),
         delta_key: round(candidate_value - baseline_value, 6),
     }
+
+
+def stress_prewarm_delta(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+) -> dict[str, dict[str, float]] | None:
+    baseline = baseline_report.get("prewarm")
+    candidate = candidate_report.get("prewarm")
+    if not isinstance(baseline, dict) or not isinstance(candidate, dict):
+        return None
+    delta: dict[str, dict[str, float]] = {}
+    for key in ("total_s", "rapidocr_s", "extraction_s", "seed_s", "catalog_s"):
+        metric_delta = stress_scalar_delta(baseline, candidate, key, delta_key="delta_s")
+        if metric_delta is not None:
+            delta[key] = metric_delta
+    return delta or None
 
 
 def stress_stage_duration_total_deltas(
@@ -7299,6 +7318,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         config_changes_text = baseline_configuration_changes_text(baseline_comparison)
         if config_changes_text:
             print(f"baseline config changes: {config_changes_text}")
+        prewarm_delta_text = baseline_prewarm_delta_text(baseline_comparison)
+        if prewarm_delta_text:
+            print(f"baseline prewarm delta: {prewarm_delta_text}")
         expectation_delta_text = baseline_expectation_delta_text(baseline_comparison)
         if expectation_delta_text:
             print(f"baseline expectation delta: {expectation_delta_text}")
@@ -8505,6 +8527,27 @@ def config_change_value_text(value: Any) -> str:
     if isinstance(value, str):
         return value or "empty"
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def baseline_prewarm_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    prewarm_delta = baseline_comparison.get("prewarm_delta_s")
+    if not isinstance(prewarm_delta, dict):
+        return ""
+    parts: list[str] = []
+    for metric, label in (
+        ("total_s", "total"),
+        ("rapidocr_s", "rapidocr"),
+        ("extraction_s", "extract"),
+        ("seed_s", "seed"),
+        ("catalog_s", "catalog"),
+    ):
+        delta = prewarm_delta.get(metric)
+        if not isinstance(delta, dict):
+            continue
+        value = parse_signed_float(delta.get("delta_s"))
+        if value is not None:
+            parts.append(f"{label}={value:+.3f}s")
+    return ", ".join(parts)
 
 
 def baseline_expectation_delta_text(baseline_comparison: dict[str, Any]) -> str:

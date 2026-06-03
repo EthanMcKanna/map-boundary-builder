@@ -2648,6 +2648,42 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
     ]
 
 
+def test_compare_stress_reports_records_prewarm_delta() -> None:
+    baseline = {
+        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5}],
+        "prewarm": {
+            "status": "ok",
+            "total_s": 0.65,
+            "rapidocr_s": 0.60,
+            "extraction_s": 0.02,
+            "seed_s": 0.03,
+        },
+    }
+    candidate = {
+        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
+        "prewarm": {
+            "status": "ok",
+            "total_s": 0.72,
+            "rapidocr_s": 0.68,
+            "extraction_s": 0.015,
+            "seed_s": 0.031,
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["prewarm_delta_s"] == {
+        "total_s": {"baseline": 0.65, "candidate": 0.72, "delta_s": 0.07},
+        "rapidocr_s": {"baseline": 0.6, "candidate": 0.68, "delta_s": 0.08},
+        "extraction_s": {"baseline": 0.02, "candidate": 0.015, "delta_s": -0.005},
+        "seed_s": {"baseline": 0.03, "candidate": 0.031, "delta_s": 0.001},
+    }
+    assert (
+        stress_module.baseline_prewarm_delta_text(comparison)
+        == "total=+0.070s, rapidocr=+0.080s, extract=-0.005s, seed=+0.001s"
+    )
+
+
 def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
     baseline = {
         "rows": [
@@ -2895,6 +2931,12 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                 {"field": "extraction_cache", "baseline": True, "candidate": False},
                 {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v6"},
             ],
+            "prewarm_delta_s": {
+                "total_s": {"baseline": 0.65, "candidate": 0.72, "delta_s": 0.07},
+                "rapidocr_s": {"baseline": 0.60, "candidate": 0.68, "delta_s": 0.08},
+                "extraction_s": {"baseline": 0.02, "candidate": 0.015, "delta_s": -0.005},
+                "seed_s": {"baseline": 0.03, "candidate": 0.031, "delta_s": 0.001},
+            },
             "expectation_compared_rows": 2,
             "baseline_expectation_passed_rows": 2,
             "candidate_expectation_passed_rows": 1,
@@ -3221,6 +3263,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert (
         "baseline config changes: runner_ocr_cache=true->false, "
         "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v6"
+    ) in output
+    assert (
+        "baseline prewarm delta: total=+0.070s, rapidocr=+0.080s, "
+        "extract=-0.005s, seed=+0.001s"
     ) in output
     assert (
         "baseline expectation delta: baseline=2/2, candidate=1/2, delta=-1, changes=1"
