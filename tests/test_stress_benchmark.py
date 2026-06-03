@@ -627,8 +627,14 @@ def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None
     assert comparison["regression_budget"] == {
         "violations": [],
         "max_ocr_engine_total_regression_s": 0.01,
+        "skipped_primary_ocr_zero_call_row_count": 1,
+        "skipped_primary_ocr_zero_call_rows": ["catalog-row"],
         "passed": True,
     }
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: passed primary_ocr<=0.010s skipped_primary_ocr_zero_call=1"
+    )
 
 
 def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> None:

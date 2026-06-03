@@ -897,6 +897,7 @@ def baseline_regression_budget(
 ) -> dict[str, Any]:
     budget: dict[str, Any] = {"violations": []}
     violations: list[dict[str, Any]] = []
+    skipped_primary_ocr_zero_call_rows: list[str] = []
     latency_deltas = comparison.get("latency_deltas")
     if max_total_elapsed_regression_s is not None:
         max_total = round(float(max_total_elapsed_regression_s), 6)
@@ -935,6 +936,9 @@ def baseline_regression_budget(
                         delta.get("candidate_ocr_engine_calls")
                     )
                     if baseline_calls == 0.0 and candidate_calls == 0.0:
+                        slug = delta.get("slug")
+                        if isinstance(slug, str) and slug:
+                            skipped_primary_ocr_zero_call_rows.append(slug)
                         continue
                     violation = {
                         "kind": "primary_ocr_total_delta_missing",
@@ -960,6 +964,11 @@ def baseline_regression_budget(
                     if value is not None:
                         violation[key] = round(value, 6)
                 violations.append(violation)
+        if skipped_primary_ocr_zero_call_rows:
+            budget["skipped_primary_ocr_zero_call_row_count"] = len(
+                skipped_primary_ocr_zero_call_rows
+            )
+            budget["skipped_primary_ocr_zero_call_rows"] = skipped_primary_ocr_zero_call_rows
     if max_repeat_p95_regression_s is not None:
         max_repeat = round(float(max_repeat_p95_regression_s), 6)
         budget["max_repeat_p95_regression_s"] = max_repeat
@@ -4887,6 +4896,7 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     if max_repeat_ocr_total is not None:
         limits.append(f"repeat_ocr_p95<={max_repeat_ocr_total:.3f}s")
     limit_text = f" {' '.join(limits)}" if limits else ""
+    skip_text = baseline_regression_budget_skip_text(regression_budget)
     if regression_budget.get("passed") is False:
         violations = regression_budget.get("violations")
         violation_count = len(violations) if isinstance(violations, list) else 0
@@ -4895,8 +4905,27 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
             if isinstance(violations, list)
             else ""
         )
-        return f"baseline regression budget: failed{limit_text} violations={violation_count}{kind_text}"
-    return f"baseline regression budget: passed{limit_text}"
+        return (
+            f"baseline regression budget: failed{limit_text}{skip_text} "
+            f"violations={violation_count}{kind_text}"
+        )
+    return f"baseline regression budget: passed{limit_text}{skip_text}"
+
+
+def baseline_regression_budget_skip_text(regression_budget: dict[str, Any]) -> str:
+    skipped_count = parse_nonnegative_count_metric(
+        regression_budget.get("skipped_primary_ocr_zero_call_row_count")
+    )
+    if skipped_count is None:
+        skipped_rows = regression_budget.get("skipped_primary_ocr_zero_call_rows")
+        if not isinstance(skipped_rows, list):
+            return ""
+        skipped_count = float(
+            sum(1 for slug in skipped_rows if isinstance(slug, str) and slug)
+        )
+    if skipped_count <= 0.0:
+        return ""
+    return f" skipped_primary_ocr_zero_call={skipped_count:g}"
 
 
 def baseline_regression_budget_violation_count_text(violations: list[Any]) -> str:

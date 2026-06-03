@@ -16953,3 +16953,19 @@ with zero failures in 0.531s.
   `107 passed in 0.34s`, the full suite passed
   `683 passed, 31 subtests passed in 5.74s`, and `git diff --check` was clean.
   This is benchmark acceptance reliability only; no runtime deploy is needed.
+- Made the no-OCR regression-budget skip auditable instead of silent. Primary
+  OCR regression budgets now save `skipped_primary_ocr_zero_call_row_count`
+  and `skipped_primary_ocr_zero_call_rows` when a compared baseline/candidate
+  row explicitly has `ocr_engine_profile.calls=0` on both sides, and the CLI
+  budget line prints `skipped_primary_ocr_zero_call=N`. The strict path is
+  unchanged: rows where OCR ran but `total_s` is missing still fail as
+  `primary_ocr_total_delta_missing`. Replaying the saved comparison between
+  `out/current-leaders-full49-hard-20260603/stress-summary.json` and
+  `out/warm-sample-950-full49-hard-candidate-20260603/stress-summary.json`
+  now prints `baseline regression budget: passed primary<=0.250s
+  primary_ocr<=0.250s repeat_p95<=0.250s repeat_ocr_p95<=0.250s
+  skipped_primary_ocr_zero_call=11`, with `49` compared rows, `0` signature
+  changes, and no violations. Focused stress benchmark tests passed
+  `107 passed in 0.31s`, the full suite passed
+  `683 passed, 31 subtests passed in 5.84s`, and `git diff --check` was clean.
+  This is benchmark acceptance transparency only; no runtime deploy is needed.
