@@ -17667,3 +17667,22 @@ with zero failures in 0.531s.
   `max_repeat_ocr_engine_max_duration_s={"total_s":0.7}`; p95 stayed green at
   `0.517158s`, while the new max-duration gate failed `total_s=0.923499s`.
   Benchmark acceptance reliability only; no runtime default changed.
+- Added a repeat OCR max regression budget for baseline comparisons. This is
+  the baseline-comparison counterpart to the repeat OCR max-duration hard gate:
+  aggregate and per-case OCR engine total/stage max duration deltas now fail
+  when a candidate introduces a one-off repeat OCR outlier that p95 does not
+  exceed. The CLI/API now accept
+  `--max-baseline-repeat-ocr-total-max-regression-s`, and the focused
+  real-screenshot hard gate defaults it to the same conservative `0.25s`
+  baseline regression limit as the other hard-gate budgets. Focused stress tests
+  passed (`139 passed in 0.31s`) and the full suite passed (`715 passed,
+  31 subtests passed in 5.16s`). A saved proof in
+  `out/repeat-ocr-max-regression-budget-proof-20260603/comparison.json`
+  compared `out/warm-sample-900-primary-tail-control-20260603` against
+  `out/warm-sample-900-primary-tail-candidate-20260603` with
+  `max_repeat_ocr_engine_total_p95_regression_s=0.100` and
+  `max_repeat_ocr_engine_total_max_regression_s=0.100`; aggregate repeat OCR
+  total p95 stayed under budget at `+0.046833s`, while the new max gate failed
+  aggregate recognizer max `+0.102494s` and `los-angeles-waymo` recognizer max
+  `+0.103120s`. Benchmark acceptance reliability only; no runtime default
+  changed.
