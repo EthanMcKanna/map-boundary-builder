@@ -16118,3 +16118,18 @@ with zero failures in 0.531s.
   `label_confidence_lt_90_count` p95/max `2.25`/`3`, prewarm `1.239s`, and
   stable repeat signatures. This is a manifest reliability contract only; no
   runtime deploy is needed.
+- Rejected intermediate profile-app UI OCR cap reductions after the new
+  confidence-count contract exposed quality loss that the old label/category
+  checks would have missed. The fresh default `1000px` control at
+  `out/profile-app-ocr1000-control-20260603` passed with primary `0.475846s`,
+  repeat p95 `0.468s`, repeat max `0.473s`, repeat OCR-engine p95 `0.344s`,
+  stable `21/21/21/16` OCR counts, and exactly one label below `90`
+  confidence. A monkeypatched `900px` candidate at
+  `out/profile-app-ocr900-candidate-20260603` was not a durable speed win
+  (repeat p95 `0.464s`, OCR-engine p95 `0.362s`) and failed the new manifest
+  ceiling with `label_confidence_lt_90_count=2`. A monkeypatched `950px`
+  candidate at `out/profile-app-ocr950-candidate-20260603` was faster on this
+  narrow probe (repeat p95 `0.446s`, OCR-engine p95 `0.325s`) but degraded
+  recognition confidence further to `label_confidence_lt_90_count=3`. Keep
+  `PROFILE_APP_UI_OCR_MAX_DIMENSION=1000`; the smaller caps preserve the final
+  non-map UI rejection but weaken OCR quality evidence.
