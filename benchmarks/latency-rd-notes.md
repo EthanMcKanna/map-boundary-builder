@@ -17579,3 +17579,15 @@ with zero failures in 0.531s.
   aggregate OCR p95, printing `repeat stage ocr p95 +0.005s > budget 0.004s`
   with raw `ocr_delta=0.005140s`. Benchmark acceptance reliability only; no
   runtime default changed.
+- Extended the repeat-stage p95 regression budget to per-case stage deltas.
+  This closes the next acceptance gap after the aggregate budget: a candidate
+  can leave aggregate repeat-stage p95 nearly flat while slowing one or more
+  individual screenshots. Focused stress tests passed (`134 passed in 0.45s`)
+  and the full suite passed (`710 passed, 31 subtests passed in 5.06s`). A
+  saved proof in `out/repeat-stage-case-p95-budget-proof-20260603/comparison.json`
+  compared `out/current-v11-full49-hard-rerun-20260603` against
+  `out/full49-bright-blue-det240-20260603` with
+  `max_repeat_stage_p95_regression_s=0.020`; aggregate repeat OCR p95 was only
+  `+0.000216s`, but the new per-case gate failed six case-stage regressions,
+  including `houston-waymo ocr +0.043s > budget 0.020s`. Benchmark acceptance
+  reliability only; no runtime default changed.

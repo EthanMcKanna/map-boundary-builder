@@ -228,8 +228,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "Exit non-zero when any aggregate repeat-profile pipeline stage p95 is "
-            "more than this many seconds slower than --compare-baseline-report."
+            "Exit non-zero when any aggregate or per-case repeat-profile pipeline "
+            "stage p95 is more than this many seconds slower than "
+            "--compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -1369,6 +1370,60 @@ def baseline_regression_budget(
                     "max_repeat_stage_p95_regression_s": max_repeat_stage,
                 }
             )
+        case_deltas = comparison.get("repeat_profile_case_deltas")
+        if isinstance(case_deltas, list):
+            for case_delta in case_deltas:
+                if not isinstance(case_delta, dict):
+                    continue
+                case_stage_duration = case_delta.get("stage_duration_s")
+                if not isinstance(case_stage_duration, dict):
+                    continue
+                for stage in sorted(
+                    (
+                        stage
+                        for stage in case_stage_duration
+                        if isinstance(stage, str) and stage
+                    ),
+                    key=pipeline_stage_sort_key,
+                ):
+                    p95_delta = repeat_case_delta_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "delta_s",
+                    )
+                    if p95_delta is None or p95_delta <= max_repeat_stage_p95_regression_s:
+                        continue
+                    violation = {
+                        "kind": "repeat_stage_case_p95_regression_exceeded",
+                        "slug": case_delta.get("slug"),
+                        "stage": stage,
+                        "delta_s": round(p95_delta, 6),
+                        "max_repeat_stage_p95_regression_s": max_repeat_stage,
+                    }
+                    baseline_case_stage_p95 = repeat_case_delta_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "baseline",
+                    )
+                    candidate_case_stage_p95 = repeat_case_delta_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "candidate",
+                    )
+                    if baseline_case_stage_p95 is not None:
+                        violation["baseline_stage_p95_duration_s"] = round(
+                            baseline_case_stage_p95,
+                            6,
+                        )
+                    if candidate_case_stage_p95 is not None:
+                        violation["candidate_stage_p95_duration_s"] = round(
+                            candidate_case_stage_p95,
+                            6,
+                        )
+                    violations.append(violation)
     if max_repeat_ocr_engine_total_p95_regression_s is not None:
         max_repeat_ocr_total = round(float(max_repeat_ocr_engine_total_p95_regression_s), 6)
         budget["max_repeat_ocr_engine_total_p95_regression_s"] = max_repeat_ocr_total
@@ -7148,6 +7203,7 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_profile_case_p95_regression_exceeded": "repeat_case_p95",
         "repeat_stage_p95_regression_exceeded": "repeat_stage_p95",
         "repeat_stage_p95_delta_missing": "repeat_stage_p95_missing",
+        "repeat_stage_case_p95_regression_exceeded": "repeat_stage_case_p95",
         "repeat_ocr_total_p95_regression_exceeded": "repeat_ocr_p95",
         "repeat_ocr_total_p95_delta_missing": "repeat_ocr_p95_missing",
         "repeat_ocr_case_total_p95_regression_exceeded": "repeat_ocr_case_p95",
@@ -7240,6 +7296,19 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         if not isinstance(stage, str) or delta is None or budget is None:
             return ""
         return f"repeat stage {stage} p95 {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_stage_case_p95_regression_exceeded":
+        slug = violation.get("slug")
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_repeat_stage_p95_regression_s"))
+        if (
+            not isinstance(slug, str)
+            or not isinstance(stage, str)
+            or delta is None
+            or budget is None
+        ):
+            return ""
+        return f"repeat stage case p95 {slug} {stage} {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "repeat_stage_p95_delta_missing":
         budget = parse_nonnegative_float(violation.get("max_repeat_stage_p95_regression_s"))
         budget_text = f" budget {budget:.3f}s" if budget is not None else ""
