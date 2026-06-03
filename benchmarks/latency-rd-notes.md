@@ -16077,3 +16077,16 @@ with zero failures in 0.531s.
   p95/max `29`/`29`, repeat label-count p95/max `24.1`/`29`, prewarm
   `1.132s`, and stable repeat signatures. This is another stress-manifest
   reliability contract only; no runtime deploy is needed.
+- Rejected lowering the ordinary bright-blue RapidOCR detector limit from the
+  current `256/max` to `240/max` on the latest Waymo OCR tail. The matched
+  current-default control at `out/brightblue-det240-control-slow7-clean-20260603`
+  passed `7/7`, primary max `0.586859s`, repeat p95 `0.492s`, repeat max
+  `0.497s`, repeat OCR-engine p95 `0.439s`, and repeat OCR-engine max
+  `0.444s`. The `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN=240`
+  candidate at `out/brightblue-det240-candidate-slow7-20260603` also passed
+  `7/7` and improved primary max to `0.562789s`, but it did not improve the
+  repeat gate: repeat p95 rose to `0.494s`, repeat max to `0.510s`, repeat
+  OCR-engine p95 to `0.441s`, and repeat OCR-engine max to `0.456s`. Both runs
+  kept selected/result/label count budgets intact, so this is a pure latency
+  tradeoff; keep the `256/max` default unless a future broader candidate proves
+  a real repeat-profile win.
