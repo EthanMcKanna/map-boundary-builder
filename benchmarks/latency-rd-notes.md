@@ -17051,3 +17051,17 @@ with zero failures in 0.531s.
   `685 passed, 31 subtests passed in 6.03s`, the saved-report smoke showed the
   expected dominant-stage labels, and `git diff --check` was clean. This is
   benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Rejected deferring georeference resource preload for route-UI shortcut OCR.
+  The hypothesis was that fail-closed route/profile screens were starting an
+  unnecessary geocoder/OSM preload before the first OCR labels could reject
+  them. A focused control gate at `out/route-georef-preload-control-20260603`
+  passed `8/8` expected failures with primary max `0.298s`, repeat p95
+  `0.298s`, and repeat max `0.306s`. The prototype deferred preload for
+  route-shortcut submissions and restarted it before the full-detail survivor
+  retry, but the same focused gate at
+  `out/route-georef-preload-candidate-20260603` was worse: primary max
+  `0.323s`, repeat p95 `0.332s`, and repeat max `0.415s` with the same OCR-call
+  contract. The attempted broad call-site patch also exposed a scoping hazard
+  around non-route focused OCR preload, so no runtime/test changes were kept.
+  Keep georeference preloading as-is unless new evidence shows actual preload
+  contention rather than OCR recognizer/detector variance.
