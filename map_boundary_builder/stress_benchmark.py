@@ -558,6 +558,8 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     args.disable_extraction_cache = True
     args.fail_on_unexpected = True
     args.fail_on_repeat_signature_drift = True
+    if args.compare_baseline_report:
+        args.fail_on_baseline_config_drift = True
     if args.repeat_profile_runs == 0:
         args.repeat_profile_runs = 3
     if args.repeat_profile_warmups == 0:

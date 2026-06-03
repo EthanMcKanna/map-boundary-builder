@@ -4552,6 +4552,128 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
     assert exit_code == 0
 
 
+def test_real_screenshot_gate_baseline_comparison_fails_config_drift_by_default(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "configuration_changes": [
+                    {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+                ],
+                "signature_changes": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "configuration_changes": [],
+                "signature_changes": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monkeypatch) -> None:
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["max_prewarm_stage_s"] == {

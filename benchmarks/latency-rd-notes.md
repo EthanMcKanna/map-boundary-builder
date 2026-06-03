@@ -17198,3 +17198,14 @@ with zero failures in 0.531s.
   `preset=none->focused-real-screenshot-gate@v1:only1`. Focused stress
   benchmark tests passed `115 passed in 0.33s`; this is benchmark
   feedback-loop reliability only.
+- Made baseline config-drift failure automatic for `--real-screenshot-hard-gate`
+  and `--focused-real-screenshot-gate` comparisons. Non-comparison hard/focused
+  runs are unchanged, but when `--compare-baseline-report` is supplied the
+  preset now enables `--fail-on-baseline-config-drift` by default. A real smoke
+  at `out/config-drift-default-gate-smoke-20260603` proved the default: the
+  `dallas-waymo` focused gate passed behavior (`1/1`, primary `0.354s`, repeat
+  analyzed `2`, repeat subsecond `2/2`), but exited `1` without the explicit
+  flag because the old cached baseline differed on runner OCR cache, extraction
+  cache, and preset (`none` to `focused-real-screenshot-gate@v1:only1`). Focused
+  stress benchmark tests passed `117 passed in 0.33s`; this is benchmark
+  feedback-loop reliability only.
