@@ -17209,3 +17209,15 @@ with zero failures in 0.531s.
   cache, and preset (`none` to `focused-real-screenshot-gate@v1:only1`). Focused
   stress benchmark tests passed `117 passed in 0.33s`; this is benchmark
   feedback-loop reliability only.
+- Bumped saved preset metadata after the baseline config-drift default changed:
+  `--real-screenshot-hard-gate` now records version `3` and
+  `--focused-real-screenshot-gate` records version `2`. This keeps future
+  comparisons from treating old reports with weaker default failure semantics as
+  same-preset baselines. A focused real smoke at
+  `out/preset-version-drift-gate-smoke-20260603` compared current
+  `dallas-waymo` against the pre-bump focused report; behavior still passed
+  (`1/1`, primary `0.454s`, repeat analyzed `2`, repeat subsecond `2/2`), but
+  the command exited `1` because the comparator reported
+  `preset=focused-real-screenshot-gate@v1:only1->focused-real-screenshot-gate@v2:only1`.
+  Focused stress benchmark tests passed `117 passed in 0.66s`; this is
+  benchmark feedback-loop reliability only.
