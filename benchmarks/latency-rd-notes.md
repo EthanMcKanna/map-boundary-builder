@@ -16775,3 +16775,16 @@ with zero failures in 0.531s.
   `repeat_ocr_p95<=0.500s`, with `signature_changes=0` and no regression-budget
   violations. This is harness acceptance hardening only; no runtime deploy is
   needed.
+- Improved failed baseline-regression budget CLI reporting so long failure
+  lists cannot hide OCR-specific regressions behind the first few primary rows.
+  The failed budget line now includes compact per-kind counts, and the printed
+  samples include one representative violation per kind before filling the
+  remaining sample slots. Focused stress benchmark tests passed
+  `102 passed in 0.44s`, the full suite passed `678 passed in 6.06s`, and
+  `git diff --check` was clean. A strict real six-route smoke at
+  `out/baseline-violation-kinds-route-20260603` intentionally exited nonzero
+  and now printed
+  `by_kind=primary:5,primary_ocr:5,repeat_p95:1,repeat_ocr_p95:1` plus sample
+  lines for primary total, primary OCR, repeat p95, and repeat OCR p95; the
+  saved JSON still recorded all 12 violations. This is benchmark feedback-loop
+  reliability only; no runtime deploy is needed.

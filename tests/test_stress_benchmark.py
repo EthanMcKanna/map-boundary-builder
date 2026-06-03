@@ -618,7 +618,8 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert (
         "baseline regression budget: failed primary<=0.100s primary_ocr<=0.100s "
-        "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4"
+        "repeat_p95<=0.020s repeat_ocr_p95<=0.010s violations=4 "
+        "by_kind=primary:1,primary_ocr:1,repeat_p95:1,repeat_ocr_p95:1"
     ) in output
     assert "primary houston +0.200s > budget 0.100s" in output
     assert "primary ocr houston +0.150s > budget 0.100s" in output
@@ -627,6 +628,52 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston fields=city,control_points" in output
+
+
+def test_baseline_regression_budget_violation_samples_include_each_kind() -> None:
+    violations = [
+        {
+            "kind": "primary_total_regression_exceeded",
+            "slug": f"slow-{index}",
+            "total_elapsed_delta_s": 0.1 + index,
+            "max_total_elapsed_regression_s": 0.05,
+        }
+        for index in range(6)
+    ]
+    violations.extend(
+        [
+            {
+                "kind": "primary_ocr_total_regression_exceeded",
+                "slug": "ocr-slow",
+                "ocr_engine_total_delta_s": 0.2,
+                "max_ocr_engine_total_regression_s": 0.03,
+            },
+            {
+                "kind": "repeat_profile_p95_regression_exceeded",
+                "delta_s": 0.12,
+                "max_repeat_p95_regression_s": 0.02,
+            },
+            {
+                "kind": "repeat_ocr_total_p95_regression_exceeded",
+                "delta_s": 0.09,
+                "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
+            },
+        ]
+    )
+
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=5)
+    sample_kinds = [sample["kind"] for sample in samples]
+
+    assert sample_kinds[:4] == [
+        "primary_total_regression_exceeded",
+        "primary_ocr_total_regression_exceeded",
+        "repeat_profile_p95_regression_exceeded",
+        "repeat_ocr_total_p95_regression_exceeded",
+    ]
+    assert sample_kinds[4] == "primary_total_regression_exceeded"
+    assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
+        " by_kind=primary:6,primary_ocr:1,repeat_p95:1,repeat_ocr_p95:1"
+    )
 
 
 def test_run_stress_benchmark_can_attach_baseline_comparison(tmp_path, monkeypatch) -> None:

@@ -3880,7 +3880,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             print(baseline_regression_budget_text(regression_budget))
             violations = regression_budget.get("violations")
             if regression_budget.get("passed") is False and isinstance(violations, list):
-                for violation in violations[:5]:
+                for violation in baseline_regression_budget_violation_samples(violations, limit=5):
                     violation_text = baseline_regression_budget_violation_text(violation)
                     if violation_text:
                         print(f"   - {violation_text}")
@@ -4305,8 +4305,67 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     if regression_budget.get("passed") is False:
         violations = regression_budget.get("violations")
         violation_count = len(violations) if isinstance(violations, list) else 0
-        return f"baseline regression budget: failed{limit_text} violations={violation_count}"
+        kind_text = (
+            baseline_regression_budget_violation_count_text(violations)
+            if isinstance(violations, list)
+            else ""
+        )
+        return f"baseline regression budget: failed{limit_text} violations={violation_count}{kind_text}"
     return f"baseline regression budget: passed{limit_text}"
+
+
+def baseline_regression_budget_violation_count_text(violations: list[Any]) -> str:
+    counts: dict[str, int] = {}
+    for violation in violations:
+        if not isinstance(violation, dict):
+            continue
+        kind = violation.get("kind")
+        if not isinstance(kind, str) or not kind:
+            continue
+        label = baseline_regression_budget_violation_kind_label(kind)
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return ""
+    return " by_kind=" + ",".join(f"{label}:{count}" for label, count in counts.items())
+
+
+def baseline_regression_budget_violation_kind_label(kind: str) -> str:
+    labels = {
+        "primary_total_regression_exceeded": "primary",
+        "primary_ocr_total_regression_exceeded": "primary_ocr",
+        "primary_ocr_total_delta_missing": "primary_ocr_missing",
+        "repeat_profile_p95_regression_exceeded": "repeat_p95",
+        "repeat_profile_p95_delta_missing": "repeat_p95_missing",
+        "repeat_ocr_total_p95_regression_exceeded": "repeat_ocr_p95",
+        "repeat_ocr_total_p95_delta_missing": "repeat_ocr_p95_missing",
+    }
+    return labels.get(kind, kind)
+
+
+def baseline_regression_budget_violation_samples(violations: list[Any], *, limit: int = 5) -> list[Any]:
+    if limit <= 0:
+        return []
+    selected_indices: list[int] = []
+    selected_index_set: set[int] = set()
+    seen_kinds: set[str] = set()
+    for index, violation in enumerate(violations):
+        if not isinstance(violation, dict):
+            continue
+        kind = violation.get("kind")
+        if not isinstance(kind, str) or not kind or kind in seen_kinds:
+            continue
+        selected_indices.append(index)
+        selected_index_set.add(index)
+        seen_kinds.add(kind)
+        if len(selected_indices) >= limit:
+            return [violations[selected_index] for selected_index in selected_indices]
+    for index, _violation in enumerate(violations):
+        if index in selected_index_set:
+            continue
+        selected_indices.append(index)
+        if len(selected_indices) >= limit:
+            break
+    return [violations[selected_index] for selected_index in selected_indices]
 
 
 def baseline_regression_budget_violation_text(violation: Any) -> str:
