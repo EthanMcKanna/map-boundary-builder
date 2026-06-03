@@ -17428,3 +17428,28 @@ with zero failures in 0.531s.
   stores `georeference_events` with `Inferring map location from labels`
   lasting `0.261634s` before `Map transform fitted`. This is benchmark
   feedback-loop reliability only.
+- Probed the bright-blue Waymo OCR tail with a fresh current focused control at
+  `out/waymo-tail-current-control-20260603`: `8/8` expected, primary max
+  `0.378775s`, repeat p95 `0.342s`, and repeat OCR p95 `0.301s`, with Los
+  Angeles and Bay Area as the repeat OCR tail. Three speed levers were rejected
+  as default changes. `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA=3000`
+  passed the focused subset but the full hard gate at
+  `out/full49-area3000-candidate-20260603` was mixed rather than better
+  (full `49/49`, signature changes `0`, primary max `0.499462s`, repeat p95
+  `0.308s`, baseline repeat p95 delta `+0.004s`, worst repeat OCR case
+  `miami-waymo +0.027s`). `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN=224`
+  was safe on the focused subset but only noise-level better (`repeat p95
+  -0.013s`, repeat OCR p95 `-0.014s`, Houston repeat OCR case `+0.049s`).
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=24` is rejected because it introduced
+  signature drift (`houston-waymo` OCR top labels), and
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION=1200` is rejected because it
+  failed `4/8` focused expectations, created `8` signature changes, and sent
+  Nashville to `2.278918s` via a georeference retry. No runtime default changed.
+- Extended the compact georeference event context from primary slowest rows to
+  repeat-profile slowest samples, so repeat-only georeference outliers no
+  longer lose the dominant event message. Focused stress tests passed
+  (`132 passed in 0.39s`). A real Ann Arbor repeat probe at
+  `out/ann-arbor-repeat-geostep-20260603` passed `1/1` with primary total
+  `0.505533s`, repeat p95 `0.377s`, and repeat slowest lines now include
+  `geo_step=inferring_map_location_from_labels:0.184s` and `0.181s`. This is
+  benchmark feedback-loop reliability only.

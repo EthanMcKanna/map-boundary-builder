@@ -6455,6 +6455,58 @@ def test_repeat_profile_slowest_samples_summarizes_actionable_context() -> None:
     )
 
 
+def test_repeat_profile_slowest_samples_include_georeference_event_context() -> None:
+    slowest = stress_module.repeat_profile_slowest_samples(
+        [
+            {
+                "slug": "ann-arbor",
+                "repeat_index": 2,
+                "total_elapsed_s": 1.04,
+                "observed_status": "complete",
+                "expectation_passed": True,
+                "stages": {"georeference": 0.78, "ocr": 0.13},
+                "georeference_events": [
+                    {
+                        "message": "Trying regional label context",
+                        "elapsed_s": 0.61,
+                    },
+                    {
+                        "message": "Map transform fitted",
+                        "elapsed_s": 0.01,
+                    },
+                ],
+            }
+        ],
+        limit=1,
+    )
+
+    assert slowest == [
+        {
+            "slug": "ann-arbor",
+            "repeat_index": 2,
+            "total_elapsed_s": 1.04,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "top_stage": {"stage": "georeference", "elapsed_s": 0.78},
+            "georeference_events": [
+                {
+                    "message": "Trying regional label context",
+                    "elapsed_s": 0.61,
+                },
+                {
+                    "message": "Map transform fitted",
+                    "elapsed_s": 0.01,
+                },
+            ],
+        }
+    ]
+    assert (
+        stress_module.repeat_profile_slow_sample_text(slowest[0])
+        == "ann-arbor#2=1.040s georeference=0.780s "
+        "geo_step=trying_regional_label_context:0.610s"
+    )
+
+
 def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     case_summaries = {
         "fast": {

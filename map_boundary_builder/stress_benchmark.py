@@ -3997,6 +3997,12 @@ def repeat_profile_slowest_sample_summary(
     top_stage = slowest_stage_summary(sample)
     if top_stage is not None:
         summary["top_stage"] = top_stage
+        if top_stage.get("stage") == "georeference":
+            georeference_events = sample.get("georeference_events")
+            if isinstance(georeference_events, list) and georeference_events:
+                summary["georeference_events"] = [
+                    event for event in georeference_events if isinstance(event, dict)
+                ][:5]
     ocr_label_count = sample.get("ocr_label_count")
     if isinstance(ocr_label_count, (int, float)) and not isinstance(ocr_label_count, bool):
         summary["ocr_label_count"] = int(ocr_label_count)
@@ -5762,6 +5768,10 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
         stage_elapsed = parse_nonnegative_float(top_stage.get("elapsed_s"))
         if isinstance(stage, str) and stage and stage_elapsed is not None:
             stage_text = f" {stage}={stage_elapsed:.3f}s"
+            if stage == "georeference":
+                georeference_text = slow_case_georeference_event_text(sample)
+                if georeference_text:
+                    stage_text = f"{stage_text} {georeference_text}"
     ocr_engine = sample.get("ocr_engine")
     ocr_text = ""
     if isinstance(ocr_engine, dict):
@@ -5932,7 +5942,7 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
         if isinstance(stage, str) and stage and stage_elapsed_s is not None:
             parts.append(f"{stage}={stage_elapsed_s:.3f}s")
             if stage == "georeference":
-                georeference_text = primary_slow_case_georeference_event_text(case)
+                georeference_text = slow_case_georeference_event_text(case)
                 if georeference_text:
                     parts.append(georeference_text)
     ocr_engine = case.get("ocr_engine")
@@ -5977,7 +5987,7 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def primary_slow_case_georeference_event_text(case: dict[str, Any]) -> str:
+def slow_case_georeference_event_text(case: dict[str, Any]) -> str:
     events = case.get("georeference_events")
     if not isinstance(events, list):
         return ""
