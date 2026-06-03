@@ -469,6 +469,67 @@ def test_check_expectations_rejects_low_ocr_label_count() -> None:
     assert issues == ["ocr_label_count 17 below 18"]
 
 
+def test_check_expectations_accepts_catalog_slug_and_ocr_call_budget() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "catalog-shape-match",
+            "city": "Dallas",
+            "catalog_slug": "dallas-waymo",
+            "ocr_engine_profile": {"calls": 0},
+        },
+        {
+            "status": "complete",
+            "source_equals": "catalog-shape-match",
+            "city_equals": "Dallas",
+            "catalog_slug_equals": "dallas-waymo",
+            "max_ocr_engine_calls": 0,
+        },
+    )
+
+    assert issues == []
+
+
+def test_check_expectations_rejects_catalog_slug_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "catalog-shape-match",
+            "city": "Dallas",
+            "catalog_slug": "houston-waymo",
+        },
+        {
+            "status": "complete",
+            "source_equals": "catalog-shape-match",
+            "city_equals": "Dallas",
+            "catalog_slug_equals": "dallas-waymo",
+        },
+    )
+
+    assert issues == ["catalog_slug 'houston-waymo' did not equal 'dallas-waymo'"]
+
+
+def test_check_expectations_rejects_excess_ocr_engine_calls() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "catalog-shape-match",
+            "city": "Orlando",
+            "catalog_slug": "orlando-waymo",
+            "ocr_engine_profile": {"calls": 1},
+        },
+        {
+            "status": "complete",
+            "source_equals": "catalog-shape-match",
+            "city_equals": "Orlando",
+            "catalog_slug_equals": "orlando-waymo",
+            "max_ocr_engine_calls": 0,
+        },
+    )
+
+    assert issues == ["ocr_engine_profile.calls 1 above 0"]
+
+
 def test_check_expectations_rejects_low_confidence() -> None:
     issues = stress_module.check_expectations(
         {

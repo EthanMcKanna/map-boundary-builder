@@ -15848,3 +15848,18 @@ with zero failures in 0.531s.
   `out/bright-provider-crop-full44-hard-20260603` showed zero behavior drift for
   status, source, city, bbox, geometry hash, coordinate count, confidence,
   catalog metadata, and road-match fields.
+- Hardened the stress expectation schema so production-shaped current-catalog
+  rows now assert the exact `catalog_slug` and an OCR-engine call ceiling. Pure
+  `catalog-shape-match` current rows require zero OCR calls, while
+  provider-label current rows allow one OCR call to read the provider UI label
+  without permitting retries or a full-map fallback. The focused hardened guard
+  at `out/hardened-current-catalog-focused-20260603` passed `10/10`, primary max
+  `0.406479s`, repeat p95 `0.312s`, repeat OCR-engine p95 `0.184s`, and prewarm
+  `1.502s`; the seven pure catalog rows reported `0` OCR calls and the three
+  provider-label rows reported `1` call each. The full hardened gate at
+  `out/hardened-current-catalog-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.594596s`, repeat p95 `0.500s`,
+  repeat OCR-engine p95 `0.437s`, and prewarm `1.219s`. Comparing against
+  `out/expanded-current-catalog-full49-hard-20260603` showed zero behavior drift
+  for status, source, city, bbox, geometry hash, coordinate count, confidence,
+  catalog metadata, OCR label summaries, retry flags, and road-match fields.

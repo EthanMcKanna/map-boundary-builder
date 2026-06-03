@@ -1145,6 +1145,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
             issues.append(f"error did not contain {expected_error!r}")
         append_min_ocr_labels_expectation_issue(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
+        append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
         return issues
 
     source_equals = expect.get("source_equals")
@@ -1159,6 +1160,10 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
     if isinstance(city_equals, str) and row.get("city") != city_equals:
         issues.append(f"city {row.get('city')!r} did not equal {city_equals!r}")
 
+    catalog_slug_equals = expect.get("catalog_slug_equals")
+    if isinstance(catalog_slug_equals, str) and row.get("catalog_slug") != catalog_slug_equals:
+        issues.append(f"catalog_slug {row.get('catalog_slug')!r} did not equal {catalog_slug_equals!r}")
+
     min_control_points = expect.get("min_control_points")
     if isinstance(min_control_points, int):
         control_points = row.get("control_points")
@@ -1166,6 +1171,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
             issues.append(f"control_points {control_points!r} below {min_control_points}")
 
     append_min_ocr_labels_expectation_issue(row, expect, issues)
+    append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
 
     append_min_confidence_expectation_issue(
         row,
@@ -1201,6 +1207,20 @@ def append_min_ocr_labels_expectation_issue(row: dict[str, Any], expect: dict[st
         ocr_label_count = row.get("ocr_label_count")
         if not isinstance(ocr_label_count, int) or ocr_label_count < min_ocr_labels:
             issues.append(f"ocr_label_count {ocr_label_count!r} below {min_ocr_labels}")
+
+
+def append_max_ocr_engine_calls_expectation_issue(
+    row: dict[str, Any], expect: dict[str, Any], issues: list[str]
+) -> None:
+    max_ocr_engine_calls = parse_nonnegative_count_metric(expect.get("max_ocr_engine_calls"))
+    if max_ocr_engine_calls is None:
+        return
+    ocr_engine_profile = row.get("ocr_engine_profile")
+    raw_calls = ocr_engine_profile.get("calls") if isinstance(ocr_engine_profile, dict) else None
+    calls = parse_nonnegative_count_metric(raw_calls)
+    if calls is None or calls > max_ocr_engine_calls:
+        call_text = repr(raw_calls) if calls is None else f"{calls:g}"
+        issues.append(f"ocr_engine_profile.calls {call_text} above {max_ocr_engine_calls:g}")
 
 
 def append_total_elapsed_expectation_issue(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:

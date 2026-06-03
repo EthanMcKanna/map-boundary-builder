@@ -277,8 +277,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Nashville",
+        "catalog_slug_equals": "nashville-waymo",
         "min_combined_confidence": 0.97,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
         "max_bbox_error_m": 1000
       }
@@ -307,9 +309,11 @@
         "status": "complete",
         "source_equals": "catalog-shape-match:provider-ui-label",
         "city_equals": "Bay Area",
+        "catalog_slug_equals": "bay-area-tesla",
         "min_ocr_labels": 8,
         "min_combined_confidence": 0.70,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
         "bbox_approx": [-122.5974432, 37.1807695, -121.7084889, 37.9208366],
         "max_bbox_error_m": 1000
       }
@@ -323,9 +327,11 @@
         "status": "complete",
         "source_equals": "catalog-shape-match:provider-ui-label",
         "city_equals": "Houston",
+        "catalog_slug_equals": "houston-waymo",
         "min_ocr_labels": 10,
         "min_combined_confidence": 0.70,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
         "bbox_approx": [-95.4320951, 29.6684949, -95.2874491, 29.8202881],
         "max_bbox_error_m": 1000
       }
@@ -339,9 +345,11 @@
         "status": "complete",
         "source_equals": "catalog-shape-match:provider-ui-label",
         "city_equals": "Miami",
+        "catalog_slug_equals": "miami-waymo",
         "min_ocr_labels": 8,
         "min_combined_confidence": 0.70,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
         "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
         "max_bbox_error_m": 1000
       }
@@ -355,8 +363,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Phoenix",
+        "catalog_slug_equals": "phoenix-waymo",
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-112.1166355, 33.2312436, -111.8164536, 33.6877976],
         "max_bbox_error_m": 1000
       }
@@ -370,8 +380,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Dallas",
+        "catalog_slug_equals": "dallas-waymo",
         "min_combined_confidence": 0.98,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-96.8754673, 32.7332127, -96.7276669, 32.8672603],
         "max_bbox_error_m": 1000
       }
@@ -385,8 +397,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "San Antonio",
+        "catalog_slug_equals": "san-antonio-waymo",
         "min_combined_confidence": 0.98,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-98.5580707, 29.3902521, -98.3921385, 29.5374699],
         "max_bbox_error_m": 1000
       }
@@ -400,8 +414,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Bay Area",
+        "catalog_slug_equals": "bay-area-waymo",
         "min_combined_confidence": 0.85,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
         "max_bbox_error_m": 1000
       }
@@ -415,8 +431,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Los Angeles",
+        "catalog_slug_equals": "los-angeles-waymo",
         "min_combined_confidence": 0.84,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-118.5235017, 33.9320907, -118.2221488, 34.1183233],
         "max_bbox_error_m": 1000
       }
@@ -430,8 +448,10 @@
         "status": "complete",
         "source_equals": "catalog-shape-match",
         "city_equals": "Orlando",
+        "catalog_slug_equals": "orlando-waymo",
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
         "bbox_approx": [-81.5075254, 28.3614576, -81.3638449, 28.5537667],
         "max_bbox_error_m": 1000
       }
