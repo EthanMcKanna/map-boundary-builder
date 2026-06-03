@@ -16059,3 +16059,21 @@ with zero failures in 0.531s.
   signatures under explicit `selected_box_count` p95/max budgets. This is
   another stress-harness reliability contract only; no runtime deploy is
   needed.
+- Tightened per-row OCR work-volume contracts for the current high-risk tail
+  instead of broadly freezing ordinary rows. `tesla-austin-route-receipt-long`,
+  `tesla-austin-route-receipt-gray-long`, `profile-app-non-map-ui`, and
+  `los-angeles-waymo` now cap `raw_box_count`, `selected_box_count`,
+  `result_count`, and profiled `label_count` via `max_ocr_engine_counts`.
+  This guards against detector-box and recognition-result growth on the rows
+  most likely to hide OCR work regressions behind a still-single OCR call. The
+  focused gate at `out/tail-count-contract-focused-20260603` passed `4/4`,
+  repeat p95 `0.527s`, repeat OCR-engine p95 `0.470s`, raw-box p95/max `50`,
+  selected-box p95/max `30`, result-count p95/max `29`, and label-count
+  p95/max `29`. The full hard gate at
+  `out/tail-count-contract-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.553429s`, repeat p95 `0.470s`,
+  repeat max `0.514s`, repeat OCR-engine p95 `0.439s`, repeat raw-box p95/max
+  `41.5`/`50`, repeat selected-box p95/max `29`/`30`, repeat result-count
+  p95/max `29`/`29`, repeat label-count p95/max `24.1`/`29`, prewarm
+  `1.132s`, and stable repeat signatures. This is another stress-manifest
+  reliability contract only; no runtime deploy is needed.
