@@ -1584,7 +1584,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 ((608, 608, 3), False),
                 ((608, 608, 3), False),
-                ((1400, 1400, 3), False),
+                ((1000, 1000, 3), False),
             ],
         )
 
@@ -1616,7 +1616,7 @@ class OcrGroupingTests(unittest.TestCase):
             [
                 ((1200, 1200, 3), False),
                 ((1200, 1200, 3), False),
-                ((1400, 1400, 3), False),
+                ((1200, 1200, 3), False),
             ],
         )
 

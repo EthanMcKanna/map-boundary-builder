@@ -1368,7 +1368,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["rapidocr_gray_fill_max_dimension"], 800)
         self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_max_dimension"], 1600)
         self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_detector_limit_side_len"], 208)
-        self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_warm_sample_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_svg_bright_blue_warm_sample_max_dimension"], 1000)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_dimension"], 1400)
         self.assertEqual(cold["ocr"]["rapidocr_dark_teal_wide_max_height_width_ratio"], 1.25)
         self.assertIsInstance(cold["ocr"]["rapidocr_bright_blue_recognition_assets_available"], bool)
@@ -1381,7 +1381,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(cold["ocr"]["current_catalog_label_ocr_max_dimension"], 875)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limit"], 608)
         self.assertEqual(cold["ocr"]["rapidocr_warm_detector_limits"], [608])
-        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_warm_sample_max_dimension"], 1400)
+        self.assertEqual(cold["ocr"]["rapidocr_bright_blue_warm_sample_max_dimension"], 1000)
         self.assertEqual(
             cold["ocr"]["rapidocr_warm_engine_keys"],
             [
@@ -1396,8 +1396,8 @@ class ApiRunCacheTests(unittest.TestCase):
             [
                 [608, "default", "default", 12, 608],
                 [608, "default", "default", 16, 608],
-                [256, "en-ppocrv5", "max", 12, 1400],
-                [208, "en-ppocrv5", "max", 12, 1400],
+                [256, "en-ppocrv5", "max", 12, 1000],
+                [208, "en-ppocrv5", "max", 12, 1000],
             ],
         )
         self.assertEqual(cold["ocr"]["rapidocr_warm_sample_max_dimension"], 608)

@@ -16389,3 +16389,23 @@ with zero failures in 0.531s.
   focused image/API tests (`105 passed in 0.73s`), a real healthy-cache smoke
   (`0.115949s` then `0.000005s`), and the full suite (`654 passed, 31 subtests
   passed in 7.03s`). This is a production health-path reliability hardening.
+- Lowered the synthetic bright-blue RapidOCR warm sample from `1400` to `1000`
+  while leaving actual bright-blue OCR inference at `1400`. A matched Waymo
+  tail control at `out/warm-sample-default-brightblue-tail-control-20260603`
+  passed `8/8` with prewarm `0.828s`, primary max `0.402s`, repeat p95
+  `0.351s`, and repeat OCR-engine p95 `0.300s`. Dropping the warm sample all
+  the way to `608` at `out/warm-sample-608-brightblue-tail-20260603` passed but
+  caused a first-primary Dallas OCR spike (`0.409s` OCR-engine total), so that
+  was rejected. The `1000` candidate at `out/warm-sample-1000-brightblue-tail-20260603`
+  kept `8/8` behavior, reduced prewarm to `0.627s`, and avoided the primary
+  spike. The full hard gate at `out/warm-sample-1000-full-hard-gate-20260603`
+  then passed `49/49`, statuses `{"complete":38,"failed":11}`, prewarm
+  `0.620s`, primary max `0.376s`, repeat p95 `0.319s`, repeat OCR-engine p95
+  `0.266s`, stable repeat signatures, and all manifest latency/OCR-count
+  contracts. After patching the default, the no-env hard gate at
+  `out/warm-sample-1000-patched-full-hard-gate-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, prewarm `0.627s`, primary max
+  `0.460s` (Dallas first-primary spike, still within budget), repeat p95
+  `0.316s`, repeat max `0.400s`, repeat OCR-engine p95 `0.270s`, and all
+  manifest latency/OCR-count contracts. This reduces health/cron warmup CPU
+  without weakening the actual large-map OCR path.
