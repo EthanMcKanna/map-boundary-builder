@@ -1697,6 +1697,46 @@ def test_latency_budget_flags_repeat_ocr_engine_count_p95_excess() -> None:
     ]
 
 
+def test_latency_budget_flags_repeat_ocr_engine_count_max_excess() -> None:
+    report = stress_module.build_latency_budget_summary(
+        rows=[],
+        repeat_profile={
+            "summary": {
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"max_count": 31.0},
+                    "raw_box_count": {"max_count": 50.0},
+                }
+            }
+        },
+        max_repeat_ocr_engine_max_count={
+            "selected_box_count": 30.0,
+            "raw_box_count": 55.0,
+            "result_count": 29.0,
+        },
+    )
+
+    assert report["passed"] is False
+    assert report["max_repeat_ocr_engine_max_count"] == {
+        "raw_box_count": 55.0,
+        "result_count": 29.0,
+        "selected_box_count": 30.0,
+    }
+    assert report["repeat_ocr_engine_count_max_violations"] == [
+        {
+            "kind": "repeat_ocr_engine_count_max_missing",
+            "metric": "result_count",
+            "max_repeat_ocr_engine_max_count": 29.0,
+        },
+        {
+            "kind": "repeat_ocr_engine_count_max_budget_exceeded",
+            "metric": "selected_box_count",
+            "max_count": 31.0,
+            "max_repeat_ocr_engine_max_count": 30.0,
+            "excess_count": 1.0,
+        },
+    ]
+
+
 def test_latency_budget_skips_primary_ocr_engine_budgets_for_zero_call_profiles() -> None:
     report = stress_module.build_latency_budget_summary(
         rows=[
@@ -1790,11 +1830,13 @@ def test_latency_budget_skips_repeat_ocr_engine_p95_for_zero_call_profiles() -> 
         },
         max_repeat_ocr_engine_p95_duration_s={"total_s": 0.9},
         max_repeat_ocr_engine_p95_count={"selected_box_count": 30},
+        max_repeat_ocr_engine_max_count={"selected_box_count": 30},
     )
 
     assert report["passed"] is True
     assert report["repeat_ocr_engine_p95_violations"] == []
     assert report["repeat_ocr_engine_count_p95_violations"] == []
+    assert report["repeat_ocr_engine_count_max_violations"] == []
 
 
 def test_repeat_profile_flags_output_signature_drift() -> None:

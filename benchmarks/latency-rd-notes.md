@@ -16044,3 +16044,18 @@ with zero failures in 0.531s.
   `29`, repeat selected-box max `30`, prewarm `1.326s`, and stable repeat
   signatures. This is a stress-harness reliability contract only; no runtime
   deploy is needed.
+- Added a repeat OCR engine max-count budget gate beside the existing repeat
+  p95 count gate. The new `--max-repeat-ocr-engine-max-count` option reads the
+  repeat profile's `ocr_engine_count_metric.*.max_count` values, skips
+  all-zero-OCR repeat profiles like the p95 gate, and reports missing/excess
+  count metrics in the latency-budget summary. Focused validation at
+  `out/repeat-count-max-focused-20260603` passed `3/3` for the selected-box
+  tail with repeat p95 `0.548s`, repeat OCR-engine p95 `0.496s`, selected-box
+  p95 `30`, and selected-box max `30`. The full hard gate at
+  `out/repeat-count-max-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.576205s`, repeat p95 `0.437s`,
+  repeat max `0.473s`, repeat OCR-engine p95 `0.376s`, repeat selected-box
+  p95 `29`, repeat selected-box max `30`, prewarm `1.263s`, and stable repeat
+  signatures under explicit `selected_box_count` p95/max budgets. This is
+  another stress-harness reliability contract only; no runtime deploy is
+  needed.

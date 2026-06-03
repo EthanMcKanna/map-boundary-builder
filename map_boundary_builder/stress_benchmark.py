@@ -239,6 +239,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-repeat-ocr-engine-max-count",
+        action="append",
+        default=[],
+        metavar="METRIC=COUNT",
+        help=(
+            "Fail when a profiled repeat OCR engine count metric max exceeds this budget. "
+            "Repeat or comma-separate entries such as selected_box_count=30,raw_box_count=50."
+        ),
+    )
+    parser.add_argument(
         "--max-ocr-engine-count",
         action="append",
         default=[],
@@ -287,6 +297,12 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     try:
+        max_repeat_ocr_engine_max_count = parse_metric_count_budgets(
+            args.max_repeat_ocr_engine_max_count
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
         max_ocr_engine_count = parse_metric_count_budgets(args.max_ocr_engine_count)
     except ValueError as exc:
         parser.error(str(exc))
@@ -311,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         max_ocr_engine_count=max_ocr_engine_count,
         max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
         max_repeat_ocr_engine_p95_count=max_repeat_ocr_engine_p95_count,
+        max_repeat_ocr_engine_max_count=max_repeat_ocr_engine_max_count,
     )
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
@@ -358,6 +375,7 @@ def run_stress_benchmark(
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_count: dict[str, float] | None = None,
+    max_repeat_ocr_engine_max_count: dict[str, float] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
@@ -374,6 +392,7 @@ def run_stress_benchmark(
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
     ocr_engine_p95_count_budgets = dict(max_repeat_ocr_engine_p95_count or {})
+    ocr_engine_max_count_budgets = dict(max_repeat_ocr_engine_max_count or {})
     prewarm_stage_budgets = dict(max_prewarm_stage_s or {})
     if execution not in {"subprocess", "in-process"}:
         raise ValueError(f"Unsupported stress execution mode: {execution}")
@@ -451,6 +470,7 @@ def run_stress_benchmark(
         or ocr_engine_count_budgets
         or ocr_engine_p95_budgets
         or ocr_engine_p95_count_budgets
+        or ocr_engine_max_count_budgets
     ):
         report["latency_budget"] = build_latency_budget_summary(
             rows,
@@ -464,6 +484,7 @@ def run_stress_benchmark(
             max_ocr_engine_count=ocr_engine_count_budgets,
             max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
             max_repeat_ocr_engine_p95_count=ocr_engine_p95_count_budgets,
+            max_repeat_ocr_engine_max_count=ocr_engine_max_count_budgets,
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -1946,6 +1967,7 @@ def build_latency_budget_summary(
     max_ocr_engine_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_count: dict[str, float] | None = None,
+    max_repeat_ocr_engine_max_count: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     repeat_samples: list[dict[str, Any]] = []
     if isinstance(repeat_profile, dict):
@@ -1975,6 +1997,10 @@ def build_latency_budget_summary(
         repeat_profile,
         max_repeat_ocr_engine_p95_count or {},
     )
+    repeat_ocr_engine_count_max_violations = repeat_ocr_engine_count_max_budget_violations(
+        repeat_profile,
+        max_repeat_ocr_engine_max_count or {},
+    )
     repeat_p95_violations = repeat_profile_p95_budget_violations(
         repeat_profile,
         max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
@@ -1998,6 +2024,7 @@ def build_latency_budget_summary(
             and not ocr_engine_count_violations
             and not repeat_ocr_engine_p95_violations
             and not repeat_ocr_engine_count_p95_violations
+            and not repeat_ocr_engine_count_max_violations
         ),
         "primary_violations": primary_violations,
         "repeat_violations": repeat_violations,
@@ -2040,6 +2067,12 @@ def build_latency_budget_summary(
             for metric, count in sorted(max_repeat_ocr_engine_p95_count.items())
         }
         summary["repeat_ocr_engine_count_p95_violations"] = repeat_ocr_engine_count_p95_violations
+    if max_repeat_ocr_engine_max_count:
+        summary["max_repeat_ocr_engine_max_count"] = {
+            metric: round(float(count), 6)
+            for metric, count in sorted(max_repeat_ocr_engine_max_count.items())
+        }
+        summary["repeat_ocr_engine_count_max_violations"] = repeat_ocr_engine_count_max_violations
     return summary
 
 
@@ -2463,6 +2496,54 @@ def repeat_ocr_engine_count_p95_budget_violations(
     return violations
 
 
+def repeat_ocr_engine_count_max_budget_violations(
+    repeat_profile: dict[str, Any] | None,
+    budgets: dict[str, float],
+) -> list[dict[str, Any]]:
+    if not budgets:
+        return []
+    if not isinstance(repeat_profile, dict):
+        return [
+            {
+                "kind": "repeat_ocr_engine_count_max_missing",
+                "metric": metric,
+                "max_repeat_ocr_engine_max_count": round(float(budget), 6),
+            }
+            for metric, budget in sorted(budgets.items())
+        ]
+    if repeat_profile_has_only_zero_ocr_engine_calls(repeat_profile):
+        return []
+    summary = repeat_profile.get("summary")
+    count_stats = summary.get("ocr_engine_count_metric") if isinstance(summary, dict) else None
+    if not isinstance(count_stats, dict):
+        count_stats = {}
+    violations: list[dict[str, Any]] = []
+    for metric, budget in sorted(budgets.items()):
+        stats = count_stats.get(metric)
+        max_count = stats.get("max_count") if isinstance(stats, dict) else None
+        parsed = parse_nonnegative_float(max_count)
+        if parsed is None:
+            violations.append(
+                {
+                    "kind": "repeat_ocr_engine_count_max_missing",
+                    "metric": metric,
+                    "max_repeat_ocr_engine_max_count": round(float(budget), 6),
+                }
+            )
+            continue
+        if parsed > budget:
+            violations.append(
+                {
+                    "kind": "repeat_ocr_engine_count_max_budget_exceeded",
+                    "metric": metric,
+                    "max_count": round(parsed, 6),
+                    "max_repeat_ocr_engine_max_count": round(float(budget), 6),
+                    "excess_count": round(parsed - budget, 6),
+                }
+            )
+    return violations
+
+
 def latency_budget_violations(
     rows: list[dict[str, Any]],
     *,
@@ -2754,6 +2835,10 @@ def print_stress_table(report: dict[str, Any]) -> None:
             repeat_ocr_engine_count_budget_count = (
                 len(repeat_ocr_engine_counts) if isinstance(repeat_ocr_engine_counts, list) else 0
             )
+            repeat_ocr_engine_max_counts = latency_budget.get("repeat_ocr_engine_count_max_violations")
+            repeat_ocr_engine_max_count_budget_count = (
+                len(repeat_ocr_engine_max_counts) if isinstance(repeat_ocr_engine_max_counts, list) else 0
+            )
             repeat_p95 = latency_budget.get("repeat_p95_violations")
             repeat_p95_count = len(repeat_p95) if isinstance(repeat_p95, list) else 0
             prewarm_violations = latency_budget.get("prewarm_violations")
@@ -2776,7 +2861,8 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"ocr_engine={ocr_engine_count} "
                 f"ocr_engine_count={ocr_engine_count_budget_count} "
                 f"repeat_ocr_engine_p95={repeat_ocr_engine_count} "
-                f"repeat_ocr_engine_count_p95={repeat_ocr_engine_count_budget_count}"
+                f"repeat_ocr_engine_count_p95={repeat_ocr_engine_count_budget_count} "
+                f"repeat_ocr_engine_count_max={repeat_ocr_engine_max_count_budget_count}"
             )
             if isinstance(prewarm_violations, list):
                 for issue in prewarm_violations[:3]:
@@ -2869,6 +2955,19 @@ def print_stress_table(report: dict[str, Any]) -> None:
                         )
                     elif issue.get("kind") == "repeat_ocr_engine_count_p95_missing":
                         print(f"   - {metric}: repeat OCR engine count p95 metric missing")
+            if isinstance(repeat_ocr_engine_max_counts, list):
+                for issue in repeat_ocr_engine_max_counts[:6]:
+                    if not isinstance(issue, dict):
+                        continue
+                    metric = issue.get("metric")
+                    if issue.get("kind") == "repeat_ocr_engine_count_max_budget_exceeded":
+                        print(
+                            "   - "
+                            f"{metric}: repeat OCR engine count max {float(issue['max_count']):.1f} "
+                            f"> budget {float(issue['max_repeat_ocr_engine_max_count']):.1f}"
+                        )
+                    elif issue.get("kind") == "repeat_ocr_engine_count_max_missing":
+                        print(f"   - {metric}: repeat OCR engine count max metric missing")
     repeat_profile = report.get("repeat_profile")
     if isinstance(repeat_profile, dict):
         repeat_summary = repeat_profile.get("summary")
