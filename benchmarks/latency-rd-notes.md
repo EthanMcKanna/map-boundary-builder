@@ -17686,3 +17686,20 @@ with zero failures in 0.531s.
   aggregate recognizer max `+0.102494s` and `los-angeles-waymo` recognizer max
   `+0.103120s`. Benchmark acceptance reliability only; no runtime default
   changed.
+- Added repeat OCR count regression budgets for baseline comparisons. Absolute
+  hard gates already capped OCR count metrics, but candidate-vs-baseline runs
+  could still add boxes or labels while staying under the repeat OCR timing
+  budget. The CLI/API now accept
+  `--max-baseline-repeat-ocr-count-p95-regression` and
+  `--max-baseline-repeat-ocr-count-max-regression`; the focused real-screenshot
+  hard gate defaults both to a `2.0` count delta. Focused stress tests passed
+  (`140 passed in 0.86s`) and the full suite passed (`716 passed, 31 subtests
+  passed in 7.69s`). A saved proof in
+  `out/repeat-ocr-count-regression-budget-proof-20260603/comparison.json`
+  compared `out/waymo-tail-current-control-20260603` against
+  `out/waymo-bright-blue-maxdim1300-20260603` with
+  `max_repeat_ocr_engine_total_p95_regression_s=0.100` and count regression
+  budgets of `2.0`; repeat OCR total p95 stayed under budget, while selected
+  box count p95/max regressed `+13.0`, label count p95/max regressed `+7.0`,
+  and the new budget failed 18 aggregate/per-case count violations. Benchmark
+  acceptance reliability only; no runtime default changed.

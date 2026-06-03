@@ -144,6 +144,7 @@ REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET = (
     "label_confidence_lt_90_count=3"
 )
 REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S = 0.25
+REAL_SCREENSHOT_HARD_GATE_BASELINE_COUNT_REGRESSION = 2.0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -280,6 +281,26 @@ def build_parser() -> argparse.ArgumentParser:
             "Exit non-zero when aggregate or per-case repeat-profile OCR engine "
             "total or substage max duration is more than this many seconds slower "
             "than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-repeat-ocr-count-p95-regression",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when aggregate or per-case repeat-profile OCR engine "
+            "count p95 increases by more than this many boxes or labels versus "
+            "--compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-repeat-ocr-count-max-regression",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when aggregate or per-case repeat-profile OCR engine "
+            "count max increases by more than this many boxes or labels versus "
+            "--compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -506,6 +527,16 @@ def main(argv: list[str] | None = None) -> int:
         and not args.compare_baseline_report
     ):
         parser.error("--max-baseline-repeat-ocr-total-max-regression-s requires --compare-baseline-report")
+    if (
+        args.max_baseline_repeat_ocr_count_p95_regression is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-repeat-ocr-count-p95-regression requires --compare-baseline-report")
+    if (
+        args.max_baseline_repeat_ocr_count_max_regression is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-repeat-ocr-count-max-regression requires --compare-baseline-report")
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
     if args.max_repeat_profile_p95_duration_s is not None and args.max_repeat_profile_p95_duration_s <= 0.0:
@@ -549,6 +580,16 @@ def main(argv: list[str] | None = None) -> int:
         and args.max_baseline_repeat_ocr_total_max_regression_s < 0.0
     ):
         parser.error("--max-baseline-repeat-ocr-total-max-regression-s must be non-negative")
+    if (
+        args.max_baseline_repeat_ocr_count_p95_regression is not None
+        and args.max_baseline_repeat_ocr_count_p95_regression < 0.0
+    ):
+        parser.error("--max-baseline-repeat-ocr-count-p95-regression must be non-negative")
+    if (
+        args.max_baseline_repeat_ocr_count_max_regression is not None
+        and args.max_baseline_repeat_ocr_count_max_regression < 0.0
+    ):
+        parser.error("--max-baseline-repeat-ocr-count-max-regression must be non-negative")
     if args.min_ocr_call_contract_rows is not None and args.min_ocr_call_contract_rows < 0:
         parser.error("--min-ocr-call-contract-rows must be non-negative")
     if args.min_ocr_count_contract_rows is not None and args.min_ocr_count_contract_rows < 0:
@@ -631,6 +672,12 @@ def main(argv: list[str] | None = None) -> int:
         max_baseline_repeat_ocr_total_max_regression_s=(
             args.max_baseline_repeat_ocr_total_max_regression_s
         ),
+        max_baseline_repeat_ocr_count_p95_regression=(
+            args.max_baseline_repeat_ocr_count_p95_regression
+        ),
+        max_baseline_repeat_ocr_count_max_regression=(
+            args.max_baseline_repeat_ocr_count_max_regression
+        ),
         preset=stress_preset_from_args(args),
     )
     print_stress_table(report)
@@ -706,6 +753,14 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         if args.max_baseline_repeat_ocr_total_max_regression_s is None:
             args.max_baseline_repeat_ocr_total_max_regression_s = (
                 REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+            )
+        if args.max_baseline_repeat_ocr_count_p95_regression is None:
+            args.max_baseline_repeat_ocr_count_p95_regression = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_COUNT_REGRESSION
+            )
+        if args.max_baseline_repeat_ocr_count_max_regression is None:
+            args.max_baseline_repeat_ocr_count_max_regression = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_COUNT_REGRESSION
             )
     if args.repeat_profile_runs == 0:
         args.repeat_profile_runs = 3
@@ -813,6 +868,8 @@ def run_stress_benchmark(
     max_baseline_stage_total_regression_s: float | None = None,
     max_baseline_repeat_ocr_total_p95_regression_s: float | None = None,
     max_baseline_repeat_ocr_total_max_regression_s: float | None = None,
+    max_baseline_repeat_ocr_count_p95_regression: float | None = None,
+    max_baseline_repeat_ocr_count_max_regression: float | None = None,
     preset: dict[str, Any] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
@@ -860,6 +917,16 @@ def run_stress_benchmark(
         and max_baseline_repeat_ocr_total_max_regression_s < 0.0
     ):
         raise ValueError("max_baseline_repeat_ocr_total_max_regression_s must be non-negative")
+    if (
+        max_baseline_repeat_ocr_count_p95_regression is not None
+        and max_baseline_repeat_ocr_count_p95_regression < 0.0
+    ):
+        raise ValueError("max_baseline_repeat_ocr_count_p95_regression must be non-negative")
+    if (
+        max_baseline_repeat_ocr_count_max_regression is not None
+        and max_baseline_repeat_ocr_count_max_regression < 0.0
+    ):
+        raise ValueError("max_baseline_repeat_ocr_count_max_regression must be non-negative")
     ocr_engine_budgets = dict(max_ocr_engine_duration_s or {})
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
@@ -995,6 +1062,12 @@ def run_stress_benchmark(
             max_repeat_ocr_engine_total_max_regression_s=(
                 max_baseline_repeat_ocr_total_max_regression_s
             ),
+            max_repeat_ocr_engine_count_p95_regression=(
+                max_baseline_repeat_ocr_count_p95_regression
+            ),
+            max_repeat_ocr_engine_count_max_regression=(
+                max_baseline_repeat_ocr_count_max_regression
+            ),
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -1020,6 +1093,8 @@ def compare_stress_reports(
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
     max_repeat_ocr_engine_total_max_regression_s: float | None = None,
+    max_repeat_ocr_engine_count_p95_regression: float | None = None,
+    max_repeat_ocr_engine_count_max_regression: float | None = None,
 ) -> dict[str, Any]:
     baseline_rows = stress_report_rows_by_slug(baseline_report)
     candidate_rows = stress_report_rows_by_slug(candidate_report)
@@ -1204,6 +1279,8 @@ def compare_stress_reports(
         or max_stage_total_regression_s is not None
         or max_repeat_ocr_engine_total_p95_regression_s is not None
         or max_repeat_ocr_engine_total_max_regression_s is not None
+        or max_repeat_ocr_engine_count_p95_regression is not None
+        or max_repeat_ocr_engine_count_max_regression is not None
     ):
         comparison["regression_budget"] = baseline_regression_budget(
             comparison,
@@ -1218,6 +1295,12 @@ def compare_stress_reports(
             ),
             max_repeat_ocr_engine_total_max_regression_s=(
                 max_repeat_ocr_engine_total_max_regression_s
+            ),
+            max_repeat_ocr_engine_count_p95_regression=(
+                max_repeat_ocr_engine_count_p95_regression
+            ),
+            max_repeat_ocr_engine_count_max_regression=(
+                max_repeat_ocr_engine_count_max_regression
             ),
         )
     return comparison
@@ -1234,6 +1317,8 @@ def baseline_regression_budget(
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
     max_repeat_ocr_engine_total_max_regression_s: float | None = None,
+    max_repeat_ocr_engine_count_p95_regression: float | None = None,
+    max_repeat_ocr_engine_count_max_regression: float | None = None,
 ) -> dict[str, Any]:
     budget: dict[str, Any] = {"violations": []}
     violations: list[dict[str, Any]] = []
@@ -2021,9 +2106,140 @@ def baseline_regression_budget(
                             6,
                         )
                     violations.append(violation)
+    if max_repeat_ocr_engine_count_p95_regression is not None:
+        max_repeat_ocr_count_p95 = round(
+            float(max_repeat_ocr_engine_count_p95_regression),
+            6,
+        )
+        budget["max_repeat_ocr_engine_count_p95_regression"] = max_repeat_ocr_count_p95
+        violations.extend(
+            repeat_ocr_count_regression_budget_violations(
+                comparison,
+                max_regression=max_repeat_ocr_engine_count_p95_regression,
+                rounded_budget=max_repeat_ocr_count_p95,
+                stat="p95_count",
+                budget_key="max_repeat_ocr_engine_count_p95_regression",
+                missing_kind="repeat_ocr_count_p95_delta_missing",
+                aggregate_kind="repeat_ocr_count_p95_regression_exceeded",
+                case_kind="repeat_ocr_case_count_p95_regression_exceeded",
+            )
+        )
+    if max_repeat_ocr_engine_count_max_regression is not None:
+        max_repeat_ocr_count_max = round(
+            float(max_repeat_ocr_engine_count_max_regression),
+            6,
+        )
+        budget["max_repeat_ocr_engine_count_max_regression"] = max_repeat_ocr_count_max
+        violations.extend(
+            repeat_ocr_count_regression_budget_violations(
+                comparison,
+                max_regression=max_repeat_ocr_engine_count_max_regression,
+                rounded_budget=max_repeat_ocr_count_max,
+                stat="max_count",
+                budget_key="max_repeat_ocr_engine_count_max_regression",
+                missing_kind="repeat_ocr_count_max_delta_missing",
+                aggregate_kind="repeat_ocr_count_max_regression_exceeded",
+                case_kind="repeat_ocr_case_count_max_regression_exceeded",
+            )
+        )
     budget["violations"] = violations
     budget["passed"] = not violations
     return budget
+
+
+def repeat_ocr_count_regression_budget_violations(
+    comparison: dict[str, Any],
+    *,
+    max_regression: float,
+    rounded_budget: float,
+    stat: str,
+    budget_key: str,
+    missing_kind: str,
+    aggregate_kind: str,
+    case_kind: str,
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    repeat_delta = comparison.get("repeat_profile_delta")
+    aggregate_metric_seen = False
+    if isinstance(repeat_delta, dict):
+        count_metrics = repeat_delta.get("ocr_engine_count_metric")
+        if isinstance(count_metrics, dict):
+            for metric in OCR_ENGINE_COUNT_DISPLAY_KEYS:
+                count_delta = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_count_metric", metric, stat),
+                    "delta_count",
+                )
+                if count_delta is None:
+                    continue
+                aggregate_metric_seen = True
+                if count_delta <= max_regression:
+                    continue
+                violation = {
+                    "kind": aggregate_kind,
+                    "metric": metric,
+                    "delta_count": round(count_delta, 6),
+                    budget_key: rounded_budget,
+                }
+                baseline_count = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_count_metric", metric, stat),
+                    "baseline",
+                )
+                candidate_count = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_count_metric", metric, stat),
+                    "candidate",
+                )
+                if baseline_count is not None:
+                    violation[f"baseline_{stat}"] = round(baseline_count, 6)
+                if candidate_count is not None:
+                    violation[f"candidate_{stat}"] = round(candidate_count, 6)
+                violations.append(violation)
+    if not aggregate_metric_seen:
+        violations.append({"kind": missing_kind, budget_key: rounded_budget})
+    case_deltas = comparison.get("repeat_profile_case_deltas")
+    if isinstance(case_deltas, list):
+        for case_delta in case_deltas:
+            if not isinstance(case_delta, dict):
+                continue
+            count_metrics = case_delta.get("ocr_engine_count_metric")
+            if not isinstance(count_metrics, dict):
+                continue
+            for metric in OCR_ENGINE_COUNT_DISPLAY_KEYS:
+                count_delta = repeat_case_delta_ocr_count_value(
+                    case_delta,
+                    metric,
+                    stat,
+                    "delta_count",
+                )
+                if count_delta is None or count_delta <= max_regression:
+                    continue
+                violation = {
+                    "kind": case_kind,
+                    "slug": case_delta.get("slug"),
+                    "metric": metric,
+                    "delta_count": round(count_delta, 6),
+                    budget_key: rounded_budget,
+                }
+                baseline_count = repeat_case_delta_ocr_count_value(
+                    case_delta,
+                    metric,
+                    stat,
+                    "baseline",
+                )
+                candidate_count = repeat_case_delta_ocr_count_value(
+                    case_delta,
+                    metric,
+                    stat,
+                    "candidate",
+                )
+                if baseline_count is not None:
+                    violation[f"baseline_{stat}"] = round(baseline_count, 6)
+                if candidate_count is not None:
+                    violation[f"candidate_{stat}"] = round(candidate_count, 6)
+                violations.append(violation)
+    return violations
 
 
 def stress_repeat_profile_delta(
@@ -2151,6 +2367,16 @@ def stress_repeat_profile_case_deltas(
         )
         if ocr_stage_fields:
             delta["ocr_engine_stage_duration_s"] = ocr_stage_fields
+        ocr_count_fields = stress_nested_metric_deltas(
+            baseline_case,
+            candidate_case,
+            section_key="ocr_engine_count_metric",
+            metric_keys=OCR_ENGINE_COUNT_DISPLAY_KEYS,
+            stat_keys=("p95_count", "max_count"),
+            delta_key="delta_count",
+        )
+        if ocr_count_fields:
+            delta["ocr_engine_count_metric"] = ocr_count_fields
         if len(delta) > 1:
             deltas.append(delta)
     return deltas
@@ -2359,6 +2585,24 @@ def repeat_case_delta_ocr_stage_value(
     if not isinstance(stage_duration, dict):
         return None
     metric_delta = stage_duration.get(metric)
+    if not isinstance(metric_delta, dict):
+        return None
+    stat_delta = metric_delta.get(stat)
+    if not isinstance(stat_delta, dict):
+        return None
+    return parse_signed_float(stat_delta.get(value_key))
+
+
+def repeat_case_delta_ocr_count_value(
+    case_delta: dict[str, Any],
+    metric: str,
+    stat: str,
+    value_key: str,
+) -> float | None:
+    count_metrics = case_delta.get("ocr_engine_count_metric")
+    if not isinstance(count_metrics, dict):
+        return None
+    metric_delta = count_metrics.get(metric)
     if not isinstance(metric_delta, dict):
         return None
     stat_delta = metric_delta.get(stat)
@@ -7807,6 +8051,16 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     )
     if max_repeat_ocr_max is not None:
         limits.append(f"repeat_ocr_max<={max_repeat_ocr_max:.3f}s")
+    max_repeat_ocr_count_p95 = parse_nonnegative_float(
+        regression_budget.get("max_repeat_ocr_engine_count_p95_regression")
+    )
+    if max_repeat_ocr_count_p95 is not None:
+        limits.append(f"repeat_ocr_count_p95<={max_repeat_ocr_count_p95:.1f}")
+    max_repeat_ocr_count_max = parse_nonnegative_float(
+        regression_budget.get("max_repeat_ocr_engine_count_max_regression")
+    )
+    if max_repeat_ocr_count_max is not None:
+        limits.append(f"repeat_ocr_count_max<={max_repeat_ocr_count_max:.1f}")
     limit_text = f" {' '.join(limits)}" if limits else ""
     skip_text = baseline_regression_budget_skip_text(regression_budget)
     if regression_budget.get("passed") is False:
@@ -7883,6 +8137,12 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_ocr_total_max_delta_missing": "repeat_ocr_max_missing",
         "repeat_ocr_case_total_max_regression_exceeded": "repeat_ocr_case_max",
         "repeat_ocr_case_stage_max_regression_exceeded": "repeat_ocr_case_stage_max",
+        "repeat_ocr_count_p95_regression_exceeded": "repeat_ocr_count_p95",
+        "repeat_ocr_count_p95_delta_missing": "repeat_ocr_count_p95_missing",
+        "repeat_ocr_case_count_p95_regression_exceeded": "repeat_ocr_case_count_p95",
+        "repeat_ocr_count_max_regression_exceeded": "repeat_ocr_count_max",
+        "repeat_ocr_count_max_delta_missing": "repeat_ocr_count_max_missing",
+        "repeat_ocr_case_count_max_regression_exceeded": "repeat_ocr_case_count_max",
     }
     return labels.get(kind, kind)
 
@@ -8124,6 +8384,62 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         return (
             f"repeat ocr case stage max {slug} {stage_label} "
             f"{delta:+.3f}s > budget {budget:.3f}s"
+        )
+    if kind in {
+        "repeat_ocr_count_p95_regression_exceeded",
+        "repeat_ocr_count_max_regression_exceeded",
+    }:
+        metric = violation.get("metric")
+        delta = parse_signed_float(violation.get("delta_count"))
+        budget_key = (
+            "max_repeat_ocr_engine_count_p95_regression"
+            if kind == "repeat_ocr_count_p95_regression_exceeded"
+            else "max_repeat_ocr_engine_count_max_regression"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        if not isinstance(metric, str) or delta is None or budget is None:
+            return ""
+        metric_label = OCR_ENGINE_COUNT_DISPLAY_LABELS.get(metric, metric)
+        stat_label = "p95" if "p95" in kind else "max"
+        return (
+            f"repeat ocr count {metric_label} {stat_label} "
+            f"{delta:+.1f} > budget {budget:.1f}"
+        )
+    if kind in {"repeat_ocr_count_p95_delta_missing", "repeat_ocr_count_max_delta_missing"}:
+        budget_key = (
+            "max_repeat_ocr_engine_count_p95_regression"
+            if kind == "repeat_ocr_count_p95_delta_missing"
+            else "max_repeat_ocr_engine_count_max_regression"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        stat_label = "p95" if "p95" in kind else "max"
+        budget_text = f" budget {budget:.1f}" if budget is not None else ""
+        return f"repeat ocr count {stat_label} delta missing{budget_text}"
+    if kind in {
+        "repeat_ocr_case_count_p95_regression_exceeded",
+        "repeat_ocr_case_count_max_regression_exceeded",
+    }:
+        slug = violation.get("slug")
+        metric = violation.get("metric")
+        delta = parse_signed_float(violation.get("delta_count"))
+        budget_key = (
+            "max_repeat_ocr_engine_count_p95_regression"
+            if kind == "repeat_ocr_case_count_p95_regression_exceeded"
+            else "max_repeat_ocr_engine_count_max_regression"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        if (
+            not isinstance(slug, str)
+            or not isinstance(metric, str)
+            or delta is None
+            or budget is None
+        ):
+            return ""
+        metric_label = OCR_ENGINE_COUNT_DISPLAY_LABELS.get(metric, metric)
+        stat_label = "p95" if "p95" in kind else "max"
+        return (
+            f"repeat ocr case count {slug} {metric_label} {stat_label} "
+            f"{delta:+.1f} > budget {budget:.1f}"
         )
     return ""
 
