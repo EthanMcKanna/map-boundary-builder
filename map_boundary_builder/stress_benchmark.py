@@ -1490,6 +1490,12 @@ def compare_stress_reports(
     return comparison
 
 
+def primary_ocr_missing_delta_skip_candidate_zero_calls(delta: dict[str, Any]) -> bool:
+    baseline_calls = parse_nonnegative_count_metric(delta.get("baseline_ocr_engine_calls"))
+    candidate_calls = parse_nonnegative_count_metric(delta.get("candidate_ocr_engine_calls"))
+    return baseline_calls is not None and candidate_calls == 0.0
+
+
 def baseline_regression_budget(
     comparison: dict[str, Any],
     *,
@@ -1547,7 +1553,7 @@ def baseline_regression_budget(
                     candidate_calls = parse_nonnegative_count_metric(
                         delta.get("candidate_ocr_engine_calls")
                     )
-                    if baseline_calls == 0.0 and candidate_calls == 0.0:
+                    if primary_ocr_missing_delta_skip_candidate_zero_calls(delta):
                         slug = delta.get("slug")
                         if isinstance(slug, str) and slug:
                             skipped_primary_ocr_zero_call_rows.append(slug)
@@ -1634,7 +1640,7 @@ def baseline_regression_budget(
                     candidate_calls = parse_nonnegative_count_metric(
                         delta.get("candidate_ocr_engine_calls")
                     )
-                    if baseline_calls == 0.0 and candidate_calls == 0.0:
+                    if primary_ocr_missing_delta_skip_candidate_zero_calls(delta):
                         continue
                     violation = {
                         "kind": "primary_ocr_count_delta_missing",
@@ -1688,7 +1694,7 @@ def baseline_regression_budget(
                     candidate_calls = parse_nonnegative_count_metric(
                         delta.get("candidate_ocr_engine_calls")
                     )
-                    if baseline_calls == 0.0 and candidate_calls == 0.0:
+                    if primary_ocr_missing_delta_skip_candidate_zero_calls(delta):
                         continue
                     violation = {
                         "kind": "primary_ocr_overlap_hidden_delta_missing",

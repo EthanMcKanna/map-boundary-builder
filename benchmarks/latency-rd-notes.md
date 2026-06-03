@@ -18397,3 +18397,19 @@ with zero failures in 0.531s.
   `out/focused-waymo-baseline-allow-preset-green-20260603` (`8/8`, signature
   changes `0`, exit `0` with the preset-drift allowance and a `0.25s`
   repeat hidden-overlap budget for focused-slice variance).
+- Fixed the Bay SVG zero-OCR comparator false positive. Primary OCR regression
+  budgets now treat a candidate row with explicit `ocr_engine_profile.calls=0`
+  as safe to skip for missing primary OCR total/count/hidden-overlap deltas
+  when the baseline row recorded OCR call counts, so zero-OCR shortcuts are
+  accepted as no OCR work instead of failing as missing telemetry. The strict
+  path still holds: a candidate that records positive OCR calls but omits
+  `total_s`, OCR counts, or hidden-overlap evidence still fails with the
+  corresponding missing-delta violations. Replaying
+  `out/nash-roadskip-full73-hard-gate-pass-20260603/stress-summary.json`
+  against `out/svg-label-id-full73-hard-gate-green-20260603/stress-summary.json`
+  with primary elapsed/OCR/count/hidden budgets now reports
+  `baseline regression budget: passed primary<=1.000s primary_ocr<=0.050s
+  primary_ocr_count<=2.0 primary_ocr_hidden<=0.050s
+  skipped_primary_ocr_zero_call=28`, no violations, and the
+  `bay-3-svg-ui-default` row at `0.325236s -> 0.093431s` with OCR calls
+  `1 -> 0`. Targeted stress benchmark tests passed `4 passed`.

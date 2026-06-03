@@ -1339,6 +1339,135 @@ def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None
     )
 
 
+def test_baseline_ocr_regression_budget_skips_candidate_zero_call_improvement() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "bay-3-svg-ui-default",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.325,
+                "ocr_overlap_hidden_s": 0.061,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.17,
+                    "raw_box_count": 34,
+                    "selected_box_count": 19,
+                    "label_count": 18,
+                },
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "bay-3-svg-ui-default",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.093,
+                "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_engine_total_regression_s=0.01,
+        max_ocr_engine_count_regression=2.0,
+        max_ocr_overlap_hidden_regression_s=0.05,
+    )
+
+    row_delta = comparison["latency_deltas"][0]
+    assert row_delta == {
+        "slug": "bay-3-svg-ui-default",
+        "baseline_total_elapsed_s": 0.325,
+        "candidate_total_elapsed_s": 0.093,
+        "total_elapsed_delta_s": -0.232,
+        "baseline_ocr_engine_calls": 1.0,
+        "candidate_ocr_engine_calls": 0.0,
+    }
+    assert "ocr_engine_total_delta_s" not in row_delta
+    assert "ocr_engine_count_delta" not in row_delta
+    assert "ocr_overlap_hidden_delta_s" not in row_delta
+    assert comparison["regression_budget"] == {
+        "violations": [],
+        "max_ocr_engine_total_regression_s": 0.01,
+        "skipped_primary_ocr_zero_call_row_count": 1,
+        "skipped_primary_ocr_zero_call_rows": ["bay-3-svg-ui-default"],
+        "max_ocr_engine_count_regression": 2.0,
+        "max_ocr_overlap_hidden_regression_s": 0.05,
+        "passed": True,
+    }
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: passed primary_ocr<=0.010s "
+        "primary_ocr_count<=2.0 primary_ocr_hidden<=0.050s "
+        "skipped_primary_ocr_zero_call=1"
+    )
+
+
+def test_baseline_ocr_regression_budget_still_flags_positive_call_missing_telemetry() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "positive-ocr-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.325,
+                "ocr_overlap_hidden_s": 0.061,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.17,
+                    "raw_box_count": 34,
+                    "selected_box_count": 19,
+                    "label_count": 18,
+                },
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "positive-ocr-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.31,
+                "ocr_engine_profile": {"calls": 1},
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_engine_total_regression_s=0.01,
+        max_ocr_engine_count_regression=2.0,
+        max_ocr_overlap_hidden_regression_s=0.05,
+    )
+
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_ocr_total_delta_missing",
+            "slug": "positive-ocr-row",
+            "max_ocr_engine_total_regression_s": 0.01,
+            "baseline_ocr_engine_calls": 1.0,
+            "candidate_ocr_engine_calls": 1.0,
+        },
+        {
+            "kind": "primary_ocr_count_delta_missing",
+            "slug": "positive-ocr-row",
+            "max_ocr_engine_count_regression": 2.0,
+            "baseline_ocr_engine_calls": 1.0,
+            "candidate_ocr_engine_calls": 1.0,
+        },
+        {
+            "kind": "primary_ocr_overlap_hidden_delta_missing",
+            "slug": "positive-ocr-row",
+            "max_ocr_overlap_hidden_regression_s": 0.05,
+            "baseline_ocr_engine_calls": 1.0,
+            "candidate_ocr_engine_calls": 1.0,
+        },
+    ]
+
+
 def test_baseline_primary_ocr_count_budget_flags_growth_without_latency_regression() -> None:
     baseline = {
         "rows": [
