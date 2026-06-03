@@ -17,6 +17,7 @@ from map_boundary_builder.osm_roads import (
     load_road_points_seed,
     read_road_refine_cache,
     refine_transform_with_osm_roads,
+    road_refine_acceptance_score,
     road_refine_search_grids,
     road_refine_cache_key,
     road_points_source_digest,
@@ -26,6 +27,7 @@ from map_boundary_builder.osm_roads import (
     score_transform_batch,
     score_transform_batch_on_score_image,
     seed_road_points,
+    should_try_full_resolution_road_search,
     should_use_road_refine_cache,
     write_road_refine_cache,
 )
@@ -68,6 +70,13 @@ class RoadScoringTests(unittest.TestCase):
         np.testing.assert_array_equal(grid["coarse_scale_multipliers"], np.array([1.0]))
         np.testing.assert_array_equal(grid["fine_scale_multipliers"], np.array([1.0]))
         np.testing.assert_array_equal(grid["polish_scale_multipliers"], np.array([1.0]))
+
+    def test_full_resolution_fallback_only_runs_for_rejected_road_refine_scores(self) -> None:
+        self.assertAlmostEqual(road_refine_acceptance_score(0.260624), 0.320000)
+        self.assertFalse(should_try_full_resolution_road_search(0.334126, 0.260624))
+        self.assertTrue(should_try_full_resolution_road_search(0.315000, 0.260624))
+        self.assertTrue(should_try_full_resolution_road_search(0.530000, 0.500000))
+        self.assertFalse(should_try_full_resolution_road_search(0.610000, 0.500000))
 
     def test_batch_scoring_matches_scalar_scoring(self) -> None:
         feature_distance = np.zeros((80, 90), dtype=np.float32)

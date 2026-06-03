@@ -15759,3 +15759,32 @@ with zero failures in 0.531s.
   showed zero changes for status, source, city, bbox, geometry hash,
   coordinate count, confidence, control count, OCR label count, top labels, or
   full-detail retry flags.
+- Tightened the road-refinement full-resolution fallback gate after the current
+  full44 suite exposed it as the remaining no-catalog tail. Nashville Waymo's
+  downsampled/coarse-polished road result already met the normal acceptance
+  floor with road score `0.334126` over base `0.260624`, bbox
+  `[-86.8475058,36.1153856,-86.6964806,36.2435026]`, geometry hash
+  `b4976a27ddf7cce3`, confidence `0.746501`, and 3 controls, but the static
+  `0.60` fallback threshold still spent a full-resolution search that returned
+  the same transform. The counterfactual at
+  `out/nashville-no-road-fullfallback-20260603/stress-summary.json` preserved
+  that exact signature while dropping Nashville primary total from the full44
+  baseline `0.852849s` to `0.543804s` and repeat p95 to `0.286s`. The expanded
+  counterfactual at `out/no-road-fullfallback-full44-hard-20260603` passed
+  `44/44`, max total `0.595198s`, repeat p95 `0.508s`, and zero row-signature
+  drift against `out/current-catalog-full44-hard-20260602`.
+- Accepted the safer code version of that probe: full-resolution road search is
+  still available when the downsampled/polished road match would be rejected,
+  but it is skipped once the match already reaches the normal acceptance floor.
+  The road-refine cache version moved to `road-refine-v7` so cached v6 full
+  searches do not mask the new decision logic. The focused patched Nashville
+  gate at `out/patched-roadfallback-nashville-focused-20260603` passed `1/1`
+  with primary `0.537724s`, georeference `0.241s`, repeat `5/5` subsecond,
+  repeat p95 `0.285s`, and the exact prior geometry hash. The full patched
+  gate at `out/patched-roadfallback-full44-hard-20260603` passed `44/44`,
+  statuses `{"complete":33,"failed":11}`, primary max `0.604871s`, repeat
+  `44/44` subsecond, repeat p95 `0.537s`, repeat OCR-engine p95 `0.467s`, and
+  prewarm `1.374s`. Comparing all 44 common rows against
+  `out/current-catalog-full44-hard-20260602` showed zero changes for status,
+  source, city, bbox, geometry hash, coordinate count, confidence, control
+  count, OCR label count, top labels, or full-detail retry flags.

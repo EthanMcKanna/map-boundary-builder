@@ -36,7 +36,7 @@ ROAD_REFINE_CACHE_MAX_PIXELS = max(
     int(os.environ.get("MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS", "3000000")),
 )
 ROAD_SCORE_SIGMA_PX = np.float32(6.0)
-ROAD_REFINE_CACHE_VERSION = "road-refine-v6"
+ROAD_REFINE_CACHE_VERSION = "road-refine-v7"
 ROAD_REFINE_MEMORY_CACHE_MAX = 64
 OSM_ROAD_POINTS_SEED_FILE = "osm_road_points_seed.npz"
 _ROAD_REFINE_MEMORY_CACHE: OrderedDict[str, RoadMatchResult] = OrderedDict()
@@ -153,7 +153,7 @@ def refine_transform_with_osm_roads(
         if polish is not None and polish[0] > best_score:
             best_score, best_count, best_transform = polish
 
-    if best_score < ROAD_REFINE_FULL_FALLBACK_MIN_SCORE:
+    if should_try_full_resolution_road_search(best_score, base_score):
         full_search = full_resolution_road_search(
             road_points,
             feature_distance,
@@ -166,7 +166,7 @@ def refine_transform_with_osm_roads(
         if full_search is not None and full_search[0] > best_score:
             best_score, best_count, best_transform = full_search
 
-    if best_score < max(base_score + 0.04, 0.32):
+    if best_score < road_refine_acceptance_score(base_score):
         return None
 
     refined = GeoreferenceTransform(
@@ -189,6 +189,16 @@ def refine_transform_with_osm_roads(
     if cache_key is not None:
         write_road_refine_cache(cache_key, result)
     return result
+
+
+def road_refine_acceptance_score(base_score: float) -> float:
+    return max(float(base_score) + 0.04, 0.32)
+
+
+def should_try_full_resolution_road_search(best_score: float, base_score: float) -> bool:
+    if float(best_score) >= ROAD_REFINE_FULL_FALLBACK_MIN_SCORE:
+        return False
+    return float(best_score) < road_refine_acceptance_score(base_score)
 
 
 def resolved_image_feature_distance(
