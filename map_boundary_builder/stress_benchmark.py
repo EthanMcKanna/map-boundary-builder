@@ -58,6 +58,7 @@ OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS = (
     ("det", "p95_det_elapsed_s"),
     ("rec", "p95_rec_elapsed_s"),
 )
+PIPELINE_STAGE_DISPLAY_ORDER = ("extract", "ocr", "georeference")
 OCR_ENGINE_DETAIL_CONTEXT_KEYS = (
     "input_kind",
     "input_shape",
@@ -1330,6 +1331,10 @@ def stress_repeat_profile_delta(
     if duration_fields:
         delta["duration_s"] = duration_fields
 
+    stage_fields = stress_stage_duration_deltas(baseline_summary, candidate_summary)
+    if stage_fields:
+        delta["stage_duration_s"] = stage_fields
+
     ocr_stage_fields = stress_nested_metric_deltas(
         baseline_summary,
         candidate_summary,
@@ -1395,6 +1400,9 @@ def stress_repeat_profile_case_deltas(
                 duration_fields[key] = metric_delta
         if duration_fields:
             delta["duration_s"] = duration_fields
+        stage_fields = stress_stage_duration_deltas(baseline_case, candidate_case)
+        if stage_fields:
+            delta["stage_duration_s"] = stage_fields
         ocr_stage_fields = stress_nested_metric_deltas(
             baseline_case,
             candidate_case,
@@ -1621,6 +1629,24 @@ def repeat_case_delta_ocr_stage_value(
     return parse_signed_float(stat_delta.get(value_key))
 
 
+def repeat_case_delta_stage_value(
+    case_delta: dict[str, Any],
+    stage: str,
+    stat: str,
+    value_key: str,
+) -> float | None:
+    stage_duration = case_delta.get("stage_duration_s")
+    if not isinstance(stage_duration, dict):
+        return None
+    metric_delta = stage_duration.get(stage)
+    if not isinstance(metric_delta, dict):
+        return None
+    stat_delta = metric_delta.get(stat)
+    if not isinstance(stat_delta, dict):
+        return None
+    return parse_signed_float(stat_delta.get(value_key))
+
+
 def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, Any] | None:
     repeat_profile = report.get("repeat_profile")
     if not isinstance(repeat_profile, dict):
@@ -1785,6 +1811,46 @@ def stress_nested_metric_deltas(
         if stat_deltas:
             deltas[metric] = stat_deltas
     return deltas
+
+
+def stress_stage_duration_deltas(
+    baseline_summary: dict[str, Any],
+    candidate_summary: dict[str, Any],
+) -> dict[str, dict[str, dict[str, float]]]:
+    metric_keys = stress_stage_duration_metric_keys(baseline_summary, candidate_summary)
+    if not metric_keys:
+        return {}
+    return stress_nested_metric_deltas(
+        baseline_summary,
+        candidate_summary,
+        section_key="stage_duration_s",
+        metric_keys=metric_keys,
+        stat_keys=("p95_duration_s", "max_duration_s"),
+        delta_key="delta_s",
+    )
+
+
+def stress_stage_duration_metric_keys(
+    baseline_summary: dict[str, Any],
+    candidate_summary: dict[str, Any],
+) -> tuple[str, ...]:
+    baseline_stage = baseline_summary.get("stage_duration_s")
+    candidate_stage = candidate_summary.get("stage_duration_s")
+    if not isinstance(baseline_stage, dict) or not isinstance(candidate_stage, dict):
+        return ()
+    shared = {
+        stage
+        for stage in set(baseline_stage) & set(candidate_stage)
+        if isinstance(stage, str) and stage
+    }
+    return tuple(sorted(shared, key=pipeline_stage_sort_key))
+
+
+def pipeline_stage_sort_key(stage: str) -> tuple[int, str]:
+    try:
+        return (PIPELINE_STAGE_DISPLAY_ORDER.index(stage), stage)
+    except ValueError:
+        return (len(PIPELINE_STAGE_DISPLAY_ORDER), stage)
 
 
 def stress_metric_group_delta(
@@ -5373,6 +5439,11 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if repeat_delta_text:
             print(f"baseline repeat delta: {repeat_delta_text}")
+        repeat_stage_delta_text = baseline_repeat_stage_delta_text(
+            repeat_delta if isinstance(repeat_delta, dict) else None
+        )
+        if repeat_stage_delta_text:
+            print(f"baseline repeat stage delta: {repeat_stage_delta_text}")
         repeat_case_delta_text = baseline_repeat_case_delta_text(baseline_comparison)
         if repeat_case_delta_text:
             print(f"baseline repeat case delta: {repeat_case_delta_text}")
@@ -6300,7 +6371,60 @@ def repeat_case_delta_summary_text(label: str, case_delta: dict[str, Any] | None
     candidate = repeat_case_delta_metric_value(case_delta, "p95_total_elapsed_s", "candidate")
     if baseline is not None and candidate is not None:
         parts.append(f"(baseline={baseline:.3f}s, candidate={candidate:.3f}s)")
+    stage_text = repeat_case_delta_top_stage_text(case_delta)
+    if stage_text:
+        parts.append(stage_text)
     return " ".join(parts)
+
+
+def repeat_case_delta_top_stage_text(case_delta: dict[str, Any]) -> str:
+    stage_duration = case_delta.get("stage_duration_s")
+    if not isinstance(stage_duration, dict):
+        return ""
+    ranked: list[tuple[float, tuple[int, str], float, str, float | None, float | None]] = []
+    for stage, stats in stage_duration.items():
+        if not isinstance(stage, str) or not stage or not isinstance(stats, dict):
+            continue
+        p95_delta = repeat_case_delta_stage_value(
+            case_delta,
+            stage,
+            "p95_duration_s",
+            "delta_s",
+        )
+        if p95_delta is None:
+            continue
+        baseline = repeat_case_delta_stage_value(
+            case_delta,
+            stage,
+            "p95_duration_s",
+            "baseline",
+        )
+        candidate = repeat_case_delta_stage_value(
+            case_delta,
+            stage,
+            "p95_duration_s",
+            "candidate",
+        )
+        ranked.append(
+            (
+                abs(p95_delta),
+                pipeline_stage_sort_key(stage),
+                p95_delta,
+                stage,
+                baseline,
+                candidate,
+            )
+        )
+    if not ranked:
+        return ""
+    _, _, p95_delta, stage, baseline, candidate = sorted(
+        ranked,
+        key=lambda item: (-item[0], item[1]),
+    )[0]
+    text = f"{stage}_p95={p95_delta:+.3f}s"
+    if baseline is not None and candidate is not None:
+        text += f" ({baseline:.3f}->{candidate:.3f}s)"
+    return text
 
 
 def baseline_repeat_ocr_case_delta_text(baseline_comparison: dict[str, Any]) -> str:
@@ -6453,6 +6577,27 @@ def baseline_repeat_ocr_stage_delta_text(repeat_delta: dict[str, Any] | None) ->
         )
         if value is not None:
             parts.append(f"{label}={value:+.3f}s")
+    return ", ".join(parts)
+
+
+def baseline_repeat_stage_delta_text(repeat_delta: dict[str, Any] | None) -> str:
+    if not repeat_delta:
+        return ""
+    stage_duration = repeat_delta.get("stage_duration_s")
+    if not isinstance(stage_duration, dict):
+        return ""
+    parts: list[str] = []
+    for stage in sorted(
+        (stage for stage in stage_duration if isinstance(stage, str) and stage),
+        key=pipeline_stage_sort_key,
+    ):
+        value = repeat_delta_metric_value(
+            repeat_delta,
+            ("stage_duration_s", stage, "p95_duration_s"),
+            "delta_s",
+        )
+        if value is not None:
+            parts.append(f"{stage}_p95={value:+.3f}s")
     return ", ".join(parts)
 
 

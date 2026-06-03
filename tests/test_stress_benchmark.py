@@ -789,6 +789,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "median_total_elapsed_s": 0.55,
                 "p95_total_elapsed_s": 0.7,
                 "max_total_elapsed_s": 0.8,
+                "stage_duration_s": {
+                    "ocr": {"p95_duration_s": 0.4, "max_duration_s": 0.46},
+                    "georeference": {"p95_duration_s": 0.12, "max_duration_s": 0.14},
+                },
                 "ocr_engine_stage_duration_s": {
                     "total_s": {"p95_duration_s": 0.3, "max_duration_s": 0.4},
                 },
@@ -801,6 +805,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "median_total_elapsed_s": 0.45,
                     "p95_total_elapsed_s": 0.5,
                     "max_total_elapsed_s": 0.52,
+                    "stage_duration_s": {
+                        "ocr": {"p95_duration_s": 0.2, "max_duration_s": 0.22},
+                        "georeference": {"p95_duration_s": 0.05, "max_duration_s": 0.06},
+                    },
                     "ocr_engine_stage_duration_s": {
                         "total_s": {"p95_duration_s": 0.25, "max_duration_s": 0.3},
                     },
@@ -809,6 +817,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "median_total_elapsed_s": 0.6,
                     "p95_total_elapsed_s": 0.68,
                     "max_total_elapsed_s": 0.7,
+                    "stage_duration_s": {
+                        "ocr": {"p95_duration_s": 0.22, "max_duration_s": 0.25},
+                        "georeference": {"p95_duration_s": 0.18, "max_duration_s": 0.21},
+                    },
                     "ocr_engine_stage_duration_s": {
                         "total_s": {"p95_duration_s": 0.31, "max_duration_s": 0.38},
                     },
@@ -881,6 +893,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "median_total_elapsed_s": 0.56,
                 "p95_total_elapsed_s": 0.73,
                 "max_total_elapsed_s": 0.84,
+                "stage_duration_s": {
+                    "ocr": {"p95_duration_s": 0.43, "max_duration_s": 0.5},
+                    "georeference": {"p95_duration_s": 0.14, "max_duration_s": 0.17},
+                },
                 "ocr_engine_stage_duration_s": {
                     "total_s": {"p95_duration_s": 0.32, "max_duration_s": 0.42},
                 },
@@ -893,6 +909,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "median_total_elapsed_s": 0.42,
                     "p95_total_elapsed_s": 0.46,
                     "max_total_elapsed_s": 0.5,
+                    "stage_duration_s": {
+                        "ocr": {"p95_duration_s": 0.17, "max_duration_s": 0.19},
+                        "georeference": {"p95_duration_s": 0.04, "max_duration_s": 0.05},
+                    },
                     "ocr_engine_stage_duration_s": {
                         "total_s": {"p95_duration_s": 0.22, "max_duration_s": 0.28},
                     },
@@ -901,6 +921,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "median_total_elapsed_s": 0.64,
                     "p95_total_elapsed_s": 0.74,
                     "max_total_elapsed_s": 0.76,
+                    "stage_duration_s": {
+                        "ocr": {"p95_duration_s": 0.24, "max_duration_s": 0.27},
+                        "georeference": {"p95_duration_s": 0.23, "max_duration_s": 0.26},
+                    },
                     "ocr_engine_stage_duration_s": {
                         "total_s": {"p95_duration_s": 0.36, "max_duration_s": 0.42},
                     },
@@ -973,12 +997,14 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     repeat_delta = comparison["repeat_profile_delta"]
     assert repeat_delta["sample_counts"]["ocr_full_detail_retry_samples"]["delta"] == 1.0
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
+    assert repeat_delta["stage_duration_s"]["ocr"]["p95_duration_s"]["delta_s"] == 0.03
     assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
     case_deltas = comparison["repeat_profile_case_deltas"]
     assert [delta["slug"] for delta in case_deltas] == ["dallas", "houston"]
     assert case_deltas[0]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == -0.04
     assert case_deltas[1]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.06
+    assert case_deltas[1]["stage_duration_s"]["georeference"]["p95_duration_s"]["delta_s"] == 0.05
     assert case_deltas[1]["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.05
     assert comparison["largest_repeat_profile_case_p95_regressions"][0]["slug"] == "houston"
     assert (
@@ -1711,6 +1737,22 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                             "delta_s": 0.06,
                         }
                     },
+                    "stage_duration_s": {
+                        "ocr": {
+                            "p95_duration_s": {
+                                "baseline": 0.22,
+                                "candidate": 0.24,
+                                "delta_s": 0.02,
+                            }
+                        },
+                        "georeference": {
+                            "p95_duration_s": {
+                                "baseline": 0.18,
+                                "candidate": 0.23,
+                                "delta_s": 0.05,
+                            }
+                        },
+                    },
                 }
             ],
             "largest_repeat_profile_case_p95_improvements": [
@@ -1722,6 +1764,22 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                             "candidate": 0.46,
                             "delta_s": -0.04,
                         }
+                    },
+                    "stage_duration_s": {
+                        "ocr": {
+                            "p95_duration_s": {
+                                "baseline": 0.2,
+                                "candidate": 0.17,
+                                "delta_s": -0.03,
+                            }
+                        },
+                        "georeference": {
+                            "p95_duration_s": {
+                                "baseline": 0.05,
+                                "candidate": 0.04,
+                                "delta_s": -0.01,
+                            }
+                        },
                     },
                 }
             ],
@@ -1760,6 +1818,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                 "duration_s": {
                     "p95_total_elapsed_s": {"delta_s": 0.03},
                     "max_total_elapsed_s": {"delta_s": 0.04},
+                },
+                "stage_duration_s": {
+                    "ocr": {"p95_duration_s": {"delta_s": 0.03}},
+                    "georeference": {"p95_duration_s": {"delta_s": 0.02}},
                 },
                 "ocr_engine_stage_duration_s": {
                     "input_s": {"p95_duration_s": {"delta_s": 0.005}},
@@ -1814,9 +1876,14 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     ) in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert (
+        "baseline repeat stage delta: ocr_p95=+0.030s, "
+        "georeference_p95=+0.020s"
+    ) in output
+    assert (
         "baseline repeat case delta: worst_case=houston +0.060s "
-        "(baseline=0.680s, candidate=0.740s), best_case=dallas -0.040s "
-        "(baseline=0.500s, candidate=0.460s)"
+        "(baseline=0.680s, candidate=0.740s) georeference_p95=+0.050s "
+        "(0.180->0.230s), best_case=dallas -0.040s "
+        "(baseline=0.500s, candidate=0.460s) ocr_p95=-0.030s (0.200->0.170s)"
     ) in output
     assert (
         "baseline repeat OCR case delta: worst_ocr_case=houston +0.050s "

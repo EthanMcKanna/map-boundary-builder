@@ -17463,3 +17463,19 @@ with zero failures in 0.531s.
   `out/ann-arbor-repeat-case-stage-20260603` passed `1/1` with primary total
   `0.518686s`, repeat p95 `0.374s`, and `repeat slowest cases` now prints
   `georeference_p95=0.183s`. This is benchmark feedback-loop reliability only.
+- Added pipeline-stage p95/max deltas to baseline repeat-profile comparisons,
+  both aggregate and per-case. This closes the diagnostic gap where
+  `baseline repeat case delta` could show a slow-case regression without
+  explaining whether `extract`, `ocr`, `georeference`, `export`, or `inspect`
+  moved. The CLI now prints a compact aggregate line such as
+  `baseline repeat stage delta: ...` and appends the dominant moved stage to the
+  worst/best repeat case text. Focused stress tests passed
+  (`133 passed in 0.22s`) and the full suite passed (`709 passed, 31 subtests
+  passed in 5.77s`). A real Ann Arbor repeat comparison at
+  `out/ann-arbor-repeat-stage-delta-20260603` passed `1/1` with primary total
+  `0.519281s`, repeat p95 `0.370s`, aggregate stage deltas
+  `extract_p95=+0.002s`, `ocr_p95=+0.005s`,
+  `georeference_p95=-0.005s`, `export_p95=+0.001s`, and
+  `inspect_p95=-0.000s`, plus repeat case text naming
+  `ocr_p95=+0.005s (0.101->0.107s)`. This is benchmark feedback-loop
+  reliability only; no runtime default changed.
