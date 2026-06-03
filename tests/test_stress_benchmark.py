@@ -861,6 +861,43 @@ def test_manifest_contract_budget_passes_when_coverage_meets_thresholds() -> Non
     }
 
 
+def test_real_screenshot_manifest_preserves_ocr_contract_coverage() -> None:
+    manifest = stress_module.load_manifest(Path("benchmarks/real-screenshot-stress.json"))
+    contracts = stress_module.summarize_manifest_contracts(manifest["cases"])
+    budget = stress_module.build_manifest_contract_budget_summary(
+        contracts,
+        min_ocr_call_contract_rows=49,
+        min_ocr_count_contract_rows=12,
+        max_positive_ocr_call_only_rows=26,
+        fail_on_invalid_ocr_count_contracts=True,
+    )
+    expected_count_contract_slugs = {
+        "tesla-austin-route-receipt-long",
+        "tesla-austin-route-receipt-gray-long",
+        "profile-app-non-map-ui",
+        "dallas-waymo",
+        "san-antonio-waymo",
+        "bay-area-waymo",
+        "bay-area-waymo-jpeg-small",
+        "los-angeles-waymo",
+        "houston-waymo",
+        "orlando-waymo",
+        "nashville-waymo",
+        "miami-waymo",
+    }
+
+    assert contracts["total_cases"] == 49
+    assert contracts["ocr_call_contract_rows"] == contracts["total_cases"]
+    assert contracts["ocr_call_contract_missing_rows"] == []
+    assert contracts["ocr_positive_call_contract_rows"] == 38
+    assert contracts["ocr_zero_call_contract_rows"] == 11
+    assert set(contracts["ocr_count_contract_slugs"]) >= expected_count_contract_slugs
+    assert contracts["ocr_count_contract_rows"] >= len(expected_count_contract_slugs)
+    assert len(contracts["ocr_positive_call_rows_without_count_contract"]) <= 26
+    assert contracts["invalid_ocr_count_contract_rows"] == []
+    assert budget["passed"] is True
+
+
 def test_check_expectations_rejects_route_ui_evidence_drift() -> None:
     issues = stress_module.check_expectations(
         {

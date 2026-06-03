@@ -16182,3 +16182,16 @@ with zero failures in 0.531s.
   benchmark tests passed `87` tests; the full suite passed `645` tests plus
   `31` subtests. This is another harness reliability gate only; no runtime
   deploy is needed.
+- Locked the real screenshot manifest's OCR contract coverage into ordinary
+  stress benchmark tests, so accidental removal of the row-level OCR call/count
+  guards now fails CI-style validation before a full image-processing gate is
+  needed. The no-image regression test loads
+  `benchmarks/real-screenshot-stress.json` and verifies all `49` rows still
+  carry `max_ocr_engine_calls`, the current `12` high-risk rows retain
+  count/confidence contracts, positive-call-only rows stay at or below `26`,
+  and invalid count contracts remain absent. Focused validation passed
+  `tests/test_stress_benchmark.py` with `88` tests. A direct no-image full
+  manifest gate check reported calls `49`, count contracts `12`,
+  positive-call-only `26`, invalid contracts `[]`, and `budget_passed=true`.
+  The full suite passed `646` tests plus `31` subtests. This is a manifest
+  regression-test hardening only; no runtime deploy is needed.
