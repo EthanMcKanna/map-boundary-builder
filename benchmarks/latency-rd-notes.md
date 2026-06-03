@@ -16969,3 +16969,17 @@ with zero failures in 0.531s.
   `107 passed in 0.31s`, the full suite passed
   `683 passed, 31 subtests passed in 5.84s`, and `git diff --check` was clean.
   This is benchmark acceptance transparency only; no runtime deploy is needed.
+- Promoted OCR input preparation time to a first-class stress-report stage
+  metric. `input_s` now participates in `ocr_engine_stage_max_rows`,
+  repeat-profile OCR stage distributions, primary slow-case context, and
+  repeat OCR slow-case leaders, so resizing/native-array regressions are
+  visible beside detector, recognizer, and total OCR time. Focused stress
+  benchmark tests passed `107 passed in 0.20s`, the full suite passed
+  `683 passed, 31 subtests passed in 5.63s`, and a real Dallas/LA focused gate
+  at `out/input-stage-metric-focused-20260603` passed `2/2` with primary max
+  `0.400s`, repeat p95 `0.353s`, repeat OCR p95 `0.313s`, and stable
+  expectations. The CLI now prints examples such as
+  `ocr engine max: ... input=0.005s@dallas-waymo ...`,
+  `primary ocr slowest cases: dallas-waymo ocr=0.318s input=0.005s ...`, and
+  `repeat ocr slowest cases: los-angeles-waymo ... input_p95=0.025s ...`.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.

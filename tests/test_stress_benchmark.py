@@ -278,6 +278,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                 {
                     "slug": "kept",
                     "total_s": 0.3,
+                    "input_s": 0.02,
                     "rec_elapsed_s": 0.12,
                     "det_elapsed_s": 0.07,
                     "input_shape": [1000, 607],
@@ -301,6 +302,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                     "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
                     "ocr_engine": {
                         "total_s": 0.3,
+                        "input_s": 0.02,
                         "rec_elapsed_s": 0.12,
                         "det_elapsed_s": 0.07,
                         "selected_box_count": 12,
@@ -333,6 +335,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                         "repeat_index": 2,
                         "total_elapsed_s": 0.5,
                         "ocr_engine": {
+                            "input_s": 0.02,
                             "rec_elapsed_s": 0.12,
                             "total_s": 0.3,
                             "label_confidence_p50": 88.25,
@@ -353,6 +356,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                         "slug": "kept",
                         "p95_total_s": 0.3,
                         "max_total_s": 0.3,
+                        "p95_input_s": 0.02,
                         "p95_rec_elapsed_s": 0.12,
                         "p95_det_elapsed_s": 0.07,
                         "p95_selected_box_count": 12.0,
@@ -360,6 +364,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                     }
                 ],
                 "ocr_engine_stage_duration_s": {
+                    "input_s": {"p95_duration_s": 0.02, "max_duration_s": 0.02},
                     "det_elapsed_s": {"p95_duration_s": 0.07, "max_duration_s": 0.07},
                     "rec_elapsed_s": {"p95_duration_s": 0.12, "max_duration_s": 0.12},
                     "total_s": {"p95_duration_s": 0.3, "max_duration_s": 0.3},
@@ -389,17 +394,20 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     output = capsys.readouterr().out
     assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
     assert "manifest contract budget: passed" in output
-    assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
+    assert (
+        "repeat slowest: kept#2=0.500s ocr_total=0.300s input=0.020s "
+        "rec=0.120s conf_p50=88.2 conf_lt80=1"
+    ) in output
     assert (
         "ocr engine max: det=0.070s@kept shape=607x1000 det_limit=608/default "
         "rec=default min_area=500 selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
     ) in output
     assert (
         "primary slowest cases: kept=0.500s ocr=0.400s ocr_total=0.300s "
-        "rec=0.120s det=0.070s selected=12 sel_lt1300=5 conf_p50=88.2"
+        "input=0.020s rec=0.120s det=0.070s selected=12 sel_lt1300=5 conf_p50=88.2"
     ) in output
     assert (
-        "primary ocr slowest cases: kept ocr=0.300s rec=0.120s det=0.070s "
+        "primary ocr slowest cases: kept ocr=0.300s input=0.020s rec=0.120s det=0.070s "
         "shape=607x1000 det_limit=608/default rec_profile=default min_area=500 "
         "selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
     ) in output
@@ -407,8 +415,10 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert "repeat slowest cases: kept p95=0.500s max=0.500s" in output
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
-        "rec_p95=0.120s det_p95=0.070s selected_p95=12.0 sel_lt1300_p95=5.0"
+        "input_p95=0.020s rec_p95=0.120s det_p95=0.070s "
+        "selected_p95=12.0 sel_lt1300_p95=5.0"
     ) in output
+    assert "repeat ocr engine: input=p95 0.020s max 0.020s" in output
     assert "repeat ocr engine counts:" in output
     assert "label_count=p95 12.0 max 14.0" in output
     assert "conf_lt70=p95 0.0 max 0.0" in output
@@ -979,6 +989,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
                     "error": "Could not infer a reliable map location from sparse OCR labels.",
                     "ocr_engine_profile": {
                         "calls": 1,
+                        "input_s": 0.05,
                         "det_elapsed_s": 0.2,
                         "rec_elapsed_s": 0.3,
                         "total_s": 0.55,
@@ -1008,6 +1019,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
     assert report["summary"]["ocr_engine_profile"] == {
         "fixtures": 1,
         "calls": 1,
+        "input_s": 0.05,
         "det_elapsed_s": 0.2,
         "rec_elapsed_s": 0.3,
         "total_s": 0.55,
@@ -1015,6 +1027,12 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
         "selected_box_count": 3,
     }
     assert report["summary"]["ocr_engine_stage_max_rows"] == {
+        "input_s": {
+            "slug": "profiled-map",
+            "elapsed_s": 0.05,
+            "raw_box_count": 4,
+            "selected_box_count": 3,
+        },
         "det_elapsed_s": {
             "slug": "profiled-map",
             "elapsed_s": 0.2,
@@ -1038,6 +1056,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
         {
             "slug": "profiled-map",
             "total_s": 0.55,
+            "input_s": 0.05,
             "rec_elapsed_s": 0.3,
             "det_elapsed_s": 0.2,
             "calls": 1,
@@ -1053,6 +1072,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "expectation_passed": True,
             "top_stage": {"stage": "ocr", "elapsed_s": 0.6},
             "ocr_engine": {
+                "input_s": 0.05,
                 "det_elapsed_s": 0.2,
                 "rec_elapsed_s": 0.3,
                 "total_s": 0.55,
@@ -2356,6 +2376,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "stages": {"ocr": round(duration / 2, 6)},
             "ocr_engine_profile": {
                 "calls": 1,
+                "input_s": round(duration / 40, 6),
                 "det_elapsed_s": round(duration / 10, 6),
                 "rec_elapsed_s": round(duration / 5, 6),
                 "total_s": round(duration / 4, 6),
@@ -2366,6 +2387,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "label_confidence_lt_90_count": 2,
                 "calls_detail": [
                     {
+                        "input_s": round(duration / 40, 6),
                         "det_elapsed_s": round(duration / 10, 6),
                         "rec_elapsed_s": round(duration / 5, 6),
                         "total_s": round(duration / 4, 6),
@@ -2442,6 +2464,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "expectation_passed": True,
             "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
             "ocr_engine": {
+                "input_s": 0.02,
                 "det_elapsed_s": 0.08,
                 "rec_elapsed_s": 0.16,
                 "total_s": 0.2,
@@ -2474,6 +2497,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "slug": "kept",
             "p95_total_s": 0.2,
             "max_total_s": 0.2,
+            "p95_input_s": 0.02,
             "p95_rec_elapsed_s": 0.16,
             "p95_det_elapsed_s": 0.08,
             "p95_selected_box_count": 3,
@@ -2483,6 +2507,7 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["summary"]["ocr_engine_profile"] == {
         "fixtures": 1,
         "calls": 1,
+        "input_s": 0.02,
         "det_elapsed_s": 0.08,
         "rec_elapsed_s": 0.16,
         "total_s": 0.2,
@@ -2493,6 +2518,15 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         "label_confidence_lt_90_count": 2,
     }
     assert repeat_profile["summary"]["ocr_engine_stage_duration_s"] == {
+        "input_s": {
+            "samples": 1,
+            "min_duration_s": 0.02,
+            "median_duration_s": 0.02,
+            "average_duration_s": 0.02,
+            "p90_duration_s": 0.02,
+            "p95_duration_s": 0.02,
+            "max_duration_s": 0.02,
+        },
         "det_elapsed_s": {
             "samples": 1,
             "min_duration_s": 0.08,
@@ -2578,6 +2612,21 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
         },
     }
     assert repeat_profile["summary"]["ocr_engine_stage_max_rows"] == {
+        "input_s": {
+            "slug": "kept",
+            "elapsed_s": 0.02,
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "selected_box_count": 3,
+            "label_confidence_min": 72.0,
+            "label_confidence_p50": 84.0,
+            "label_confidence_p90": 93.2,
+            "label_confidence_max": 96.0,
+            "label_confidence_lt_50_count": 0,
+            "label_confidence_lt_70_count": 0,
+            "label_confidence_lt_80_count": 1,
+            "label_confidence_lt_90_count": 2,
+        },
         "det_elapsed_s": {
             "slug": "kept",
             "elapsed_s": 0.08,
@@ -4752,7 +4801,7 @@ def test_repeat_profile_slowest_samples_summarizes_actionable_context() -> None:
     ]
     assert (
         stress_module.repeat_profile_slow_sample_text(slowest[0])
-        == "slow#2=0.910s ocr=0.740s rec=0.450s ocr_total=0.720s sel_area_p50=1180 sel_lt1300=21"
+        == "slow#2=0.910s ocr=0.740s ocr_total=0.720s rec=0.450s sel_area_p50=1180 sel_lt1300=21"
     )
 
 
@@ -4766,6 +4815,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "p95_total_elapsed_s": 0.32,
             "max_total_elapsed_s": 0.34,
             "ocr_engine_stage_duration_s": {
+                "input_s": {"p95_duration_s": 0.02, "max_duration_s": 0.03},
                 "det_elapsed_s": {"p95_duration_s": 0.05, "max_duration_s": 0.06},
                 "rec_elapsed_s": {"p95_duration_s": 0.09, "max_duration_s": 0.1},
                 "total_s": {"p95_duration_s": 0.15, "max_duration_s": 0.16},
@@ -4782,6 +4832,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "p95_total_elapsed_s": 0.82,
             "max_total_elapsed_s": 0.91,
             "ocr_engine_stage_duration_s": {
+                "input_s": {"p95_duration_s": 0.04, "max_duration_s": 0.05},
                 "det_elapsed_s": {"p95_duration_s": 0.12, "max_duration_s": 0.14},
                 "rec_elapsed_s": {"p95_duration_s": 0.43, "max_duration_s": 0.45},
                 "total_s": {"p95_duration_s": 0.62, "max_duration_s": 0.72},
@@ -4810,6 +4861,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "slug": "slow",
             "p95_total_s": 0.62,
             "max_total_s": 0.72,
+            "p95_input_s": 0.04,
             "p95_rec_elapsed_s": 0.43,
             "p95_det_elapsed_s": 0.12,
             "p95_selected_box_count": 37.0,
@@ -4825,7 +4877,8 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     )
     assert (
         stress_module.repeat_profile_ocr_engine_slow_case_text(ocr_cases[0])
-        == "slow ocr_p95=0.620s ocr_max=0.720s rec_p95=0.430s det_p95=0.120s selected_p95=37.0 sel_lt1300_p95=21.0"
+        == "slow ocr_p95=0.620s ocr_max=0.720s input_p95=0.040s "
+        "rec_p95=0.430s det_p95=0.120s selected_p95=37.0 sel_lt1300_p95=21.0"
     )
 
 
@@ -4844,6 +4897,7 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
             "ocr_engine_profile": {
                 "calls": 2,
                 "total_s": 0.62,
+                "input_s": 0.04,
                 "rec_elapsed_s": 0.35,
                 "det_elapsed_s": 0.18,
                 "raw_box_count": 44,
@@ -4883,6 +4937,7 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
         {
             "slug": "slow",
             "total_s": 0.62,
+            "input_s": 0.04,
             "rec_elapsed_s": 0.35,
             "det_elapsed_s": 0.18,
             "calls": 2,
@@ -4900,9 +4955,9 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
     ]
     assert (
         stress_module.primary_ocr_engine_slow_case_text(cases[0])
-        == "slow ocr=0.620s rec=0.350s det=0.180s shape=1400x1400 det_limit=256/max "
-        "rec_profile=en-ppocrv5 min_area=2300 selected=37 raw=44 labels=31 sel_lt1300=5 "
-        "conf_lt90=4"
+        == "slow ocr=0.620s input=0.040s rec=0.350s det=0.180s shape=1400x1400 "
+        "det_limit=256/max rec_profile=en-ppocrv5 min_area=2300 selected=37 raw=44 "
+        "labels=31 sel_lt1300=5 conf_lt90=4"
     )
 
 
@@ -4923,6 +4978,7 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
             "ocr_engine_profile": {
                 "calls": 1,
                 "total_s": 0.36,
+                "input_s": 0.02,
                 "rec_elapsed_s": 0.15,
                 "det_elapsed_s": 0.17,
                 "selected_box_count": 18,
@@ -4942,6 +4998,7 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
             "expectation_passed": True,
             "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
             "ocr_engine": {
+                "input_s": 0.02,
                 "det_elapsed_s": 0.17,
                 "rec_elapsed_s": 0.15,
                 "total_s": 0.36,
@@ -4954,8 +5011,8 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
     ]
     assert (
         stress_module.primary_slow_case_text_from_summary(cases[0])
-        == "slow=0.620s ocr=0.400s ocr_total=0.360s rec=0.150s det=0.170s "
-        "selected=18 sel_lt1300=3 conf_p50=98.2"
+        == "slow=0.620s ocr=0.400s ocr_total=0.360s input=0.020s rec=0.150s "
+        "det=0.170s selected=18 sel_lt1300=3 conf_p50=98.2"
     )
 
 

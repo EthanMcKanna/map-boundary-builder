@@ -35,7 +35,7 @@ REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
 REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 2
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 1
-OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
+OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
 }
@@ -2668,7 +2668,7 @@ def primary_ocr_engine_slowest_case_summary(
         "slug": row.get("slug"),
         "total_s": round(total_s, 6),
     }
-    for key in ("rec_elapsed_s", "det_elapsed_s"):
+    for key in ("input_s", "rec_elapsed_s", "det_elapsed_s"):
         elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
         if elapsed_s is not None:
             result[key] = round(elapsed_s, 6)
@@ -3055,6 +3055,11 @@ def repeat_profile_ocr_engine_slowest_case_summary(
         "p95_total_s": round(p95_total, 6),
         "max_total_s": round(max_total, 6),
     }
+    input_stats = repeat_profile_case_ocr_engine_metric(summary, "input_s")
+    if input_stats is not None:
+        input_p95 = parse_nonnegative_float(input_stats.get("p95_duration_s"))
+        if input_p95 is not None:
+            result["p95_input_s"] = round(input_p95, 6)
     rec_stats = repeat_profile_case_ocr_engine_metric(summary, "rec_elapsed_s")
     if rec_stats is not None:
         rec_p95 = parse_nonnegative_float(rec_stats.get("p95_duration_s"))
@@ -4256,6 +4261,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
     if summary.get("ocr_engine_stage_max_rows"):
         max_rows = summary["ocr_engine_stage_max_rows"]
         labels = {
+            "input_s": "input",
             "det_elapsed_s": "det",
             "rec_elapsed_s": "rec",
             "total_s": "total",
@@ -4515,6 +4521,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             ocr_engine_stage_duration = repeat_summary.get("ocr_engine_stage_duration_s")
             if isinstance(ocr_engine_stage_duration, dict) and ocr_engine_stage_duration:
                 labels = {
+                    "input_s": "input",
                     "det_elapsed_s": "det",
                     "rec_elapsed_s": "rec",
                     "total_s": "total",
@@ -4562,13 +4569,16 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
     ocr_engine = sample.get("ocr_engine")
     ocr_text = ""
     if isinstance(ocr_engine, dict):
-        rec_elapsed_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
         total_elapsed_s = parse_nonnegative_float(ocr_engine.get("total_s"))
+        input_elapsed_s = parse_nonnegative_float(ocr_engine.get("input_s"))
+        rec_elapsed_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
         parts = []
-        if rec_elapsed_s is not None:
-            parts.append(f"rec={rec_elapsed_s:.3f}s")
         if total_elapsed_s is not None:
             parts.append(f"ocr_total={total_elapsed_s:.3f}s")
+        if input_elapsed_s is not None:
+            parts.append(f"input={input_elapsed_s:.3f}s")
+        if rec_elapsed_s is not None:
+            parts.append(f"rec={rec_elapsed_s:.3f}s")
         selected_area_p50 = parse_nonnegative_float(ocr_engine.get("selected_box_area_p50"))
         selected_lt_1300 = ocr_engine.get("selected_box_area_lt_1300_count")
         if selected_area_p50 is not None:
@@ -4637,11 +4647,14 @@ def ocr_engine_input_shape_text(shape: Any) -> str | None:
 def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     slug = case.get("slug") or "-"
     total_s = parse_nonnegative_float(case.get("total_s"))
+    input_s = parse_nonnegative_float(case.get("input_s"))
     rec_s = parse_nonnegative_float(case.get("rec_elapsed_s"))
     det_s = parse_nonnegative_float(case.get("det_elapsed_s"))
     parts = [str(slug)]
     if total_s is not None:
         parts.append(f"ocr={total_s:.3f}s")
+    if input_s is not None:
+        parts.append(f"input={input_s:.3f}s")
     if rec_s is not None:
         parts.append(f"rec={rec_s:.3f}s")
     if det_s is not None:
@@ -4693,6 +4706,7 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
     ocr_engine = case.get("ocr_engine")
     if isinstance(ocr_engine, dict):
         total_s = parse_nonnegative_float(ocr_engine.get("total_s"))
+        input_s = parse_nonnegative_float(ocr_engine.get("input_s"))
         rec_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
         det_s = parse_nonnegative_float(ocr_engine.get("det_elapsed_s"))
         selected_count = ocr_engine.get("selected_box_count")
@@ -4700,6 +4714,8 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
         confidence_p50 = parse_nonnegative_float(ocr_engine.get("label_confidence_p50"))
         if total_s is not None:
             parts.append(f"ocr_total={total_s:.3f}s")
+        if input_s is not None:
+            parts.append(f"input={input_s:.3f}s")
         if rec_s is not None:
             parts.append(f"rec={rec_s:.3f}s")
         if det_s is not None:
@@ -4751,6 +4767,7 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     slug = case.get("slug") or "-"
     p95_total = parse_nonnegative_float(case.get("p95_total_s"))
     max_total = parse_nonnegative_float(case.get("max_total_s"))
+    p95_input = parse_nonnegative_float(case.get("p95_input_s"))
     p95_rec = parse_nonnegative_float(case.get("p95_rec_elapsed_s"))
     p95_det = parse_nonnegative_float(case.get("p95_det_elapsed_s"))
     p95_selected = parse_nonnegative_float(case.get("p95_selected_box_count"))
@@ -4760,6 +4777,8 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"ocr_p95={p95_total:.3f}s")
     if max_total is not None:
         parts.append(f"ocr_max={max_total:.3f}s")
+    if p95_input is not None:
+        parts.append(f"input_p95={p95_input:.3f}s")
     if p95_rec is not None:
         parts.append(f"rec_p95={p95_rec:.3f}s")
     if p95_det is not None:
