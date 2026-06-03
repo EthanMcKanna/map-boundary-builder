@@ -16,7 +16,7 @@ from shapely.affinity import translate as translate_geometry
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import unary_union
 
-from .pipeline_version import runtime_dependency_signature
+from .pipeline_version import get_pipeline_version, runtime_dependency_signature
 
 DEFAULT_SIMPLIFY_PX = 6.0
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
@@ -322,6 +322,7 @@ def extraction_visual_cache_key(
     digest.update(contiguous.data)
     payload = (
         f"{EXTRACTION_CACHE_VERSION}:"
+        f"pipeline={get_pipeline_version()}:"
         f"simplify={round(float(simplify_px), 4)}:"
         f"max-dimension={int(max_dimension)}:"
         f"deps={extraction_cache_dependency_signature()}:"

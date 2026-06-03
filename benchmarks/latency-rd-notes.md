@@ -16493,3 +16493,37 @@ with zero failures in 0.531s.
   cache tests (`82 passed in 0.71s`), and the full suite (`660 passed, 31
   subtests passed in 11.75s`). No extraction-path benchmark was rerun because
   this only changes frontend cache admission/keying.
+- Rejected more bright-blue OCR tuning on the no-catalog Waymo slice. Raising
+  `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA` from `2300` to `3000` at
+  `out/bright-blue-minarea3000-focused-20260603` passed `9/9`, but did not
+  reduce LA's selected boxes (`30`) and worsened the matched repeat p95
+  (`0.429s` versus `0.395s` for
+  `out/bright-blue-minarea2300-control-focused-20260603`). Raising
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM` to `16` and `24` also passed behavior
+  but was mixed or worse: `16` increased Dallas primary to `0.625s`, and `24`
+  raised repeat p95 to `0.466s`. Disabling road-feature precompute preserved
+  outputs but worsened Dallas/LA tails (`out/bright-blue-no-road-precompute-focused-20260603`,
+  repeat max `0.509s`). Keep the current bright-blue OCR area floor, rec batch,
+  and road-feature precompute defaults.
+- Rejected lowering the profile-app UI OCR cap below `1000`. Monkeypatched
+  focused probes at `800`, `700`, and `600` on `profile-app-non-map-ui` showed
+  `800` preserved the follower/following/media rejection evidence, but a
+  matched default-control at `out/profile-app-ocr1000-control-20260603` was
+  faster (`0.331s` primary, repeats `0.295s`/`0.297s`). The `700` and `600`
+  probes violated the locked confidence-count contract (`label_confidence_lt_90`
+  above budget). Keep `PROFILE_APP_UI_OCR_MAX_DIMENSION = 1000`.
+- Added the pipeline version to extraction cache keys. Extraction caches already
+  tracked image content, simplify/max-dimension, and runtime dependency
+  signatures including `cv2`, but not the extraction algorithm/config source
+  version; a lower-level extraction memory/disk cache could therefore reuse a
+  stale mask after code/config changes even when top-level API run-result keys
+  had invalidated. Validation passed with `git diff --check`, focused extraction
+  tests (`20 passed in 0.37s`), focused API/pipeline/warmup tests (`91 passed
+  in 0.64s`), the full suite (`661 passed, 31 subtests passed in 7.91s`), a
+  focused extraction-cache stress slice at
+  `out/extraction-pipeline-cache-focused2-20260603` (`4/4`, repeat p95
+  `0.385s`), and the full hard gate at
+  `out/extraction-pipeline-cache-full49-hard-20260603`: `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.532s`, repeat p95 `0.413s`,
+  repeat max `0.534s`, repeat OCR-engine p95 `0.376s`, and all manifest
+  latency/OCR-count contracts.

@@ -443,6 +443,21 @@ class MaskRepairTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_extraction_cache_key_tracks_pipeline_version(self) -> None:
+        rgb = np.full((12, 14, 3), 255, dtype=np.uint8)
+        with (
+            patch.object(extract_module, "get_pipeline_version", return_value="pipeline-a"),
+            patch.object(extract_module, "extraction_cache_dependency_signature", return_value="deps"),
+        ):
+            first = extract_module.extraction_visual_cache_key(rgb, simplify_px=6.0, max_dimension=0)
+        with (
+            patch.object(extract_module, "get_pipeline_version", return_value="pipeline-b"),
+            patch.object(extract_module, "extraction_cache_dependency_signature", return_value="deps"),
+        ):
+            second = extract_module.extraction_visual_cache_key(rgb, simplify_px=6.0, max_dimension=0)
+
+        self.assertNotEqual(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()
