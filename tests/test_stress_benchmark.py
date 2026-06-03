@@ -4361,11 +4361,11 @@ def test_real_screenshot_manifest_preserves_ocr_contract_coverage() -> None:
         fail_on_invalid_ocr_count_contracts=True,
     )
 
-    assert contracts["total_cases"] == 52
+    assert contracts["total_cases"] == 55
     assert contracts["ocr_call_contract_rows"] == contracts["total_cases"]
     assert contracts["ocr_call_contract_missing_rows"] == []
     assert contracts["ocr_positive_call_contract_rows"] == 39
-    assert contracts["ocr_zero_call_contract_rows"] == 13
+    assert contracts["ocr_zero_call_contract_rows"] == 16
     assert contracts["ocr_count_contract_rows"] == contracts["ocr_positive_call_contract_rows"]
     assert len(contracts["ocr_count_contract_slugs"]) == 39
     assert contracts["ocr_positive_call_rows_without_count_contract"] == []

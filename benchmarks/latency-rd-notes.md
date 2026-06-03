@@ -18198,3 +18198,31 @@ with zero failures in 0.531s.
   `jq` validated the manifest, the focused catalog/stress tests passed
   (`286 passed`), `python -m compileall -q api map_boundary_builder` passed,
   and full pytest passed `730 passed, 31 subtests passed`.
+- Added default-upload catalog shortcut rows for the Tesla Austin, Dallas, and
+  Houston service-area screenshots while preserving each forced no-catalog row
+  as the OCR/georeference coverage proof. Direct CLI probes with
+  `--filename-hint upload.png` all resolved through `catalog-shape-match` with
+  zero OCR calls: Austin matched `austin-tesla` at shape IoU `0.971967`,
+  confidence `0.971967`, and bbox
+  `[-97.868131,30.1428589,-97.5545568,30.4240202]`; Dallas matched
+  `dallas-tesla` at shape IoU `0.97352`, confidence `0.973520`, and bbox
+  `[-96.8582001,32.7624321,-96.7552567,32.8723526]`; Houston matched
+  `houston-tesla` at shape IoU `0.968565`, confidence `0.968565`, and bbox
+  `[-95.624939,29.8584766,-95.5238266,29.971941]`. Focused stress proof at
+  `out/tesla-service-default-catalog-focused-20260603` passed `6/6`: the three
+  forced rows stayed on `ocr-georeference:nominatim-label-fit`, while the three
+  new default rows used `catalog-shape-match` in `0.009s`, `0.009s`, and
+  `0.010s` with zero OCR calls. The full hard gate at
+  `out/tesla-service-default-catalog-full55-hard-20260603` passed `55/55`
+  expected outcomes with statuses `{"complete":44,"failed":11}`, max primary
+  `0.366228s`, repeat p95 `0.290s`, repeat max `0.347s`, and prewarm `0.659s`;
+  common-row comparison against the previous full52 report showed `52` compared
+  rows, `signature_change_count=0`, `expectation_passed_delta=0`, median delta
+  `-0.000441s`, and only the three new Tesla default rows missing from the
+  baseline. I did not relax the remaining provider-label catalog rows because
+  current shape-only evidence is weaker: Houston Waymo is around `0.573` IoU,
+  Miami Waymo around `0.609`, and Tesla Bay Area around `0.900`, all below the
+  existing current-catalog shape-only thresholds. Verification: `jq` validated
+  the manifest, the focused catalog/stress tests passed (`286 passed`),
+  `python -m compileall -q api map_boundary_builder` passed, and full pytest
+  passed `730 passed, 31 subtests passed`.
