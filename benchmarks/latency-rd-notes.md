@@ -15729,3 +15729,33 @@ with zero failures in 0.531s.
   changes for status, source, city, bbox, geometry hash, coordinate count,
   confidence, control count, OCR label count, top labels, or full-detail retry
   flags.
+- Screened the full current `/Users/ethanmckanna/Downloads/service area images`
+  set through the production-shaped catalog path with neutral filename hints,
+  network blocked, OCR/extraction caches disabled, prewarm enabled, and OCR
+  engine profiling at `out/current-service-area-catalog-screen-20260602`.
+  All 15 screenshots completed under one second with max total `0.531481s`,
+  only 3 OCR engine calls total, OCR-engine max `0.440780s` on Waymo Houston,
+  and prewarm `1.547s`. This confirmed the catalog-enabled path already
+  protects several no-catalog tails that were previously slow, weak, or failed:
+  Tesla Bay Area and Waymo Houston resolved through
+  `catalog-shape-match:provider-ui-label`, Waymo Miami recovered from the
+  no-catalog sparse-OCR failure through the same provider-label path, and Waymo
+  Phoenix resolved as a pure `catalog-shape-match` instead of the weak generic
+  inferred-city no-catalog output.
+- Accepted four targeted current catalog stress guards:
+  `tesla-bay-area-current-catalog`, `houston-waymo-current-catalog`,
+  `miami-waymo-current-catalog`, and `phoenix-waymo-current-catalog`. The
+  focused gate at
+  `out/current-catalog-guards-focused-20260602/stress-summary.json` passed
+  `4/4`, primary max `0.513398s`, repeat `12/12` subsecond, repeat p95
+  `0.445s`, repeat OCR-engine p95 `0.363s`, and prewarm `1.328s`. The expanded
+  full hard gate at `out/current-catalog-full44-hard-20260602/stress-summary.json`
+  passed `44/44`, statuses `{"complete":33,"failed":11}`, primary max
+  `0.852849s`, repeat `44/44` subsecond, repeat p95 `0.511s`, repeat max
+  `0.616s`, repeat OCR-engine p95 `0.465s`, and prewarm `1.168s`. The new rows
+  stayed within budget in the full gate: Tesla Bay Area `0.156s`, Waymo Houston
+  `0.615s`, Waymo Miami `0.438s`, and Waymo Phoenix `0.101s`. Comparing all 40
+  common rows against `out/nashville-current-catalog-full40-hard-20260602`
+  showed zero changes for status, source, city, bbox, geometry hash,
+  coordinate count, confidence, control count, OCR label count, top labels, or
+  full-detail retry flags.
