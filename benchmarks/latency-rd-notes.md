@@ -16232,3 +16232,22 @@ with zero failures in 0.531s.
   smoke printed the preset name/version, and the full suite passed `650` tests
   plus `31` subtests. This is stress-report provenance only; no runtime deploy
   is needed.
+- Lowered the gray-fill route-UI OCR fast cap from `1000` to `900`, keeping
+  light-fill route screens at `1000` after a targeted no-cache OCR-profile
+  experiment found the cliff. The six Tesla route/non-map route subset at the
+  current cap passed `6/6` with OCR stage total `1.917s`; lowering both light
+  and gray to `800` failed `5/6` by dropping route evidence and forcing a
+  full-detail retry, and lowering both to `900` still failed the two active
+  light-fill route screens by losing `pickup`. The safe narrower run with only
+  `MAP_BOUNDARY_GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION=900` passed `6/6`, reduced
+  route-subset OCR stage total to `1.648s`, and kept all required
+  route-category/metric evidence. The gray receipt row dropped from
+  `0.455s` total / `0.423s` OCR-engine total / `29` selected boxes to `0.388s`
+  total / `0.361s` OCR-engine total / `23` selected boxes under the same
+  disabled OCR/extraction cache and in-process profiling setup. The full
+  `--real-screenshot-hard-gate` then passed at
+  `out/real-screenshot-hard-gate-gray-route-900-20260603` with `49/49`
+  expected, primary max `0.538087s`, repeat p95 `0.463s`, repeat max `0.557s`,
+  repeat OCR-engine p95/max `0.419s`/`0.486s`, repeat selected-box p95/max
+  `24.5`/`30.0`, manifest contract budget passed, and all latency/OCR/prewarm
+  budgets passed.
