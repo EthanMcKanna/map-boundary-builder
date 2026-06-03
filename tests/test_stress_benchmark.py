@@ -310,6 +310,197 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert "conf_lt80=p95 1.0 max 2.0" in output
 
 
+def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "city": "Dallas",
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": 7,
+                "bbox": [-97.0, 32.0, -96.0, 33.0],
+                "geojson_geometry_hash": "hash-a",
+                "geojson_coordinate_count": 120,
+                "combined_confidence": 0.91,
+                "ocr_label_count": 12,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Dallas"],
+                "total_elapsed_s": 0.5,
+                "stages": {"ocr": 0.3},
+                "ocr_engine_profile": {"total_s": 0.28},
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "city": "Houston",
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": 6,
+                "bbox": [-96.0, 29.0, -95.0, 30.0],
+                "geojson_geometry_hash": "hash-b",
+                "geojson_coordinate_count": 90,
+                "combined_confidence": 0.88,
+                "ocr_label_count": 9,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Houston"],
+                "total_elapsed_s": 0.8,
+                "stages": {"ocr": 0.5},
+                "ocr_engine_profile": {"total_s": 0.45},
+            },
+            {"slug": "baseline-only", "observed_status": "failed"},
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "city": "Dallas",
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": 7,
+                "bbox": [-97.0, 32.0, -96.0, 33.0],
+                "geojson_geometry_hash": "hash-a",
+                "geojson_coordinate_count": 120,
+                "combined_confidence": 0.91,
+                "ocr_label_count": 12,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Dallas"],
+                "total_elapsed_s": 0.4,
+                "stages": {"ocr": 0.25},
+                "ocr_engine_profile": {"total_s": 0.2},
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "city": "Inferred map area",
+                "source": "ocr-georeference:nominatim-label-fit",
+                "control_points": 6,
+                "bbox": [-96.0, 29.0, -95.0, 30.0],
+                "geojson_geometry_hash": "hash-b",
+                "geojson_coordinate_count": 90,
+                "combined_confidence": 0.88,
+                "ocr_label_count": 9,
+                "ocr_label_event": "Map labels read",
+                "ocr_full_detail_retry": False,
+                "ocr_top_labels": ["Houston"],
+                "total_elapsed_s": 1.0,
+                "stages": {"ocr": 0.65},
+                "ocr_engine_profile": {"total_s": 0.6},
+            },
+            {"slug": "candidate-only", "observed_status": "failed"},
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["compared_rows"] == 2
+    assert comparison["missing_in_baseline"] == ["candidate-only"]
+    assert comparison["missing_in_candidate"] == ["baseline-only"]
+    assert comparison["signature_change_count"] == 1
+    assert stress_module.baseline_comparison_signature_drift_cases(
+        {"baseline_comparison": comparison}
+    ) == ["houston"]
+    assert comparison["median_total_elapsed_delta_s"] == 0.05
+    assert comparison["largest_total_regressions"][0]["slug"] == "houston"
+    assert comparison["largest_total_regressions"][0]["total_elapsed_delta_s"] == 0.2
+    assert comparison["largest_total_improvements"][0]["slug"] == "dallas"
+    assert comparison["largest_total_improvements"][0]["stage_delta_s"] == {"ocr": -0.05}
+    assert comparison["largest_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
+
+
+def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
+    report = {
+        "summary": {
+            "total": 1,
+            "expectation_passed": 1,
+            "statuses": {"complete": 1},
+            "max_total_elapsed_s": 0.5,
+        },
+        "baseline_comparison": {
+            "compared_rows": 2,
+            "missing_in_baseline": ["new"],
+            "missing_in_candidate": [],
+            "signature_changes": [{"slug": "houston"}],
+            "median_total_elapsed_delta_s": -0.04,
+        },
+        "rows": [],
+    }
+
+    stress_module.print_stress_table(report)
+
+    output = capsys.readouterr().out
+    assert "baseline comparison: compared=2, signature_changes=1" in output
+    assert "missing_baseline=1, missing_candidate=0, median_delta=-0.040s" in output
+    assert "signature drift: houston" in output
+
+
+def test_run_stress_benchmark_can_attach_baseline_comparison(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "stress.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "dallas",
+                        "image": str(image),
+                        "expect": {
+                            "status": "complete",
+                            "source_prefix": "ocr-georeference:",
+                        },
+                    }
+                ]
+            }
+        )
+    )
+    baseline_report = tmp_path / "baseline.json"
+    baseline_report.write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "slug": "dallas",
+                        "observed_status": "complete",
+                        "source": "ocr-georeference:nominatim-label-fit",
+                        "total_elapsed_s": 0.7,
+                    }
+                ]
+            }
+        )
+    )
+
+    def fake_run(command, *, text, capture_output, timeout, check):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "georeference_source": "ocr-georeference:nominatim-label-fit",
+                    "event_profile": {"total_elapsed_s": 0.4},
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(stress_module.subprocess, "run", fake_run)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        compare_baseline_report=baseline_report,
+        python_executable="python",
+    )
+
+    assert report["baseline_comparison"]["compared_rows"] == 1
+    assert report["baseline_comparison"]["latency_deltas"][0]["total_elapsed_delta_s"] == -0.3
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    assert saved["baseline_comparison"]["baseline_report"] == str(baseline_report)
+
+
 def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")

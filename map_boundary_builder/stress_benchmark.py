@@ -146,6 +146,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero when analyzed repeat-profile samples produce different output signatures.",
     )
     parser.add_argument(
+        "--compare-baseline-report",
+        default=None,
+        help="Compare this run against an earlier stress-summary.json and save behavior/latency deltas.",
+    )
+    parser.add_argument(
+        "--fail-on-baseline-signature-drift",
+        action="store_true",
+        help="Exit non-zero when --compare-baseline-report finds output signature changes.",
+    )
+    parser.add_argument(
         "--real-screenshot-hard-gate",
         action="store_true",
         help=(
@@ -326,6 +336,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat-profile-warmups must be non-negative")
     if args.fail_on_repeat_signature_drift and args.repeat_profile_runs == 0:
         parser.error("--fail-on-repeat-signature-drift requires --repeat-profile-runs")
+    if args.fail_on_baseline_signature_drift and not args.compare_baseline_report:
+        parser.error("--fail-on-baseline-signature-drift requires --compare-baseline-report")
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
     if args.max_repeat_profile_p95_duration_s is not None and args.max_repeat_profile_p95_duration_s <= 0.0:
@@ -394,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         min_ocr_count_contract_rows=args.min_ocr_count_contract_rows,
         max_positive_ocr_call_only_rows=args.max_positive_ocr_call_only_rows,
         fail_on_invalid_ocr_count_contracts=args.fail_on_invalid_ocr_count_contracts,
+        compare_baseline_report=Path(args.compare_baseline_report) if args.compare_baseline_report else None,
         preset=stress_preset_from_args(args),
     )
     print_stress_table(report)
@@ -406,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.prewarm_runtime and not prewarm_runtime_ok(report.get("prewarm")):
         return 1
     if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
+        return 1
+    if args.fail_on_baseline_signature_drift and baseline_comparison_signature_drift_cases(report):
         return 1
     if args.fail_on_unexpected and (
         report["summary"]["unexpected"] or repeat_profile_unexpected_sample_count(report)
@@ -522,6 +537,7 @@ def run_stress_benchmark(
     min_ocr_count_contract_rows: int | None = None,
     max_positive_ocr_call_only_rows: int | None = None,
     fail_on_invalid_ocr_count_contracts: bool = False,
+    compare_baseline_report: Path | None = None,
     preset: dict[str, Any] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
@@ -656,8 +672,188 @@ def run_stress_benchmark(
             max_positive_ocr_call_only_rows=max_positive_ocr_call_only_rows,
             fail_on_invalid_ocr_count_contracts=fail_on_invalid_ocr_count_contracts,
         )
+    if compare_baseline_report is not None:
+        report["baseline_comparison"] = compare_stress_reports(
+            load_stress_report(compare_baseline_report),
+            report,
+            baseline_report_path=compare_baseline_report,
+        )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
+
+
+def load_stress_report(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict):
+        raise ValueError("Baseline stress report must be a JSON object.")
+    return payload
+
+
+def compare_stress_reports(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    *,
+    baseline_report_path: Path | None = None,
+) -> dict[str, Any]:
+    baseline_rows = stress_report_rows_by_slug(baseline_report)
+    candidate_rows = stress_report_rows_by_slug(candidate_report)
+    candidate_order = [slug for slug in stress_report_slug_order(candidate_report) if slug in candidate_rows]
+    compared_slugs = [slug for slug in candidate_order if slug in baseline_rows]
+    missing_in_baseline = sorted(slug for slug in candidate_rows if slug not in baseline_rows)
+    missing_in_candidate = sorted(slug for slug in baseline_rows if slug not in candidate_rows)
+    signature_changes: list[dict[str, Any]] = []
+    latency_deltas: list[dict[str, Any]] = []
+
+    for slug in compared_slugs:
+        baseline_row = baseline_rows[slug]
+        candidate_row = candidate_rows[slug]
+        baseline_signature = repeat_profile_output_signature(baseline_row)
+        candidate_signature = repeat_profile_output_signature(candidate_row)
+        if baseline_signature != candidate_signature:
+            signature_changes.append(
+                {
+                    "slug": slug,
+                    "baseline": baseline_signature,
+                    "candidate": candidate_signature,
+                }
+            )
+        latency_delta = stress_row_latency_delta(slug, baseline_row, candidate_row)
+        if latency_delta is not None:
+            latency_deltas.append(latency_delta)
+
+    total_deltas = [
+        float(delta["total_elapsed_delta_s"])
+        for delta in latency_deltas
+        if isinstance(delta.get("total_elapsed_delta_s"), (int, float))
+    ]
+    comparison: dict[str, Any] = {
+        "baseline_report": str(baseline_report_path) if baseline_report_path is not None else None,
+        "compared_rows": len(compared_slugs),
+        "missing_in_baseline": missing_in_baseline,
+        "missing_in_candidate": missing_in_candidate,
+        "signature_change_count": len(signature_changes),
+        "signature_changes": signature_changes,
+        "latency_deltas": latency_deltas,
+        "largest_total_regressions": ranked_latency_deltas(latency_deltas, reverse=True),
+        "largest_total_improvements": ranked_latency_deltas(latency_deltas, reverse=False),
+    }
+    if total_deltas:
+        comparison.update(
+            {
+                "median_total_elapsed_delta_s": round(float(median(total_deltas)), 6),
+                "average_total_elapsed_delta_s": round(float(mean(total_deltas)), 6),
+                "max_total_elapsed_delta_s": round(max(total_deltas), 6),
+                "min_total_elapsed_delta_s": round(min(total_deltas), 6),
+            }
+        )
+    return comparison
+
+
+def stress_report_rows_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = report.get("rows")
+    if not isinstance(rows, list):
+        return {}
+    rows_by_slug: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        slug = row.get("slug")
+        if isinstance(slug, str) and slug:
+            rows_by_slug[slug] = row
+    return rows_by_slug
+
+
+def stress_report_slug_order(report: dict[str, Any]) -> list[str]:
+    rows = report.get("rows")
+    if not isinstance(rows, list):
+        return []
+    slugs: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        slug = row.get("slug")
+        if isinstance(slug, str) and slug:
+            slugs.append(slug)
+    return slugs
+
+
+def stress_row_latency_delta(
+    slug: str,
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+) -> dict[str, Any] | None:
+    baseline_total = parse_nonnegative_float(baseline_row.get("total_elapsed_s"))
+    candidate_total = parse_nonnegative_float(candidate_row.get("total_elapsed_s"))
+    if baseline_total is None or candidate_total is None:
+        return None
+    delta: dict[str, Any] = {
+        "slug": slug,
+        "baseline_total_elapsed_s": round(baseline_total, 6),
+        "candidate_total_elapsed_s": round(candidate_total, 6),
+        "total_elapsed_delta_s": round(candidate_total - baseline_total, 6),
+    }
+    stage_deltas = stress_row_stage_deltas(baseline_row, candidate_row)
+    if stage_deltas:
+        delta["stage_delta_s"] = stage_deltas
+    ocr_total_delta = stress_row_ocr_engine_metric_delta(baseline_row, candidate_row, "total_s")
+    if ocr_total_delta is not None:
+        delta["ocr_engine_total_delta_s"] = ocr_total_delta
+    return delta
+
+
+def stress_row_stage_deltas(
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+) -> dict[str, float]:
+    baseline_stages = baseline_row.get("stages")
+    candidate_stages = candidate_row.get("stages")
+    if not isinstance(baseline_stages, dict) or not isinstance(candidate_stages, dict):
+        return {}
+    deltas: dict[str, float] = {}
+    for stage in sorted(set(baseline_stages) & set(candidate_stages)):
+        baseline_stage = parse_nonnegative_float(baseline_stages.get(stage))
+        candidate_stage = parse_nonnegative_float(candidate_stages.get(stage))
+        if baseline_stage is None or candidate_stage is None:
+            continue
+        deltas[str(stage)] = round(candidate_stage - baseline_stage, 6)
+    return deltas
+
+
+def stress_row_ocr_engine_metric_delta(
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+    metric: str,
+) -> float | None:
+    baseline_profile = baseline_row.get("ocr_engine_profile")
+    candidate_profile = candidate_row.get("ocr_engine_profile")
+    if not isinstance(baseline_profile, dict) or not isinstance(candidate_profile, dict):
+        return None
+    baseline_value = parse_nonnegative_float(baseline_profile.get(metric))
+    candidate_value = parse_nonnegative_float(candidate_profile.get(metric))
+    if baseline_value is None or candidate_value is None:
+        return None
+    return round(candidate_value - baseline_value, 6)
+
+
+def ranked_latency_deltas(
+    latency_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in latency_deltas
+        if isinstance(delta.get("total_elapsed_delta_s"), (int, float))
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(delta["total_elapsed_delta_s"]),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
 
 
 def run_generation_prewarm(*, runner_ocr_cache: bool, extraction_cache: bool) -> dict[str, Any]:
@@ -2231,6 +2427,23 @@ def repeat_profile_signature_drift_cases(report: dict[str, Any]) -> list[str]:
     return [str(slug) for slug in unstable_cases]
 
 
+def baseline_comparison_signature_drift_cases(report: dict[str, Any]) -> list[str]:
+    comparison = report.get("baseline_comparison")
+    if not isinstance(comparison, dict):
+        return []
+    changes = comparison.get("signature_changes")
+    if not isinstance(changes, list):
+        return []
+    slugs: list[str] = []
+    for change in changes:
+        if not isinstance(change, dict):
+            continue
+        slug = change.get("slug")
+        if isinstance(slug, str) and slug:
+            slugs.append(slug)
+    return slugs
+
+
 def repeat_profile_unexpected_sample_count(report: dict[str, Any]) -> int:
     repeat_profile = report.get("repeat_profile")
     if not isinstance(repeat_profile, dict):
@@ -3154,6 +3367,35 @@ def print_stress_table(report: dict[str, Any]) -> None:
                         invalid_rows = issue.get("invalid_ocr_count_contract_rows")
                         invalid_count = len(invalid_rows) if isinstance(invalid_rows, list) else 0
                         print(f"   - invalid ocr count contracts: {invalid_count}")
+    baseline_comparison = report.get("baseline_comparison")
+    if isinstance(baseline_comparison, dict):
+        signature_changes = baseline_comparison.get("signature_changes")
+        signature_change_count = (
+            len(signature_changes) if isinstance(signature_changes, list) else 0
+        )
+        missing_in_baseline = baseline_comparison.get("missing_in_baseline")
+        missing_in_candidate = baseline_comparison.get("missing_in_candidate")
+        missing_baseline_count = len(missing_in_baseline) if isinstance(missing_in_baseline, list) else 0
+        missing_candidate_count = len(missing_in_candidate) if isinstance(missing_in_candidate, list) else 0
+        median_delta = baseline_comparison.get("median_total_elapsed_delta_s")
+        median_delta_text = (
+            f", median_delta={float(median_delta):+.3f}s"
+            if isinstance(median_delta, (int, float))
+            else ""
+        )
+        print(
+            "baseline comparison: "
+            f"compared={baseline_comparison.get('compared_rows', 0)}, "
+            f"signature_changes={signature_change_count}, "
+            f"missing_baseline={missing_baseline_count}, "
+            f"missing_candidate={missing_candidate_count}"
+            f"{median_delta_text}"
+        )
+        if isinstance(signature_changes, list):
+            for change in signature_changes[:5]:
+                if not isinstance(change, dict):
+                    continue
+                print(f"   - signature drift: {change.get('slug')}")
     if summary.get("stage_duration_s"):
         stage_total_text = ", ".join(
             f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()

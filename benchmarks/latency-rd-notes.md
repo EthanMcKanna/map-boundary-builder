@@ -16640,3 +16640,16 @@ with zero failures in 0.531s.
   `{"complete":38,"failed":11}`, prewarm `0.683s`, primary max `0.425s`, repeat
   p95 `0.372s`, repeat max `0.433s`, repeat OCR-engine p95 `0.339s`, stable
   signatures, and all manifest latency/OCR-count contracts.
+- Added a stress-report baseline comparison helper for cleaner future A/B
+  decisions. `--compare-baseline-report` loads an earlier
+  `stress-summary.json`, compares intersecting slugs with the same rounded
+  output-signature fields used by repeat-profile drift checks, saves per-row
+  primary latency/stage/OCR-engine deltas, and prints a compact comparison line;
+  `--fail-on-baseline-signature-drift` can turn those signature changes into a
+  nonzero candidate gate. Focused stress benchmark tests passed `98 passed in
+  0.48s`. A real focused smoke at `out/baseline-compare-smoke-20260603`
+  compared `dallas-waymo` and `zoox-sf` against
+  `out/dark-rec8-patched-full49-hard-20260603/stress-summary.json`, passed
+  `2/2`, reported `signature_changes=0`, repeat p95 `0.285s`, repeat
+  OCR-engine p95 `0.237s`, and all focused latency/OCR-count budgets. This is
+  harness reliability only; no runtime deploy is needed.
