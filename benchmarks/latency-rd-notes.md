@@ -16461,3 +16461,23 @@ with zero failures in 0.531s.
   (Dallas detector spike, still within budget), repeat p95 `0.351s`, repeat max
   `0.415s`, repeat OCR-engine p95 `0.310s`, stable signatures, and all manifest
   latency/OCR-count contracts.
+- Added runtime dependency versions, including `cv2`, to the API run-result
+  cache key and cached that dependency dict in-process. The pipeline hash still
+  intentionally avoids importing `cv2`, but top-level cached run results now
+  invalidate when runtime packages change instead of relying only on lower-level
+  OCR/extraction cache dependency signatures. While validating that cache
+  hardening, the full hard gate exposed a real primary-latency tail on the
+  no-catalog tall Zoox mobile failure row: the pre-fast-fail control
+  `out/run-deps-cache-full49-hard2-20260603` passed all repeat budgets but failed
+  the primary budget at `1.151999s` for `zoox-las-vegas-mobile-tall` after a
+  regional-label georeference attempt that still failed sparse. Moving the
+  existing focused sparse portrait fast-fail guard before georeference preserved
+  behavior signatures while skipping that doomed fit. Focused validation at
+  `out/run-deps-zoox-fastfail-focused-20260603` passed `2/2`, cut the tall row
+  primary to `0.218739s`, and kept repeat p95 `0.254s`. The full hard gate at
+  `out/run-deps-fastfail-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.598364s`, repeat p95 `0.415s`,
+  repeat max `0.656s`, repeat OCR-engine p95 `0.397s`, stable repeat
+  signatures, and all manifest latency/OCR-count contracts. All 49 primary
+  behavior signatures matched the immediate pre-fast-fail control; the tall Zoox
+  row improved from `1.151999s` to `0.188700s`.

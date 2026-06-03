@@ -1990,28 +1990,41 @@ def build_boundary(
             "Could not infer a service-area boundary from non-map app UI. "
             "Upload a service-area coverage map crop with readable place labels."
         )
-    wait_future_result(georef_resource_future)
-    georef = fit_georeference(
+    georef = None
+    if should_fast_fail_focused_sparse_ocr(
+        labels_from_focus_georef_ocr,
+        georef,
         labels,
-        image_path,
-        extraction.pixel_geometry,
-        rgb=rgb,
-        city_input=city_input,
-        context_hints=filename_city_contexts(filename_hint) if city_input is None else None,
+        style=extraction.style,
+        allow_catalog=allow_catalog,
         width=width,
         height=height,
-        coverage_ratio=extraction.coverage_ratio,
-        min_control_points=opts.min_control_points,
-        label_y_min=label_y_min,
-        label_y_max=label_y_max,
-        road_feature_distance=road_feature_distance,
-        anchor_marker_dots=should_anchor_marker_dots(extraction.style),
-        style=extraction.style,
-        allow_credible_cached_fit=labels_from_focus_georef_ocr,
-        progress=progress,
-    )
-    if labels_from_focus_georef_ocr:
-        georef = focused_georef_with_admin_control_city(georef)
+        provider_ui_fast_ocr_max_dimension=provider_ui_fast_ocr_max_dimension,
+    ):
+        focused_sparse_ocr_failure = True
+    else:
+        wait_future_result(georef_resource_future)
+        georef = fit_georeference(
+            labels,
+            image_path,
+            extraction.pixel_geometry,
+            rgb=rgb,
+            city_input=city_input,
+            context_hints=filename_city_contexts(filename_hint) if city_input is None else None,
+            width=width,
+            height=height,
+            coverage_ratio=extraction.coverage_ratio,
+            min_control_points=opts.min_control_points,
+            label_y_min=label_y_min,
+            label_y_max=label_y_max,
+            road_feature_distance=road_feature_distance,
+            anchor_marker_dots=should_anchor_marker_dots(extraction.style),
+            style=extraction.style,
+            allow_credible_cached_fit=labels_from_focus_georef_ocr,
+            progress=progress,
+        )
+        if labels_from_focus_georef_ocr:
+            georef = focused_georef_with_admin_control_city(georef)
     if should_fast_fail_focused_sparse_ocr(
         labels_from_focus_georef_ocr,
         georef,

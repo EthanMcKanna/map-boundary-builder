@@ -470,15 +470,47 @@ class ApiRunCacheTests(unittest.TestCase):
         with (
             patch.dict("os.environ", {"MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1600"}, clear=True),
             patch("api.index.ocr_runtime_config", return_value={}),
+            patch("api.index.run_result_runtime_dependencies_config", return_value={}),
         ):
             first = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
         with (
             patch.dict("os.environ", {"MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1200"}, clear=True),
             patch("api.index.ocr_runtime_config", return_value={}),
+            patch("api.index.run_result_runtime_dependencies_config", return_value={}),
         ):
             second = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
 
         self.assertNotEqual(first, second)
+
+    def test_run_cache_key_depends_on_runtime_dependencies(self) -> None:
+        with (
+            patch("api.index.ocr_runtime_config", return_value={}),
+            patch("api.index.generation_runtime_env_config", return_value={}),
+            patch("api.index.run_result_runtime_dependencies_config", return_value={"cv2": "4.10.0"}),
+        ):
+            first = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+        with (
+            patch("api.index.ocr_runtime_config", return_value={}),
+            patch("api.index.generation_runtime_env_config", return_value={}),
+            patch("api.index.run_result_runtime_dependencies_config", return_value={"cv2": "4.11.0"}),
+        ):
+            second = run_result_cache_key(b"image-a", None, BoundaryBuildOptions())
+
+        self.assertNotEqual(first, second)
+
+    def test_run_cache_runtime_dependencies_are_cached(self) -> None:
+        api_index.run_result_runtime_dependencies_config.cache_clear()
+        with patch(
+            "api.index.pipeline_version_dependency_versions",
+            return_value=[("cv2", "4.10.0"), ("rapidocr-onnxruntime", "1.4.4")],
+        ) as dependencies:
+            first = api_index.run_result_runtime_dependencies_config()
+            second = api_index.run_result_runtime_dependencies_config()
+        api_index.run_result_runtime_dependencies_config.cache_clear()
+
+        self.assertEqual(first, {"cv2": "4.10.0", "rapidocr-onnxruntime": "1.4.4"})
+        self.assertEqual(second, first)
+        dependencies.assert_called_once_with()
 
     def test_generation_runtime_env_config_defaults_and_overrides(self) -> None:
         with patch.dict("os.environ", {}, clear=True):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from collections import OrderedDict
+from functools import lru_cache
 import gzip
 import hashlib
 import hmac
@@ -1368,7 +1369,13 @@ def run_result_runtime_config() -> dict[str, Any]:
     return {
         "ocr": ocr_runtime_config(),
         "generation_env": generation_runtime_env_config(),
+        "runtime_dependencies": run_result_runtime_dependencies_config(),
     }
+
+
+@lru_cache(maxsize=1)
+def run_result_runtime_dependencies_config() -> dict[str, str]:
+    return dict(pipeline_version_dependency_versions())
 
 
 def generation_runtime_env_config() -> dict[str, str]:

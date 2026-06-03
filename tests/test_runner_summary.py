@@ -3819,7 +3819,11 @@ def test_no_catalog_tall_dark_teal_focus_can_fail_sparse_without_full_retry(tmp_
     monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
     monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
     monkeypatch.setattr(runner, "extract_focus_georef_labels_from_rgb", lambda *_args, **_kwargs: focus_labels)
-    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        runner,
+        "fit_georeference",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("georeference should be skipped")),
+    )
     monkeypatch.setattr(
         runner,
         "extract_full_ocr_labels_for_style",
