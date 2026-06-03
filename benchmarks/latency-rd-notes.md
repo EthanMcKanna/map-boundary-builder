@@ -17268,3 +17268,16 @@ with zero failures in 0.531s.
   `missing_baseline=1`, and `baseline_out_of_scope=1`. Focused stress benchmark
   tests passed `122 passed in 0.35s`; this is benchmark feedback-loop
   reliability only.
+- Rejected lowering the focused dark-teal georeference OCR crop cap below the
+  current `550px` default. A current five-row focused-control gate at
+  `out/focus-cap550-control-20260603` passed `5/5` expectations with repeat p95
+  `0.282s` and repeat OCR-total p95 `0.142s`. The `500px` candidate at
+  `out/focus-cap500-candidate-20260603` and the `450px` candidate at
+  `out/focus-cap450-candidate-20260603` both failed `3/5`: Ann Arbor dropped
+  below its manifest OCR-label floor and Zoox Las Vegas tall violated
+  confidence-count contracts, with output-signature drift in each run. The
+  `400px` candidate also failed `3/5`, pushed Ann Arbor to `2.845s`, triggered a
+  full-detail OCR retry, drifted four output signatures, and failed the preset
+  latency-regression budget. Keep
+  `MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION=550`; this is rejected
+  speed-tuning evidence, not a runtime change.
