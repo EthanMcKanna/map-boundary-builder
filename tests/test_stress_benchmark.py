@@ -1008,7 +1008,7 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
         "prewarm_runtime": True,
         "repeat_profile_runs": 3,
         "repeat_profile_warmups": 1,
-        "preset": {"name": "real-screenshot-hard-gate", "version": 3},
+        "preset": {"name": "real-screenshot-hard-gate", "version": 4},
         "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
     }
 
@@ -1018,7 +1018,7 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
         {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
         {"field": "extraction_cache", "baseline": True, "candidate": False},
         {"field": "repeat_profile_warmups", "baseline": 0, "candidate": 1},
-        {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v3"},
+        {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v4"},
     ]
 
 
@@ -1201,7 +1201,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "configuration_changes": [
                 {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
                 {"field": "extraction_cache", "baseline": True, "candidate": False},
-                {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v3"},
+                {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v4"},
             ],
             "signature_changed_field_counts": {"city": 1, "control_points": 1},
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
@@ -1342,7 +1342,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "signature_fields=city:1,control_points:1" in output
     assert (
         "baseline config changes: runner_ocr_cache=true->false, "
-        "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v3"
+        "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v4"
     ) in output
     assert (
         "baseline primary delta: worst_total=houston +0.200s "
@@ -4406,7 +4406,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 3,
+            "version": 4,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -4499,7 +4499,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 2,
+            "version": 3,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {
@@ -4594,6 +4594,68 @@ def test_real_screenshot_gate_baseline_comparison_fails_config_drift_by_default(
                     {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
                 ],
                 "signature_changes": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_real_screenshot_gate_baseline_comparison_fails_signature_drift_by_default(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "configuration_changes": [],
+                "signature_changes": [
+                    {"slug": "dallas-waymo", "changed_fields": ["control_points"]},
+                ],
             },
         }
 

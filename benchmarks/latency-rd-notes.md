@@ -17221,3 +17221,19 @@ with zero failures in 0.531s.
   `preset=focused-real-screenshot-gate@v1:only1->focused-real-screenshot-gate@v2:only1`.
   Focused stress benchmark tests passed `117 passed in 0.66s`; this is
   benchmark feedback-loop reliability only.
+- Made baseline output-signature drift fail automatically for hard/focused
+  preset comparisons, matching the new default config-drift gate. The preset
+  metadata moved again (`--real-screenshot-hard-gate` to version `4`,
+  `--focused-real-screenshot-gate` to version `3`) because comparison semantics
+  changed: a speed candidate using `--compare-baseline-report` now fails closed
+  if its output signature differs from the baseline. A same-config focused
+  smoke used `out/baseline-signature-drift-20260603/stress-summary.json`, a copy
+  of the current `dallas-waymo` focused report with only `control_points`
+  intentionally staled, then ran current output at
+  `out/baseline-signature-default-gate-smoke-20260603`. The row still passed
+  behavior (`1/1`, primary `0.357s`, repeat analyzed `2`, repeat subsecond
+  `2/2`), but exited `1` without the explicit
+  `--fail-on-baseline-signature-drift` flag because the comparator reported
+  `signature_changes=1` and `signature_fields=control_points:1`. Focused stress
+  benchmark tests passed `118 passed in 0.55s`; this is benchmark feedback-loop
+  reliability only.

@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 3
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 4
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 2
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 3
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -559,6 +559,7 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     args.fail_on_unexpected = True
     args.fail_on_repeat_signature_drift = True
     if args.compare_baseline_report:
+        args.fail_on_baseline_signature_drift = True
         args.fail_on_baseline_config_drift = True
     if args.repeat_profile_runs == 0:
         args.repeat_profile_runs = 3
