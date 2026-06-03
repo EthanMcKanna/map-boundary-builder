@@ -4712,12 +4712,14 @@ def test_latency_budget_skips_repeat_ocr_engine_p95_for_zero_call_profiles() -> 
             ],
         },
         max_repeat_ocr_engine_p95_duration_s={"total_s": 0.9},
+        max_repeat_ocr_engine_max_duration_s={"total_s": 0.9},
         max_repeat_ocr_engine_p95_count={"selected_box_count": 30},
         max_repeat_ocr_engine_max_count={"selected_box_count": 30},
     )
 
     assert report["passed"] is True
     assert report["repeat_ocr_engine_p95_violations"] == []
+    assert report["repeat_ocr_engine_max_violations"] == []
     assert report["repeat_ocr_engine_count_p95_violations"] == []
     assert report["repeat_ocr_engine_count_max_violations"] == []
 
@@ -5790,6 +5792,9 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
             "total_s": 0.7,
         }
+        assert kwargs["max_repeat_ocr_engine_max_duration_s"] == {
+            "total_s": 0.7,
+        }
         expected_count_budget = {
             "label_confidence_lt_90_count": 3.0,
             "label_count": 29.0,
@@ -5881,6 +5886,9 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
             "total_s": 2.0,
         }
         assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
+            "total_s": 0.7,
+        }
+        assert kwargs["max_repeat_ocr_engine_max_duration_s"] == {
             "total_s": 0.7,
         }
         expected_count_budget = {
@@ -6399,6 +6407,9 @@ def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monk
         assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
             "total_s": 0.6,
         }
+        assert kwargs["max_repeat_ocr_engine_max_duration_s"] == {
+            "total_s": 0.65,
+        }
         assert kwargs["max_repeat_ocr_engine_p95_count"] == {
             "label_confidence_lt_90_count": 3.0,
             "label_count": 29.0,
@@ -6451,6 +6462,8 @@ def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monk
             "rapidocr_s=1.7",
             "--max-repeat-ocr-engine-p95-duration-s",
             "total_s=0.6",
+            "--max-repeat-ocr-engine-max-duration-s",
+            "total_s=0.65",
             "--max-repeat-ocr-engine-p95-count",
             "selected_box_count=28",
             "--max-repeat-ocr-engine-max-count",
@@ -6877,6 +6890,56 @@ def test_latency_budget_flags_repeat_ocr_engine_p95_excess_and_missing() -> None
     ]
 
 
+def test_latency_budget_flags_repeat_ocr_engine_max_excess_and_missing() -> None:
+    repeat_profile = {
+        "summary": {
+            "ocr_engine_stage_duration_s": {
+                "rec_elapsed_s": {
+                    "samples": 3,
+                    "p95_duration_s": 0.52,
+                    "max_duration_s": 0.72,
+                }
+            }
+        },
+        "samples": [
+            {"slug": "zoox-tall", "warmup": False, "total_elapsed_s": 0.8},
+        ],
+    }
+
+    budget = stress_module.build_latency_budget_summary(
+        [],
+        repeat_profile,
+        max_repeat_ocr_engine_p95_duration_s={
+            "rec_elapsed_s": 0.6,
+        },
+        max_repeat_ocr_engine_max_duration_s={
+            "det_elapsed_s": 0.3,
+            "rec_elapsed_s": 0.6,
+        },
+    )
+
+    assert budget["passed"] is False
+    assert budget["repeat_ocr_engine_p95_violations"] == []
+    assert budget["max_repeat_ocr_engine_max_duration_s"] == {
+        "det_elapsed_s": 0.3,
+        "rec_elapsed_s": 0.6,
+    }
+    assert budget["repeat_ocr_engine_max_violations"] == [
+        {
+            "kind": "repeat_ocr_engine_max_missing",
+            "metric": "det_elapsed_s",
+            "max_repeat_ocr_engine_max_duration_s": 0.3,
+        },
+        {
+            "kind": "repeat_ocr_engine_max_budget_exceeded",
+            "metric": "rec_elapsed_s",
+            "max_duration_s": 0.72,
+            "max_repeat_ocr_engine_max_duration_s": 0.6,
+            "excess_s": 0.12,
+        },
+    ]
+
+
 def test_latency_budget_flags_primary_ocr_engine_excess_and_missing() -> None:
     budget = stress_module.build_latency_budget_summary(
         [
@@ -7086,6 +7149,10 @@ def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatc
             "rec_elapsed_s": 0.6,
             "total_s": 0.8,
         }
+        assert kwargs["max_repeat_ocr_engine_max_duration_s"] == {
+            "rec_elapsed_s": 0.7,
+            "total_s": 0.9,
+        }
         return {
             "summary": {
                 "total": 1,
@@ -7112,7 +7179,12 @@ def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatc
                     "rec_elapsed_s": 0.6,
                     "total_s": 0.8,
                 },
+                "max_repeat_ocr_engine_max_duration_s": {
+                    "rec_elapsed_s": 0.7,
+                    "total_s": 0.9,
+                },
                 "repeat_ocr_engine_p95_violations": [],
+                "repeat_ocr_engine_max_violations": [],
             },
         }
 
@@ -7128,6 +7200,8 @@ def test_main_passes_repeat_ocr_engine_p95_budget_to_runner(tmp_path, monkeypatc
             "2",
             "--max-repeat-ocr-engine-p95-duration-s",
             "rec_elapsed_s=0.6,total_elapsed_s=0.8",
+            "--max-repeat-ocr-engine-max-duration-s",
+            "rec_elapsed_s=0.7,total_elapsed_s=0.9",
         ]
     )
 

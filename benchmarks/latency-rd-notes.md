@@ -17653,3 +17653,17 @@ with zero failures in 0.531s.
   `repeat_case_max` violation, where `los-angeles-waymo` case p95 delta stayed
   under budget at `+0.098149s` but case max delta reached `+0.101615s`.
   Benchmark acceptance reliability only; no runtime default changed.
+- Added a repeat OCR max-duration latency budget for hard gates. The current
+  repeat OCR budget could fail p95 duration and max count metrics, but not a
+  one-off OCR detector/recognizer/total duration spike when p95 stayed inside
+  budget. The CLI/API now accept
+  `--max-repeat-ocr-engine-max-duration-s`, and the real-screenshot hard gate
+  defaults `total_s` to the same `0.7s` repeat OCR duration budget as p95.
+  Focused stress tests passed (`138 passed in 0.40s`) and the full suite
+  passed (`714 passed, 31 subtests passed in 4.98s`). A saved proof in
+  `out/repeat-ocr-max-duration-budget-proof-20260603/latency-budget.json`
+  uses `out/profile-context-gray-fill-full27-hard-20260602/stress-summary.json`
+  with `max_repeat_ocr_engine_p95_duration_s={"total_s":0.7}` and
+  `max_repeat_ocr_engine_max_duration_s={"total_s":0.7}`; p95 stayed green at
+  `0.517158s`, while the new max-duration gate failed `total_s=0.923499s`.
+  Benchmark acceptance reliability only; no runtime default changed.
