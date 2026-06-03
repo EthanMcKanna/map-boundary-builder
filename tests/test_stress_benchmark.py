@@ -350,7 +350,24 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_engine_profile": {"total_s": 0.45},
             },
             {"slug": "baseline-only", "observed_status": "failed"},
-        ]
+        ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 2,
+                "expectation_passed_samples": 2,
+                "unexpected_samples": 0,
+                "subsecond_samples": 2,
+                "median_total_elapsed_s": 0.55,
+                "p95_total_elapsed_s": 0.7,
+                "max_total_elapsed_s": 0.8,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {"p95_duration_s": 0.3, "max_duration_s": 0.4},
+                },
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": 20.0, "max_count": 22.0},
+                },
+            },
+        },
     }
     candidate = {
         "rows": [
@@ -391,7 +408,24 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_engine_profile": {"total_s": 0.6},
             },
             {"slug": "candidate-only", "observed_status": "failed"},
-        ]
+        ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 2,
+                "expectation_passed_samples": 2,
+                "unexpected_samples": 0,
+                "subsecond_samples": 2,
+                "median_total_elapsed_s": 0.56,
+                "p95_total_elapsed_s": 0.73,
+                "max_total_elapsed_s": 0.84,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {"p95_duration_s": 0.32, "max_duration_s": 0.42},
+                },
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": 22.0, "max_count": 24.0},
+                },
+            },
+        },
     }
 
     comparison = stress_module.compare_stress_reports(baseline, candidate)
@@ -409,6 +443,10 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["largest_total_improvements"][0]["slug"] == "dallas"
     assert comparison["largest_total_improvements"][0]["stage_delta_s"] == {"ocr": -0.05}
     assert comparison["largest_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
+    repeat_delta = comparison["repeat_profile_delta"]
+    assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
+    assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
+    assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
 
 
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
@@ -425,6 +463,18 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "missing_in_candidate": [],
             "signature_changes": [{"slug": "houston"}],
             "median_total_elapsed_delta_s": -0.04,
+            "repeat_profile_delta": {
+                "duration_s": {
+                    "p95_total_elapsed_s": {"delta_s": 0.03},
+                    "max_total_elapsed_s": {"delta_s": 0.04},
+                },
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {"p95_duration_s": {"delta_s": 0.02}},
+                },
+                "ocr_engine_count_metric": {
+                    "selected_box_count": {"p95_count": {"delta_count": 2.0}},
+                },
+            },
         },
         "rows": [],
     }
@@ -434,6 +484,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     output = capsys.readouterr().out
     assert "baseline comparison: compared=2, signature_changes=1" in output
     assert "missing_baseline=1, missing_candidate=0, median_delta=-0.040s" in output
+    assert "baseline repeat delta: p95_total=+0.030s" in output
+    assert "ocr_total_p95=+0.020s" in output
+    assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston" in output
 
 

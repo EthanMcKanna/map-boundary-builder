@@ -16668,3 +16668,19 @@ with zero failures in 0.531s.
   median primary delta `+0.039s`, repeat p95 `0.378s`, and repeat OCR-engine
   p95 `0.349s`. Keep route UI OCR on the generic `12` batch; the rejected
   global `8` batch is not salvageable as a narrow route-only override.
+- Extended `--compare-baseline-report` so it carries repeat-profile deltas in
+  addition to per-row primary latency/signature deltas. Candidate reports now
+  save `baseline_comparison.repeat_profile_delta` for sample counts,
+  median/p95/max total repeat durations, OCR engine p95/max stage durations,
+  and displayed OCR-count metrics, and the CLI prints a compact
+  `baseline repeat delta` line for p95/max total, OCR total p95, and selected
+  box p95. Focused stress benchmark tests passed `98 passed in 0.41s`, the full
+  suite passed `674 passed in 5.76s`, and `git diff --check` was clean. A real
+  focused smoke at `out/baseline-repeat-compare-smoke-20260603` compared
+  `dallas-waymo` and `zoox-sf` against
+  `out/dark-rec8-patched-full49-hard-20260603/stress-summary.json`, passed
+  `2/2`, reported `signature_changes=0`, median primary delta `+0.033s`, and
+  repeat deltas `p95_total=-0.076s`, `max_total=-0.132s`,
+  `ocr_total_p95=-0.099s`, `selected_box_p95=-7.5`; the saved JSON check
+  matched the printed deltas. This is harness reliability only; no runtime
+  deploy is needed.

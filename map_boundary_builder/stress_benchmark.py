@@ -746,7 +746,119 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
+    repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
+    if repeat_delta is not None:
+        comparison["repeat_profile_delta"] = repeat_delta
     return comparison
+
+
+def stress_repeat_profile_delta(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+) -> dict[str, Any] | None:
+    baseline_summary = stress_report_repeat_profile_summary(baseline_report)
+    candidate_summary = stress_report_repeat_profile_summary(candidate_report)
+    if baseline_summary is None or candidate_summary is None:
+        return None
+    delta: dict[str, Any] = {}
+    count_fields: dict[str, dict[str, float]] = {}
+    for key in (
+        "analyzed_samples",
+        "expectation_passed_samples",
+        "unexpected_samples",
+        "subsecond_samples",
+    ):
+        metric_delta = stress_scalar_delta(baseline_summary, candidate_summary, key, delta_key="delta")
+        if metric_delta is not None:
+            count_fields[key] = metric_delta
+    if count_fields:
+        delta["sample_counts"] = count_fields
+
+    duration_fields: dict[str, dict[str, float]] = {}
+    for key in ("median_total_elapsed_s", "p95_total_elapsed_s", "max_total_elapsed_s"):
+        metric_delta = stress_scalar_delta(baseline_summary, candidate_summary, key, delta_key="delta_s")
+        if metric_delta is not None:
+            duration_fields[key] = metric_delta
+    if duration_fields:
+        delta["duration_s"] = duration_fields
+
+    ocr_stage_fields = stress_nested_metric_deltas(
+        baseline_summary,
+        candidate_summary,
+        section_key="ocr_engine_stage_duration_s",
+        metric_keys=OCR_ENGINE_STAGE_MAX_KEYS,
+        stat_keys=("p95_duration_s", "max_duration_s"),
+        delta_key="delta_s",
+    )
+    if ocr_stage_fields:
+        delta["ocr_engine_stage_duration_s"] = ocr_stage_fields
+
+    ocr_count_fields = stress_nested_metric_deltas(
+        baseline_summary,
+        candidate_summary,
+        section_key="ocr_engine_count_metric",
+        metric_keys=OCR_ENGINE_COUNT_DISPLAY_KEYS,
+        stat_keys=("p95_count", "max_count"),
+        delta_key="delta_count",
+    )
+    if ocr_count_fields:
+        delta["ocr_engine_count_metric"] = ocr_count_fields
+    return delta or None
+
+
+def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, Any] | None:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return None
+    summary = repeat_profile.get("summary")
+    return summary if isinstance(summary, dict) else None
+
+
+def stress_scalar_delta(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+    key: str,
+    *,
+    delta_key: str,
+) -> dict[str, float] | None:
+    baseline_value = parse_nonnegative_float(baseline.get(key))
+    candidate_value = parse_nonnegative_float(candidate.get(key))
+    if baseline_value is None or candidate_value is None:
+        return None
+    return {
+        "baseline": round(baseline_value, 6),
+        "candidate": round(candidate_value, 6),
+        delta_key: round(candidate_value - baseline_value, 6),
+    }
+
+
+def stress_nested_metric_deltas(
+    baseline_summary: dict[str, Any],
+    candidate_summary: dict[str, Any],
+    *,
+    section_key: str,
+    metric_keys: tuple[str, ...],
+    stat_keys: tuple[str, ...],
+    delta_key: str,
+) -> dict[str, dict[str, dict[str, float]]]:
+    baseline_section = baseline_summary.get(section_key)
+    candidate_section = candidate_summary.get(section_key)
+    if not isinstance(baseline_section, dict) or not isinstance(candidate_section, dict):
+        return {}
+    deltas: dict[str, dict[str, dict[str, float]]] = {}
+    for metric in metric_keys:
+        baseline_metric = baseline_section.get(metric)
+        candidate_metric = candidate_section.get(metric)
+        if not isinstance(baseline_metric, dict) or not isinstance(candidate_metric, dict):
+            continue
+        stat_deltas: dict[str, dict[str, float]] = {}
+        for stat in stat_keys:
+            metric_delta = stress_scalar_delta(baseline_metric, candidate_metric, stat, delta_key=delta_key)
+            if metric_delta is not None:
+                stat_deltas[stat] = metric_delta
+        if stat_deltas:
+            deltas[metric] = stat_deltas
+    return deltas
 
 
 def stress_report_rows_by_slug(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -3391,6 +3503,12 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"missing_candidate={missing_candidate_count}"
             f"{median_delta_text}"
         )
+        repeat_delta = baseline_comparison.get("repeat_profile_delta")
+        repeat_delta_text = baseline_repeat_delta_text(
+            repeat_delta if isinstance(repeat_delta, dict) else None
+        )
+        if repeat_delta_text:
+            print(f"baseline repeat delta: {repeat_delta_text}")
         if isinstance(signature_changes, list):
             for change in signature_changes[:5]:
                 if not isinstance(change, dict):
@@ -3719,6 +3837,68 @@ def repeat_profile_ocr_engine_count_metric_text(ocr_engine_counts: dict[str, Any
         label = OCR_ENGINE_COUNT_DISPLAY_LABELS.get(key, key)
         parts.append(f"{label}=p95 {p95_count:.1f} max {max_count:.1f}")
     return ", ".join(parts)
+
+
+def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
+    if not repeat_delta:
+        return ""
+    metrics = (
+        (
+            "p95_total",
+            ("duration_s", "p95_total_elapsed_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
+            "max_total",
+            ("duration_s", "max_total_elapsed_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
+            "ocr_total_p95",
+            ("ocr_engine_stage_duration_s", "total_s", "p95_duration_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
+            "selected_box_p95",
+            ("ocr_engine_count_metric", "selected_box_count", "p95_count"),
+            "delta_count",
+            "{:+.1f}",
+        ),
+    )
+    parts: list[str] = []
+    for label, path, value_key, formatter in metrics:
+        value = repeat_delta_metric_value(repeat_delta, path, value_key)
+        if value is not None:
+            parts.append(f"{label}={formatter.format(value)}")
+    return ", ".join(parts)
+
+
+def repeat_delta_metric_value(
+    repeat_delta: dict[str, Any],
+    path: tuple[str, ...],
+    value_key: str,
+) -> float | None:
+    current: Any = repeat_delta
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    if not isinstance(current, dict):
+        return None
+    return parse_signed_float(current.get(value_key))
+
+
+def parse_signed_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def parse_summary(stdout: str | bytes | None) -> tuple[dict[str, Any], str | None]:
