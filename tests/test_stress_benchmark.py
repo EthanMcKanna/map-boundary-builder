@@ -599,6 +599,60 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
     ) in output
 
 
+def test_print_stress_table_enriches_repeat_slowest_case_stage_from_cases(capsys) -> None:
+    report = {
+        "summary": {
+            "total": 1,
+            "expectation_passed": 1,
+            "statuses": {"complete": 1},
+            "max_total_elapsed_s": 0.6,
+        },
+        "repeat_profile": {
+            "runs_per_case": 3,
+            "warmup_runs_per_case": 1,
+            "summary": {
+                "analyzed_samples": 2,
+                "expectation_passed_samples": 2,
+                "subsecond_samples": 2,
+                "median_total_elapsed_s": 0.55,
+                "p95_total_elapsed_s": 0.6,
+                "max_total_elapsed_s": 0.61,
+                "slowest_cases": [
+                    {
+                        "slug": "ann-arbor",
+                        "p95_total_elapsed_s": 0.6,
+                        "max_total_elapsed_s": 0.61,
+                    }
+                ],
+            },
+            "cases": {
+                "ann-arbor": {
+                    "samples": 3,
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "p95_total_elapsed_s": 0.6,
+                    "max_total_elapsed_s": 0.61,
+                    "stage_duration_s": {
+                        "extract": {"p95_duration_s": 0.12, "max_duration_s": 0.13},
+                        "georeference": {"p95_duration_s": 0.31, "max_duration_s": 0.34},
+                        "ocr": {"p95_duration_s": 0.14, "max_duration_s": 0.15},
+                    },
+                }
+            },
+        },
+        "rows": [],
+    }
+
+    stress_module.print_stress_table(report)
+
+    output = capsys.readouterr().out
+    assert (
+        "repeat slowest cases: ann-arbor p95=0.600s max=0.610s "
+        "georeference_p95=0.310s"
+    ) in output
+
+
 def test_summarize_rapidocr_profile_events_copies_single_call_context() -> None:
     summary = summarize_rapidocr_profile_events(
         [
@@ -3474,6 +3528,11 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "analyzed_samples": 1,
             "expectation_passed_samples": 1,
             "unexpected_samples": 0,
+            "top_stage": {
+                "stage": "ocr",
+                "p95_duration_s": 0.4,
+                "max_duration_s": 0.4,
+            },
         }
     ]
     assert repeat_profile["summary"]["ocr_engine_slowest_cases"] == [
@@ -6516,6 +6575,10 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "unexpected_samples": 0,
             "p95_total_elapsed_s": 0.32,
             "max_total_elapsed_s": 0.34,
+            "stage_duration_s": {
+                "extract": {"p95_duration_s": 0.08, "max_duration_s": 0.09},
+                "ocr": {"p95_duration_s": 0.12, "max_duration_s": 0.13},
+            },
             "ocr_engine_stage_duration_s": {
                 "input_s": {"p95_duration_s": 0.02, "max_duration_s": 0.03},
                 "det_elapsed_s": {"p95_duration_s": 0.05, "max_duration_s": 0.06},
@@ -6533,6 +6596,10 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "unexpected_samples": 1,
             "p95_total_elapsed_s": 0.82,
             "max_total_elapsed_s": 0.91,
+            "stage_duration_s": {
+                "extract": {"p95_duration_s": 0.17, "max_duration_s": 0.2},
+                "ocr": {"p95_duration_s": 0.61, "max_duration_s": 0.7},
+            },
             "ocr_engine_stage_duration_s": {
                 "input_s": {"p95_duration_s": 0.04, "max_duration_s": 0.05},
                 "det_elapsed_s": {"p95_duration_s": 0.12, "max_duration_s": 0.14},
@@ -6568,6 +6635,11 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "analyzed_samples": 2,
             "expectation_passed_samples": 1,
             "unexpected_samples": 1,
+            "top_stage": {
+                "stage": "ocr",
+                "p95_duration_s": 0.61,
+                "max_duration_s": 0.7,
+            },
         }
     ]
     ocr_cases = stress_module.repeat_profile_ocr_engine_slowest_cases(case_summaries, limit=1)
@@ -6597,7 +6669,7 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     slow_cases = stress_module.repeat_profile_slowest_cases(case_summaries, limit=1)
     assert (
         stress_module.repeat_profile_slow_case_text(slow_cases[0])
-        == "slow p95=0.820s max=0.910s unexpected=1"
+        == "slow p95=0.820s max=0.910s ocr_p95=0.610s unexpected=1"
     )
     assert (
         stress_module.repeat_profile_ocr_engine_slow_case_text(ocr_cases[0])

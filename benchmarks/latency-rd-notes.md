@@ -17453,3 +17453,13 @@ with zero failures in 0.531s.
   `0.505533s`, repeat p95 `0.377s`, and repeat slowest lines now include
   `geo_step=inferring_map_location_from_labels:0.184s` and `0.181s`. This is
   benchmark feedback-loop reliability only.
+- Added dominant p95 stage context to repeat-profile slowest cases. This closes
+  the next diagnostic gap after `geo_step`: slow repeat samples showed their
+  top stage, but the case-level p95 line still only printed total p95/max. New
+  reports now print tokens such as `ocr_p95=...` or `georeference_p95=...`, and
+  old saved reports can rebuild this context from `repeat_profile.cases` or raw
+  repeat samples when available. Focused stress tests passed
+  (`133 passed in 0.32s`). A real Ann Arbor repeat probe at
+  `out/ann-arbor-repeat-case-stage-20260603` passed `1/1` with primary total
+  `0.518686s`, repeat p95 `0.374s`, and `repeat slowest cases` now prints
+  `georeference_p95=0.183s`. This is benchmark feedback-loop reliability only.

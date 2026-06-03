@@ -3804,7 +3804,33 @@ def repeat_profile_slowest_case_summary(
         value = summary.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             result[key] = value
+    top_stage = repeat_profile_case_top_stage_summary(summary)
+    if top_stage is not None:
+        result["top_stage"] = top_stage
     return result
+
+
+def repeat_profile_case_top_stage_summary(summary: dict[str, Any]) -> dict[str, Any] | None:
+    stage_stats = summary.get("stage_duration_s")
+    if not isinstance(stage_stats, dict):
+        return None
+    ranked: list[tuple[float, float, str]] = []
+    for stage, raw_stats in stage_stats.items():
+        if not isinstance(stage, str) or not stage or not isinstance(raw_stats, dict):
+            continue
+        p95_duration_s = parse_nonnegative_float(raw_stats.get("p95_duration_s"))
+        if p95_duration_s is None:
+            continue
+        max_duration_s = parse_nonnegative_float(raw_stats.get("max_duration_s"))
+        ranked.append((p95_duration_s, max_duration_s or p95_duration_s, stage))
+    if not ranked:
+        return None
+    p95_duration_s, max_duration_s, stage = max(ranked, key=lambda item: (item[0], item[1], item[2]))
+    return {
+        "stage": stage,
+        "p95_duration_s": round(p95_duration_s, 6),
+        "max_duration_s": round(max_duration_s, 6),
+    }
 
 
 def repeat_profile_ocr_full_detail_retry_cases(
@@ -5135,6 +5161,20 @@ def repeat_profile_slowest_samples_include_input_kind(samples: list[dict[str, An
     return False
 
 
+def repeat_profile_slowest_cases_include_top_stage(cases: list[dict[str, Any]]) -> bool:
+    return any(
+        isinstance(case, dict) and isinstance(case.get("top_stage"), dict)
+        for case in cases
+    )
+
+
+def rebuilt_repeat_profile_slowest_cases(repeat_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    repeat_cases = stress_report_repeat_profile_cases({"repeat_profile": repeat_profile})
+    if repeat_cases is None:
+        return []
+    return repeat_profile_slowest_cases(repeat_cases)
+
+
 def repeat_profile_ocr_engine_slowest_cases_include_detail_context(cases: list[dict[str, Any]]) -> bool:
     return any(
         any(case.get(key) is not None for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS)
@@ -5689,6 +5729,10 @@ def print_stress_table(report: dict[str, Any]) -> None:
                     print(f"repeat full-detail retries: {retry_count} sample(s): {retry_text}")
             slowest_cases = repeat_summary.get("slowest_cases")
             if isinstance(slowest_cases, list) and slowest_cases:
+                if not repeat_profile_slowest_cases_include_top_stage(slowest_cases):
+                    rebuilt_slowest_cases = rebuilt_repeat_profile_slowest_cases(repeat_profile)
+                    if repeat_profile_slowest_cases_include_top_stage(rebuilt_slowest_cases):
+                        slowest_cases = rebuilt_slowest_cases
                 slow_case_text = ", ".join(
                     repeat_profile_slow_case_text(case)
                     for case in slowest_cases[:5]
@@ -6020,6 +6064,12 @@ def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"p95={p95_total:.3f}s")
     if max_total is not None:
         parts.append(f"max={max_total:.3f}s")
+    top_stage = case.get("top_stage")
+    if isinstance(top_stage, dict):
+        stage = top_stage.get("stage")
+        p95_duration_s = parse_nonnegative_float(top_stage.get("p95_duration_s"))
+        if isinstance(stage, str) and stage and p95_duration_s is not None:
+            parts.append(f"{stage}_p95={p95_duration_s:.3f}s")
     unexpected = case.get("unexpected_samples")
     if isinstance(unexpected, int) and unexpected:
         parts.append(f"unexpected={unexpected}")
