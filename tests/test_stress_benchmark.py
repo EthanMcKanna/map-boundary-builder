@@ -2930,7 +2930,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 1,
+            "version": 2,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},

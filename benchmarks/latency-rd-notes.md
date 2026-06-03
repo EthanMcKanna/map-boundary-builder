@@ -16349,3 +16349,18 @@ with zero failures in 0.531s.
   repeat p95 `0.473s` and repeat OCR-engine p95 `0.431s`. Keep the existing
   bright-blue detector/rescue defaults; no runtime change was made from this
   local ONNX timing noise.
+- Rejected parallelizing RapidOCR warmup on current evidence. A fresh isolated
+  local sequential warm of the current four-engine plan took `3.824025s`
+  (`608/default/batch12=1.067452s`, `608/default/batch16=0.407662s`,
+  `256/en-ppocrv5/max=1.439664s`, `208/en-ppocrv5/max=0.901820s`). A two-worker
+  parallel prototype was worse at `4.466569s`, stretching every warm to about
+  `2.1-2.36s`. A four-worker prototype improved wall time only to `3.268762s`
+  while stretching both large bright-blue warms beyond `3.24s`, which is a poor
+  tradeoff for production Fluid Compute CPU/memory pressure. Keep sequential
+  warmup unless a production-like benchmark proves a parallel plan is both
+  faster and stable.
+- Bumped saved `--real-screenshot-hard-gate` preset metadata to version `2` now
+  that the preset enforces the stricter completed OCR contract coverage
+  (`49` call-contract rows, `38` count-contract rows, and `0` positive
+  call-only rows). This keeps future artifacts distinguishable from version `1`
+  runs that allowed the older `12` count-contract / `26` call-only coverage.
