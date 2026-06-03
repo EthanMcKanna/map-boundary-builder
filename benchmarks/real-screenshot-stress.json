@@ -405,6 +405,23 @@
       }
     },
     {
+      "slug": "avride-dallas-map-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Dallas",
+        "catalog_slug_equals": "dallas-avride",
+        "min_combined_confidence": 0.91,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-96.8183506, 32.7681501, -96.7551594, 32.83758],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "avride-dallas-webp-lowres",
       "image": "/Users/ethanmckanna/Downloads/avride dallas.webp",
       "no_catalog": true,
@@ -888,6 +905,23 @@
       }
     },
     {
+      "slug": "tesla-dallas-jpeg-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Dallas",
+        "catalog_slug_equals": "dallas-tesla",
+        "min_combined_confidence": 0.97,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-96.8582001, 32.7624321, -96.7552567, 32.8723526],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "austin-tesla-service-area",
       "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
       "no_catalog": true,
@@ -1107,6 +1141,23 @@
       }
     },
     {
+      "slug": "zoox-las-vegas-service-area-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Las Vegas",
+        "catalog_slug_equals": "las-vegas-zoox",
+        "min_combined_confidence": 0.76,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-115.3550119, 36.0353866, -115.1830059, 36.187696],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "bay-area-waymo",
       "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
       "no_catalog": true,
@@ -1217,6 +1268,23 @@
       }
     },
     {
+      "slug": "houston-waymo-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/h-waymo.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Houston",
+        "catalog_slug_equals": "houston-waymo",
+        "min_combined_confidence": 0.87,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-95.4320951, 29.6684949, -95.2874491, 29.8202881],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "orlando-waymo",
       "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
       "no_catalog": true,
@@ -1273,6 +1341,23 @@
       }
     },
     {
+      "slug": "nashville-waymo-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Nashville",
+        "catalog_slug_equals": "nashville-waymo",
+        "min_combined_confidence": 0.96,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "houston-robotaxi-gray",
       "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
       "no_catalog": true,
@@ -1296,6 +1381,23 @@
           "label_confidence_lt_90_count": 0
         },
         "bbox_approx": [-95.666187, 29.8350303, -95.4797339, 29.9966451],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "houston-robotaxi-gray-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Houston",
+        "catalog_slug_equals": "houston-tesla",
+        "min_combined_confidence": 0.96,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-95.624939, 29.8584766, -95.5238266, 29.971941],
         "max_bbox_error_m": 1000
       }
     },
@@ -1324,6 +1426,23 @@
           "label_confidence_lt_90_count": 0
         },
         "bbox_approx": [-80.3388012, 25.6886035, -80.1116863, 25.9830147],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "miami-waymo-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/miami.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Miami",
+        "catalog_slug_equals": "miami-waymo",
+        "min_combined_confidence": 0.89,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
         "max_bbox_error_m": 1000
       }
     }

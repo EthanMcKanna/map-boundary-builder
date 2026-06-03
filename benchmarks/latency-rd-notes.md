@@ -18226,3 +18226,29 @@ with zero failures in 0.531s.
   the manifest, the focused catalog/stress tests passed (`286 passed`),
   `python -m compileall -q api map_boundary_builder` passed, and full pytest
   passed `730 passed, 31 subtests passed`.
+- Added seven more default-upload catalog shortcut rows for existing
+  non-duplicate screenshots where the broad default-path probe at
+  `out/default-path-probe-forced-complete-20260603/summary.json` proved a
+  zero-OCR shape match without changing runtime behavior. The new default rows
+  cover Avride Dallas (`dallas-avride`, `0.022s` focused), Tesla Dallas JPEG
+  (`dallas-tesla`, `0.018s`), Zoox Las Vegas service-area
+  (`las-vegas-zoox`, `0.028s`), Houston Waymo (`houston-waymo`, `0.061s`),
+  Nashville Waymo (`nashville-waymo`, `0.014s`), Houston Robotaxi gray
+  (`houston-tesla`, `0.017s`), and Miami Waymo (`miami-waymo`, `0.067s`).
+  The forced no-catalog rows remain in place as OCR/georeference coverage and
+  all seven paired default rows assert `max_ocr_engine_calls: 0`. I again left
+  the Zoox San Francisco phone screenshot unlocked because the current default
+  path matches the broader `bay-area-zoox` catalog while the forced OCR row
+  expects San Francisco, which is useful signal but not a stable contract.
+  Focused stress proof at `out/default-catalog-nonduplicate-focused-20260603`
+  passed `14/14` with repeat p95 `0.269s` and max `0.275s`; the full hard gate
+  at `out/default-catalog-nonduplicate-full62-hard-20260603` passed `62/62`
+  expected outcomes with statuses `{"complete":51,"failed":11}`, max primary
+  `0.350329s`, repeat p95 `0.279s`, repeat max `0.309s`, and prewarm `0.632s`.
+  Common-row comparison against the previous full55 report showed `55`
+  compared rows, `signature_change_count=0`, `expectation_passed_delta=0`,
+  median delta `+0.000156s`, and only the seven new default rows missing from
+  the baseline. Verification: `jq` validated the manifest, the focused
+  catalog/stress tests passed (`286 passed`), `python -m compileall -q api
+  map_boundary_builder` passed, and full pytest passed `730 passed, 31 subtests
+  passed`.
