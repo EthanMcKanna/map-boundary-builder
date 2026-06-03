@@ -746,6 +746,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "total_elapsed_s": 0.5,
                 "stages": {"ocr": 0.3},
                 "ocr_engine_profile": {
+                    "input_kind": "array",
+                    "input_shape": [900, 1200],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "rec_batch_num": 12,
+                    "min_text_area": 1500.0,
                     "input_s": 0.02,
                     "det_elapsed_s": 0.10,
                     "rec_elapsed_s": 0.16,
@@ -771,6 +778,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "total_elapsed_s": 0.8,
                 "stages": {"ocr": 0.5},
                 "ocr_engine_profile": {
+                    "input_kind": "array",
+                    "input_shape": [1400, 1400],
+                    "detector_limit": 256,
+                    "detector_limit_type": "max",
+                    "recognition_profile": "en-ppocrv5",
+                    "rec_batch_num": 12,
+                    "min_text_area": 2300.0,
                     "input_s": 0.03,
                     "det_elapsed_s": 0.18,
                     "rec_elapsed_s": 0.24,
@@ -806,6 +820,40 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_engine_count_metric": {
                     "selected_box_count": {"p95_count": 20.0, "max_count": 22.0},
                 },
+                "ocr_engine_workload_groups": [
+                    {
+                        "input_kind": "array",
+                        "input_shape": [1400, 1400],
+                        "detector_limit": 256,
+                        "detector_limit_type": "max",
+                        "recognition_profile": "en-ppocrv5",
+                        "rec_batch_num": 12,
+                        "min_text_area": 2300.0,
+                        "row_count": 1,
+                        "calls": 2,
+                        "total_s": 0.7,
+                        "input_s": 0.05,
+                        "det_elapsed_s": 0.4,
+                        "rec_elapsed_s": 0.2,
+                        "top_slugs": ["houston"],
+                    },
+                    {
+                        "input_kind": "array",
+                        "input_shape": [900, 1200],
+                        "detector_limit": 608,
+                        "detector_limit_type": "default",
+                        "recognition_profile": "default",
+                        "rec_batch_num": 12,
+                        "min_text_area": 1500.0,
+                        "row_count": 1,
+                        "calls": 2,
+                        "total_s": 0.4,
+                        "input_s": 0.04,
+                        "det_elapsed_s": 0.16,
+                        "rec_elapsed_s": 0.18,
+                        "top_slugs": ["dallas"],
+                    },
+                ],
             },
             "cases": {
                 "dallas": {
@@ -856,6 +904,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "total_elapsed_s": 0.4,
                 "stages": {"ocr": 0.25},
                 "ocr_engine_profile": {
+                    "input_kind": "array",
+                    "input_shape": [900, 1200],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "rec_batch_num": 12,
+                    "min_text_area": 1500.0,
                     "input_s": 0.02,
                     "det_elapsed_s": 0.08,
                     "rec_elapsed_s": 0.10,
@@ -882,6 +937,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "total_elapsed_s": 1.0,
                 "stages": {"ocr": 0.65},
                 "ocr_engine_profile": {
+                    "input_kind": "array",
+                    "input_shape": [1400, 1400],
+                    "detector_limit": 256,
+                    "detector_limit_type": "max",
+                    "recognition_profile": "en-ppocrv5",
+                    "rec_batch_num": 12,
+                    "min_text_area": 2300.0,
                     "input_s": 0.04,
                     "det_elapsed_s": 0.25,
                     "rec_elapsed_s": 0.31,
@@ -917,6 +979,40 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_engine_count_metric": {
                     "selected_box_count": {"p95_count": 22.0, "max_count": 24.0},
                 },
+                "ocr_engine_workload_groups": [
+                    {
+                        "input_kind": "array",
+                        "input_shape": [1400, 1400],
+                        "detector_limit": 256,
+                        "detector_limit_type": "max",
+                        "recognition_profile": "en-ppocrv5",
+                        "rec_batch_num": 12,
+                        "min_text_area": 2300.0,
+                        "row_count": 1,
+                        "calls": 2,
+                        "total_s": 0.9,
+                        "input_s": 0.06,
+                        "det_elapsed_s": 0.52,
+                        "rec_elapsed_s": 0.25,
+                        "top_slugs": ["houston"],
+                    },
+                    {
+                        "input_kind": "array",
+                        "input_shape": [900, 1200],
+                        "detector_limit": 608,
+                        "detector_limit_type": "default",
+                        "recognition_profile": "default",
+                        "rec_batch_num": 12,
+                        "min_text_area": 1500.0,
+                        "row_count": 1,
+                        "calls": 2,
+                        "total_s": 0.3,
+                        "input_s": 0.03,
+                        "det_elapsed_s": 0.12,
+                        "rec_elapsed_s": 0.14,
+                        "top_slugs": ["dallas"],
+                    },
+                ],
             },
             "cases": {
                 "dallas": {
@@ -1040,6 +1136,20 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["largest_ocr_engine_total_regressions"][0]["ocr_engine_total_delta_s"] == 0.15
     assert comparison["largest_ocr_engine_total_improvements"][0]["slug"] == "dallas"
     assert comparison["largest_ocr_engine_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
+    assert comparison["ocr_engine_workload_group_delta_count"] == 2
+    primary_workload_regression = comparison["largest_ocr_engine_workload_group_regressions"][0]
+    assert primary_workload_regression["input_shape"] == [1400, 1400]
+    assert primary_workload_regression["recognition_profile"] == "en-ppocrv5"
+    assert primary_workload_regression["baseline_total_s"] == 0.45
+    assert primary_workload_regression["candidate_total_s"] == 0.6
+    assert primary_workload_regression["total_delta_s"] == 0.15
+    assert primary_workload_regression["calls_delta"] == 0
+    assert primary_workload_regression["det_elapsed_delta_s"] == 0.07
+    assert primary_workload_regression["rec_elapsed_delta_s"] == 0.07
+    primary_workload_improvement = comparison["largest_ocr_engine_workload_group_improvements"][0]
+    assert primary_workload_improvement["input_shape"] == [900, 1200]
+    assert primary_workload_improvement["recognition_profile"] == "default"
+    assert primary_workload_improvement["total_delta_s"] == -0.08
     assert comparison["stage_duration_delta_s"] == {
         "extract": {"baseline": 0.2, "candidate": 0.18, "delta_s": -0.02},
         "ocr": {"baseline": 0.8, "candidate": 0.9, "delta_s": 0.1},
@@ -1051,6 +1161,23 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_delta["stage_duration_s"]["ocr"]["p95_duration_s"]["delta_s"] == 0.03
     assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
+    assert comparison["repeat_ocr_engine_workload_group_delta_count"] == 2
+    repeat_workload_regression = comparison[
+        "largest_repeat_ocr_engine_workload_group_regressions"
+    ][0]
+    assert repeat_workload_regression["input_shape"] == [1400, 1400]
+    assert repeat_workload_regression["recognition_profile"] == "en-ppocrv5"
+    assert repeat_workload_regression["baseline_total_s"] == 0.7
+    assert repeat_workload_regression["candidate_total_s"] == 0.9
+    assert repeat_workload_regression["total_delta_s"] == 0.2
+    assert repeat_workload_regression["det_elapsed_delta_s"] == 0.12
+    assert repeat_workload_regression["rec_elapsed_delta_s"] == 0.05
+    repeat_workload_improvement = comparison[
+        "largest_repeat_ocr_engine_workload_group_improvements"
+    ][0]
+    assert repeat_workload_improvement["input_shape"] == [900, 1200]
+    assert repeat_workload_improvement["recognition_profile"] == "default"
+    assert repeat_workload_improvement["total_delta_s"] == -0.1
     case_deltas = comparison["repeat_profile_case_deltas"]
     assert [delta["slug"] for delta in case_deltas] == ["dallas", "houston"]
     assert case_deltas[0]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == -0.04
@@ -2803,6 +2930,38 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     },
                 },
             ],
+            "largest_ocr_engine_workload_group_regressions": [
+                {
+                    "input_kind": "array",
+                    "input_shape": [1400, 1400],
+                    "detector_limit": 256,
+                    "detector_limit_type": "max",
+                    "recognition_profile": "en-ppocrv5",
+                    "rec_batch_num": 12,
+                    "min_text_area": 2300.0,
+                    "total_delta_s": 0.2,
+                    "calls_delta": 0,
+                    "input_delta_s": 0.01,
+                    "det_elapsed_delta_s": 0.12,
+                    "rec_elapsed_delta_s": 0.05,
+                }
+            ],
+            "largest_ocr_engine_workload_group_improvements": [
+                {
+                    "input_kind": "array",
+                    "input_shape": [900, 1200],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "rec_batch_num": 12,
+                    "min_text_area": 1500.0,
+                    "total_delta_s": -0.1,
+                    "calls_delta": 0,
+                    "input_delta_s": -0.01,
+                    "det_elapsed_delta_s": -0.04,
+                    "rec_elapsed_delta_s": -0.04,
+                }
+            ],
             "largest_ocr_overlap_hidden_regressions": [
                 {
                     "slug": "houston",
@@ -2974,6 +3133,38 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "selected_box_count": {"p95_count": {"delta_count": 2.0}},
                 },
             },
+            "largest_repeat_ocr_engine_workload_group_regressions": [
+                {
+                    "input_kind": "array",
+                    "input_shape": [1400, 1400],
+                    "detector_limit": 256,
+                    "detector_limit_type": "max",
+                    "recognition_profile": "en-ppocrv5",
+                    "rec_batch_num": 12,
+                    "min_text_area": 2300.0,
+                    "total_delta_s": 0.2,
+                    "calls_delta": 0,
+                    "input_delta_s": 0.01,
+                    "det_elapsed_delta_s": 0.12,
+                    "rec_elapsed_delta_s": 0.05,
+                }
+            ],
+            "largest_repeat_ocr_engine_workload_group_improvements": [
+                {
+                    "input_kind": "array",
+                    "input_shape": [900, 1200],
+                    "detector_limit": 608,
+                    "detector_limit_type": "default",
+                    "recognition_profile": "default",
+                    "rec_batch_num": 12,
+                    "min_text_area": 1500.0,
+                    "total_delta_s": -0.1,
+                    "calls_delta": 0,
+                    "input_delta_s": -0.01,
+                    "det_elapsed_delta_s": -0.04,
+                    "rec_elapsed_delta_s": -0.04,
+                }
+            ],
         },
         "rows": [],
     }
@@ -3010,6 +3201,13 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "baseline primary OCR delta: worst_ocr=houston +0.150s "
         "(input=+0.010s, det=+0.070s, rec=+0.070s), "
         "best_ocr=dallas -0.080s (input=+0.000s, det=-0.020s, rec=-0.060s)"
+    ) in output
+    assert (
+        "baseline OCR workload delta: worst_group=1400x1400 array det=256/max "
+        "rec=en-ppocrv5 batch=12 min_area=2300 +0.200s calls=+0 "
+        "input=+0.010s det=+0.120s rec=+0.050s, best_group=1200x900 array "
+        "det=608/default rec=default batch=12 min_area=1500 -0.100s calls=+0 "
+        "input=-0.010s det=-0.040s rec=-0.040s"
     ) in output
     assert (
         "baseline primary hidden OCR delta: worst_hidden=houston +0.060s "
@@ -3049,6 +3247,13 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert (
         "baseline repeat OCR stage delta: input_p95=+0.005s, det_p95=-0.010s, "
         "rec_p95=+0.040s, total_p95=+0.020s"
+    ) in output
+    assert (
+        "baseline repeat OCR workload delta: worst_group=1400x1400 array "
+        "det=256/max rec=en-ppocrv5 batch=12 min_area=2300 +0.200s calls=+0 "
+        "input=+0.010s det=+0.120s rec=+0.050s, best_group=1200x900 array "
+        "det=608/default rec=default batch=12 min_area=1500 -0.100s calls=+0 "
+        "input=-0.010s det=-0.040s rec=-0.040s"
     ) in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output

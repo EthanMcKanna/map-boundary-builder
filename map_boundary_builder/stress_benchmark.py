@@ -1322,20 +1322,69 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
+    scoped_compared_slugs = compared_slugs if candidate_scope_slugs is not None else None
     stage_duration_delta = stress_stage_duration_total_deltas(
         baseline_report,
         candidate_report,
-        slugs=compared_slugs if candidate_scope_slugs is not None else None,
+        slugs=scoped_compared_slugs,
     )
     if stage_duration_delta:
         comparison["stage_duration_delta_s"] = stage_duration_delta
+    primary_workload_deltas = ocr_engine_workload_group_deltas(
+        stress_report_primary_ocr_workload_groups(
+            baseline_report,
+            slugs=scoped_compared_slugs,
+        ),
+        stress_report_primary_ocr_workload_groups(
+            candidate_report,
+            slugs=scoped_compared_slugs,
+        ),
+    )
+    if primary_workload_deltas:
+        comparison["ocr_engine_workload_group_delta_count"] = len(primary_workload_deltas)
+        comparison["largest_ocr_engine_workload_group_regressions"] = (
+            ranked_ocr_engine_workload_group_deltas(
+                primary_workload_deltas,
+                reverse=True,
+            )
+        )
+        comparison["largest_ocr_engine_workload_group_improvements"] = (
+            ranked_ocr_engine_workload_group_deltas(
+                primary_workload_deltas,
+                reverse=False,
+            )
+        )
     repeat_delta = stress_repeat_profile_delta(
         baseline_report,
         candidate_report,
-        slugs=compared_slugs if candidate_scope_slugs is not None else None,
+        slugs=scoped_compared_slugs,
     )
     if repeat_delta is not None:
         comparison["repeat_profile_delta"] = repeat_delta
+    repeat_workload_deltas = ocr_engine_workload_group_deltas(
+        stress_report_repeat_ocr_workload_groups(
+            baseline_report,
+            slugs=scoped_compared_slugs,
+        ),
+        stress_report_repeat_ocr_workload_groups(
+            candidate_report,
+            slugs=scoped_compared_slugs,
+        ),
+    )
+    if repeat_workload_deltas:
+        comparison["repeat_ocr_engine_workload_group_delta_count"] = len(repeat_workload_deltas)
+        comparison["largest_repeat_ocr_engine_workload_group_regressions"] = (
+            ranked_ocr_engine_workload_group_deltas(
+                repeat_workload_deltas,
+                reverse=True,
+            )
+        )
+        comparison["largest_repeat_ocr_engine_workload_group_improvements"] = (
+            ranked_ocr_engine_workload_group_deltas(
+                repeat_workload_deltas,
+                reverse=False,
+            )
+        )
     repeat_case_coverage = stress_repeat_profile_case_coverage(
         baseline_report,
         candidate_report,
@@ -5186,6 +5235,155 @@ def ocr_engine_workload_group_key(context: dict[str, Any]) -> tuple[Any, ...]:
     return tuple(key_parts)
 
 
+def stress_report_primary_ocr_workload_groups(
+    report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    rows = report.get("rows")
+    slug_set = set(slugs) if slugs is not None else None
+    if isinstance(rows, list):
+        filtered_rows = [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and (slug_set is None or row.get("slug") in slug_set)
+        ]
+        return primary_ocr_engine_workload_groups(filtered_rows, limit=10_000)
+    if slug_set is not None:
+        return []
+    summary = report.get("summary")
+    if not isinstance(summary, dict):
+        return []
+    return ocr_engine_workload_groups_from_summary(summary)
+
+
+def stress_report_repeat_ocr_workload_groups(
+    report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return []
+    slug_set = set(slugs) if slugs is not None else None
+    samples = repeat_profile.get("samples")
+    if isinstance(samples, list):
+        analyzed_samples = repeat_profile_analyzed_samples(
+            [sample for sample in samples if isinstance(sample, dict)]
+        )
+        if slug_set is not None:
+            analyzed_samples = [
+                sample for sample in analyzed_samples if sample.get("slug") in slug_set
+            ]
+        return primary_ocr_engine_workload_groups(analyzed_samples, limit=10_000)
+    if slug_set is not None:
+        return []
+    summary = repeat_profile.get("summary")
+    if not isinstance(summary, dict):
+        return []
+    return ocr_engine_workload_groups_from_summary(summary)
+
+
+def ocr_engine_workload_groups_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    groups = summary.get("ocr_engine_workload_groups")
+    if not isinstance(groups, list):
+        return []
+    return [dict(group) for group in groups if isinstance(group, dict)]
+
+
+def ocr_engine_workload_group_deltas(
+    baseline_groups: list[dict[str, Any]],
+    candidate_groups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    baseline_by_key = {
+        ocr_engine_workload_group_key(ocr_engine_workload_context(group)): group
+        for group in baseline_groups
+    }
+    candidate_by_key = {
+        ocr_engine_workload_group_key(ocr_engine_workload_context(group)): group
+        for group in candidate_groups
+    }
+    deltas: list[dict[str, Any]] = []
+    for key in sorted(
+        set(baseline_by_key) | set(candidate_by_key),
+        key=lambda item: tuple(str(part) for part in item),
+    ):
+        baseline = baseline_by_key.get(key, {})
+        candidate = candidate_by_key.get(key, {})
+        context = ocr_engine_workload_context(candidate or baseline)
+        delta: dict[str, Any] = {**context}
+        for metric in ("total_s", "input_s", "det_elapsed_s", "rec_elapsed_s"):
+            baseline_value = parse_nonnegative_float(baseline.get(metric))
+            candidate_value = parse_nonnegative_float(candidate.get(metric))
+            if baseline_value is None and candidate_value is None:
+                continue
+            baseline_value = baseline_value or 0.0
+            candidate_value = candidate_value or 0.0
+            delta[f"baseline_{metric}"] = round(baseline_value, 6)
+            delta[f"candidate_{metric}"] = round(candidate_value, 6)
+            if metric == "total_s":
+                delta_key = "total_delta_s"
+            else:
+                delta_key = f"{metric.removesuffix('_s')}_delta_s"
+            delta[delta_key] = round(candidate_value - baseline_value, 6)
+        for metric in (
+            "calls",
+            "raw_box_count",
+            "selected_box_count",
+            "result_count",
+            "label_count",
+            "row_count",
+        ):
+            baseline_value = ocr_engine_workload_count_value(baseline, metric)
+            candidate_value = ocr_engine_workload_count_value(candidate, metric)
+            if baseline_value is None and candidate_value is None:
+                continue
+            baseline_value = baseline_value or 0
+            candidate_value = candidate_value or 0
+            delta[f"baseline_{metric}"] = baseline_value
+            delta[f"candidate_{metric}"] = candidate_value
+            delta[f"{metric}_delta"] = candidate_value - baseline_value
+        if isinstance(baseline.get("top_slugs"), list):
+            delta["baseline_top_slugs"] = baseline["top_slugs"]
+        if isinstance(candidate.get("top_slugs"), list):
+            delta["candidate_top_slugs"] = candidate["top_slugs"]
+        if isinstance(baseline.get("slowest_slug"), str):
+            delta["baseline_slowest_slug"] = baseline["slowest_slug"]
+        if isinstance(candidate.get("slowest_slug"), str):
+            delta["candidate_slowest_slug"] = candidate["slowest_slug"]
+        deltas.append(delta)
+    return deltas
+
+
+def ocr_engine_workload_count_value(group: dict[str, Any], metric: str) -> int | None:
+    value = group.get(metric)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def ranked_ocr_engine_workload_group_deltas(
+    workload_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in workload_deltas
+        if isinstance(delta.get("total_delta_s"), (int, float))
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(delta["total_delta_s"]),
+            str(ocr_engine_workload_group_key(ocr_engine_workload_context(delta))),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
 def build_repeat_profile(
     cases: list[dict[str, Any]],
     *,
@@ -7098,6 +7296,13 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_ocr_delta_text = baseline_primary_ocr_delta_text(baseline_comparison)
         if primary_ocr_delta_text:
             print(f"baseline primary OCR delta: {primary_ocr_delta_text}")
+        primary_workload_delta_text = baseline_ocr_workload_delta_text(
+            baseline_comparison,
+            regression_key="largest_ocr_engine_workload_group_regressions",
+            improvement_key="largest_ocr_engine_workload_group_improvements",
+        )
+        if primary_workload_delta_text:
+            print(f"baseline OCR workload delta: {primary_workload_delta_text}")
         primary_hidden_delta_text = baseline_primary_ocr_overlap_hidden_delta_text(baseline_comparison)
         if primary_hidden_delta_text:
             print(f"baseline primary hidden OCR delta: {primary_hidden_delta_text}")
@@ -7123,6 +7328,13 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if repeat_ocr_stage_delta_text:
             print(f"baseline repeat OCR stage delta: {repeat_ocr_stage_delta_text}")
+        repeat_workload_delta_text = baseline_ocr_workload_delta_text(
+            baseline_comparison,
+            regression_key="largest_repeat_ocr_engine_workload_group_regressions",
+            improvement_key="largest_repeat_ocr_engine_workload_group_improvements",
+        )
+        if repeat_workload_delta_text:
+            print(f"baseline repeat OCR workload delta: {repeat_workload_delta_text}")
         regression_budget = baseline_comparison.get("regression_budget")
         if isinstance(regression_budget, dict):
             print(baseline_regression_budget_text(regression_budget))
@@ -8420,6 +8632,33 @@ def baseline_primary_ocr_delta_text(baseline_comparison: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def baseline_ocr_workload_delta_text(
+    baseline_comparison: dict[str, Any],
+    *,
+    regression_key: str,
+    improvement_key: str,
+) -> str:
+    parts: list[str] = []
+    regression_items = baseline_comparison.get(regression_key)
+    improvement_items = baseline_comparison.get(improvement_key)
+    worst = baseline_ocr_workload_delta_item_text(regression_items)
+    if worst:
+        parts.append(f"worst_group={worst}")
+    best = baseline_ocr_workload_delta_item_text(improvement_items)
+    if best and not baseline_ocr_workload_delta_same_item(
+        regression_items,
+        improvement_items,
+    ):
+        parts.append(f"best_group={best}")
+    return ", ".join(parts)
+
+
+def baseline_ocr_workload_delta_same_item(left: Any, right: Any) -> bool:
+    if not isinstance(left, list) or not isinstance(right, list) or not left or not right:
+        return False
+    return isinstance(left[0], dict) and isinstance(right[0], dict) and left[0] == right[0]
+
+
 def baseline_primary_ocr_overlap_hidden_delta_text(baseline_comparison: dict[str, Any]) -> str:
     parts: list[str] = []
     worst = baseline_primary_ocr_overlap_hidden_delta_item_text(
@@ -8464,6 +8703,32 @@ def baseline_primary_ocr_delta_item_text(items: Any) -> str:
         return ""
     stage_delta_text = baseline_primary_ocr_stage_delta_text(item, include_total=False)
     return f"{slug} {delta:+.3f}s{stage_delta_text}"
+
+
+def baseline_ocr_workload_delta_item_text(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return ""
+    item = items[0]
+    if not isinstance(item, dict):
+        return ""
+    total_delta = parse_signed_float(item.get("total_delta_s"))
+    if total_delta is None:
+        return ""
+    context = ocr_engine_workload_context(item)
+    label = ocr_engine_workload_group_text(context) or "unknown"
+    parts = [f"{label} {total_delta:+.3f}s"]
+    calls_delta = item.get("calls_delta")
+    if isinstance(calls_delta, int) and not isinstance(calls_delta, bool):
+        parts.append(f"calls={calls_delta:+d}")
+    for metric, label in (
+        ("input_delta_s", "input"),
+        ("det_elapsed_delta_s", "det"),
+        ("rec_elapsed_delta_s", "rec"),
+    ):
+        delta = parse_signed_float(item.get(metric))
+        if delta is not None:
+            parts.append(f"{label}={delta:+.3f}s")
+    return " ".join(parts)
 
 
 def baseline_primary_ocr_overlap_hidden_delta_item_text(items: Any) -> str:

@@ -18083,3 +18083,22 @@ with zero failures in 0.531s.
   `rec_elapsed_s=1.065360`; route/non-map default recognizer groups were
   second and third. This makes future warm-path regressions easier to attribute
   to shared bright-blue detector work versus route/non-map recognition work.
+- Added baseline-comparison deltas for primary and repeat OCR workload groups.
+  The comparison now rebuilds workload groups from scoped primary rows and
+  repeat samples when `--only` is active, falls back to saved summary groups for
+  unscoped reports, stores ranked worst/best total-time deltas, and prints
+  compact `baseline OCR workload delta` / `baseline repeat OCR workload delta`
+  lines. This is reporting-only; no runtime defaults changed. Verification:
+  `python3 -m py_compile map_boundary_builder/stress_benchmark.py`, the
+  focused comparison/print tests (`2 passed`), the full stress benchmark test
+  module (`144 passed`), and full pytest (`728 passed, 31 subtests passed`) all
+  passed. A first focused smoke against the full hard-gate baseline at
+  `out/workload-delta-focused-smoke-20260603` produced the new workload delta
+  lines and passed expectations, latency, manifest, and baseline regression
+  budgets, exiting nonzero only because the focused preset intentionally treats
+  the full-baseline preset difference as config drift. A strict focused-to-
+  focused comparison at `out/workload-delta-focused-smoke-20260603-rerun2`
+  exited zero with `3/3` expected outcomes, no signature changes, max primary
+  `0.407226s`, repeat p95 `0.320s`, and baseline regression budget passed; the
+  single shared bright-blue Waymo workload showed primary delta `+0.046s` and
+  repeat delta `+0.088s`.
