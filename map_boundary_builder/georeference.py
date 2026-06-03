@@ -49,6 +49,7 @@ PROMOTED_DIRECT_CONTEXT_LABEL_SCORE = 95.0
 STRONG_DIRECT_CONTEXT_MIN_SCORE = 115.0
 GEOCODE_BATCH_SIZE = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_BATCH_SIZE", "12")))
 GEOCODE_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_WORKERS", "6")))
+GEOCODE_CACHED_ONLY_WORKERS = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_CACHED_ONLY_WORKERS", "1")))
 GEOCODE_LABEL_LOOKAHEAD = max(1, int(os.environ.get("MAP_BOUNDARY_GEOCODE_LABEL_LOOKAHEAD", "3")))
 PLACE_FAST_PATH_TIMEOUT_SECONDS = max(0.0, float(os.environ.get("MAP_BOUNDARY_PLACE_FAST_PATH_TIMEOUT_SECONDS", "0.08")))
 PLACE_BEFORE_LIVE_TIMEOUT_SECONDS = max(
@@ -517,13 +518,14 @@ def geocode_many(
 
     unique_requests = list(dict.fromkeys(normalized))
     geocode_backend = geocode if allow_network else geocode_cached_only
-    if len(unique_requests) == 1 or GEOCODE_WORKERS == 1:
+    worker_count = GEOCODE_WORKERS if allow_network else GEOCODE_CACHED_ONLY_WORKERS
+    if len(unique_requests) == 1 or worker_count == 1:
         results_by_request = {
             request: geocode_backend(request[0], limit=request[1], country_codes=request[2])
             for request in unique_requests
         }
     else:
-        max_workers = min(GEOCODE_WORKERS, len(unique_requests))
+        max_workers = min(worker_count, len(unique_requests))
 
         def run(request: tuple[str, int, str]) -> tuple[tuple[str, int, str], list[GeocodeResult]]:
             return request, geocode_backend(request[0], limit=request[1], country_codes=request[2])

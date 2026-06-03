@@ -17892,3 +17892,32 @@ with zero failures in 0.531s.
   `out/generic-avif-eager-rgb-full50-compare-20260603` compared all 50 rows
   with `signature_changes=0`; its nonzero exit was the known older-baseline
   missing primary hidden-overlap fields, not output drift.
+- Accepted a conservative cached-only geocode batching default after probing
+  whether worker fanout helps seed-backed lookups. The first focused Ann Arbor
+  probe with `MAP_BOUNDARY_GEOCODE_WORKERS=1` compared against
+  `out/geocode-workers-default-ann-arbor-20260603` with `signature_changes=0`,
+  primary max improving `0.251120s -> 0.183472s`, repeat p95 improving
+  `0.178s -> 0.173s`, and the two-row georeference stage total halving
+  `0.024s -> 0.012s`; the compare exited nonzero only on known missing
+  hidden-overlap fields in the partial baseline. A full 50-row env probe at
+  `out/geocode-workers1-full50-hard-20260603` preserved `50/50` expectations
+  and `signature_changes=0`, but strict comparison against the older eager-RGB
+  baseline also surfaced benchmark noise in aggregate extraction and one repeat
+  OCR case. A fresh default full control at
+  `out/geocode-workers-default-full50-rerun-20260603` showed the same aggregate
+  extraction noise, so it was not attributable to cached geocode scheduling. The
+  shipped default splits live and cached-only worker counts: live/network
+  geocoding keeps `MAP_BOUNDARY_GEOCODE_WORKERS=6`, while cached-only seed
+  lookups default to `MAP_BOUNDARY_GEOCODE_CACHED_ONLY_WORKERS=1`. The patched
+  full run at `out/cached-geocode-single-worker-full50-hard-20260603`
+  preserved `50/50` expectations and `signature_changes=0`; compared with the
+  fresh default control, median primary delta was `-0.001s`, aggregate
+  georeference moved `-0.023s`, repeat p95 moved `-0.005s`, Ann Arbor primary
+  moved `0.200s -> 0.186s`, and UI-default Ann Arbor moved `0.166s -> 0.159s`.
+  Two strict row-level OCR deltas remained over the 50ms comparison budget. A
+  clean hard-gate acceptance run at
+  `out/cached-geocode-single-worker-full50-clean-20260603` then passed `50/50`
+  expectations, max primary `0.345720s`, repeat p95 `0.280s`, repeat max
+  `0.315s`, and prewarm `0.622s`. The accepted claim is intentionally narrow:
+  less thread fanout for cached seed lookups with no output-signature drift,
+  not a broad OCR-speed win.

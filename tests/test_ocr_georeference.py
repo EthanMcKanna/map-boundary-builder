@@ -2199,6 +2199,35 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual([items[0].label for items in results], ["Miami", "Orlando", "Miami"])
         self.assertEqual(set(calls), {("Miami", 2, "us"), ("Orlando", 1, "us")})
 
+    def test_geocode_many_cached_only_uses_single_worker_by_default(self) -> None:
+        calls: list[tuple[str, int, str]] = []
+
+        def fake_cached(query: str, *, limit: int = 3, country_codes: str = "us"):
+            calls.append((query, limit, country_codes))
+            return [
+                GeocodeResult(
+                    label=query,
+                    lon=-83.74,
+                    lat=42.28,
+                    display_name=f"{query}, Michigan, United States",
+                    bbox=(-84.0, 42.0, -83.5, 42.5),
+                    importance=0.5,
+                    place_type="city",
+                )
+            ][:limit]
+
+        with (
+            patch("map_boundary_builder.georeference.geocode_cached_only", side_effect=fake_cached),
+            patch(
+                "map_boundary_builder.georeference.ThreadPoolExecutor",
+                side_effect=AssertionError("cached-only geocode should not fan out by default"),
+            ),
+        ):
+            results = geocode_many([("Ann Arbor", 2), ("Washtenaw", 1), ("Ann Arbor", 2)], allow_network=False)
+
+        self.assertEqual([items[0].label for items in results], ["Ann Arbor", "Washtenaw", "Ann Arbor"])
+        self.assertEqual(calls, [("Ann Arbor", 2, "us"), ("Washtenaw", 1, "us")])
+
     def test_geocode_contexts_skip_synthetic_inferred_area(self) -> None:
         center = GeocodeResult(
             label="Inferred map area",
