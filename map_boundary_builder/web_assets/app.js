@@ -220,7 +220,8 @@ const iconAssets = {
   dark: "/static/boundary-builder-icon-dark.png",
 };
 let activeThemeMode = loadThemeMode();
-let cachedRunCachePipelineVersion = embeddedRunCachePipelineVersion();
+const embeddedRunCachePipelineVersionValue = embeddedRunCachePipelineVersion();
+let cachedRunCacheRuntimeVersion = null;
 
 const stageLabels = {
   queued: "Queued",
@@ -824,8 +825,9 @@ function scheduleGenerationRuntimePrewarm(options = {}) {
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => {
-        if (typeof payload?.pipeline_version === "string" && payload.pipeline_version) {
-          cachedRunCachePipelineVersion = payload.pipeline_version;
+        const runtimeVersion = runCacheRuntimeVersionFromHealthPayload(payload);
+        if (runtimeVersion) {
+          cachedRunCacheRuntimeVersion = runtimeVersion;
         }
         return payload;
       })
@@ -1228,13 +1230,13 @@ async function buildRunCacheKeys(file, formData) {
         cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),
       };
     }
-    const pipelineVersion = await fetchRunCachePipelineVersion();
-    if (!pipelineVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
+    const runCacheVersion = await fetchRunCacheRuntimeVersion();
+    if (!runCacheVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
     const [rawImageHash, settingsHash] = await Promise.all([
       rawImageContentHash(file),
       sha256Hex(new TextEncoder().encode(settingsSignature)),
     ]);
-    const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
+    const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, runCacheVersion, rawImageHash, settingsHash);
     if (requiresJsonUpload(file)) {
       return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
     }
@@ -1244,7 +1246,7 @@ async function buildRunCacheKeys(file, formData) {
     const pixelHashPromise = pixelImageContentHash(file);
     const cacheKeysPromise = pixelHashPromise
       .then((pixelImageHash) => cacheKeysForHashes({
-        pipelineVersion,
+        runCacheVersion,
         settingsHash,
         rawImageHash,
         pixelImageHash,
@@ -1252,7 +1254,7 @@ async function buildRunCacheKeys(file, formData) {
       .catch(() => [rawKey]);
     const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
     const lookupKeys = cacheKeysForHashes({
-      pipelineVersion,
+      runCacheVersion,
       settingsHash,
       rawImageHash,
       pixelImageHash: quickPixelHash,
@@ -1282,18 +1284,18 @@ function lazyRunCacheKeys(file, settingsSignature) {
 }
 
 async function runCacheKeysFromImage(file, settingsSignature) {
-  const pipelineVersion = await fetchRunCachePipelineVersion();
-  if (!pipelineVersion) return [];
+  const runCacheVersion = await fetchRunCacheRuntimeVersion();
+  if (!runCacheVersion) return [];
   const [rawImageHash, settingsHash] = await Promise.all([
     rawImageContentHash(file),
     sha256Hex(new TextEncoder().encode(settingsSignature)),
   ]);
-  const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash);
+  const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, runCacheVersion, rawImageHash, settingsHash);
   if (requiresJsonUpload(file)) return [rawKey];
   try {
     const pixelImageHash = await pixelImageContentHash(file);
     return cacheKeysForHashes({
-      pipelineVersion,
+      runCacheVersion,
       settingsHash,
       rawImageHash,
       pixelImageHash,
@@ -1303,22 +1305,22 @@ async function runCacheKeysFromImage(file, settingsSignature) {
   }
 }
 
-function runCacheKey(version, pipelineVersion, imageHash, settingsHash) {
+function runCacheKey(version, runCacheVersion, imageHash, settingsHash) {
   return [
     version,
-    pipelineVersion,
+    runCacheVersion,
     imageHash,
     settingsHash,
   ].join(":");
 }
 
-function cacheKeysForHashes({ pipelineVersion, settingsHash, rawImageHash, pixelImageHash }) {
+function cacheKeysForHashes({ runCacheVersion, settingsHash, rawImageHash, pixelImageHash }) {
   const keys = [];
   if (pixelImageHash) {
-    keys.push(runCacheKey(RUN_CACHE_PIXEL_VERSION, pipelineVersion, pixelImageHash, settingsHash));
+    keys.push(runCacheKey(RUN_CACHE_PIXEL_VERSION, runCacheVersion, pixelImageHash, settingsHash));
   }
   if (rawImageHash) {
-    keys.push(runCacheKey(RUN_CACHE_RAW_VERSION, pipelineVersion, rawImageHash, settingsHash));
+    keys.push(runCacheKey(RUN_CACHE_RAW_VERSION, runCacheVersion, rawImageHash, settingsHash));
   }
   return [...new Set(keys)];
 }
@@ -1442,20 +1444,45 @@ function embeddedRunCachePipelineVersion() {
   return version;
 }
 
-async function fetchRunCachePipelineVersion() {
-  if (cachedRunCachePipelineVersion) return cachedRunCachePipelineVersion;
+async function fetchRunCacheRuntimeVersion() {
+  if (cachedRunCacheRuntimeVersion) return cachedRunCacheRuntimeVersion;
   try {
     const response = await fetch("/api/health", { cache: "no-store" });
     if (!response.ok) return null;
     const payload = await response.json();
-    cachedRunCachePipelineVersion = typeof payload.pipeline_version === "string" && payload.pipeline_version
-      ? payload.pipeline_version
-      : null;
-    return cachedRunCachePipelineVersion;
+    cachedRunCacheRuntimeVersion = runCacheRuntimeVersionFromHealthPayload(payload);
+    return cachedRunCacheRuntimeVersion;
   } catch (error) {
-    console.warn("Could not verify pipeline version for local run cache", error);
+    console.warn("Could not verify runtime version for local run cache", error);
     return null;
   }
+}
+
+function runCacheRuntimeVersionFromHealthPayload(payload) {
+  const pipelineVersion = payload?.pipeline_version;
+  const runtimeSignature = runCacheRuntimeSignature(payload?.runtime_dependencies);
+  if (typeof pipelineVersion !== "string" || !pipelineVersion || !runtimeSignature) {
+    return null;
+  }
+  return `${pipelineVersion}|deps=${runtimeSignature}`;
+}
+
+function runCacheRuntimeSignature(runtimeDependencies) {
+  if (!runtimeDependencies || typeof runtimeDependencies !== "object" || Array.isArray(runtimeDependencies)) {
+    return null;
+  }
+  const entries = Object.entries(runtimeDependencies)
+    .filter(([name, dependencyVersion]) => (
+      typeof name === "string" && name &&
+      typeof dependencyVersion === "string" && dependencyVersion
+    ))
+    .sort(([leftName], [rightName]) => leftName.localeCompare(rightName));
+  if (!entries.length) return null;
+  return entries
+    .map(([name, dependencyVersion]) => (
+      `${encodeURIComponent(name)}=${encodeURIComponent(dependencyVersion)}`
+    ))
+    .join(",");
 }
 
 async function sha256Hex(bytes) {
@@ -2192,7 +2219,15 @@ function hasCachedRunHistoryEntries() {
 }
 
 function hasCurrentRunCacheHistoryEntries() {
-  const pipelineVersion = cachedRunCachePipelineVersion;
+  const runtimeVersion = cachedRunCacheRuntimeVersion;
+  if (runtimeVersion) {
+    return historyEntries.some((entry) => (
+      entry?.geojson && entryCacheKeys(entry).some((key) => (
+        runCacheKeyMatchesPipelineVersion(key, runtimeVersion)
+      ))
+    ));
+  }
+  const pipelineVersion = embeddedRunCachePipelineVersionValue;
   if (!pipelineVersion) return hasCachedRunHistoryEntries();
   return historyEntries.some((entry) => (
     entry?.geojson && entryCacheKeys(entry).some((key) => (
@@ -2205,7 +2240,10 @@ function runCacheKeyMatchesPipelineVersion(key, pipelineVersion) {
   return [
     RUN_CACHE_RAW_VERSION,
     RUN_CACHE_PIXEL_VERSION,
-  ].some((version) => key.startsWith(`${version}:${pipelineVersion}:`));
+  ].some((version) => (
+    key.startsWith(`${version}:${pipelineVersion}:`) ||
+    key.startsWith(`${version}:${pipelineVersion}|`)
+  ));
 }
 
 async function cacheKeysFromPromise(cacheKeysPromise) {

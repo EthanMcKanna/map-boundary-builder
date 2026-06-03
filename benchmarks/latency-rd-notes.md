@@ -16481,3 +16481,15 @@ with zero failures in 0.531s.
   signatures, and all manifest latency/OCR-count contracts. All 49 primary
   behavior signatures matched the immediate pre-fast-fail control; the tall Zoox
   row improved from `1.151999s` to `0.188700s`.
+- Mirrored the runtime-dependency cache namespace in the browser local-history
+  cache. The frontend had still initialized pre-upload cache keys from only the
+  embedded pipeline hash, so a dependency-only runtime drift could leave stale
+  local history looking current before the upload reached the dependency-aware
+  API run-result cache. Local run keys now require `/api/health`
+  `runtime_dependencies` and use a stable `pipeline|deps=...` signature; if
+  health cannot provide it, the browser skips local lookup/storage keys instead
+  of falling back to pipeline-only keys. Validation passed with `git diff
+  --check`, `node --check map_boundary_builder/web_assets/app.js`, focused API
+  cache tests (`82 passed in 0.71s`), and the full suite (`660 passed, 31
+  subtests passed in 11.75s`). No extraction-path benchmark was rerun because
+  this only changes frontend cache admission/keying.

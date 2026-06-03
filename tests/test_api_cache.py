@@ -1866,6 +1866,37 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
         self.assertIn(b"runCacheKeyMatchesPipelineVersion(key, pipelineVersion)", app_js)
 
+    def test_frontend_keys_local_history_by_runtime_dependency_signature(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        embedded_pipeline = app_js.index(b"const embeddedRunCachePipelineVersionValue = embeddedRunCachePipelineVersion();")
+        runtime_cache = app_js.index(b"let cachedRunCacheRuntimeVersion = null;", embedded_pipeline)
+        fetch_helper = app_js.index(b"async function fetchRunCacheRuntimeVersion() {")
+        health_fetch = app_js.index(b'fetch("/api/health", { cache: "no-store" })', fetch_helper)
+        health_signature = app_js.index(
+            b"cachedRunCacheRuntimeVersion = runCacheRuntimeVersionFromHealthPayload(payload);",
+            health_fetch,
+        )
+        payload_helper = app_js.index(b"function runCacheRuntimeVersionFromHealthPayload(payload) {")
+        dependency_read = app_js.index(b"payload?.runtime_dependencies", payload_helper)
+        composite_return = app_js.index(b"return `${pipelineVersion}|deps=${runtimeSignature}`;", dependency_read)
+        signature_helper = app_js.index(b"function runCacheRuntimeSignature(runtimeDependencies) {")
+        sorted_entries = app_js.index(
+            b".sort(([leftName], [rightName]) => leftName.localeCompare(rightName));",
+            signature_helper,
+        )
+        encoded_entries = app_js.index(b"encodeURIComponent(name)", sorted_entries)
+
+        self.assertLess(embedded_pipeline, runtime_cache)
+        self.assertLess(fetch_helper, health_fetch)
+        self.assertLess(health_fetch, health_signature)
+        self.assertLess(payload_helper, dependency_read)
+        self.assertLess(dependency_read, composite_return)
+        self.assertLess(signature_helper, sorted_entries)
+        self.assertLess(sorted_entries, encoded_entries)
+        self.assertNotIn(b"let cachedRunCachePipelineVersion = embeddedRunCachePipelineVersion();", app_js)
+
     def test_frontend_lazily_builds_cache_keys_without_cached_history(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
@@ -1880,8 +1911,8 @@ class ApiRunCacheTests(unittest.TestCase):
             b"cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),",
             no_history_guard,
         )
-        pipeline_fetch = app_js.index(b"const pipelineVersion = await fetchRunCachePipelineVersion();", lazy_return)
-        raw_hash = app_js.index(b"rawImageContentHash(file),", pipeline_fetch)
+        runtime_fetch = app_js.index(b"const runCacheVersion = await fetchRunCacheRuntimeVersion();", lazy_return)
+        raw_hash = app_js.index(b"rawImageContentHash(file),", runtime_fetch)
         pixel_hash = app_js.index(b"const pixelHashPromise = pixelImageContentHash(file);", raw_hash)
         quick_wait = app_js.index(
             b"const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);",
@@ -1890,8 +1921,8 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertLess(settings_signature, no_history_guard)
         self.assertLess(no_history_guard, lazy_return)
-        self.assertLess(lazy_return, pipeline_fetch)
-        self.assertLess(pipeline_fetch, raw_hash)
+        self.assertLess(lazy_return, runtime_fetch)
+        self.assertLess(runtime_fetch, raw_hash)
         self.assertLess(raw_hash, pixel_hash)
         self.assertLess(pixel_hash, quick_wait)
         self.assertIn(b"function lazyRunCacheKeys(file, settingsSignature) {", app_js)
@@ -1918,7 +1949,12 @@ class ApiRunCacheTests(unittest.TestCase):
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         helper_start = app_js.index(b"function hasCurrentRunCacheHistoryEntries() {")
-        pipeline_version = app_js.index(b"const pipelineVersion = cachedRunCachePipelineVersion;", helper_start)
+        runtime_version = app_js.index(b"const runtimeVersion = cachedRunCacheRuntimeVersion;", helper_start)
+        runtime_match = app_js.index(
+            b"runCacheKeyMatchesPipelineVersion(key, runtimeVersion)",
+            runtime_version,
+        )
+        pipeline_version = app_js.index(b"const pipelineVersion = embeddedRunCachePipelineVersionValue;", runtime_match)
         fallback = app_js.index(b"if (!pipelineVersion) return hasCachedRunHistoryEntries();", pipeline_version)
         namespace_match = app_js.index(
             b"runCacheKeyMatchesPipelineVersion(key, pipelineVersion)",
@@ -1927,14 +1963,18 @@ class ApiRunCacheTests(unittest.TestCase):
         matcher_start = app_js.index(b"function runCacheKeyMatchesPipelineVersion(key, pipelineVersion) {")
         raw_version = app_js.index(b"RUN_CACHE_RAW_VERSION,", matcher_start)
         pixel_version = app_js.index(b"RUN_CACHE_PIXEL_VERSION,", raw_version)
-        starts_with = app_js.index(b"key.startsWith(`${version}:${pipelineVersion}:`)", pixel_version)
+        exact_starts_with = app_js.index(b"key.startsWith(`${version}:${pipelineVersion}:`)", pixel_version)
+        dependency_starts_with = app_js.index(b"key.startsWith(`${version}:${pipelineVersion}|`)", exact_starts_with)
 
-        self.assertLess(helper_start, pipeline_version)
+        self.assertLess(helper_start, runtime_version)
+        self.assertLess(runtime_version, runtime_match)
+        self.assertLess(runtime_match, pipeline_version)
         self.assertLess(pipeline_version, fallback)
         self.assertLess(fallback, namespace_match)
         self.assertLess(matcher_start, raw_version)
         self.assertLess(raw_version, pixel_version)
-        self.assertLess(pixel_version, starts_with)
+        self.assertLess(pixel_version, exact_starts_with)
+        self.assertLess(exact_starts_with, dependency_starts_with)
 
     def test_frontend_leaves_svgz_uploads_for_backend_rasterization(self) -> None:
         app_js, mime = web_asset_response("app.js")
