@@ -422,14 +422,22 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         args.max_repeat_profile_p95_duration_s = 0.8
     if args.max_prewarm_runtime_s is None:
         args.max_prewarm_runtime_s = 2.0
-    if not args.max_prewarm_stage_s:
-        args.max_prewarm_stage_s = ["rapidocr_s=1.8,total_s=2.0"]
-    if not args.max_repeat_ocr_engine_p95_duration_s:
-        args.max_repeat_ocr_engine_p95_duration_s = ["total_s=0.7"]
-    if not args.max_repeat_ocr_engine_p95_count:
-        args.max_repeat_ocr_engine_p95_count = [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET]
-    if not args.max_repeat_ocr_engine_max_count:
-        args.max_repeat_ocr_engine_max_count = [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET]
+    args.max_prewarm_stage_s = prepend_default_budget_entries(
+        ["rapidocr_s=1.8,total_s=2.0"],
+        args.max_prewarm_stage_s,
+    )
+    args.max_repeat_ocr_engine_p95_duration_s = prepend_default_budget_entries(
+        ["total_s=0.7"],
+        args.max_repeat_ocr_engine_p95_duration_s,
+    )
+    args.max_repeat_ocr_engine_p95_count = prepend_default_budget_entries(
+        [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET],
+        args.max_repeat_ocr_engine_p95_count,
+    )
+    args.max_repeat_ocr_engine_max_count = prepend_default_budget_entries(
+        [REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET],
+        args.max_repeat_ocr_engine_max_count,
+    )
     if args.min_ocr_call_contract_rows is None:
         args.min_ocr_call_contract_rows = 49
     if args.min_ocr_count_contract_rows is None:
@@ -437,6 +445,10 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     if args.max_positive_ocr_call_only_rows is None:
         args.max_positive_ocr_call_only_rows = 26
     args.fail_on_invalid_ocr_count_contracts = True
+
+
+def prepend_default_budget_entries(defaults: list[str], values: list[str]) -> list[str]:
+    return [*defaults, *values]
 
 
 def load_manifest(path: Path) -> dict[str, Any]:

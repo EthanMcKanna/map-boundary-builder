@@ -16213,3 +16213,13 @@ with zero failures in 0.531s.
   Focused stress tests passed `90` tests and the full suite passed `648` tests
   plus `31` subtests. This is harness ergonomics and reliability only; no
   runtime deploy is needed.
+- Hardened `--real-screenshot-hard-gate` metric-budget overrides so partial
+  user overrides no longer drop the preset's other default metrics. The preset
+  now prepends default prewarm/OCR duration/count budgets and lets later user
+  entries override only the named metrics, so e.g. tightening
+  `selected_box_count=28` keeps the raw/result/label/confidence-count guards
+  active. Focused stress tests passed `91` tests, a direct parser expansion
+  check confirmed merged budgets (`rapidocr_s=1.7` with default `total_s=2.0`,
+  OCR p95 count defaults plus `selected_box_count=28`, and max-count defaults
+  plus `label_count=28`), and the full suite passed `649` tests plus `31`
+  subtests. This is a hard-gate safety fix only; no runtime deploy is needed.

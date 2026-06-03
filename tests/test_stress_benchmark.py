@@ -2941,6 +2941,77 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
     assert exit_code == 0
 
 
+def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["max_prewarm_stage_s"] == {
+            "rapidocr_s": 1.7,
+            "total_s": 2.0,
+        }
+        assert kwargs["max_repeat_ocr_engine_p95_duration_s"] == {
+            "total_s": 0.6,
+        }
+        assert kwargs["max_repeat_ocr_engine_p95_count"] == {
+            "label_confidence_lt_90_count": 3.0,
+            "label_count": 29.0,
+            "raw_box_count": 50.0,
+            "result_count": 29.0,
+            "selected_box_count": 28.0,
+        }
+        assert kwargs["max_repeat_ocr_engine_max_count"] == {
+            "label_confidence_lt_90_count": 3.0,
+            "label_count": 28.0,
+            "raw_box_count": 50.0,
+            "result_count": 29.0,
+            "selected_box_count": 30.0,
+        }
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 49,
+                "expectation_passed": 49,
+                "unexpected": [],
+                "statuses": {"complete": 38, "failed": 11},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "unexpected_samples": 0,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--real-screenshot-hard-gate",
+            "--max-prewarm-stage-s",
+            "rapidocr_s=1.7",
+            "--max-repeat-ocr-engine-p95-duration-s",
+            "total_s=0.6",
+            "--max-repeat-ocr-engine-p95-count",
+            "selected_box_count=28",
+            "--max-repeat-ocr-engine-max-count",
+            "label_count=28",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_main_rejects_real_screenshot_hard_gate_with_only(monkeypatch) -> None:
     def fake_run_stress_benchmark(*args, **kwargs):
         raise AssertionError("stress benchmark should not run when hard gate is combined with --only")
