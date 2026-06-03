@@ -34,6 +34,10 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
                     "combined_confidence": 0.91,
                     "georeference_confidence": 0.88,
                     "control_points": 5,
+                    "road_match_score": 0.706233,
+                    "road_match_base_score": 0.506854,
+                    "road_match_sampled_points": 1348,
+                    "road_match_elapsed_s": 0.22955,
                     "bbox": [-97, 32, -96, 33],
                     "pipeline_version": "pipeline-test",
                     "event_profile": {
@@ -91,6 +95,10 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["source"] == "ocr-georeference:nominatim-label-fit"
     assert row["total_elapsed_s"] == 0.612345
     assert row["stages"] == {"ocr": 0.4}
+    assert row["road_match_score"] == 0.706233
+    assert row["road_match_base_score"] == 0.506854
+    assert row["road_match_sampled_points"] == 1348
+    assert row["road_match_elapsed_s"] == 0.22955
     assert row["pipeline_version"] == "pipeline-test"
     assert row["image_width"] == 1200
     assert row["image_height"] == 900
@@ -1266,6 +1274,9 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "geojson_coordinate_count": None,
                 "combined_confidence": None,
                 "georeference_confidence": None,
+                "road_match_score": None,
+                "road_match_base_score": None,
+                "road_match_sampled_points": None,
                 "ocr_label_count": None,
                 "ocr_label_event": None,
                 "ocr_full_detail_retry": None,
@@ -1661,6 +1672,74 @@ def test_repeat_profile_flags_geojson_geometry_signature_drift() -> None:
     ]
 
 
+def test_repeat_profile_flags_road_match_signature_drift_but_ignores_elapsed_time() -> None:
+    samples = [
+        {
+            "slug": "road-score",
+            "repeat_index": 1,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.42,
+            "city": "Nashville",
+            "source": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+            "control_points": 3,
+            "bbox": [-86.8475058, 36.1153856, -86.6964806, 36.2435026],
+            "geojson_geometry_hash": "stable-shape",
+            "geojson_coordinate_count": 90,
+            "combined_confidence": 0.746501,
+            "georeference_confidence": 0.746501,
+            "road_match_score": 0.334126,
+            "road_match_base_score": 0.260624,
+            "road_match_sampled_points": 1348,
+            "road_match_elapsed_s": 0.23,
+            "ocr_label_count": 16,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Nashville"],
+        },
+        {
+            "slug": "road-score",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.43,
+            "city": "Nashville",
+            "source": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+            "control_points": 3,
+            "bbox": [-86.8475058, 36.1153856, -86.6964806, 36.2435026],
+            "geojson_geometry_hash": "stable-shape",
+            "geojson_coordinate_count": 90,
+            "combined_confidence": 0.746501,
+            "georeference_confidence": 0.746501,
+            "road_match_score": 0.340001,
+            "road_match_base_score": 0.260624,
+            "road_match_sampled_points": 1348,
+            "road_match_elapsed_s": 0.99,
+            "ocr_label_count": 16,
+            "ocr_label_event": "Map labels read",
+            "ocr_full_detail_retry": False,
+            "ocr_top_labels": ["Nashville"],
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=2,
+        warmup_runs_per_case=0,
+    )
+
+    stability = repeat_profile["cases"]["road-score"]["signature_stability"]
+    assert stability["stable"] is False
+    assert stability["unique_signatures"] == 2
+    assert sorted(signature["road_match_score"] for signature in stability["signatures"]) == [
+        0.334126,
+        0.340001,
+    ]
+    assert "road_match_elapsed_s" not in stability["signatures"][0]
+
+
 def test_geojson_geometry_summary_hashes_rounded_geometry(tmp_path) -> None:
     geojson = tmp_path / "shape.geojson"
     geojson.write_text(
@@ -1670,7 +1749,13 @@ def test_geojson_geometry_summary_hashes_rounded_geometry(tmp_path) -> None:
                 "features": [
                     {
                         "type": "Feature",
-                        "properties": {"ignored": "metadata"},
+                        "properties": {
+                            "ignored": "metadata",
+                            "road_match_score": 0.334126,
+                            "road_match_base_score": 0.260624,
+                            "road_match_sampled_points": 1348,
+                            "road_match_elapsed_s": 0.22955,
+                        },
                         "geometry": {
                             "type": "Polygon",
                             "coordinates": [
@@ -1694,6 +1779,10 @@ def test_geojson_geometry_summary_hashes_rounded_geometry(tmp_path) -> None:
     assert summary["geojson_coordinate_count"] == 3
     assert isinstance(summary["geojson_geometry_hash"], str)
     assert len(summary["geojson_geometry_hash"]) == 16
+    assert summary["road_match_score"] == 0.334126
+    assert summary["road_match_base_score"] == 0.260624
+    assert summary["road_match_sampled_points"] == 1348
+    assert summary["road_match_elapsed_s"] == 0.22955
     assert summary_after_metadata_change == summary
 
 

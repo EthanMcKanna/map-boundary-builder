@@ -851,6 +851,10 @@ def row_from_process(
             "combined_confidence": summary.get("combined_confidence"),
             "georeference_confidence": summary.get("georeference_confidence"),
             "control_points": summary.get("control_points"),
+            "road_match_score": summary.get("road_match_score"),
+            "road_match_base_score": summary.get("road_match_base_score"),
+            "road_match_sampled_points": summary.get("road_match_sampled_points"),
+            "road_match_elapsed_s": summary.get("road_match_elapsed_s"),
             "bbox": summary.get("bbox"),
             "geojson_geometry_hash": None,
             "geojson_coordinate_count": None,
@@ -918,7 +922,42 @@ def geojson_geometry_summary(output_path: Path) -> dict[str, Any]:
     return {
         "geojson_geometry_hash": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
         "geojson_coordinate_count": sum(geojson_coordinate_count(geometry) for geometry in normalized),
+        **geojson_road_match_summary(data),
     }
+
+
+def geojson_road_match_summary(value: Any) -> dict[str, Any]:
+    properties = first_geojson_feature_properties(value)
+    if properties is None:
+        return {}
+    return {
+        key: properties.get(key)
+        for key in (
+            "road_match_score",
+            "road_match_base_score",
+            "road_match_sampled_points",
+            "road_match_elapsed_s",
+        )
+        if key in properties
+    }
+
+
+def first_geojson_feature_properties(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    if value.get("type") == "Feature":
+        properties = value.get("properties")
+        return properties if isinstance(properties, dict) else None
+    if value.get("type") != "FeatureCollection":
+        return None
+    features = value.get("features")
+    if not isinstance(features, list):
+        return None
+    for feature in features:
+        properties = first_geojson_feature_properties(feature)
+        if properties is not None:
+            return properties
+    return None
 
 
 def geojson_geometries(value: Any) -> list[dict[str, Any]]:
@@ -1484,6 +1523,9 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "geojson_coordinate_count": sample.get("geojson_coordinate_count"),
         "combined_confidence": repeat_profile_confidence_signature(sample.get("combined_confidence")),
         "georeference_confidence": repeat_profile_confidence_signature(sample.get("georeference_confidence")),
+        "road_match_score": repeat_profile_confidence_signature(sample.get("road_match_score")),
+        "road_match_base_score": repeat_profile_confidence_signature(sample.get("road_match_base_score")),
+        "road_match_sampled_points": repeat_profile_int_signature(sample.get("road_match_sampled_points")),
         "ocr_label_count": sample.get("ocr_label_count"),
         "ocr_label_event": sample.get("ocr_label_event"),
         "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
@@ -1512,6 +1554,16 @@ def repeat_profile_confidence_signature(value: Any) -> float | None:
     if parsed is None:
         return None
     return round(parsed, 6)
+
+
+def repeat_profile_int_signature(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def repeat_profile_slowest_samples(

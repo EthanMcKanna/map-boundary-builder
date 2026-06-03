@@ -15788,3 +15788,17 @@ with zero failures in 0.531s.
   `out/current-catalog-full44-hard-20260602` showed zero changes for status,
   source, city, bbox, geometry hash, coordinate count, confidence, control
   count, OCR label count, top labels, or full-detail retry flags.
+- Promoted road-match evidence into stress rows and repeat signatures after the
+  road-refine fallback work exposed that the benchmark summary only preserved
+  the resulting geometry, not the road-match decision inputs. Stress rows now
+  report road-match score, base score, sampled point count, and elapsed seconds;
+  repeat signatures enforce the stable score/base/sample fields while excluding
+  elapsed time. The focused Nashville gate at
+  `out/road-metadata-focused-20260603` passed `1/1`, primary `0.506451s`,
+  repeat p95 `0.244s`, stable repeat signature, and road-match fields
+  `0.334126` / `0.260624` / `1348`. The full hard gate at
+  `out/road-metadata-full44-hard-20260603` passed `44/44`, statuses
+  `{"complete":33,"failed":11}`, max total `0.686172s`, repeat p95 `0.514s`,
+  repeat OCR-engine p95 `0.468s`, and zero output drift against
+  `out/patched-roadfallback-full44-hard-20260603`; the full test suite passed
+  `616` tests plus `31` subtests.
