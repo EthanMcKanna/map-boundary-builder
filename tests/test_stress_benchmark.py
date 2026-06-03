@@ -989,6 +989,39 @@ def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -
     assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope"] == ["baseline-out-of-scope"]
 
 
+def test_compare_stress_reports_records_configuration_changes() -> None:
+    baseline = {
+        "execution": "in-process",
+        "profile_ocr_engine": True,
+        "runner_ocr_cache": True,
+        "extraction_cache": True,
+        "prewarm_runtime": True,
+        "repeat_profile_runs": 3,
+        "repeat_profile_warmups": 0,
+        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5}],
+    }
+    candidate = {
+        "execution": "in-process",
+        "profile_ocr_engine": True,
+        "runner_ocr_cache": False,
+        "extraction_cache": False,
+        "prewarm_runtime": True,
+        "repeat_profile_runs": 3,
+        "repeat_profile_warmups": 1,
+        "preset": {"name": "real-screenshot-hard-gate", "version": 2},
+        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["configuration_changes"] == [
+        {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+        {"field": "extraction_cache", "baseline": True, "candidate": False},
+        {"field": "repeat_profile_warmups", "baseline": 0, "candidate": 1},
+        {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v2"},
+    ]
+
+
 def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
     baseline = {
         "rows": [
@@ -1165,6 +1198,11 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "compared_rows": 2,
             "missing_in_baseline": ["new"],
             "missing_in_candidate": [],
+            "configuration_changes": [
+                {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
+                {"field": "extraction_cache", "baseline": True, "candidate": False},
+                {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v2"},
+            ],
             "signature_changed_field_counts": {"city": 1, "control_points": 1},
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
@@ -1302,6 +1340,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
     assert "median_delta=-0.040s" in output
     assert "signature_fields=city:1,control_points:1" in output
+    assert (
+        "baseline config changes: runner_ocr_cache=true->false, "
+        "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v2"
+    ) in output
     assert (
         "baseline primary delta: worst_total=houston +0.200s "
         "(ocr_total=+0.150s, input=+0.010s, det=+0.070s, rec=+0.070s), "

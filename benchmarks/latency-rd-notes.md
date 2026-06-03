@@ -17173,3 +17173,16 @@ with zero failures in 0.531s.
   passed `111 passed in 0.33s`, the full suite passed
   `687 passed, 31 subtests passed in 5.83s`, and this is benchmark
   feedback-loop reliability only; no runtime deploy is needed.
+- Added baseline configuration-change reporting to keep stale or differently
+  cached benchmark artifacts from masquerading as speed wins. The comparator now
+  records and prints top-level timing policy drift for execution mode, OCR
+  profiling, runner OCR cache, extraction cache, prewarm, repeat-profile sample
+  settings, and preset label. Replaying the old cached full report
+  `out/real-screenshot-hard-gate-preset-full49-20260603` against the current
+  uncached hard-gate report `out/ocr-context-full49-hard-20260603` now prints
+  `baseline config changes: runner_ocr_cache=true->false,
+  extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v2`
+  before the misleading `p95_total=+0.209s` repeat delta, explaining that the
+  comparison crossed cache/preset policies instead of proving a pure runtime
+  regression. Focused stress benchmark tests passed `112 passed in 0.45s`;
+  this is benchmark feedback-loop reliability only.

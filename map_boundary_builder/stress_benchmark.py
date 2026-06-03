@@ -875,6 +875,10 @@ def compare_stress_reports(
         "compared_rows": len(compared_slugs),
         "missing_in_baseline": missing_in_baseline,
         "missing_in_candidate": missing_in_candidate,
+        "configuration_changes": stress_report_configuration_changes(
+            baseline_report,
+            candidate_report,
+        ),
         "signature_change_count": len(signature_changes),
         "signature_changed_field_counts": signature_changed_field_counts(signature_changes),
         "signature_changes": signature_changes,
@@ -1201,6 +1205,62 @@ def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | N
         seen.add(value)
         slugs.append(value)
     return slugs
+
+
+def stress_report_configuration_changes(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fields = (
+        "execution",
+        "profile_ocr_engine",
+        "runner_ocr_cache",
+        "extraction_cache",
+        "prewarm_runtime",
+        "repeat_profile_runs",
+        "repeat_profile_warmups",
+    )
+    changes: list[dict[str, Any]] = []
+    for field in fields:
+        baseline_value = baseline_report.get(field)
+        candidate_value = candidate_report.get(field)
+        if baseline_value == candidate_value:
+            continue
+        changes.append(
+            {
+                "field": field,
+                "baseline": baseline_value,
+                "candidate": candidate_value,
+            }
+        )
+    baseline_preset = stress_report_preset_label(baseline_report)
+    candidate_preset = stress_report_preset_label(candidate_report)
+    if baseline_preset != candidate_preset:
+        changes.append(
+            {
+                "field": "preset",
+                "baseline": baseline_preset,
+                "candidate": candidate_preset,
+            }
+        )
+    return changes
+
+
+def stress_report_preset_label(report: dict[str, Any]) -> str | None:
+    preset = report.get("preset")
+    if not isinstance(preset, dict):
+        return None
+    name = preset.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+    version = preset.get("version")
+    version_text = f"@v{version}" if isinstance(version, int) else ""
+    only = preset.get("only")
+    only_text = ""
+    if isinstance(only, list):
+        only_count = sum(1 for slug in only if isinstance(slug, str) and slug)
+        only_text = f":only{only_count}" if only_count else ""
+    return f"{name}{version_text}{only_text}"
 
 
 def stress_signature_changed_fields(
@@ -4580,6 +4640,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"{median_delta_text}"
             f"{signature_field_counts_text}"
         )
+        config_changes_text = baseline_configuration_changes_text(baseline_comparison)
+        if config_changes_text:
+            print(f"baseline config changes: {config_changes_text}")
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
             print(f"baseline primary delta: {primary_delta_text}")
@@ -5379,6 +5442,41 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
         if value is not None:
             parts.append(f"{label}={formatter.format(value)}")
     return ", ".join(parts)
+
+
+def baseline_configuration_changes_text(
+    baseline_comparison: dict[str, Any],
+    *,
+    limit: int = 8,
+) -> str:
+    changes = baseline_comparison.get("configuration_changes")
+    if not isinstance(changes, list) or not changes:
+        return ""
+    parts: list[str] = []
+    for change in changes:
+        if not isinstance(change, dict):
+            continue
+        field = change.get("field")
+        if not isinstance(field, str) or not field:
+            continue
+        baseline_value = config_change_value_text(change.get("baseline"))
+        candidate_value = config_change_value_text(change.get("candidate"))
+        parts.append(f"{field}={baseline_value}->{candidate_value}")
+        if len(parts) >= limit:
+            break
+    return ", ".join(parts)
+
+
+def config_change_value_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "none"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{value:g}"
+    if isinstance(value, str):
+        return value or "empty"
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def baseline_repeat_ocr_stage_delta_text(repeat_delta: dict[str, Any] | None) -> str:
