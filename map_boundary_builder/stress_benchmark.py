@@ -3582,6 +3582,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"{baseline_out_of_scope_text}"
             f"{median_delta_text}"
         )
+        primary_delta_text = baseline_primary_delta_text(baseline_comparison)
+        if primary_delta_text:
+            print(f"baseline primary delta: {primary_delta_text}")
         repeat_delta = baseline_comparison.get("repeat_profile_delta")
         repeat_delta_text = baseline_repeat_delta_text(
             repeat_delta if isinstance(repeat_delta, dict) else None
@@ -3959,6 +3962,34 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
         if value is not None:
             parts.append(f"{label}={formatter.format(value)}")
     return ", ".join(parts)
+
+
+def baseline_primary_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    parts: list[str] = []
+    worst = baseline_primary_delta_item_text(
+        baseline_comparison.get("largest_total_regressions")
+    )
+    if worst:
+        parts.append(f"worst_total={worst}")
+    best = baseline_primary_delta_item_text(
+        baseline_comparison.get("largest_total_improvements")
+    )
+    if best:
+        parts.append(f"best_total={best}")
+    return ", ".join(parts)
+
+
+def baseline_primary_delta_item_text(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return ""
+    item = items[0]
+    if not isinstance(item, dict):
+        return ""
+    slug = item.get("slug")
+    delta = parse_signed_float(item.get("total_elapsed_delta_s"))
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    return f"{slug} {delta:+.3f}s"
 
 
 def repeat_delta_metric_value(

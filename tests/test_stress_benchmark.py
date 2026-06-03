@@ -525,6 +525,12 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "missing_in_candidate": [],
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
+            "largest_total_regressions": [
+                {"slug": "houston", "total_elapsed_delta_s": 0.2},
+            ],
+            "largest_total_improvements": [
+                {"slug": "dallas", "total_elapsed_delta_s": -0.1},
+            ],
             "candidate_scope": {
                 "baseline_rows_outside_candidate_scope_count": 3,
             },
@@ -550,6 +556,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "baseline comparison: compared=2, signature_changes=1" in output
     assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
     assert "median_delta=-0.040s" in output
+    assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output

@@ -16723,3 +16723,18 @@ with zero failures in 0.531s.
   four signature changes; the new metadata identified two `ocr_top_labels`-only
   drifts and two rows where both `ocr_top_labels` and `route_metric_labels`
   changed. This is harness reliability only; no runtime deploy is needed.
+- Added a compact `baseline primary delta` CLI line for
+  `--compare-baseline-report`, using the already-saved
+  `largest_total_regressions` and `largest_total_improvements` rows. Candidate
+  A/B runs now show the worst primary row and best primary row directly beside
+  the median and repeat-profile deltas, without opening `stress-summary.json`.
+  Focused stress benchmark tests passed `100 passed in 0.27s`, the full suite
+  passed `676 passed in 5.91s`, and `git diff --check` was clean. A real
+  six-row route smoke at `out/baseline-primary-delta-route-smoke-20260603`
+  compared current defaults against `out/route-recbatch12-control-20260603`,
+  passed `6/6`, kept `signature_changes=0`, printed
+  `worst_total=tesla-austin-route-receipt-long +0.029s` and
+  `best_total=tesla-austin-route-receipt -0.005s`, and the saved JSON matched
+  those row deltas. Repeat p95 in that smoke was `+0.045s`, so this is
+  harness readability only, not a new speed acceptance; no runtime deploy is
+  needed.
