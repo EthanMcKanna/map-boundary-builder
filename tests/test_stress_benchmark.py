@@ -1173,23 +1173,59 @@ def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> No
 
 def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -> None:
     baseline = {
+        "summary": {"stage_duration_s": {"ocr": 10.2}},
         "rows": [
-            {"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5},
-            {"slug": "baseline-out-of-scope", "observed_status": "complete", "total_elapsed_s": 0.6},
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "stages": {"ocr": 0.2},
+            },
+            {
+                "slug": "baseline-out-of-scope",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.6,
+                "stages": {"ocr": 10.0},
+            },
         ],
     }
     candidate = {
         "preset": {"name": "focused-real-screenshot-gate", "only": ["dallas"]},
-        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
+        "summary": {"stage_duration_s": {"ocr": 0.25}},
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.4,
+                "stages": {"ocr": 0.25},
+            }
+        ],
     }
 
-    comparison = stress_module.compare_stress_reports(baseline, candidate)
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_stage_total_regression_s=0.04,
+    )
 
     assert comparison["compared_rows"] == 1
     assert comparison["missing_in_candidate"] == []
     assert comparison["candidate_scope"]["slugs"] == ["dallas"]
     assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope_count"] == 1
     assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope"] == ["baseline-out-of-scope"]
+    assert comparison["stage_duration_delta_s"] == {
+        "ocr": {"baseline": 0.2, "candidate": 0.25, "delta_s": 0.05}
+    }
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_stage_total_regression_exceeded",
+            "stage": "ocr",
+            "delta_s": 0.05,
+            "max_stage_total_regression_s": 0.04,
+            "baseline_stage_total_s": 0.2,
+            "candidate_stage_total_s": 0.25,
+        }
+    ]
 
 
 def test_compare_stress_reports_records_repeat_profile_case_coverage_gaps() -> None:

@@ -1012,7 +1012,11 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
-    stage_duration_delta = stress_stage_duration_total_deltas(baseline_report, candidate_report)
+    stage_duration_delta = stress_stage_duration_total_deltas(
+        baseline_report,
+        candidate_report,
+        slugs=compared_slugs if candidate_scope_slugs is not None else None,
+    )
     if stage_duration_delta:
         comparison["stage_duration_delta_s"] = stage_duration_delta
     repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
@@ -1861,9 +1865,21 @@ def stress_scalar_delta(
 def stress_stage_duration_total_deltas(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
 ) -> dict[str, dict[str, float]]:
-    baseline_stage = stress_report_primary_stage_duration_totals(baseline_report)
-    candidate_stage = stress_report_primary_stage_duration_totals(candidate_report)
+    if slugs is not None:
+        baseline_stage = stress_report_primary_stage_duration_totals_for_slugs(
+            baseline_report,
+            slugs,
+        )
+        candidate_stage = stress_report_primary_stage_duration_totals_for_slugs(
+            candidate_report,
+            slugs,
+        )
+    else:
+        baseline_stage = stress_report_primary_stage_duration_totals(baseline_report)
+        candidate_stage = stress_report_primary_stage_duration_totals(candidate_report)
     if not baseline_stage or not candidate_stage:
         return {}
     shared_stages = {
@@ -1884,6 +1900,19 @@ def stress_stage_duration_total_deltas(
     return deltas
 
 
+def stress_report_primary_stage_duration_totals_for_slugs(
+    report: dict[str, Any],
+    slugs: list[str],
+) -> dict[str, float]:
+    rows_by_slug = stress_report_rows_by_slug(report)
+    rows = [
+        rows_by_slug[slug]
+        for slug in slugs
+        if slug in rows_by_slug
+    ]
+    return stress_stage_duration_totals_from_rows(rows)
+
+
 def stress_report_primary_stage_duration_totals(report: dict[str, Any]) -> dict[str, float]:
     summary = report.get("summary")
     if isinstance(summary, dict):
@@ -1893,10 +1922,14 @@ def stress_report_primary_stage_duration_totals(report: dict[str, Any]) -> dict[
     rows = report.get("rows")
     if not isinstance(rows, list):
         return {}
+    return stress_stage_duration_totals_from_rows(
+        [row for row in rows if isinstance(row, dict)]
+    )
+
+
+def stress_stage_duration_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, float]:
     stage_totals: dict[str, float] = {}
     for row in rows:
-        if not isinstance(row, dict):
-            continue
         stages = row.get("stages")
         if not isinstance(stages, dict):
             continue

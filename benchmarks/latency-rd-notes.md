@@ -17533,3 +17533,18 @@ with zero failures in 0.531s.
   `max_stage_total_regression_s=0.1`; the new budget failed exactly on the
   aggregate OCR drift, printing `primary stage ocr +0.149s > budget 0.100s`.
   This is benchmark acceptance reliability only; no runtime default changed.
+- Scoped aggregate primary stage deltas to the compared row set for focused
+  baseline comparisons. The prior implementation reused whole-report summary
+  totals, which was correct for full/full comparisons but misleading for
+  `--only` candidate runs compared against a full baseline: it could compare
+  eight candidate rows against forty-nine baseline rows. Focused stress tests
+  passed (`134 passed in 0.30s`) and the full suite passed (`710 passed, 31
+  subtests passed in 4.96s`). A saved focused proof compared
+  `out/waymo-tail-current-control-20260603` against
+  `out/current-v11-full49-hard-rerun-20260603`; the comparison reported
+  `compared_rows=8`, `baseline_rows_outside_candidate_scope_count=41`, and
+  scoped primary stage deltas `extract=+0.014728s`, `ocr=+0.011430s`,
+  `georeference=-0.007368s`, `export=-0.003387s`, and `inspect=+0.009611s`.
+  This keeps focused speed candidates from getting misleading aggregate-stage
+  acceptance signals. Benchmark acceptance reliability only; no runtime default
+  changed.
