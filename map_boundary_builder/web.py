@@ -20,6 +20,13 @@ from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
+from .request_options import (
+    allow_catalog_for_request,
+    bool_field,
+    city_hint_for_request,
+    float_field,
+    int_field,
+)
 from .runner import BoundaryBuildOptions, CatalogProbeMiss, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 from .upload_payload import UploadPayloadError, json_upload_body_limit, parse_json_upload_body
@@ -588,44 +595,6 @@ def first_query_value(query: dict[str, list[str]], name: str) -> str | None:
     if not values:
         return None
     return values[0]
-
-
-def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:
-    try:
-        value = float(fields.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(minimum, min(maximum, value))
-
-
-def int_field(fields: dict[str, str], name: str, default: int, minimum: int, maximum: int) -> int:
-    try:
-        value = int(fields.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(minimum, min(maximum, value))
-
-
-def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
-    value = fields.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() not in {"0", "false", "no", "off", ""}
-
-
-def city_hint_for_request(fields: dict[str, str]) -> str | None:
-    city = fields.get("city", "").strip()
-    if not city:
-        return None
-    if re.sub(r"[^a-z0-9]+", "", city.lower()) in {"auto", "automatic", "autodetect", "detect"}:
-        return None
-    return city
-
-
-def allow_catalog_for_request(fields: dict[str, str]) -> bool:
-    if bool_field(fields, "no_catalog", default=False):
-        return False
-    return bool_field(fields, "allow_catalog", default=True)
 
 
 def build_parser() -> argparse.ArgumentParser:

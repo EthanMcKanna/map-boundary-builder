@@ -27,6 +27,14 @@ os.environ.setdefault("MAP_BOUNDARY_CACHE_DIR", "/tmp/map-boundary-builder-cache
 from map_boundary_builder.asset_response import web_asset_response
 from map_boundary_builder.image_io import svg_rasterizer_diagnostics
 from map_boundary_builder.pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
+from map_boundary_builder.request_options import (
+    allow_catalog_for_request,
+    bool_field,
+    city_hint_for_request,
+    float_field,
+    include_overlay_for_request,
+    int_field,
+)
 from map_boundary_builder.runtime_warmup import (
     prewarm_generation_runtime,
     should_prewarm_generation_runtime,
@@ -962,48 +970,6 @@ def optimized_overlay_bytes(path: Path, *, original_size: int) -> tuple[str, byt
 def safe_extension(filename: str) -> str:
     ext = Path(filename).suffix.lower()
     return ext if ext in SUPPORTED_IMAGE_EXTENSIONS else ".png"
-
-
-def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:
-    try:
-        value = float(fields.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(minimum, min(maximum, value))
-
-
-def int_field(fields: dict[str, str], name: str, default: int, minimum: int, maximum: int) -> int:
-    try:
-        value = int(fields.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return max(minimum, min(maximum, value))
-
-
-def bool_field(fields: dict[str, str], name: str, *, default: bool) -> bool:
-    value = fields.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() not in {"0", "false", "no", "off", ""}
-
-
-def city_hint_for_request(fields: dict[str, str]) -> str | None:
-    city = fields.get("city", "").strip()
-    if not city:
-        return None
-    if re.sub(r"[^a-z0-9]+", "", city.lower()) in {"auto", "automatic", "autodetect", "detect"}:
-        return None
-    return city
-
-
-def include_overlay_for_request(fields: dict[str, str], *, catalog_probe_only: bool) -> bool:
-    return bool_field(fields, "include_overlay", default=not catalog_probe_only)
-
-
-def allow_catalog_for_request(fields: dict[str, str]) -> bool:
-    if bool_field(fields, "no_catalog", default=False):
-        return False
-    return bool_field(fields, "allow_catalog", default=True)
 
 
 def json_response_body(payload: dict[str, Any], *, accept_encoding: str = "") -> tuple[bytes, dict[str, str]]:

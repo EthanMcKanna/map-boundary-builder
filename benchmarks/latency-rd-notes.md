@@ -16560,3 +16560,13 @@ with zero failures in 0.531s.
   0.71s`), and the full suite (`666 passed, 31 subtests passed in 6.18s`). No
   screenshot hard gate was rerun because this only changes local request parsing
   before the existing extraction/georeference path.
+- Moved shared request-option parsing (`city`, booleans, numeric thresholds,
+  catalog/overlay switches) into `map_boundary_builder.request_options` and
+  wired both the Vercel API handler and local `map-boundary-web` handler through
+  the same functions. This is a drift-prevention hardening after the `city=Auto`
+  split: future parser changes now have one implementation and focused tests
+  assert both handlers export the shared helpers. Validation passed with
+  `git diff --check`, focused request/API/local-web tests (`92 passed in
+  0.85s`), and the full suite (`668 passed, 31 subtests passed in 6.21s`). No
+  screenshot hard gate was rerun because this preserves parsed request behavior
+  and does not touch extraction or georeferencing.
