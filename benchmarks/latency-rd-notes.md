@@ -18066,3 +18066,20 @@ with zero failures in 0.531s.
   separate default recognizer group at `total_s=0.261154`. That keeps the next
   plausible optimization lane focused on shared bright-blue detector work
   rather than another route-receipt-only knob.
+- Extended the OCR workload grouping into repeat-profile summaries and console
+  output so warm-path A/Bs show aggregate cost by engine configuration, not
+  only p95/max slowest cases. This is still reporting-only; no generation
+  defaults changed. Focused repeat-profile tests and the full stress benchmark
+  test file passed (`144 passed`), full pytest passed `728 passed,
+  31 subtests passed`, and `git diff --check` passed. The current full hard
+  gate at `out/repeat-ocr-workload-groups-full50-hard-20260603` passed
+  `50/50` expected outcomes with statuses `{"complete":39,"failed":11}`, max
+  primary `0.353438s`, repeat p95 `0.279434s`, repeat max `0.317264s`, and
+  prewarm `0.657s`. Primary OCR grouping again put bright-blue Waymo first:
+  7 rows / 7 calls, `total_s=1.634060`, `det_elapsed_s=0.922763`, and
+  `rec_elapsed_s=0.530381`. The new repeat grouping showed the same workload
+  as the warm-path owner: 7 rows / 14 calls,
+  `total_s=3.192169`, `det_elapsed_s=1.736271`, and
+  `rec_elapsed_s=1.065360`; route/non-map default recognizer groups were
+  second and third. This makes future warm-path regressions easier to attribute
+  to shared bright-blue detector work versus route/non-map recognition work.

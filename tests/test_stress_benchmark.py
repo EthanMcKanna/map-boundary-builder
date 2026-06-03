@@ -4984,6 +4984,32 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "detector_limit": 608,
         }
     ]
+    assert repeat_profile["summary"]["ocr_engine_workload_groups"] == [
+        {
+            "input_kind": "array",
+            "input_shape": [900, 1200],
+            "detector_limit": 608,
+            "calls": 1,
+            "total_s": 0.2,
+            "input_s": 0.02,
+            "det_elapsed_s": 0.08,
+            "rec_elapsed_s": 0.16,
+            "raw_box_count": 0,
+            "selected_box_count": 3,
+            "result_count": 0,
+            "label_count": 0,
+            "slowest_slug": "kept",
+            "slowest_total_s": 0.2,
+            "row_count": 1,
+            "top_slugs": ["kept"],
+        }
+    ]
+    assert stress_module.ocr_engine_workload_group_text(
+        repeat_profile["summary"]["ocr_engine_workload_groups"][0]
+    ) == (
+        "1200x900 array det=608 rows=1 calls=1 total=0.200s det=0.080s "
+        "rec=0.160s slowest=kept:0.200s top=kept"
+    )
     assert repeat_profile["summary"]["ocr_engine_profile"] == {
         "fixtures": 1,
         "calls": 1,

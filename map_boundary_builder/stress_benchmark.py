@@ -5283,6 +5283,7 @@ def summarize_repeat_profile_samples(
             "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
             "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
             "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
+            "ocr_engine_workload_groups": primary_ocr_engine_workload_groups(analyzed_samples),
             "ocr_engine_slowest_cases": repeat_profile_ocr_engine_slowest_cases(case_summaries),
         },
         "cases": case_summaries,
@@ -7523,6 +7524,27 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 )
                 if ocr_slow_case_text:
                     print(f"repeat ocr slowest cases: {ocr_slow_case_text}")
+            repeat_workload_groups = repeat_summary.get("ocr_engine_workload_groups")
+            if not isinstance(repeat_workload_groups, list) or not ocr_engine_workload_groups_include_context(
+                repeat_workload_groups
+            ):
+                repeat_samples = repeat_profile.get("samples")
+                if isinstance(repeat_samples, list):
+                    rebuilt_repeat_workload_groups = primary_ocr_engine_workload_groups(
+                        repeat_profile_analyzed_samples(
+                            [sample for sample in repeat_samples if isinstance(sample, dict)]
+                        )
+                    )
+                    if rebuilt_repeat_workload_groups:
+                        repeat_workload_groups = rebuilt_repeat_workload_groups
+            if isinstance(repeat_workload_groups, list) and repeat_workload_groups:
+                repeat_workload_text = ", ".join(
+                    ocr_engine_workload_group_text(group)
+                    for group in repeat_workload_groups[:3]
+                    if isinstance(group, dict)
+                )
+                if repeat_workload_text:
+                    print(f"repeat ocr workload groups: {repeat_workload_text}")
             unstable_signature_cases = repeat_summary.get("unstable_signature_cases")
             if isinstance(unstable_signature_cases, list) and unstable_signature_cases:
                 print(
