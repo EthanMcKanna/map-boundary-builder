@@ -16317,3 +16317,13 @@ with zero failures in 0.531s.
   `18/18` count-capped rows, zero positive-call-only rows, and the manifest
   contract budget passed. This is another stress-manifest reliability change
   only; no runtime deploy is needed.
+- Tightened the real-screenshot hard-gate preset to enforce the completed OCR
+  count-contract coverage directly: `min_ocr_count_contract_rows=38` and
+  `max_positive_ocr_call_only_rows=0`. The manifest guard now asserts all `38`
+  OCR-positive rows have count contracts and no positive OCR row remains
+  call-only, so future preset runs fail closed if this coverage regresses.
+  Validation passed with `jq empty benchmarks/real-screenshot-stress.json`,
+  `git diff --check`, focused stress harness tests
+  (`92 passed in 24.94s`), and the full suite (`651 passed, 31 subtests passed
+  in 163.64s`). This is a benchmark harness reliability change only; no runtime
+  deploy is needed.

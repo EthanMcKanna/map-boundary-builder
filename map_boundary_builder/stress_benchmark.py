@@ -444,9 +444,9 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     if args.min_ocr_call_contract_rows is None:
         args.min_ocr_call_contract_rows = 49
     if args.min_ocr_count_contract_rows is None:
-        args.min_ocr_count_contract_rows = 12
+        args.min_ocr_count_contract_rows = 38
     if args.max_positive_ocr_call_only_rows is None:
-        args.max_positive_ocr_call_only_rows = 26
+        args.max_positive_ocr_call_only_rows = 0
     args.fail_on_invalid_ocr_count_contracts = True
 
 

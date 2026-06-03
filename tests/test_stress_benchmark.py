@@ -841,13 +841,13 @@ def test_manifest_contract_budget_passes_when_coverage_meets_thresholds() -> Non
         {
             "ocr_call_contract_rows": 49,
             "ocr_call_contract_missing_rows": [],
-            "ocr_count_contract_rows": 12,
-            "ocr_positive_call_rows_without_count_contract": ["call-only"] * 26,
+            "ocr_count_contract_rows": 38,
+            "ocr_positive_call_rows_without_count_contract": [],
             "invalid_ocr_count_contract_rows": [],
         },
         min_ocr_call_contract_rows=49,
-        min_ocr_count_contract_rows=12,
-        max_positive_ocr_call_only_rows=26,
+        min_ocr_count_contract_rows=38,
+        max_positive_ocr_call_only_rows=0,
         fail_on_invalid_ocr_count_contracts=True,
     )
 
@@ -855,8 +855,8 @@ def test_manifest_contract_budget_passes_when_coverage_meets_thresholds() -> Non
         "passed": True,
         "violations": [],
         "min_ocr_call_contract_rows": 49,
-        "min_ocr_count_contract_rows": 12,
-        "max_positive_ocr_call_only_rows": 26,
+        "min_ocr_count_contract_rows": 38,
+        "max_positive_ocr_call_only_rows": 0,
         "fail_on_invalid_ocr_count_contracts": True,
     }
 
@@ -867,33 +867,19 @@ def test_real_screenshot_manifest_preserves_ocr_contract_coverage() -> None:
     budget = stress_module.build_manifest_contract_budget_summary(
         contracts,
         min_ocr_call_contract_rows=49,
-        min_ocr_count_contract_rows=12,
-        max_positive_ocr_call_only_rows=26,
+        min_ocr_count_contract_rows=38,
+        max_positive_ocr_call_only_rows=0,
         fail_on_invalid_ocr_count_contracts=True,
     )
-    expected_count_contract_slugs = {
-        "tesla-austin-route-receipt-long",
-        "tesla-austin-route-receipt-gray-long",
-        "profile-app-non-map-ui",
-        "dallas-waymo",
-        "san-antonio-waymo",
-        "bay-area-waymo",
-        "bay-area-waymo-jpeg-small",
-        "los-angeles-waymo",
-        "houston-waymo",
-        "orlando-waymo",
-        "nashville-waymo",
-        "miami-waymo",
-    }
 
     assert contracts["total_cases"] == 49
     assert contracts["ocr_call_contract_rows"] == contracts["total_cases"]
     assert contracts["ocr_call_contract_missing_rows"] == []
     assert contracts["ocr_positive_call_contract_rows"] == 38
     assert contracts["ocr_zero_call_contract_rows"] == 11
-    assert set(contracts["ocr_count_contract_slugs"]) >= expected_count_contract_slugs
-    assert contracts["ocr_count_contract_rows"] >= len(expected_count_contract_slugs)
-    assert len(contracts["ocr_positive_call_rows_without_count_contract"]) <= 26
+    assert contracts["ocr_count_contract_rows"] == contracts["ocr_positive_call_contract_rows"]
+    assert len(contracts["ocr_count_contract_slugs"]) == 38
+    assert contracts["ocr_positive_call_rows_without_count_contract"] == []
     assert contracts["invalid_ocr_count_contract_rows"] == []
     assert budget["passed"] is True
 
@@ -2939,8 +2925,8 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
         assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
         assert kwargs["min_ocr_call_contract_rows"] == 49
-        assert kwargs["min_ocr_count_contract_rows"] == 12
-        assert kwargs["max_positive_ocr_call_only_rows"] == 26
+        assert kwargs["min_ocr_count_contract_rows"] == 38
+        assert kwargs["max_positive_ocr_call_only_rows"] == 0
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
@@ -2953,8 +2939,8 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
                 "ocr_call_contract_rows": 49,
                 "ocr_positive_call_contract_rows": 38,
                 "ocr_zero_call_contract_rows": 11,
-                "ocr_count_contract_rows": 12,
-                "ocr_positive_call_rows_without_count_contract": ["call-only"] * 26,
+                "ocr_count_contract_rows": 38,
+                "ocr_positive_call_rows_without_count_contract": [],
             },
             "manifest_contract_budget": {
                 "passed": True,
