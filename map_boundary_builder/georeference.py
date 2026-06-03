@@ -2787,6 +2787,18 @@ def build_control_points(
     expand_street_controls: bool = False,
     allow_credible_cached_fit: bool = False,
 ) -> list[ControlPoint]:
+    if expand_street_controls:
+        return build_geocoded_control_points(
+            labels,
+            city,
+            city_center,
+            stop_after_controls=None,
+            max_labels=max(max_geocoded_labels, MAX_STREET_RICH_GEOCODED_LABELS),
+            prefer_large_text=merge_control_sources,
+            allow_network=False,
+            normalize_road_tokens=True,
+        )
+
     # The geocoded and OSM-place paths are independent lookups; overlap them, and
     # accept a fast OSM-place fit only when it is already decisive.
     place_executor = ThreadPoolExecutor(max_workers=1)
@@ -2807,12 +2819,8 @@ def build_control_points(
                 if has_decisive_control_fit(place_controls):
                     return place_controls
 
-        geocode_label_limit = (
-            max(max_geocoded_labels, MAX_STREET_RICH_GEOCODED_LABELS)
-            if expand_street_controls
-            else max_geocoded_labels
-        )
-        stop_after_controls = None if expand_street_controls else 6 if merge_control_sources else 4
+        geocode_label_limit = max_geocoded_labels
+        stop_after_controls = 6 if merge_control_sources else 4
 
         geocoded_controls = build_geocoded_control_points(
             labels,
@@ -2822,17 +2830,13 @@ def build_control_points(
             max_labels=geocode_label_limit,
             prefer_large_text=merge_control_sources,
             allow_network=False,
-            normalize_road_tokens=expand_street_controls,
+            normalize_road_tokens=False,
         )
         if (
             allow_credible_cached_fit
             and not merge_control_sources
-            and not expand_street_controls
             and has_credible_control_fit(geocoded_controls)
         ):
-            place_future.cancel()
-            return geocoded_controls
-        if expand_street_controls:
             place_future.cancel()
             return geocoded_controls
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
@@ -2862,8 +2866,8 @@ def build_control_points(
             stop_after_controls=stop_after_controls,
             max_labels=geocode_label_limit,
             prefer_large_text=merge_control_sources,
-            allow_network=not expand_street_controls,
-            normalize_road_tokens=expand_street_controls,
+            allow_network=True,
+            normalize_road_tokens=False,
         )
         if has_decisive_control_fit(geocoded_controls) and not merge_control_sources:
             place_future.cancel()

@@ -2730,6 +2730,60 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertEqual(focused_controls, cached_controls)
         self.assertEqual(geocode_network_modes, [False])
 
+    def test_expanded_street_controls_skip_osm_place_lookup(self) -> None:
+        center = GeocodeResult(
+            label="Las Vegas",
+            lon=-115.1484,
+            lat=36.1674,
+            display_name="Las Vegas, Clark County, Nevada, United States",
+            bbox=(-115.406575, 36.129554, -115.062066, 36.401481),
+            importance=0.724,
+            place_type="city",
+        )
+        label = OcrLabel("W Flamingo Rd", x=170, y=88, width=245, height=100, confidence=97)
+        street_control = ControlPoint(
+            label=label,
+            geocode=GeocodeResult(
+                label="W Flamingo Rd, Las Vegas",
+                lon=-115.19,
+                lat=36.115,
+                display_name="West Flamingo Road, Las Vegas, Clark County, Nevada, United States",
+                bbox=None,
+                importance=0.4,
+                place_type="road",
+            ),
+        )
+        geocoded_kwargs: list[dict] = []
+
+        def fake_geocoded_controls(*_args, **kwargs):
+            geocoded_kwargs.append(kwargs)
+            return [street_control]
+
+        with (
+            patch(
+                "map_boundary_builder.georeference.build_osm_place_control_points",
+                side_effect=AssertionError("street expansion should not start OSM place lookup"),
+            ),
+            patch(
+                "map_boundary_builder.georeference.build_geocoded_control_points",
+                side_effect=fake_geocoded_controls,
+            ),
+        ):
+            controls = build_control_points(
+                [label],
+                "Las Vegas",
+                center,
+                max_geocoded_labels=4,
+                expand_street_controls=True,
+            )
+
+        self.assertEqual(controls, [street_control])
+        self.assertEqual(len(geocoded_kwargs), 1)
+        self.assertIsNone(geocoded_kwargs[0]["stop_after_controls"])
+        self.assertGreater(geocoded_kwargs[0]["max_labels"], 4)
+        self.assertFalse(geocoded_kwargs[0]["allow_network"])
+        self.assertTrue(geocoded_kwargs[0]["normalize_road_tokens"])
+
     def test_cached_label_cluster_skips_live_direct_context_lookup(self) -> None:
         labels = [
             OcrLabel("Atherton", x=120, y=180, width=110, height=26, confidence=55),

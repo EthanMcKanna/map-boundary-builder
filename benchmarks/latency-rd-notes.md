@@ -16251,3 +16251,31 @@ with zero failures in 0.531s.
   repeat OCR-engine p95/max `0.419s`/`0.486s`, repeat selected-box p95/max
   `24.5`/`30.0`, manifest contract budget passed, and all latency/OCR/prewarm
   budgets passed.
+- Rejected several broader real-map speed knobs after targeted evidence runs on
+  the bright-blue OCR/extraction tails from the gray-route hard gate. Lowering
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION` from `1400` to `1300`
+  failed the 9-row non-SVG bright-blue subset (`5/9` expected), moving the Bay
+  Area bbox beyond tolerance, changing Miami to `Inferred map area`, lowering
+  Nashville OCR labels, and exceeding LA count contracts. Raising
+  `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA` to `2600` preserved `9/9`
+  expectations but did not improve runtime against a same-subset default
+  baseline (`ocr=2.753s` vs `2.779s`, cold max worse at `0.756s` vs `0.676s`).
+  Changing generic RapidOCR recognition batch size to `16` preserved `9/9` but
+  did not improve recognition time (`1.185s` vs `1.180s`), and `8` worsened OCR
+  (`3.074s`, rec `1.305s`). Lowering `MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION`
+  to `1400` passed an 11-row extraction-tail subset but was slower than the
+  same-subset default (`extract=1.898s` vs `1.850s`, OCR `3.210s` vs `3.045s`).
+  No runtime cap changes were made from these experiments.
+- Removed wasted OSM-place work from the expanded street-control georeference
+  retry path. That path already returned cached geocoded street controls before
+  ever using OSM place controls, but it still started a background
+  `build_osm_place_control_points` worker and then canceled it. The code now
+  returns the same geocoded street-control result directly, preserving
+  no-network road-token normalization while avoiding unnecessary thread/work on
+  header-filtered street retry attempts. Focused georeference tests passed
+  `148` tests, the full suite passed `651` tests plus `31` subtests, and the
+  full `--real-screenshot-hard-gate` passed at
+  `out/real-screenshot-hard-gate-street-control-skip-osm-20260603` with
+  `49/49` expected, primary max `0.551366s`, repeat p95 `0.469s`, repeat max
+  `0.537s`, repeat OCR-engine p95/max `0.409s`/`0.480s`, manifest contract
+  budget passed, and all latency/OCR/prewarm budgets passed.
