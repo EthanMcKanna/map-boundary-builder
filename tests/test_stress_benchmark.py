@@ -1321,6 +1321,7 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     assert saved["summary"]["ocr_engine_stage_max_rows"] == {}
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
+    assert "preset" not in saved
     assert saved["runtime_config"]["pipeline_version"] == "pipeline-test"
     assert saved["runtime_config"]["runtime_dependencies"] == {
         "rapidocr-onnxruntime": "1.4.4",
@@ -1505,6 +1506,60 @@ def test_run_stress_benchmark_can_gate_manifest_contract_coverage(tmp_path, monk
         "max_positive_ocr_call_only_rows": 0,
         "fail_on_invalid_ocr_count_contracts": True,
     }
+
+
+def test_run_stress_benchmark_saves_preset_metadata(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "kept",
+                        "image": str(image),
+                        "expect": {"status": "complete", "source_prefix": "ocr-georeference:"},
+                    }
+                ]
+            }
+        )
+    )
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": 0.5,
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        preset={"name": "real-screenshot-hard-gate", "version": 1},
+        python_executable="python",
+    )
+
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    assert report["preset"] == {"name": "real-screenshot-hard-gate", "version": 1}
+    assert saved["preset"] == report["preset"]
 
 
 def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatch) -> None:
@@ -2887,6 +2942,10 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["min_ocr_count_contract_rows"] == 12
         assert kwargs["max_positive_ocr_call_only_rows"] == 26
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
+        assert kwargs["preset"] == {
+            "name": "real-screenshot-hard-gate",
+            "version": 1,
+        }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
             "manifest_contracts": {

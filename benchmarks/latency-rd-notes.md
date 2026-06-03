@@ -16223,3 +16223,12 @@ with zero failures in 0.531s.
   OCR p95 count defaults plus `selected_box_count=28`, and max-count defaults
   plus `label_count=28`), and the full suite passed `649` tests plus `31`
   subtests. This is a hard-gate safety fix only; no runtime deploy is needed.
+- Added self-identifying preset metadata to stress reports created through
+  `--real-screenshot-hard-gate`. Saved summaries now include preset
+  `{"name":"real-screenshot-hard-gate","version":1}` for hard-gate runs, while
+  ordinary direct stress reports stay untagged. This makes future hard-gate
+  artifacts easier to compare without inferring intent from a long list of
+  expanded thresholds. Focused stress tests passed `92` tests, a direct CLI
+  smoke printed the preset name/version, and the full suite passed `650` tests
+  plus `31` subtests. This is stress-report provenance only; no runtime deploy
+  is needed.

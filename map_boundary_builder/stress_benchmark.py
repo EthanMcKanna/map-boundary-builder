@@ -31,6 +31,8 @@ from .runtime_config import generation_env_config, ocr_runtime_config
 DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
+REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 1
 OCR_ENGINE_STAGE_MAX_KEYS = ("det_elapsed_s", "rec_elapsed_s", "total_s")
 OCR_ENGINE_STAGE_METRIC_ALIASES = {
     "total_elapsed_s": "total_s",
@@ -381,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         min_ocr_count_contract_rows=args.min_ocr_count_contract_rows,
         max_positive_ocr_call_only_rows=args.max_positive_ocr_call_only_rows,
         fail_on_invalid_ocr_count_contracts=args.fail_on_invalid_ocr_count_contracts,
+        preset=stress_preset_from_args(args),
     )
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
@@ -447,6 +450,15 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     args.fail_on_invalid_ocr_count_contracts = True
 
 
+def stress_preset_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
+    if not args.real_screenshot_hard_gate:
+        return None
+    return {
+        "name": REAL_SCREENSHOT_HARD_GATE_PRESET_NAME,
+        "version": REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION,
+    }
+
+
 def prepend_default_budget_entries(defaults: list[str], values: list[str]) -> list[str]:
     return [*defaults, *values]
 
@@ -487,6 +499,7 @@ def run_stress_benchmark(
     min_ocr_count_contract_rows: int | None = None,
     max_positive_ocr_call_only_rows: int | None = None,
     fail_on_invalid_ocr_count_contracts: bool = False,
+    preset: dict[str, Any] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
@@ -576,6 +589,8 @@ def run_stress_benchmark(
         "summary": summarize_rows(rows),
         "rows": rows,
     }
+    if preset is not None:
+        report["preset"] = preset
     if prewarm is not None:
         report["prewarm"] = prewarm
     if repeat_profile is not None:
