@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 5
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 6
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 4
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 5
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -192,6 +192,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on-baseline-config-drift",
         action="store_true",
         help="Exit non-zero when --compare-baseline-report has incompatible timing/cache settings.",
+    )
+    parser.add_argument(
+        "--fail-on-baseline-coverage-gap",
+        action="store_true",
+        help="Exit non-zero when --compare-baseline-report did not compare every selected row.",
     )
     parser.add_argument(
         "--max-baseline-total-regression-s",
@@ -414,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-baseline-signature-drift requires --compare-baseline-report")
     if args.fail_on_baseline_config_drift and not args.compare_baseline_report:
         parser.error("--fail-on-baseline-config-drift requires --compare-baseline-report")
+    if args.fail_on_baseline_coverage_gap and not args.compare_baseline_report:
+        parser.error("--fail-on-baseline-coverage-gap requires --compare-baseline-report")
     if args.max_baseline_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
@@ -534,6 +541,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.fail_on_baseline_config_drift and baseline_comparison_configuration_changes(report):
         return 1
+    if args.fail_on_baseline_coverage_gap and baseline_comparison_coverage_gaps(report):
+        return 1
     if baseline_comparison_regression_budget_failed(report):
         return 1
     if args.fail_on_unexpected and (
@@ -562,6 +571,7 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
     if args.compare_baseline_report:
         args.fail_on_baseline_signature_drift = True
         args.fail_on_baseline_config_drift = True
+        args.fail_on_baseline_coverage_gap = True
         if args.max_baseline_total_regression_s is None:
             args.max_baseline_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_p95_regression_s is None:
@@ -3574,6 +3584,27 @@ def baseline_comparison_configuration_changes(report: dict[str, Any]) -> list[di
     if not isinstance(changes, list):
         return []
     return [change for change in changes if isinstance(change, dict)]
+
+
+def baseline_comparison_coverage_gaps(report: dict[str, Any]) -> list[dict[str, Any]]:
+    comparison = report.get("baseline_comparison")
+    if not isinstance(comparison, dict):
+        return []
+    gaps: list[dict[str, Any]] = []
+    missing_in_baseline = comparison.get("missing_in_baseline")
+    if isinstance(missing_in_baseline, list):
+        slugs = [str(slug) for slug in missing_in_baseline if isinstance(slug, (str, int))]
+        if slugs:
+            gaps.append({"kind": "missing_in_baseline", "slugs": slugs})
+    missing_in_candidate = comparison.get("missing_in_candidate")
+    if isinstance(missing_in_candidate, list):
+        slugs = [str(slug) for slug in missing_in_candidate if isinstance(slug, (str, int))]
+        if slugs:
+            gaps.append({"kind": "missing_in_candidate", "slugs": slugs})
+    compared_rows = comparison.get("compared_rows")
+    if isinstance(compared_rows, int) and compared_rows <= 0:
+        gaps.append({"kind": "no_compared_rows"})
+    return gaps
 
 
 def baseline_comparison_regression_budget_failed(report: dict[str, Any]) -> bool:

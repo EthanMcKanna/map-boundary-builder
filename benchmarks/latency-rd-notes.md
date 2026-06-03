@@ -17253,3 +17253,18 @@ with zero failures in 0.531s.
   `primary dallas-waymo +0.254s > budget 0.250s`. Focused stress benchmark tests
   passed `119 passed in 0.33s`; this is benchmark feedback-loop reliability
   only.
+- Added `--fail-on-baseline-coverage-gap` and made hard/focused preset baseline
+  comparisons enable it by default. Preset metadata moved again:
+  `--real-screenshot-hard-gate` now records version `6` and
+  `--focused-real-screenshot-gate` records version `5`. This catches
+  comparisons where selected candidate rows are absent from the baseline or no
+  rows were actually compared, while focused comparisons still ignore baseline
+  rows outside the candidate `--only` scope. A real same-version focused smoke
+  used a Los Angeles-only baseline at
+  `out/baseline-coverage-current-la-20260603`, then compared a Dallas-only
+  candidate at `out/baseline-coverage-default-gate-smoke-20260603`. Dallas
+  behavior still passed (`1/1`, primary `0.371s`, repeat analyzed `2`, repeat
+  subsecond `2/2`), but the command exited `1` with `compared=0`,
+  `missing_baseline=1`, and `baseline_out_of_scope=1`. Focused stress benchmark
+  tests passed `122 passed in 0.35s`; this is benchmark feedback-loop
+  reliability only.
