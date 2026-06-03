@@ -281,6 +281,37 @@ AREA_HINTED_CURRENT_CATALOG_MAX_AREA_RATIO = 1.04
 AREA_HINTED_CURRENT_CATALOG_RETRY_FIRST_MIN_VERTICES = 150
 FILENAME_CURRENT_CATALOG_SHAPE_MIN_AREA_RATIO = 0.85
 FILENAME_CURRENT_CATALOG_SHAPE_MAX_AREA_RATIO = 1.15
+GENERIC_CATALOG_HANDOFF_FILENAME_TOKENS = {
+    "after",
+    "baseline",
+    "cache",
+    "capture",
+    "current",
+    "currentref",
+    "default",
+    "file",
+    "gate",
+    "image",
+    "img",
+    "input",
+    "map",
+    "neutral",
+    "photo",
+    "probe",
+    "prod",
+    "production",
+    "prune",
+    "repeat",
+    "roadskip",
+    "run",
+    "screenshot",
+    "strict",
+    "tail",
+    "unlabeled",
+    "upload",
+    "uploaded",
+    "variant",
+}
 ROAD_NETWORK_CONTEXT_FALLBACK_ENV = "MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK"
 ROAD_FEATURE_PRECOMPUTE_ENV = "MAP_BOUNDARY_PRECOMPUTE_ROAD_FEATURES"
 RUNNER_OCR_CACHE_ENV = "MAP_BOUNDARY_RUNNER_OCR_CACHE"
@@ -762,6 +793,10 @@ def build_boundary(
     city_input = city.strip() if isinstance(city, str) and city.strip() else None
     allow_catalog = catalog_matching_enabled(opts)
     filename_hint = opts.filename_hint or image_path.stem
+    upload_is_svg = is_svg_image(image_path)
+    source_is_svg = upload_is_svg or opts.source_was_svg
+    source_is_avif = is_avif_image_content(image_path)
+    explicit_catalog_probe_miss = catalog_probe_missed_enabled(opts)
     would_try_pre_ocr_catalog = should_try_pre_ocr_catalog(
         city_input=city_input,
         allow_catalog=allow_catalog,
@@ -772,10 +807,10 @@ def build_boundary(
         city_input=city_input,
         filename_hint=filename_hint,
         allow_pre_ocr_catalog=would_try_pre_ocr_catalog,
+        source_is_svg=source_is_svg,
+        source_is_avif=source_is_avif,
     )
     allow_pre_ocr_catalog = not skip_redundant_probe and would_try_pre_ocr_catalog
-    upload_is_svg = is_svg_image(image_path)
-    source_is_svg = upload_is_svg or opts.source_was_svg
     svg_service_path_candidate: SvgServicePathCandidate | None = None
 
     if upload_is_svg:
@@ -942,6 +977,7 @@ def build_boundary(
                     city_input=city_input,
                     allow_catalog=allow_catalog,
                     skip_redundant_probe=skip_redundant_probe,
+                    explicit_probe_miss=explicit_catalog_probe_miss,
                 ):
                     ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                     labels_future_current_catalog_shortcut = True
@@ -1017,6 +1053,7 @@ def build_boundary(
                 city_input=city_input,
                 allow_catalog=allow_catalog,
                 skip_redundant_probe=skip_redundant_probe,
+                explicit_probe_miss=explicit_catalog_probe_miss,
             ):
                 ocr_kwargs["rapidocr_max_dimension"] = CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION
                 labels_future_current_catalog_shortcut = True
@@ -1283,7 +1320,14 @@ def build_boundary(
                     opts=opts,
                     rgb=rgb,
                     progress=progress,
-                    georeference_source=catalog_match_source or "catalog-shape-match:probe-miss-full",
+                    georeference_source=(
+                        catalog_match_source
+                        or (
+                            "catalog-shape-match:probe-miss-full"
+                            if explicit_catalog_probe_miss
+                            else "catalog-shape-match"
+                        )
+                    ),
                 )
 
         if catalog_probe_only_enabled(opts):
@@ -1320,7 +1364,6 @@ def build_boundary(
             provider_ui_fast_ocr_max_dimension is None
             and city_input is None
             and allow_catalog
-            and not skip_redundant_probe
         ):
             provider_ui_fast_ocr_max_dimension = current_catalog_provider_crop_ocr_max_dimension(
                 extraction,
@@ -1374,6 +1417,7 @@ def build_boundary(
                         city_input=city_input,
                         allow_catalog=allow_catalog,
                         skip_redundant_probe=skip_redundant_probe,
+                        explicit_probe_miss=explicit_catalog_probe_miss,
                     )
                     route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
                         extraction.style,
@@ -1687,6 +1731,7 @@ def build_boundary(
                 city_input=city_input,
                 allow_catalog=allow_catalog,
                 skip_redundant_probe=skip_redundant_probe,
+                explicit_probe_miss=explicit_catalog_probe_miss,
             )
             route_ui_ocr_max_dimension = route_ui_fast_ocr_max_dimension_for_style(
                 extraction.style,
@@ -3063,11 +3108,13 @@ def current_catalog_label_shape_shortcut_enabled(
     city_input: str | None,
     allow_catalog: bool,
     skip_redundant_probe: bool,
+    explicit_probe_miss: bool = True,
 ) -> bool:
     return (
         allow_catalog
         and city_input is None
         and skip_redundant_probe
+        and explicit_probe_miss
         and CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION > 0
     )
 
@@ -3569,13 +3616,66 @@ def catalog_probe_missed_handoff_enabled(
     city_input: str | None,
     filename_hint: str | None,
     allow_pre_ocr_catalog: bool,
+    source_is_svg: bool = False,
+    source_is_avif: bool = False,
 ) -> bool:
-    if not catalog_probe_missed_enabled(options) or not allow_pre_ocr_catalog:
+    if not allow_pre_ocr_catalog or catalog_probe_only_enabled(options) or source_is_svg:
         return False
     hint_text = " ".join(part for part in (filename_hint or "", city_input or "") if part.strip())
-    if bool(catalog_provider_hint(hint_text)) or has_active_catalog_area_hint(hint_text):
+    if catalog_probe_missed_enabled(options):
+        if bool(catalog_provider_hint(hint_text)) or has_active_catalog_area_hint(hint_text):
+            return True
+        return city_input is None and not has_stale_catalog_area_hint(filename_hint)
+    return should_auto_handoff_generic_catalog_probe_miss(
+        city_input=city_input,
+        filename_hint=filename_hint,
+        source_is_avif=source_is_avif,
+    )
+
+
+def should_auto_handoff_generic_catalog_probe_miss(
+    *,
+    city_input: str | None,
+    filename_hint: str | None,
+    source_is_avif: bool = False,
+) -> bool:
+    if not source_is_avif:
+        return False
+    if city_input is not None:
+        return False
+    hint_text = filename_hint or ""
+    if (
+        bool(catalog_provider_hint(hint_text))
+        or has_active_catalog_area_hint(hint_text)
+        or has_stale_catalog_area_hint(hint_text)
+    ):
+        return False
+    return is_generic_catalog_handoff_filename_hint(filename_hint)
+
+
+def is_avif_image_content(path: str | Path) -> bool:
+    try:
+        head = Path(path).read_bytes()[:64]
+    except OSError:
+        return False
+    if len(head) < 16 or head[4:8] != b"ftyp":
+        return False
+    brands = head[8:32]
+    return b"avif" in brands or b"avis" in brands
+
+
+def is_generic_catalog_handoff_filename_hint(filename_hint: str | None) -> bool:
+    if filename_hint is None:
         return True
-    return city_input is None and not has_stale_catalog_area_hint(filename_hint)
+    stem = Path(str(filename_hint)).stem.lower()
+    tokens = [
+        token
+        for token in re.split(r"[^a-z0-9]+", stem)
+        if len(token) >= 2 and not any(char.isdigit() for char in token)
+    ]
+    if not tokens:
+        return True
+    return all(token in GENERIC_CATALOG_HANDOFF_FILENAME_TOKENS for token in tokens)
 
 
 def high_confidence_label_texts(labels: list[Any]) -> list[str]:

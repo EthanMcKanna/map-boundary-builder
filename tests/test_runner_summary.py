@@ -3722,6 +3722,85 @@ def test_catalog_probe_missed_skips_low_res_probes_for_generic_requests(tmp_path
     ]
 
 
+def test_generic_avif_uploads_auto_skip_redundant_catalog_probe() -> None:
+    options = runner.BoundaryBuildOptions(filename_hint="upload.png")
+
+    assert runner.catalog_probe_missed_handoff_enabled(
+        options,
+        city_input=None,
+        filename_hint="upload.png",
+        allow_pre_ocr_catalog=True,
+        source_is_avif=True,
+    )
+    assert runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="IMG_0072.PNG"),
+        city_input=None,
+        filename_hint="IMG_0072.PNG",
+        allow_pre_ocr_catalog=True,
+        source_is_avif=True,
+    )
+    assert runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="neutral-map-after-roadskip-1780146244.webp"),
+        city_input=None,
+        filename_hint="neutral-map-after-roadskip-1780146244.webp",
+        allow_pre_ocr_catalog=True,
+        source_is_avif=True,
+    )
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        options,
+        city_input=None,
+        filename_hint="upload.png",
+        allow_pre_ocr_catalog=True,
+        source_is_avif=False,
+    )
+
+
+def test_catalog_hints_and_probe_only_keep_low_res_catalog_probe() -> None:
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="Waymo Phoenix.png"),
+        city_input=None,
+        filename_hint="Waymo Phoenix.png",
+        allow_pre_ocr_catalog=True,
+    )
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="Tesla Bay Area.png"),
+        city_input=None,
+        filename_hint="Tesla Bay Area.png",
+        allow_pre_ocr_catalog=True,
+    )
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="aa mm.avif"),
+        city_input=None,
+        filename_hint="aa mm.avif",
+        allow_pre_ocr_catalog=True,
+    )
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(catalog_probe_only=True, filename_hint="upload.png"),
+        city_input=None,
+        filename_hint="upload.png",
+        allow_pre_ocr_catalog=True,
+        source_is_avif=True,
+    )
+    assert not runner.catalog_probe_missed_handoff_enabled(
+        runner.BoundaryBuildOptions(filename_hint="upload.png"),
+        city_input=None,
+        filename_hint="upload.png",
+        allow_pre_ocr_catalog=True,
+        source_is_svg=True,
+        source_is_avif=True,
+    )
+
+
+def test_avif_content_detection_ignores_upload_extension(tmp_path) -> None:
+    disguised_avif = tmp_path / "input.png"
+    disguised_avif.write_bytes(b"\x00\x00\x00\x18ftypavif\x00\x00\x00\x00avif")
+    png_upload = tmp_path / "input-real.png"
+    Image.new("RGB", (2, 2), (255, 255, 255)).save(png_upload)
+
+    assert runner.is_avif_image_content(disguised_avif)
+    assert not runner.is_avif_image_content(png_upload)
+
+
 def test_catalog_probe_low_iou_miss_allows_early_ocr_for_provider_hints() -> None:
     assert (
         runner.should_overlap_probe_miss_ocr(

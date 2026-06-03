@@ -17831,3 +17831,28 @@ with zero failures in 0.531s.
   `0.277s`, repeat max `0.295s`, prewarm `0.618s`, and the new UI-default Ann
   Arbor row completed at `0.170s`. This is acceptance-surface hardening only,
   not a runtime-code speed change.
+- Accepted a narrow generic-AVIF catalog handoff for direct runner/API uploads.
+  The goal was to make the production-default Ann Arbor AVIF direct path behave
+  more like the browser's catalog-probe-missed handoff without broadening that
+  skip to current-catalog PNG/SVG rows. A first broad generic-filename prototype
+  was rejected: it preserved matches but changed current-catalog signatures
+  (`catalog-shape-match:probe-miss-full` sources, then confidence shifts for
+  Nashville/Phoenix) in focused comparison runs. The accepted code only auto
+  skips the redundant low-res catalog probe when the upload bytes are AVIF,
+  the request has no city/provider/area hint, the filename is generic, and the
+  source is not SVG; explicit frontend `catalog_probe_missed` still keeps its
+  existing behavior. Targeted tests passed (`108` runner-summary tests and
+  `3` API-cache tests). A focused affected-row gate at
+  `out/auto-generic-avif-handoff-focused2-20260603` passed `5/5`, and the
+  focused comparison at
+  `out/auto-generic-avif-handoff-focused-compare-20260603` had
+  `signature_changes=0` with median primary delta `-0.005s` before failing only
+  on the partial comparison's missing hidden-overlap deltas. The full hard gate
+  at `out/auto-generic-avif-handoff-full50-hard-20260603` passed `50/50`,
+  statuses `{"complete":39,"failed":11}`, max primary `0.326261s`, repeat p95
+  `0.282s`, repeat max `0.305s`, prewarm `0.595s`, and Ann Arbor UI-default
+  primary `0.161s`. A full comparison rerun at
+  `out/auto-generic-avif-handoff-full50-compare-20260603` was rejected as
+  acceptance evidence because it surfaced unrelated `robotaxi-austin`
+  no-catalog JPEG signature variance plus hidden-overlap missing-budget noise,
+  while still passing all manifest expectations.
