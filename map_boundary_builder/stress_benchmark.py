@@ -1997,6 +1997,8 @@ def repeat_ocr_engine_p95_budget_violations(
             }
             for metric, budget in sorted(budgets.items())
         ]
+    if repeat_profile_has_only_zero_ocr_engine_calls(repeat_profile):
+        return []
     summary = repeat_profile.get("summary")
     stage_stats = summary.get("ocr_engine_stage_duration_s") if isinstance(summary, dict) else None
     if not isinstance(stage_stats, dict):
@@ -2125,6 +2127,14 @@ def row_has_no_ocr_engine_calls(row: dict[str, Any]) -> bool:
     return calls == 0.0
 
 
+def repeat_profile_has_only_zero_ocr_engine_calls(repeat_profile: dict[str, Any]) -> bool:
+    samples = repeat_profile.get("samples")
+    if not isinstance(samples, list):
+        return False
+    analyzed_samples = repeat_profile_analyzed_samples([sample for sample in samples if isinstance(sample, dict)])
+    return bool(analyzed_samples) and all(row_has_no_ocr_engine_calls(sample) for sample in analyzed_samples)
+
+
 def ocr_engine_budget_missing_violation(
     row: dict[str, Any],
     *,
@@ -2170,6 +2180,8 @@ def repeat_ocr_engine_count_p95_budget_violations(
             }
             for metric, budget in sorted(budgets.items())
         ]
+    if repeat_profile_has_only_zero_ocr_engine_calls(repeat_profile):
+        return []
     summary = repeat_profile.get("summary")
     count_stats = summary.get("ocr_engine_count_metric") if isinstance(summary, dict) else None
     if not isinstance(count_stats, dict):

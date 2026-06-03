@@ -1417,6 +1417,37 @@ def test_latency_budget_skips_primary_ocr_engine_budgets_for_zero_call_profiles(
     ]
 
 
+def test_latency_budget_skips_repeat_ocr_engine_p95_for_zero_call_profiles() -> None:
+    report = stress_module.build_latency_budget_summary(
+        rows=[],
+        repeat_profile={
+            "summary": {
+                "ocr_engine_profile": {"calls": 0},
+                "ocr_engine_stage_duration_s": {},
+                "ocr_engine_count_metric": {},
+            },
+            "samples": [
+                {
+                    "slug": "pure-catalog",
+                    "warmup": False,
+                    "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+                },
+                {
+                    "slug": "pure-catalog",
+                    "warmup": False,
+                    "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+                },
+            ],
+        },
+        max_repeat_ocr_engine_p95_duration_s={"total_s": 0.9},
+        max_repeat_ocr_engine_p95_count={"selected_box_count": 30},
+    )
+
+    assert report["passed"] is True
+    assert report["repeat_ocr_engine_p95_violations"] == []
+    assert report["repeat_ocr_engine_count_p95_violations"] == []
+
+
 def test_repeat_profile_flags_output_signature_drift() -> None:
     samples = [
         {

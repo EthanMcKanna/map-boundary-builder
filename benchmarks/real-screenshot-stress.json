@@ -284,6 +284,21 @@
       }
     },
     {
+      "slug": "nashville-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Nashville.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Nashville",
+        "min_combined_confidence": 0.97,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "robotaxi-austin",
       "image": "/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg",
       "no_catalog": true,

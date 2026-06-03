@@ -15686,3 +15686,46 @@ with zero failures in 0.531s.
   `out/service-area-full38-hard-20260602/stress-summary.json` showed zero
   changes for status, source, city, bbox, geometry hash, coordinate count,
   confidence, control count, OCR label count, or top labels.
+- Investigated the untracked current Waymo Nashville PNG tail instead of
+  promoting it as a slow no-catalog row. The no-retry counterfactual at
+  `out/nashville-no-fasttext-retry-probe-20260602/no-retry.summary.json`
+  read the first 14 labels, then failed closed in `0.506507s` as sparse OCR;
+  the control run needed two OCR calls, completed in `1.427903s`, and returned
+  the same `ocr-georeference:nominatim-label-fit+osm-road-refine` bbox used by
+  the earlier scratch stress run. Reducing the bright-blue full-detail retry
+  cap was unsafe or unhelpful: `1400px` failed sparse OCR, `1450px` completed
+  with a shifted bbox and no speed win, and `1500px` remained the reliable
+  default. Sweeping `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_AREA` from `700` to
+  `1400`, `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA` from `0` through
+  `2300`, and bright-blue detector caps from `192` through `320` also failed
+  to avoid the second OCR call or produce a clean latency win. Keep the
+  current no-catalog retry behavior for this image until a stronger label
+  stability/reuse strategy exists.
+- Accepted two reliability improvements found while probing that Nashville
+  tail. First, the normal catalog-enabled upload path for
+  `/Users/ethanmckanna/Downloads/service area images/Waymo Nashville.png`
+  already avoids OCR: the neutral-filename smoke at
+  `out/current-nashville-catalog-neutral-smoke-20260602/summary.json`
+  returned `catalog-shape-match`, `nashville-waymo`, confidence
+  `0.984003`, and zero OCR calls in `0.125063s`, so
+  `nashville-waymo-current-catalog` now tracks that production-shaped current
+  screenshot path. Second, the focused stress gate exposed a harness bug: pure
+  catalog repeat-profile rows correctly had `ocr_engine_profile.calls=0`, but
+  `--max-repeat-ocr-engine-p95-duration-s total_s=0.9` reported a missing
+  metric. The stress benchmark now skips repeat OCR-engine p95 duration/count
+  budgets only when every analyzed repeat sample explicitly has zero OCR engine
+  calls; missing profiles and mixed OCR/catalog suites still fail/enforce as
+  before. Targeted unit coverage passed `8` selected tests. The focused
+  Nashville catalog gate at
+  `out/nashville-current-catalog-focused-20260602/stress-summary.json` passed
+  `1/1`, primary `0.123715s`, repeat `3/3` subsecond, repeat p95 `0.098s`,
+  zero OCR calls, and no repeat OCR-engine budget violations. The full expanded
+  gate at `out/nashville-current-catalog-full40-hard-20260602/stress-summary.json`
+  passed `40/40`, statuses `{"complete":29,"failed":11}`, primary max
+  `0.778596s`, repeat `40/40` subsecond, repeat p95 `0.576s`, repeat max
+  `0.658s`, repeat OCR-engine p95 `0.493s`, and prewarm `1.314s`. Comparing
+  all 39 common rows against
+  `out/zoox-sf-current-full39-hard-20260602/stress-summary.json` showed zero
+  changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, control count, OCR label count, top labels, or full-detail retry
+  flags.
