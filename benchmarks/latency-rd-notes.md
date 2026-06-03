@@ -16165,3 +16165,20 @@ with zero failures in 0.531s.
   and positive-call-only `0`. The full unit suite passed `640` tests plus `31`
   subtests. This is a harness reliability/reporting improvement only; no
   runtime deploy is needed.
+- Added an optional manifest-contract budget gate so coverage can fail the
+  stress CLI instead of merely printing a report. The new flags can require a
+  minimum number of `max_ocr_engine_calls` rows, a minimum number of
+  `max_ocr_engine_counts` rows, a maximum number of positive-call rows that are
+  still call-only, and failure on invalid OCR count contracts. The current full
+  manifest satisfies the exact gate with `49` call-contract rows, `12`
+  count-contract rows, `26` positive-call-only rows, and no invalid count
+  contracts. A real passing smoke at
+  `out/manifest-contract-budget-pass-smoke-20260603` passed `dallas-waymo`
+  with `1/1` expected, primary `0.975967s` under OCR profiling, and
+  `manifest contract budget: passed`. A deliberate negative smoke at
+  `out/manifest-contract-budget-fail-smoke-20260603` exited `1` when
+  `min_ocr_count_contract_rows=2` exceeded the one-row selection's actual count
+  coverage, printing `ocr count contracts 1 < minimum 2`. Focused stress
+  benchmark tests passed `87` tests; the full suite passed `645` tests plus
+  `31` subtests. This is another harness reliability gate only; no runtime
+  deploy is needed.

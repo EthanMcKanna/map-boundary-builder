@@ -258,6 +258,32 @@ def build_parser() -> argparse.ArgumentParser:
             "Repeat or comma-separate entries such as selected_box_count=30,raw_box_count=50."
         ),
     )
+    parser.add_argument(
+        "--min-ocr-call-contract-rows",
+        type=int,
+        default=None,
+        help="Fail when fewer selected manifest rows define max_ocr_engine_calls.",
+    )
+    parser.add_argument(
+        "--min-ocr-count-contract-rows",
+        type=int,
+        default=None,
+        help="Fail when fewer selected manifest rows define at least one valid max_ocr_engine_counts metric.",
+    )
+    parser.add_argument(
+        "--max-positive-ocr-call-only-rows",
+        type=int,
+        default=None,
+        help=(
+            "Fail when more selected rows with max_ocr_engine_calls > 0 lack valid "
+            "max_ocr_engine_counts metrics."
+        ),
+    )
+    parser.add_argument(
+        "--fail-on-invalid-ocr-count-contracts",
+        action="store_true",
+        help="Fail when selected manifest rows define invalid max_ocr_engine_counts metrics or values.",
+    )
     return parser
 
 
@@ -276,6 +302,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-repeat-profile-p95-duration-s must be positive")
     if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
         parser.error("--max-prewarm-runtime-s must be positive")
+    if args.min_ocr_call_contract_rows is not None and args.min_ocr_call_contract_rows < 0:
+        parser.error("--min-ocr-call-contract-rows must be non-negative")
+    if args.min_ocr_count_contract_rows is not None and args.min_ocr_count_contract_rows < 0:
+        parser.error("--min-ocr-count-contract-rows must be non-negative")
+    if args.max_positive_ocr_call_only_rows is not None and args.max_positive_ocr_call_only_rows < 0:
+        parser.error("--max-positive-ocr-call-only-rows must be non-negative")
     try:
         max_prewarm_stage_s = parse_prewarm_stage_duration_budgets(args.max_prewarm_stage_s)
     except ValueError as exc:
@@ -328,10 +360,17 @@ def main(argv: list[str] | None = None) -> int:
         max_repeat_ocr_engine_p95_duration_s=max_repeat_ocr_engine_p95_duration_s,
         max_repeat_ocr_engine_p95_count=max_repeat_ocr_engine_p95_count,
         max_repeat_ocr_engine_max_count=max_repeat_ocr_engine_max_count,
+        min_ocr_call_contract_rows=args.min_ocr_call_contract_rows,
+        min_ocr_count_contract_rows=args.min_ocr_count_contract_rows,
+        max_positive_ocr_call_only_rows=args.max_positive_ocr_call_only_rows,
+        fail_on_invalid_ocr_count_contracts=args.fail_on_invalid_ocr_count_contracts,
     )
     print_stress_table(report)
     latency_budget = report.get("latency_budget")
     if isinstance(latency_budget, dict) and latency_budget.get("passed") is False:
+        return 1
+    manifest_contract_budget = report.get("manifest_contract_budget")
+    if isinstance(manifest_contract_budget, dict) and manifest_contract_budget.get("passed") is False:
         return 1
     if args.prewarm_runtime and not prewarm_runtime_ok(report.get("prewarm")):
         return 1
@@ -376,6 +415,10 @@ def run_stress_benchmark(
     max_repeat_ocr_engine_p95_duration_s: dict[str, float] | None = None,
     max_repeat_ocr_engine_p95_count: dict[str, float] | None = None,
     max_repeat_ocr_engine_max_count: dict[str, float] | None = None,
+    min_ocr_call_contract_rows: int | None = None,
+    min_ocr_count_contract_rows: int | None = None,
+    max_positive_ocr_call_only_rows: int | None = None,
+    fail_on_invalid_ocr_count_contracts: bool = False,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
@@ -388,6 +431,12 @@ def run_stress_benchmark(
         raise ValueError("max_repeat_profile_p95_duration_s must be positive")
     if max_prewarm_runtime_s is not None and max_prewarm_runtime_s <= 0.0:
         raise ValueError("max_prewarm_runtime_s must be positive")
+    if min_ocr_call_contract_rows is not None and min_ocr_call_contract_rows < 0:
+        raise ValueError("min_ocr_call_contract_rows must be non-negative")
+    if min_ocr_count_contract_rows is not None and min_ocr_count_contract_rows < 0:
+        raise ValueError("min_ocr_count_contract_rows must be non-negative")
+    if max_positive_ocr_call_only_rows is not None and max_positive_ocr_call_only_rows < 0:
+        raise ValueError("max_positive_ocr_call_only_rows must be non-negative")
     ocr_engine_budgets = dict(max_ocr_engine_duration_s or {})
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
@@ -443,6 +492,7 @@ def run_stress_benchmark(
         runner_ocr_cache=runner_ocr_cache,
         extraction_cache=extraction_cache,
     )
+    manifest_contracts = summarize_manifest_contracts(cases)
     report = {
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
@@ -454,7 +504,7 @@ def run_stress_benchmark(
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
         "runtime_config": runtime_config,
-        "manifest_contracts": summarize_manifest_contracts(cases),
+        "manifest_contracts": manifest_contracts,
         "summary": summarize_rows(rows),
         "rows": rows,
     }
@@ -486,6 +536,19 @@ def run_stress_benchmark(
             max_repeat_ocr_engine_p95_duration_s=ocr_engine_p95_budgets,
             max_repeat_ocr_engine_p95_count=ocr_engine_p95_count_budgets,
             max_repeat_ocr_engine_max_count=ocr_engine_max_count_budgets,
+        )
+    if (
+        min_ocr_call_contract_rows is not None
+        or min_ocr_count_contract_rows is not None
+        or max_positive_ocr_call_only_rows is not None
+        or fail_on_invalid_ocr_count_contracts
+    ):
+        report["manifest_contract_budget"] = build_manifest_contract_budget_summary(
+            manifest_contracts,
+            min_ocr_call_contract_rows=min_ocr_call_contract_rows,
+            min_ocr_count_contract_rows=min_ocr_count_contract_rows,
+            max_positive_ocr_call_only_rows=max_positive_ocr_call_only_rows,
+            fail_on_invalid_ocr_count_contracts=fail_on_invalid_ocr_count_contracts,
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -580,6 +643,96 @@ def summarize_manifest_contracts(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_count_contract_metric_counts": dict(sorted(metric_counts.items())),
         "invalid_ocr_count_contract_rows": invalid_count_contract_rows,
     }
+
+
+def build_manifest_contract_budget_summary(
+    manifest_contracts: dict[str, Any],
+    *,
+    min_ocr_call_contract_rows: int | None = None,
+    min_ocr_count_contract_rows: int | None = None,
+    max_positive_ocr_call_only_rows: int | None = None,
+    fail_on_invalid_ocr_count_contracts: bool = False,
+) -> dict[str, Any]:
+    violations: list[dict[str, Any]] = []
+    ocr_call_contract_rows = manifest_contract_count(manifest_contracts, "ocr_call_contract_rows")
+    ocr_count_contract_rows = manifest_contract_count(manifest_contracts, "ocr_count_contract_rows")
+    positive_call_only_rows = manifest_contract_list(
+        manifest_contracts,
+        "ocr_positive_call_rows_without_count_contract",
+    )
+    invalid_count_contract_rows = manifest_contract_list(
+        manifest_contracts,
+        "invalid_ocr_count_contract_rows",
+    )
+
+    if min_ocr_call_contract_rows is not None:
+        minimum = int(min_ocr_call_contract_rows)
+        if ocr_call_contract_rows < minimum:
+            violations.append(
+                {
+                    "kind": "ocr_call_contract_rows_below_min",
+                    "ocr_call_contract_rows": ocr_call_contract_rows,
+                    "min_ocr_call_contract_rows": minimum,
+                    "missing_rows": manifest_contract_list(
+                        manifest_contracts,
+                        "ocr_call_contract_missing_rows",
+                    ),
+                }
+            )
+    if min_ocr_count_contract_rows is not None:
+        minimum = int(min_ocr_count_contract_rows)
+        if ocr_count_contract_rows < minimum:
+            violations.append(
+                {
+                    "kind": "ocr_count_contract_rows_below_min",
+                    "ocr_count_contract_rows": ocr_count_contract_rows,
+                    "min_ocr_count_contract_rows": minimum,
+                }
+            )
+    if max_positive_ocr_call_only_rows is not None:
+        maximum = int(max_positive_ocr_call_only_rows)
+        if len(positive_call_only_rows) > maximum:
+            violations.append(
+                {
+                    "kind": "positive_ocr_call_only_rows_above_max",
+                    "positive_ocr_call_only_rows": len(positive_call_only_rows),
+                    "max_positive_ocr_call_only_rows": maximum,
+                    "rows": positive_call_only_rows,
+                }
+            )
+    if fail_on_invalid_ocr_count_contracts and invalid_count_contract_rows:
+        violations.append(
+            {
+                "kind": "invalid_ocr_count_contracts",
+                "invalid_ocr_count_contract_rows": invalid_count_contract_rows,
+            }
+        )
+
+    summary: dict[str, Any] = {
+        "passed": not violations,
+        "violations": violations,
+    }
+    if min_ocr_call_contract_rows is not None:
+        summary["min_ocr_call_contract_rows"] = int(min_ocr_call_contract_rows)
+    if min_ocr_count_contract_rows is not None:
+        summary["min_ocr_count_contract_rows"] = int(min_ocr_count_contract_rows)
+    if max_positive_ocr_call_only_rows is not None:
+        summary["max_positive_ocr_call_only_rows"] = int(max_positive_ocr_call_only_rows)
+    if fail_on_invalid_ocr_count_contracts:
+        summary["fail_on_invalid_ocr_count_contracts"] = True
+    return summary
+
+
+def manifest_contract_count(manifest_contracts: dict[str, Any], key: str) -> int:
+    value = manifest_contracts.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return 0
+
+
+def manifest_contract_list(manifest_contracts: dict[str, Any], key: str) -> list[Any]:
+    value = manifest_contracts.get(key)
+    return [item for item in value] if isinstance(value, list) else []
 
 
 def run_stress_case(
@@ -2861,6 +3014,40 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 f"count-capped={count_contract_rows}/{positive_call_rows} positive-call rows, "
                 f"positive-call-only={count_contract_missing}"
             )
+    manifest_contract_budget = report.get("manifest_contract_budget")
+    if isinstance(manifest_contract_budget, dict):
+        if manifest_contract_budget.get("passed"):
+            print("manifest contract budget: passed")
+        else:
+            violations = manifest_contract_budget.get("violations")
+            violation_count = len(violations) if isinstance(violations, list) else 0
+            print(f"manifest contract budget: failed violations={violation_count}")
+            if isinstance(violations, list):
+                for issue in violations[:6]:
+                    if not isinstance(issue, dict):
+                        continue
+                    if issue.get("kind") == "ocr_call_contract_rows_below_min":
+                        print(
+                            "   - "
+                            f"ocr call contracts {issue['ocr_call_contract_rows']} "
+                            f"< minimum {issue['min_ocr_call_contract_rows']}"
+                        )
+                    elif issue.get("kind") == "ocr_count_contract_rows_below_min":
+                        print(
+                            "   - "
+                            f"ocr count contracts {issue['ocr_count_contract_rows']} "
+                            f"< minimum {issue['min_ocr_count_contract_rows']}"
+                        )
+                    elif issue.get("kind") == "positive_ocr_call_only_rows_above_max":
+                        print(
+                            "   - "
+                            f"positive-call-only rows {issue['positive_ocr_call_only_rows']} "
+                            f"> maximum {issue['max_positive_ocr_call_only_rows']}"
+                        )
+                    elif issue.get("kind") == "invalid_ocr_count_contracts":
+                        invalid_rows = issue.get("invalid_ocr_count_contract_rows")
+                        invalid_count = len(invalid_rows) if isinstance(invalid_rows, list) else 0
+                        print(f"   - invalid ocr count contracts: {invalid_count}")
     if summary.get("stage_duration_s"):
         stage_total_text = ", ".join(
             f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()

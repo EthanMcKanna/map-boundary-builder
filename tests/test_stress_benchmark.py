@@ -247,6 +247,12 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
             "ocr_count_contract_rows": 1,
             "ocr_positive_call_rows_without_count_contract": [],
         },
+        "manifest_contract_budget": {
+            "passed": True,
+            "violations": [],
+            "min_ocr_call_contract_rows": 2,
+            "min_ocr_count_contract_rows": 1,
+        },
         "summary": {
             "total": 1,
             "expectation_passed": 1,
@@ -297,6 +303,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
 
     output = capsys.readouterr().out
     assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
+    assert "manifest contract budget: passed" in output
     assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
     assert "repeat ocr engine counts: label_count=p95 12.0 max 14.0" in output
     assert "conf_lt70=p95 0.0 max 0.0" in output
@@ -775,6 +782,82 @@ def test_summarize_manifest_contracts_reports_ocr_count_coverage() -> None:
         "invalid_ocr_count_contract_rows": [
             {"slug": "invalid-count-contract", "metric": "unknown_count"},
         ],
+    }
+
+
+def test_manifest_contract_budget_flags_coverage_gaps() -> None:
+    budget = stress_module.build_manifest_contract_budget_summary(
+        {
+            "ocr_call_contract_rows": 3,
+            "ocr_call_contract_missing_rows": ["missing-call"],
+            "ocr_count_contract_rows": 1,
+            "ocr_positive_call_rows_without_count_contract": ["call-only-a", "call-only-b"],
+            "invalid_ocr_count_contract_rows": [
+                {"slug": "bad-count", "metric": "unknown_count"},
+            ],
+        },
+        min_ocr_call_contract_rows=4,
+        min_ocr_count_contract_rows=2,
+        max_positive_ocr_call_only_rows=1,
+        fail_on_invalid_ocr_count_contracts=True,
+    )
+
+    assert budget == {
+        "passed": False,
+        "violations": [
+            {
+                "kind": "ocr_call_contract_rows_below_min",
+                "ocr_call_contract_rows": 3,
+                "min_ocr_call_contract_rows": 4,
+                "missing_rows": ["missing-call"],
+            },
+            {
+                "kind": "ocr_count_contract_rows_below_min",
+                "ocr_count_contract_rows": 1,
+                "min_ocr_count_contract_rows": 2,
+            },
+            {
+                "kind": "positive_ocr_call_only_rows_above_max",
+                "positive_ocr_call_only_rows": 2,
+                "max_positive_ocr_call_only_rows": 1,
+                "rows": ["call-only-a", "call-only-b"],
+            },
+            {
+                "kind": "invalid_ocr_count_contracts",
+                "invalid_ocr_count_contract_rows": [
+                    {"slug": "bad-count", "metric": "unknown_count"},
+                ],
+            },
+        ],
+        "min_ocr_call_contract_rows": 4,
+        "min_ocr_count_contract_rows": 2,
+        "max_positive_ocr_call_only_rows": 1,
+        "fail_on_invalid_ocr_count_contracts": True,
+    }
+
+
+def test_manifest_contract_budget_passes_when_coverage_meets_thresholds() -> None:
+    budget = stress_module.build_manifest_contract_budget_summary(
+        {
+            "ocr_call_contract_rows": 49,
+            "ocr_call_contract_missing_rows": [],
+            "ocr_count_contract_rows": 12,
+            "ocr_positive_call_rows_without_count_contract": ["call-only"] * 26,
+            "invalid_ocr_count_contract_rows": [],
+        },
+        min_ocr_call_contract_rows=49,
+        min_ocr_count_contract_rows=12,
+        max_positive_ocr_call_only_rows=26,
+        fail_on_invalid_ocr_count_contracts=True,
+    )
+
+    assert budget == {
+        "passed": True,
+        "violations": [],
+        "min_ocr_call_contract_rows": 49,
+        "min_ocr_count_contract_rows": 12,
+        "max_positive_ocr_call_only_rows": 26,
+        "fail_on_invalid_ocr_count_contracts": True,
     }
 
 
@@ -1291,6 +1374,100 @@ def test_run_stress_benchmark_runtime_config_records_cache_policy(tmp_path, monk
     assert runtime_config["generation_env"]["MAP_BOUNDARY_ROAD_REFINE_CACHE_MAX_PIXELS"] == "3000000"
     assert os.environ.get(RUNNER_OCR_CACHE_ENV) is None
     assert os.environ.get(EXTRACTION_CACHE_ENV) is None
+
+
+def test_run_stress_benchmark_can_gate_manifest_contract_coverage(tmp_path, monkeypatch) -> None:
+    image = tmp_path / "map.png"
+    image.write_bytes(b"not a real image")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "slug": "count-capped",
+                        "image": str(image),
+                        "expect": {
+                            "status": "complete",
+                            "source_prefix": "ocr-georeference:",
+                            "max_ocr_engine_calls": 1,
+                            "max_ocr_engine_counts": {"selected_box_count": 3},
+                        },
+                    },
+                    {
+                        "slug": "call-only",
+                        "image": str(image),
+                        "expect": {
+                            "status": "complete",
+                            "source_prefix": "ocr-georeference:",
+                            "max_ocr_engine_calls": 1,
+                        },
+                    },
+                ]
+            }
+        )
+    )
+
+    def fake_run_case(
+        case,
+        out_dir,
+        *,
+        timeout_seconds,
+        write_debug,
+        profile_ocr_engine,
+        runner_ocr_cache,
+        extraction_cache,
+        execution,
+        python_executable,
+    ):
+        return {
+            "slug": case["slug"],
+            "image": case["image"],
+            "expected_status": "complete",
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "source": "ocr-georeference:nominatim-label-fit",
+            "total_elapsed_s": 0.5,
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
+
+    report = stress_module.run_stress_benchmark(
+        manifest,
+        tmp_path / "out",
+        min_ocr_call_contract_rows=2,
+        min_ocr_count_contract_rows=2,
+        max_positive_ocr_call_only_rows=0,
+        fail_on_invalid_ocr_count_contracts=True,
+        python_executable="python",
+    )
+
+    saved = json.loads((tmp_path / "out" / "stress-summary.json").read_text())
+    assert saved["manifest_contracts"] == report["manifest_contracts"]
+    assert report["manifest_contracts"]["ocr_call_contract_rows"] == 2
+    assert report["manifest_contracts"]["ocr_count_contract_rows"] == 1
+    assert report["manifest_contracts"]["ocr_positive_call_rows_without_count_contract"] == ["call-only"]
+    assert saved["manifest_contract_budget"] == report["manifest_contract_budget"]
+    assert report["manifest_contract_budget"] == {
+        "passed": False,
+        "violations": [
+            {
+                "kind": "ocr_count_contract_rows_below_min",
+                "ocr_count_contract_rows": 1,
+                "min_ocr_count_contract_rows": 2,
+            },
+            {
+                "kind": "positive_ocr_call_only_rows_above_max",
+                "positive_ocr_call_only_rows": 1,
+                "max_positive_ocr_call_only_rows": 0,
+                "rows": ["call-only"],
+            },
+        ],
+        "min_ocr_call_contract_rows": 2,
+        "min_ocr_count_contract_rows": 2,
+        "max_positive_ocr_call_only_rows": 0,
+        "fail_on_invalid_ocr_count_contracts": True,
+    }
 
 
 def test_run_stress_benchmark_can_record_generation_prewarm(tmp_path, monkeypatch) -> None:
@@ -2580,6 +2757,65 @@ def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> No
     assert exit_code == 1
 
 
+def test_main_fails_when_manifest_contract_budget_is_exceeded(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["min_ocr_call_contract_rows"] == 49
+        assert kwargs["min_ocr_count_contract_rows"] == 12
+        assert kwargs["max_positive_ocr_call_only_rows"] == 25
+        assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
+        return {
+            "manifest_contracts": {
+                "total_cases": 49,
+                "ocr_call_contract_rows": 49,
+                "ocr_positive_call_contract_rows": 38,
+                "ocr_zero_call_contract_rows": 11,
+                "ocr_count_contract_rows": 12,
+                "ocr_positive_call_rows_without_count_contract": ["call-only"] * 26,
+            },
+            "manifest_contract_budget": {
+                "passed": False,
+                "violations": [
+                    {
+                        "kind": "positive_ocr_call_only_rows_above_max",
+                        "positive_ocr_call_only_rows": 26,
+                        "max_positive_ocr_call_only_rows": 25,
+                        "rows": ["call-only"] * 26,
+                    }
+                ],
+            },
+            "summary": {
+                "total": 49,
+                "expectation_passed": 49,
+                "unexpected": [],
+                "statuses": {"complete": 38, "failed": 11},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--min-ocr-call-contract-rows",
+            "49",
+            "--min-ocr-count-contract-rows",
+            "12",
+            "--max-positive-ocr-call-only-rows",
+            "25",
+            "--fail-on-invalid-ocr-count-contracts",
+        ]
+    )
+
+    assert exit_code == 1
+
+
 def test_main_rejects_nonpositive_repeat_profile_p95_budget(monkeypatch) -> None:
     def fake_run_stress_benchmark(*args, **kwargs):
         raise AssertionError("stress benchmark should not run with an invalid p95 budget")
@@ -2614,6 +2850,22 @@ def test_main_rejects_invalid_prewarm_stage_budget(monkeypatch) -> None:
         stress_module.main(["--max-prewarm-stage-s", "rapidocr_s=0"])
 
     assert exc.value.code == 2
+
+
+def test_main_rejects_negative_manifest_contract_budgets(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run with invalid manifest contract budgets")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    for flag in (
+        "--min-ocr-call-contract-rows",
+        "--min-ocr-count-contract-rows",
+        "--max-positive-ocr-call-only-rows",
+    ):
+        with pytest.raises(SystemExit) as exc:
+            stress_module.main([flag, "-1"])
+        assert exc.value.code == 2
 
 
 def test_latency_budget_flags_repeat_profile_p95_excess_and_missing() -> None:
