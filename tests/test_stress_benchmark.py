@@ -1271,6 +1271,130 @@ def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_reg
     )
 
 
+def test_baseline_repeat_ocr_budget_flags_stage_p95_without_total_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "ocr_engine_stage_duration_s": {
+                    "input_s": {"p95_duration_s": 0.01, "max_duration_s": 0.02},
+                    "det_elapsed_s": {"p95_duration_s": 0.2, "max_duration_s": 0.24},
+                    "rec_elapsed_s": {"p95_duration_s": 0.2, "max_duration_s": 0.23},
+                    "total_s": {"p95_duration_s": 0.41, "max_duration_s": 0.48},
+                },
+            },
+            "cases": {
+                "case-only": {
+                    "ocr_engine_stage_duration_s": {
+                        "input_s": {"p95_duration_s": 0.01, "max_duration_s": 0.02},
+                        "det_elapsed_s": {"p95_duration_s": 0.2, "max_duration_s": 0.24},
+                        "rec_elapsed_s": {"p95_duration_s": 0.2, "max_duration_s": 0.23},
+                        "total_s": {"p95_duration_s": 0.41, "max_duration_s": 0.48},
+                    },
+                }
+            },
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.49,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "ocr_engine_stage_duration_s": {
+                    "input_s": {"p95_duration_s": 0.01, "max_duration_s": 0.02},
+                    "det_elapsed_s": {"p95_duration_s": 0.23, "max_duration_s": 0.25},
+                    "rec_elapsed_s": {"p95_duration_s": 0.16, "max_duration_s": 0.18},
+                    "total_s": {"p95_duration_s": 0.4, "max_duration_s": 0.45},
+                },
+            },
+            "cases": {
+                "case-only": {
+                    "ocr_engine_stage_duration_s": {
+                        "input_s": {"p95_duration_s": 0.01, "max_duration_s": 0.02},
+                        "det_elapsed_s": {"p95_duration_s": 0.17, "max_duration_s": 0.19},
+                        "rec_elapsed_s": {"p95_duration_s": 0.23, "max_duration_s": 0.24},
+                        "total_s": {"p95_duration_s": 0.4, "max_duration_s": 0.45},
+                    },
+                }
+            },
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_ocr_engine_total_p95_regression_s=0.02,
+    )
+
+    assert (
+        comparison["repeat_profile_delta"]["ocr_engine_stage_duration_s"]["det_elapsed_s"][
+            "p95_duration_s"
+        ]["delta_s"]
+        == 0.03
+    )
+    assert (
+        comparison["repeat_profile_delta"]["ocr_engine_stage_duration_s"]["total_s"][
+            "p95_duration_s"
+        ]["delta_s"]
+        == -0.01
+    )
+    assert (
+        comparison["repeat_profile_case_deltas"][0]["ocr_engine_stage_duration_s"][
+            "rec_elapsed_s"
+        ]["p95_duration_s"]["delta_s"]
+        == 0.03
+    )
+    assert (
+        comparison["repeat_profile_case_deltas"][0]["ocr_engine_stage_duration_s"]["total_s"][
+            "p95_duration_s"
+        ]["delta_s"]
+        == -0.01
+    )
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "repeat_ocr_stage_p95_regression_exceeded",
+            "stage": "det_elapsed_s",
+            "delta_s": 0.03,
+            "max_repeat_ocr_engine_total_p95_regression_s": 0.02,
+            "baseline_ocr_engine_stage_p95_duration_s": 0.2,
+            "candidate_ocr_engine_stage_p95_duration_s": 0.23,
+        },
+        {
+            "kind": "repeat_ocr_case_stage_p95_regression_exceeded",
+            "slug": "case-only",
+            "stage": "rec_elapsed_s",
+            "delta_s": 0.03,
+            "max_repeat_ocr_engine_total_p95_regression_s": 0.02,
+            "baseline_ocr_engine_stage_p95_duration_s": 0.2,
+            "candidate_ocr_engine_stage_p95_duration_s": 0.23,
+        },
+    ]
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "repeat ocr stage det p95 +0.030s > budget 0.020s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][1]
+        )
+        == "repeat ocr case stage p95 case-only rec +0.030s > budget 0.020s"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> None:
     baseline = {
         "rows": [
@@ -2339,15 +2463,28 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
                 "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
             },
             {
+                "kind": "repeat_ocr_stage_p95_regression_exceeded",
+                "stage": "rec_elapsed_s",
+                "delta_s": 0.06,
+                "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
+            },
+            {
                 "kind": "repeat_ocr_case_total_p95_regression_exceeded",
                 "slug": "ocr-case-slow",
                 "delta_s": 0.07,
                 "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
             },
+            {
+                "kind": "repeat_ocr_case_stage_p95_regression_exceeded",
+                "slug": "ocr-case-stage-slow",
+                "stage": "det_elapsed_s",
+                "delta_s": 0.08,
+                "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
+            },
         ]
     )
 
-    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=11)
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=13)
     sample_kinds = [sample["kind"] for sample in samples]
 
     assert sample_kinds == [
@@ -2361,14 +2498,16 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         "repeat_stage_p95_regression_exceeded",
         "repeat_stage_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
+        "repeat_ocr_stage_p95_regression_exceeded",
         "repeat_ocr_case_total_p95_regression_exceeded",
+        "repeat_ocr_case_stage_p95_regression_exceeded",
     ]
     assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
         " by_kind=primary:6,primary_ocr:1,primary_ocr_stage:1,"
         "primary_stage:1,primary_stage_row:1,"
         "repeat_p95:1,repeat_case_p95:1,repeat_stage_p95:1,repeat_stage_case_p95:1,"
-        "repeat_ocr_p95:1,"
-        "repeat_ocr_case_p95:1"
+        "repeat_ocr_p95:1,repeat_ocr_stage_p95:1,"
+        "repeat_ocr_case_p95:1,repeat_ocr_case_stage_p95:1"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[10])
@@ -2388,7 +2527,15 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[15])
+        == "repeat ocr stage rec p95 +0.060s > budget 0.010s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[16])
         == "repeat ocr case p95 ocr-case-slow +0.070s > budget 0.010s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[17])
+        == "repeat ocr case stage p95 ocr-case-stage-slow det +0.080s > budget 0.010s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[7])

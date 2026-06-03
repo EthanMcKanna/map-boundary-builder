@@ -17620,3 +17620,19 @@ with zero failures in 0.531s.
   `san-antonio-waymo input +0.029775s` with total OCR `+0.005856s`, and
   `san-antonio-waymo rec +0.018168s` with total OCR `+0.005856s`. Benchmark
   acceptance reliability only; no runtime default changed.
+- Extended the repeat OCR p95 regression budget to aggregate and per-case OCR
+  engine substages. This closes the repeat-profile counterpart to the primary
+  OCR substage guard: repeat detector/input/recognizer p95 can now fail even
+  when repeat OCR total p95 stays inside budget or improves. Focused stress
+  tests passed (`136 passed in 0.33s`) and the full suite passed (`712 passed,
+  31 subtests passed in 5.00s`). A saved proof in
+  `out/repeat-ocr-stage-p95-budget-proof-20260603/comparison.json` compared
+  `out/waymo-tail-current-control-20260603` against
+  `out/waymo-bright-blue-maxdim1300-20260603` with
+  `max_repeat_ocr_engine_total_p95_regression_s=0.005`; aggregate OCR total p95
+  improved by `-0.007724s`, but aggregate detector p95 regressed
+  `+0.013880s` and recognizer p95 regressed `+0.012251s`. The same proof also
+  caught two case-stage-only regressions: `san-antonio-waymo input +0.028820s`
+  with case total OCR `+0.002280s`, and `los-angeles-waymo rec +0.019676s`
+  with case total OCR `-0.008060s`. Benchmark acceptance reliability only; no
+  runtime default changed.

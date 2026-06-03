@@ -258,8 +258,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "Exit non-zero when analyzed repeat-profile OCR engine total p95 is "
-            "more than this many seconds slower than --compare-baseline-report."
+            "Exit non-zero when aggregate or per-case repeat-profile OCR engine "
+            "total or substage p95 is more than this many seconds slower than "
+            "--compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -1547,6 +1548,47 @@ def baseline_regression_budget(
             if repeat_ocr_p95 is not None:
                 violation["candidate_ocr_engine_total_p95_duration_s"] = round(repeat_ocr_p95, 6)
             violations.append(violation)
+        if isinstance(repeat_delta, dict):
+            for stage in OCR_ENGINE_STAGE_MAX_KEYS:
+                if stage == "total_s":
+                    continue
+                stage_p95_delta = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_stage_duration_s", stage, "p95_duration_s"),
+                    "delta_s",
+                )
+                if (
+                    stage_p95_delta is None
+                    or stage_p95_delta <= max_repeat_ocr_engine_total_p95_regression_s
+                ):
+                    continue
+                violation = {
+                    "kind": "repeat_ocr_stage_p95_regression_exceeded",
+                    "stage": stage,
+                    "delta_s": round(stage_p95_delta, 6),
+                    "max_repeat_ocr_engine_total_p95_regression_s": max_repeat_ocr_total,
+                }
+                baseline_stage_p95 = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_stage_duration_s", stage, "p95_duration_s"),
+                    "baseline",
+                )
+                candidate_stage_p95 = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("ocr_engine_stage_duration_s", stage, "p95_duration_s"),
+                    "candidate",
+                )
+                if baseline_stage_p95 is not None:
+                    violation["baseline_ocr_engine_stage_p95_duration_s"] = round(
+                        baseline_stage_p95,
+                        6,
+                    )
+                if candidate_stage_p95 is not None:
+                    violation["candidate_ocr_engine_stage_p95_duration_s"] = round(
+                        candidate_stage_p95,
+                        6,
+                    )
+                violations.append(violation)
         case_deltas = comparison.get("repeat_profile_case_deltas")
         if isinstance(case_deltas, list):
             for case_delta in case_deltas:
@@ -1559,39 +1601,85 @@ def baseline_regression_budget(
                     "delta_s",
                 )
                 if (
-                    p95_delta is None
-                    or p95_delta <= max_repeat_ocr_engine_total_p95_regression_s
+                    p95_delta is not None
+                    and p95_delta > max_repeat_ocr_engine_total_p95_regression_s
                 ):
+                    violation = {
+                        "kind": "repeat_ocr_case_total_p95_regression_exceeded",
+                        "slug": case_delta.get("slug"),
+                        "delta_s": round(p95_delta, 6),
+                        "max_repeat_ocr_engine_total_p95_regression_s": max_repeat_ocr_total,
+                    }
+                    baseline_case_p95 = repeat_case_delta_ocr_stage_value(
+                        case_delta,
+                        "total_s",
+                        "p95_duration_s",
+                        "baseline",
+                    )
+                    candidate_case_p95 = repeat_case_delta_ocr_stage_value(
+                        case_delta,
+                        "total_s",
+                        "p95_duration_s",
+                        "candidate",
+                    )
+                    if baseline_case_p95 is not None:
+                        violation["baseline_ocr_engine_total_p95_duration_s"] = round(
+                            baseline_case_p95,
+                            6,
+                        )
+                    if candidate_case_p95 is not None:
+                        violation["candidate_ocr_engine_total_p95_duration_s"] = round(
+                            candidate_case_p95,
+                            6,
+                        )
+                    violations.append(violation)
+                case_ocr_stage_duration = case_delta.get("ocr_engine_stage_duration_s")
+                if not isinstance(case_ocr_stage_duration, dict):
                     continue
-                violation = {
-                    "kind": "repeat_ocr_case_total_p95_regression_exceeded",
-                    "slug": case_delta.get("slug"),
-                    "delta_s": round(p95_delta, 6),
-                    "max_repeat_ocr_engine_total_p95_regression_s": max_repeat_ocr_total,
-                }
-                baseline_case_p95 = repeat_case_delta_ocr_stage_value(
-                    case_delta,
-                    "total_s",
-                    "p95_duration_s",
-                    "baseline",
-                )
-                candidate_case_p95 = repeat_case_delta_ocr_stage_value(
-                    case_delta,
-                    "total_s",
-                    "p95_duration_s",
-                    "candidate",
-                )
-                if baseline_case_p95 is not None:
-                    violation["baseline_ocr_engine_total_p95_duration_s"] = round(
-                        baseline_case_p95,
-                        6,
+                for stage in OCR_ENGINE_STAGE_MAX_KEYS:
+                    if stage == "total_s":
+                        continue
+                    stage_p95_delta = repeat_case_delta_ocr_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "delta_s",
                     )
-                if candidate_case_p95 is not None:
-                    violation["candidate_ocr_engine_total_p95_duration_s"] = round(
-                        candidate_case_p95,
-                        6,
+                    if (
+                        stage_p95_delta is None
+                        or stage_p95_delta <= max_repeat_ocr_engine_total_p95_regression_s
+                    ):
+                        continue
+                    violation = {
+                        "kind": "repeat_ocr_case_stage_p95_regression_exceeded",
+                        "slug": case_delta.get("slug"),
+                        "stage": stage,
+                        "delta_s": round(stage_p95_delta, 6),
+                        "max_repeat_ocr_engine_total_p95_regression_s": max_repeat_ocr_total,
+                    }
+                    baseline_case_stage_p95 = repeat_case_delta_ocr_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "baseline",
                     )
-                violations.append(violation)
+                    candidate_case_stage_p95 = repeat_case_delta_ocr_stage_value(
+                        case_delta,
+                        stage,
+                        "p95_duration_s",
+                        "candidate",
+                    )
+                    if baseline_case_stage_p95 is not None:
+                        violation["baseline_ocr_engine_stage_p95_duration_s"] = round(
+                            baseline_case_stage_p95,
+                            6,
+                        )
+                    if candidate_case_stage_p95 is not None:
+                        violation["candidate_ocr_engine_stage_p95_duration_s"] = round(
+                            candidate_case_stage_p95,
+                            6,
+                        )
+                    violations.append(violation)
     budget["violations"] = violations
     budget["passed"] = not violations
     return budget
@@ -7239,6 +7327,13 @@ def baseline_primary_ocr_stage_delta_label(stage: str) -> str:
     return stage
 
 
+def baseline_repeat_ocr_stage_delta_label(stage: str) -> str:
+    for key, label in BASELINE_PRIMARY_OCR_STAGE_DELTA_DISPLAY:
+        if stage == key:
+            return label
+    return stage
+
+
 def baseline_signature_field_counts_text(baseline_comparison: dict[str, Any], *, limit: int = 4) -> str:
     counts = baseline_comparison.get("signature_changed_field_counts")
     if not isinstance(counts, dict) or not counts:
@@ -7349,8 +7444,10 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_stage_p95_delta_missing": "repeat_stage_p95_missing",
         "repeat_stage_case_p95_regression_exceeded": "repeat_stage_case_p95",
         "repeat_ocr_total_p95_regression_exceeded": "repeat_ocr_p95",
+        "repeat_ocr_stage_p95_regression_exceeded": "repeat_ocr_stage_p95",
         "repeat_ocr_total_p95_delta_missing": "repeat_ocr_p95_missing",
         "repeat_ocr_case_total_p95_regression_exceeded": "repeat_ocr_case_p95",
+        "repeat_ocr_case_stage_p95_regression_exceeded": "repeat_ocr_case_stage_p95",
     }
     return labels.get(kind, kind)
 
@@ -7494,6 +7591,14 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         budget = parse_nonnegative_float(violation.get("max_repeat_ocr_engine_total_p95_regression_s"))
         budget_text = f" budget {budget:.3f}s" if budget is not None else ""
         return f"repeat ocr p95 delta missing{budget_text}"
+    if kind == "repeat_ocr_stage_p95_regression_exceeded":
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_repeat_ocr_engine_total_p95_regression_s"))
+        if not isinstance(stage, str) or delta is None or budget is None:
+            return ""
+        stage_label = baseline_repeat_ocr_stage_delta_label(stage)
+        return f"repeat ocr stage {stage_label} p95 {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "repeat_ocr_case_total_p95_regression_exceeded":
         slug = violation.get("slug")
         delta = parse_signed_float(violation.get("delta_s"))
@@ -7503,6 +7608,25 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         if not isinstance(slug, str) or delta is None or budget is None:
             return ""
         return f"repeat ocr case p95 {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_ocr_case_stage_p95_regression_exceeded":
+        slug = violation.get("slug")
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(
+            violation.get("max_repeat_ocr_engine_total_p95_regression_s")
+        )
+        if (
+            not isinstance(slug, str)
+            or not isinstance(stage, str)
+            or delta is None
+            or budget is None
+        ):
+            return ""
+        stage_label = baseline_repeat_ocr_stage_delta_label(stage)
+        return (
+            f"repeat ocr case stage p95 {slug} {stage_label} "
+            f"{delta:+.3f}s > budget {budget:.3f}s"
+        )
     return ""
 
 
