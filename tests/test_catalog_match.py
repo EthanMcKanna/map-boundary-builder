@@ -11,6 +11,7 @@ from map_boundary_builder.catalog_match import (
     CATALOG_LABEL_HINT_MIN_IOU,
     catalog_entry_contains_city_hint,
     catalog_area_matches_text,
+    catalog_provider_hint,
     catalog_feature_collection,
     catalog_style_supported,
     has_active_catalog_city_hint,
@@ -70,6 +71,7 @@ KNOWN_CHANGED_REFERENCE_MISMATCH_SLUGS = {
 
 STYLE_BY_PROVIDER = {
     "avride": "purple-fill",
+    "may-mobility": "dark-teal",
     "tesla": "gray-fill",
     "waymo": "bright-blue",
     "zoox": "dark-teal",
@@ -166,6 +168,26 @@ def test_catalog_area_aliases_understand_bay_area_text() -> None:
     assert catalog_area_matches_text("Bay Area", "zoox-sf.webp")
     assert catalog_area_matches_text("San Francisco", "Zoox SF")
     assert catalog_area_matches_text("San Francisco", "zoox-sf.webp")
+
+
+def test_may_mobility_ann_arbor_catalog_entry_matches_dark_teal_shape() -> None:
+    entry = next(item for item in load_catalog_entries() if item.slug == "ann-arbor-may-mobility")
+    pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry)
+
+    match = match_service_area_catalog(
+        pixel_geometry,
+        style="dark-teal",
+        area_hint_texts=["May Mobility Ann Arbor"],
+    )
+
+    assert catalog_provider_hint("May Mobility Ann Arbor") == "may-mobility"
+    assert entry.provider == "may-mobility"
+    assert entry.area == "Ann Arbor"
+    assert entry.use_exact_geometry
+    assert entry.max_confidence == 0.805
+    assert match is not None
+    assert match.entry.slug == "ann-arbor-may-mobility"
+    assert match.confidence == 0.805
 
 
 def test_san_francisco_zoox_verified_shape_matches_exact_catalog_entry() -> None:

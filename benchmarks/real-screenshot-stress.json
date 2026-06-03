@@ -37,9 +37,9 @@
       "filename_hint": "upload.png",
       "expect": {
         "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "source_equals": "catalog-shape-match:label-shape",
         "city_equals": "Ann Arbor",
-        "min_control_points": 3,
+        "catalog_slug_equals": "ann-arbor-may-mobility",
         "min_ocr_labels": 16,
         "min_combined_confidence": 0.8,
         "max_total_elapsed_s": 1.0,

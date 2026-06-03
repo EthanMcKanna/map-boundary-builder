@@ -4040,7 +4040,7 @@ def filename_hinted_current_catalog_shape_match(
 
 def provider_ui_label_catalog_match(extraction, labels: list[Any]):
     provider = provider_ui_label_provider(labels) or unique_catalog_provider_for_style(extraction.style)
-    if provider is None or extraction.style not in PROVIDER_STYLES.get(provider, set()):
+    if provider is not None and extraction.style not in PROVIDER_STYLES.get(provider, set()):
         return None
 
     nearby_texts = provider_ui_nearby_area_texts(labels, extraction.pixel_geometry.bounds)
@@ -4051,7 +4051,7 @@ def provider_ui_label_catalog_match(extraction, labels: list[Any]):
         for entry in load_catalog_entries()
         if (
             entry.is_active
-            and entry.provider == provider
+            and (provider is None or entry.provider == provider)
             and extraction.style in PROVIDER_STYLES.get(entry.provider, set())
         )
     ]

@@ -18014,3 +18014,40 @@ with zero failures in 0.531s.
   passed `50/50` expectations with statuses `{"complete":39,"failed":11}`,
   max primary `0.350876s`, repeat p95 `0.310s`, repeat max `0.372s`, and
   prewarm `0.637s`.
+- Accepted a current-output catalog entry for the recurring Ann Arbor May
+  Mobility dark-teal screenshot. This adds provider style support for the
+  hyphenated `may-mobility` provider and teaches provider hints to recognize
+  multi-token names like `May Mobility`, then locks the UI-default stress row to
+  `catalog-shape-match:label-shape` with `catalog_slug=ann-arbor-may-mobility`
+  while leaving the `no_catalog=true` row on raw OCR/georeference. The focused
+  Ann Arbor gate at `out/may-mobility-catalog-ann-arbor-fixed-20260603` passed
+  `2/2`: no-catalog remained `ocr-georeference:nominatim-label-fit`, and
+  UI-default completed from the catalog at `0.177s`. The focused comparison at
+  `out/may-mobility-catalog-ann-arbor-compare-20260603` showed exactly one
+  intentional signature drift, `ann-arbor-may-mobility-avif-ui-default`, and
+  aggregate georeference moved `-0.015s`; the nonzero exit was the expected
+  intentional signature change plus older-baseline hidden-overlap budget
+  fields. The full hard gate at
+  `out/may-mobility-catalog-full50-hard-20260603` passed `50/50` expectations,
+  statuses `{"complete":39,"failed":11}`, max primary `0.362668s`, repeat p95
+  `0.296s`, repeat max `0.308s`, and prewarm `0.664s`. The full comparison at
+  `out/may-mobility-catalog-full50-compare-20260603` compared all 50 rows with
+  `signature_changes=1`, limited to the intended Ann Arbor UI-default catalog
+  completion; other timing differences were ordinary OCR noise.
+- Final-code follow-up: adding May Mobility made `dark-teal` a shared provider
+  style, so provider-UI catalog matching now uses an explicit OCR provider when
+  present and otherwise accepts only a single unambiguous nearby area match
+  among entries with the detected style. Targeted tests covered the shared-style
+  Las Vegas fallback, ambiguous-area rejection, and the new Ann Arbor catalog
+  entry; full pytest passed `727 passed, 31 subtests passed`, `git diff --check`
+  passed, and the new catalog/manifest JSON parsed with `jq empty`. The final
+  full hard gate at `out/may-mobility-catalog-final-full50-hard-20260603`
+  passed `50/50` expectations, statuses `{"complete":39,"failed":11}`, max
+  primary `0.335543s`, repeat p95 `0.281s`, repeat max `0.312s`, and prewarm
+  `0.651s`; Ann Arbor UI-default completed from
+  `catalog-shape-match:label-shape` at `0.154s`. The final comparison at
+  `out/may-mobility-catalog-final-full50-compare-20260603` compared all 50 rows
+  with `signature_changes=1`, limited to `ann-arbor-may-mobility-avif-ui-default`;
+  it exited nonzero for the intentional signature drift plus known
+  hidden-overlap baseline-field gaps and OCR timing noise, not an unexpected
+  boundary change.

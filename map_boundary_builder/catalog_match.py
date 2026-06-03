@@ -31,6 +31,7 @@ CATALOG_EXACT_MIN_IOU_FLOOR = 0.955
 CATALOG_LABEL_HINT_MIN_IOU = 0.94
 PROVIDER_STYLES = {
     "avride": {"purple-fill"},
+    "may-mobility": {"dark-teal"},
     "tesla": {"gray-fill"},
     "waymo": {"bright-blue"},
     "zoox": {"dark-teal", "light-fill"},
@@ -471,7 +472,8 @@ def catalog_area_token_matches(expected: str, observed: str) -> bool:
 def catalog_provider_hint(text: str) -> str | None:
     tokens = set(normalize_catalog_area_tokens(text))
     for provider in PROVIDER_STYLES:
-        if provider in tokens:
+        provider_tokens = normalize_catalog_area_tokens(provider)
+        if provider in tokens or set(provider_tokens) <= tokens:
             return provider
     return None
 

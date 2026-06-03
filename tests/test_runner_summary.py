@@ -186,7 +186,7 @@ def test_provider_ui_label_provider_accepts_glued_ocr_provider_text() -> None:
     assert runner.provider_ui_label_provider(labels) == "zoox"
 
 
-def test_provider_ui_label_catalog_match_infers_unique_provider_from_style() -> None:
+def test_provider_ui_label_catalog_match_uses_unique_area_when_style_is_shared() -> None:
     entry = next(item for item in load_catalog_entries() if item.slug == "las-vegas-zoox")
     pixel_geometry = mercator_geometry_to_pixel(entry.mercator_geometry.simplify(6000, preserve_topology=True))
     extraction = ExtractionResult(
@@ -211,7 +211,7 @@ def test_provider_ui_label_catalog_match_infers_unique_provider_from_style() -> 
 
     match = runner.provider_ui_label_catalog_match(extraction, labels)
 
-    assert runner.unique_catalog_provider_for_style("dark-teal") == "zoox"
+    assert runner.unique_catalog_provider_for_style("dark-teal") is None
     assert match is not None
     assert match.entry.slug == "las-vegas-zoox"
 
