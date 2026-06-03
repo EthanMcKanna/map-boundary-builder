@@ -1792,6 +1792,36 @@ class OcrGroupingTests(unittest.TestCase):
         finally:
             warm_rapidocr_runtime.cache_clear()
 
+    def test_warm_rapidocr_runtime_does_not_cache_failed_attempt(self) -> None:
+        class FlakyWarmEngine:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def __call__(self, image, *, use_cls=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("transient warm failure")
+                return [], 0.0
+
+        engine = FlakyWarmEngine()
+        warm_rapidocr_runtime.cache_clear()
+        try:
+            with (
+                patch.object(
+                    ocr_module,
+                    "rapidocr_warm_engine_sample_plan",
+                    return_value=[(608, "default", "default", 12, 608)],
+                ),
+                patch.object(ocr_module, "rapidocr_engine", return_value=engine) as rapidocr,
+            ):
+                self.assertFalse(warm_rapidocr_runtime())
+                self.assertTrue(warm_rapidocr_runtime())
+
+            self.assertEqual(engine.calls, 2)
+            self.assertEqual(len(rapidocr.call_args_list), 2)
+        finally:
+            warm_rapidocr_runtime.cache_clear()
+
     def test_single_noisy_similarity_control_can_be_pruned(self) -> None:
         pixel = np.array(
             [

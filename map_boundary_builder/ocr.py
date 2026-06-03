@@ -1490,8 +1490,15 @@ def rapidocr_detector_limit_for_input(
     return RAPIDOCR_DET_LIMIT_SIDE_LEN
 
 
-@lru_cache(maxsize=1)
 def warm_rapidocr_runtime() -> bool:
+    warmed = _warm_rapidocr_runtime_cached()
+    if not warmed:
+        _warm_rapidocr_runtime_cached.cache_clear()
+    return warmed
+
+
+@lru_cache(maxsize=1)
+def _warm_rapidocr_runtime_cached() -> bool:
     try:
         samples: dict[int, np.ndarray] = {}
         for (
@@ -1510,6 +1517,9 @@ def warm_rapidocr_runtime() -> bool:
     except Exception:
         return False
     return True
+
+
+warm_rapidocr_runtime.cache_clear = _warm_rapidocr_runtime_cached.cache_clear  # type: ignore[attr-defined]
 
 
 def rapidocr_warm_engine_keys() -> list[tuple[int, str, str, int]]:

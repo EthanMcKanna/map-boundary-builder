@@ -16327,3 +16327,11 @@ with zero failures in 0.531s.
   (`92 passed in 24.94s`), and the full suite (`651 passed, 31 subtests passed
   in 163.64s`). This is a benchmark harness reliability change only; no runtime
   deploy is needed.
+- Fixed a RapidOCR warmup retry hazard: `warm_rapidocr_runtime()` now clears its
+  one-entry cache after a failed warm attempt, so a transient ONNX/RapidOCR
+  exception does not poison later warm retries in the same process. Successful
+  warm attempts still cache normally. Validation passed with `git diff --check`,
+  focused OCR/georeference tests (`149 passed in 0.71s`), a real two-call
+  warmup smoke (`ok=True` in `1.466464s`, then cached `ok=True` in `0.000002s`),
+  and the full suite (`652 passed, 31 subtests passed in 7.40s`). This is a
+  runtime warmup reliability fix that changes production code.
