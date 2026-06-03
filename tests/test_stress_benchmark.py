@@ -504,6 +504,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["missing_in_baseline"] == ["candidate-only"]
     assert comparison["missing_in_candidate"] == ["baseline-only"]
     assert comparison["signature_change_count"] == 1
+    assert comparison["signature_changed_field_counts"] == {"city": 1}
     assert comparison["signature_changes"][0]["changed_fields"] == ["city"]
     assert stress_module.baseline_comparison_signature_drift_cases(
         {"baseline_comparison": comparison}
@@ -593,6 +594,10 @@ def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
     comparison = stress_module.compare_stress_reports(baseline, candidate)
 
     assert comparison["signature_change_count"] == 1
+    assert comparison["signature_changed_field_counts"] == {
+        "route_metric_labels": 1,
+        "route_ui_categories": 1,
+    }
     change = comparison["signature_changes"][0]
     assert change["slug"] == "route-ui"
     assert change["changed_fields"] == ["route_metric_labels", "route_ui_categories"]
@@ -614,6 +619,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "compared_rows": 2,
             "missing_in_baseline": ["new"],
             "missing_in_candidate": [],
+            "signature_changed_field_counts": {"city": 1, "control_points": 1},
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
             "largest_total_regressions": [
@@ -681,6 +687,7 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "baseline comparison: compared=2, signature_changes=1" in output
     assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
     assert "median_delta=-0.040s" in output
+    assert "signature_fields=city:1,control_points:1" in output
     assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "full_detail_retries=+1" in output

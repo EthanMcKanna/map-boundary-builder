@@ -844,6 +844,7 @@ def compare_stress_reports(
         "missing_in_baseline": missing_in_baseline,
         "missing_in_candidate": missing_in_candidate,
         "signature_change_count": len(signature_changes),
+        "signature_changed_field_counts": signature_changed_field_counts(signature_changes),
         "signature_changes": signature_changes,
         "latency_deltas": latency_deltas,
         "largest_total_regressions": ranked_latency_deltas(latency_deltas, reverse=True),
@@ -1125,6 +1126,18 @@ def stress_signature_changed_fields(
         for field in fields
         if baseline_signature.get(field) != candidate_signature.get(field)
     ]
+
+
+def signature_changed_field_counts(signature_changes: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for change in signature_changes:
+        fields = change.get("changed_fields")
+        if not isinstance(fields, list):
+            continue
+        for field in fields:
+            if isinstance(field, str) and field:
+                counts[field] += 1
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
 
 def stress_scalar_delta(
@@ -4026,6 +4039,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             if isinstance(median_delta, (int, float))
             else ""
         )
+        signature_field_counts_text = baseline_signature_field_counts_text(baseline_comparison)
         print(
             "baseline comparison: "
             f"compared={baseline_comparison.get('compared_rows', 0)}, "
@@ -4034,6 +4048,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"missing_candidate={missing_candidate_count}"
             f"{baseline_out_of_scope_text}"
             f"{median_delta_text}"
+            f"{signature_field_counts_text}"
         )
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
@@ -4593,6 +4608,28 @@ def baseline_primary_delta_item_text(items: Any) -> str:
     if not isinstance(slug, str) or not slug or delta is None:
         return ""
     return f"{slug} {delta:+.3f}s"
+
+
+def baseline_signature_field_counts_text(baseline_comparison: dict[str, Any], *, limit: int = 4) -> str:
+    counts = baseline_comparison.get("signature_changed_field_counts")
+    if not isinstance(counts, dict) or not counts:
+        changes = baseline_comparison.get("signature_changes")
+        if isinstance(changes, list):
+            counts = signature_changed_field_counts(
+                [change for change in changes if isinstance(change, dict)]
+            )
+    if not isinstance(counts, dict) or not counts:
+        return ""
+    parts: list[str] = []
+    for field, count in counts.items():
+        if not isinstance(field, str) or not isinstance(count, int) or count <= 0:
+            continue
+        parts.append(f"{field}:{count}")
+        if len(parts) >= limit:
+            break
+    if not parts:
+        return ""
+    return ", signature_fields=" + ",".join(parts)
 
 
 def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:

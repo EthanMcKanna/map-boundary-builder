@@ -16867,3 +16867,25 @@ with zero failures in 0.531s.
   raw=16 labels=7 sel_lt1300=0 conf_lt90=0`, while the primary rec tail is
   `tesla-austin-route-receipt-long ... rec=default min_area=1500 selected=29`.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Rejected PPOCRv5 recognition for route/profile UI OCR despite a narrow speed
+  win, and improved baseline-comparison output so the failure mode is obvious.
+  The matched default control at
+  `out/route-profile-recprofile-default-control-20260603` passed `8/8` expected
+  fail-closed route/profile rows with repeat p95 `0.305s` and repeat OCR-engine
+  p95 `0.274s`. A monkeypatched all-route/profile `en-ppocrv5` candidate at
+  `out/route-profile-ppocrv5-candidate-20260603` improved median primary
+  latency by `-0.035s`, repeat p95 by `-0.005s`, and repeat OCR p95 by
+  `-0.032s`, but was rejected because `--fail-on-baseline-signature-drift`
+  found `8` signature changes: `ocr_top_labels:8`, `route_metric_labels:4`,
+  `non_map_ui_labels:2`, and `route_ui_categories:2`. A narrower light-fill
+  route-only candidate at `out/light-route-ppocrv5-candidate-20260603` still
+  changed all four route signatures (`ocr_top_labels:4`,
+  `route_metric_labels:2`, `route_ui_categories:2`) despite repeat p95
+  `-0.039s` and repeat OCR p95 `-0.036s`, so keep route/profile UI OCR on the
+  default recognizer. The harness now saves
+  `baseline_comparison.signature_changed_field_counts` and prints
+  `signature_fields=...` on the baseline comparison line, with a backwards
+  compatible print-time fallback for older reports. Focused stress benchmark
+  tests passed `103 passed in 0.21s`, the full suite passed
+  `679 passed, 31 subtests passed in 5.77s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.
