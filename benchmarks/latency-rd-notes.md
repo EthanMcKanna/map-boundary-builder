@@ -16335,3 +16335,17 @@ with zero failures in 0.531s.
   warmup smoke (`ok=True` in `1.466464s`, then cached `ok=True` in `0.000002s`),
   and the full suite (`652 passed, 31 subtests passed in 7.40s`). This is a
   runtime warmup reliability fix that changes production code.
+- Rejected using a noisy post-deploy hard-gate run as speed evidence. The
+  current `--real-screenshot-hard-gate` artifact at
+  `out/real-screenshot-hard-gate-warm-retry-20260603` passed primary behavior
+  (`49/49`), stable signatures, and the tightened manifest contract budget
+  (`count-capped=38/38`, positive-call-only `0`), but failed latency on two
+  Los Angeles Waymo repeat samples (`1.338112s` and `1.005190s`) and repeat OCR
+  engine p95 (`0.721691s > 0.700s`). The row's geometry, labels, controls, and
+  OCR counts stayed unchanged, while detector time spiked from `0.193905s`
+  primary to `0.812002s` on the slowest repeat. A focused LA rerun at
+  `out/la-waymo-focused-repeat-20260603` showed the tail was not reproducible:
+  after one slow primary (`1.032528s`), all five analyzed repeats passed with
+  repeat p95 `0.473s` and repeat OCR-engine p95 `0.431s`. Keep the existing
+  bright-blue detector/rescue defaults; no runtime change was made from this
+  local ONNX timing noise.
