@@ -17520,3 +17520,16 @@ with zero failures in 0.531s.
   stage deltas: `extract=+0.016358s`, `ocr=+0.148557s`,
   `georeference=+0.020202s`, `export=-0.006254s`, and `inspect=+0.005400s`.
   This is benchmark feedback-loop reliability only; no runtime default changed.
+- Added an aggregate primary pipeline-stage regression budget for baseline
+  comparisons. The existing budgets caught row-level total/OCR regressions and
+  repeat-profile p95 regressions, but they could not fail a candidate that
+  spread a primary-stage regression across many rows. The CLI/API now accept
+  `--max-baseline-stage-total-regression-s`, and the real-screenshot hard gate
+  fills the same conservative `0.25s` default used by the other baseline
+  budgets. Focused stress tests passed (`134 passed in 0.30s`) and the full
+  suite passed (`710 passed, 31 subtests passed in 4.99s`). A saved-report proof
+  compared `out/current-v11-full49-hard-rerun-20260603` against
+  `out/full49-bright-blue-det240-20260603` with
+  `max_stage_total_regression_s=0.1`; the new budget failed exactly on the
+  aggregate OCR drift, printing `primary stage ocr +0.149s > budget 0.100s`.
+  This is benchmark acceptance reliability only; no runtime default changed.
