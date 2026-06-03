@@ -1180,6 +1180,106 @@ def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None
     )
 
 
+def test_baseline_primary_ocr_count_budget_flags_growth_without_latency_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "count-growth",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.24,
+                    "selected_box_count": 20,
+                    "raw_box_count": 42,
+                    "label_count": 18,
+                },
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "count-growth",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.48,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.23,
+                    "selected_box_count": 24,
+                    "raw_box_count": 41,
+                    "label_count": 21,
+                },
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_total_elapsed_regression_s=0.05,
+        max_ocr_engine_total_regression_s=0.05,
+        max_ocr_engine_count_regression=2.0,
+    )
+
+    row_delta = comparison["latency_deltas"][0]
+    assert row_delta["total_elapsed_delta_s"] == -0.02
+    assert row_delta["ocr_engine_total_delta_s"] == -0.01
+    assert row_delta["ocr_engine_count_delta"] == {
+        "raw_box_count": -1.0,
+        "selected_box_count": 4.0,
+        "label_count": 3.0,
+    }
+    assert row_delta["baseline_ocr_engine_count"] == {
+        "raw_box_count": 42.0,
+        "selected_box_count": 20.0,
+        "label_count": 18.0,
+    }
+    assert row_delta["candidate_ocr_engine_count"] == {
+        "raw_box_count": 41.0,
+        "selected_box_count": 24.0,
+        "label_count": 21.0,
+    }
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_ocr_count_regression_exceeded",
+            "slug": "count-growth",
+            "metric": "selected_box_count",
+            "delta_count": 4.0,
+            "max_ocr_engine_count_regression": 2.0,
+            "baseline_ocr_engine_count": 20.0,
+            "candidate_ocr_engine_count": 24.0,
+        },
+        {
+            "kind": "primary_ocr_count_regression_exceeded",
+            "slug": "count-growth",
+            "metric": "label_count",
+            "delta_count": 3.0,
+            "max_ocr_engine_count_regression": 2.0,
+            "baseline_ocr_engine_count": 18.0,
+            "candidate_ocr_engine_count": 21.0,
+        },
+    ]
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: failed primary<=0.050s primary_ocr<=0.050s "
+        "primary_ocr_count<=2.0 violations=2 by_kind=primary_ocr_count:2"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "primary ocr count count-growth selected_box_count +4.0 > budget 2.0"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][1]
+        )
+        == "primary ocr count count-growth label_count +3.0 > budget 2.0"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_regression() -> None:
     baseline = {
         "rows": [
@@ -5958,6 +6058,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.025
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.015
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.03
+        assert kwargs["max_baseline_ocr_count_regression"] == 2.25
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.04
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.01
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.012
@@ -5984,6 +6085,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "max_repeat_max_regression_s": 0.025,
                     "max_repeat_stage_p95_regression_s": 0.015,
                     "max_ocr_engine_total_regression_s": 0.03,
+                    "max_ocr_engine_count_regression": 2.25,
                     "max_stage_total_regression_s": 0.04,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.012,
@@ -6021,6 +6123,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "0.015",
             "--max-baseline-ocr-total-regression-s",
             "0.03",
+            "--max-baseline-ocr-count-regression",
+            "2.25",
             "--max-baseline-stage-total-regression-s",
             "0.04",
             "--max-baseline-repeat-ocr-total-p95-regression-s",
@@ -6419,6 +6523,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
+        assert kwargs["max_baseline_ocr_count_regression"] == 2.0
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
@@ -6465,6 +6570,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
                     "max_repeat_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
+                    "max_ocr_engine_count_regression": 2.0,
                     "max_stage_total_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,
@@ -6659,6 +6765,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
+        assert kwargs["max_baseline_ocr_count_regression"] == 2.0
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
@@ -6708,6 +6815,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
                     "max_repeat_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
+                    "max_ocr_engine_count_regression": 2.0,
                     "max_stage_total_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,

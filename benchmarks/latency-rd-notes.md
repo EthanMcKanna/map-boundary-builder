@@ -17703,3 +17703,18 @@ with zero failures in 0.531s.
   box count p95/max regressed `+13.0`, label count p95/max regressed `+7.0`,
   and the new budget failed 18 aggregate/per-case count violations. Benchmark
   acceptance reliability only; no runtime default changed.
+- Added a primary OCR count regression budget for baseline comparisons. This
+  complements the repeat count gate by catching row-level OCR workload growth
+  before it necessarily appears as a primary latency or OCR-duration
+  regression. The CLI/API now accept `--max-baseline-ocr-count-regression`, and
+  the focused real-screenshot hard gate defaults it to a `2.0` count delta.
+  Focused stress tests passed (`141 passed in 0.88s`) and the full suite passed
+  (`717 passed, 31 subtests passed in 6.48s`). A saved proof in
+  `out/primary-ocr-count-regression-budget-proof-20260603/comparison.json`
+  compared `out/route-det608-control-20260603` against
+  `out/route-det576-candidate-20260603` with primary and OCR runtime regression
+  budgets of `0.100s` plus a count regression budget of `1.0`; largest primary
+  total delta stayed at `+0.030922s` and largest OCR total delta stayed at
+  `+0.030107s`, while the new count gate failed
+  `tesla-austin-route-active-dark` selected/result count deltas of `+2.0`.
+  Benchmark acceptance reliability only; no runtime default changed.
