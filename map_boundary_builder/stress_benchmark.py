@@ -145,6 +145,7 @@ REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET = (
 )
 REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S = 0.25
 REAL_SCREENSHOT_HARD_GATE_BASELINE_COUNT_REGRESSION = 2.0
+REAL_SCREENSHOT_HARD_GATE_BASELINE_HIDDEN_OVERLAP_REGRESSION_S = 0.05
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -260,6 +261,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Exit non-zero when any compared primary row has OCR engine box or "
             "label counts increase by more than this many versus "
+            "--compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-ocr-overlap-hidden-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when any compared primary row has hidden OCR overlap "
+            "increase by more than this many seconds versus "
             "--compare-baseline-report."
         ),
     )
@@ -527,6 +538,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-baseline-ocr-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_ocr_count_regression is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-ocr-count-regression requires --compare-baseline-report")
+    if (
+        args.max_baseline_ocr_overlap_hidden_regression_s is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-ocr-overlap-hidden-regression-s requires --compare-baseline-report")
     if args.max_baseline_stage_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-stage-total-regression-s requires --compare-baseline-report")
     if (
@@ -582,6 +598,11 @@ def main(argv: list[str] | None = None) -> int:
         and args.max_baseline_ocr_count_regression < 0.0
     ):
         parser.error("--max-baseline-ocr-count-regression must be non-negative")
+    if (
+        args.max_baseline_ocr_overlap_hidden_regression_s is not None
+        and args.max_baseline_ocr_overlap_hidden_regression_s < 0.0
+    ):
+        parser.error("--max-baseline-ocr-overlap-hidden-regression-s must be non-negative")
     if (
         args.max_baseline_stage_total_regression_s is not None
         and args.max_baseline_stage_total_regression_s < 0.0
@@ -683,6 +704,9 @@ def main(argv: list[str] | None = None) -> int:
         max_baseline_repeat_stage_p95_regression_s=args.max_baseline_repeat_stage_p95_regression_s,
         max_baseline_ocr_total_regression_s=args.max_baseline_ocr_total_regression_s,
         max_baseline_ocr_count_regression=args.max_baseline_ocr_count_regression,
+        max_baseline_ocr_overlap_hidden_regression_s=(
+            args.max_baseline_ocr_overlap_hidden_regression_s
+        ),
         max_baseline_stage_total_regression_s=args.max_baseline_stage_total_regression_s,
         max_baseline_repeat_ocr_total_p95_regression_s=(
             args.max_baseline_repeat_ocr_total_p95_regression_s
@@ -765,6 +789,10 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         if args.max_baseline_ocr_count_regression is None:
             args.max_baseline_ocr_count_regression = (
                 REAL_SCREENSHOT_HARD_GATE_BASELINE_COUNT_REGRESSION
+            )
+        if args.max_baseline_ocr_overlap_hidden_regression_s is None:
+            args.max_baseline_ocr_overlap_hidden_regression_s = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_HIDDEN_OVERLAP_REGRESSION_S
             )
         if args.max_baseline_stage_total_regression_s is None:
             args.max_baseline_stage_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
@@ -888,6 +916,7 @@ def run_stress_benchmark(
     max_baseline_repeat_stage_p95_regression_s: float | None = None,
     max_baseline_ocr_total_regression_s: float | None = None,
     max_baseline_ocr_count_regression: float | None = None,
+    max_baseline_ocr_overlap_hidden_regression_s: float | None = None,
     max_baseline_stage_total_regression_s: float | None = None,
     max_baseline_repeat_ocr_total_p95_regression_s: float | None = None,
     max_baseline_repeat_ocr_total_max_regression_s: float | None = None,
@@ -930,6 +959,11 @@ def run_stress_benchmark(
         and max_baseline_ocr_count_regression < 0.0
     ):
         raise ValueError("max_baseline_ocr_count_regression must be non-negative")
+    if (
+        max_baseline_ocr_overlap_hidden_regression_s is not None
+        and max_baseline_ocr_overlap_hidden_regression_s < 0.0
+    ):
+        raise ValueError("max_baseline_ocr_overlap_hidden_regression_s must be non-negative")
     if (
         max_baseline_stage_total_regression_s is not None
         and max_baseline_stage_total_regression_s < 0.0
@@ -1084,6 +1118,9 @@ def run_stress_benchmark(
             max_repeat_stage_p95_regression_s=max_baseline_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_baseline_ocr_total_regression_s,
             max_ocr_engine_count_regression=max_baseline_ocr_count_regression,
+            max_ocr_overlap_hidden_regression_s=(
+                max_baseline_ocr_overlap_hidden_regression_s
+            ),
             max_stage_total_regression_s=max_baseline_stage_total_regression_s,
             max_repeat_ocr_engine_total_p95_regression_s=(
                 max_baseline_repeat_ocr_total_p95_regression_s
@@ -1120,6 +1157,7 @@ def compare_stress_reports(
     max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_ocr_engine_count_regression: float | None = None,
+    max_ocr_overlap_hidden_regression_s: float | None = None,
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
     max_repeat_ocr_engine_total_max_regression_s: float | None = None,
@@ -1307,6 +1345,7 @@ def compare_stress_reports(
         or max_repeat_stage_p95_regression_s is not None
         or max_ocr_engine_total_regression_s is not None
         or max_ocr_engine_count_regression is not None
+        or max_ocr_overlap_hidden_regression_s is not None
         or max_stage_total_regression_s is not None
         or max_repeat_ocr_engine_total_p95_regression_s is not None
         or max_repeat_ocr_engine_total_max_regression_s is not None
@@ -1321,6 +1360,7 @@ def compare_stress_reports(
             max_repeat_stage_p95_regression_s=max_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_ocr_engine_total_regression_s,
             max_ocr_engine_count_regression=max_ocr_engine_count_regression,
+            max_ocr_overlap_hidden_regression_s=max_ocr_overlap_hidden_regression_s,
             max_stage_total_regression_s=max_stage_total_regression_s,
             max_repeat_ocr_engine_total_p95_regression_s=(
                 max_repeat_ocr_engine_total_p95_regression_s
@@ -1347,6 +1387,7 @@ def baseline_regression_budget(
     max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_ocr_engine_count_regression: float | None = None,
+    max_ocr_overlap_hidden_regression_s: float | None = None,
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
     max_repeat_ocr_engine_total_max_regression_s: float | None = None,
@@ -1519,6 +1560,51 @@ def baseline_regression_budget(
                         if candidate_count is not None:
                             violation["candidate_ocr_engine_count"] = round(candidate_count, 6)
                     violations.append(violation)
+    if max_ocr_overlap_hidden_regression_s is not None:
+        max_hidden = round(float(max_ocr_overlap_hidden_regression_s), 6)
+        budget["max_ocr_overlap_hidden_regression_s"] = max_hidden
+        if isinstance(latency_deltas, list):
+            for delta in latency_deltas:
+                if not isinstance(delta, dict):
+                    continue
+                hidden_delta = parse_signed_float(delta.get("ocr_overlap_hidden_delta_s"))
+                if hidden_delta is None:
+                    baseline_calls = parse_nonnegative_count_metric(
+                        delta.get("baseline_ocr_engine_calls")
+                    )
+                    candidate_calls = parse_nonnegative_count_metric(
+                        delta.get("candidate_ocr_engine_calls")
+                    )
+                    if baseline_calls == 0.0 and candidate_calls == 0.0:
+                        continue
+                    violation = {
+                        "kind": "primary_ocr_overlap_hidden_delta_missing",
+                        "slug": delta.get("slug"),
+                        "max_ocr_overlap_hidden_regression_s": max_hidden,
+                    }
+                    if baseline_calls is not None:
+                        violation["baseline_ocr_engine_calls"] = round(baseline_calls, 6)
+                    if candidate_calls is not None:
+                        violation["candidate_ocr_engine_calls"] = round(candidate_calls, 6)
+                    violations.append(violation)
+                    continue
+                if hidden_delta <= max_ocr_overlap_hidden_regression_s:
+                    continue
+                violation = {
+                    "kind": "primary_ocr_overlap_hidden_regression_exceeded",
+                    "slug": delta.get("slug"),
+                    "delta_s": round(hidden_delta, 6),
+                    "max_ocr_overlap_hidden_regression_s": max_hidden,
+                }
+                baseline_hidden = parse_nonnegative_float(delta.get("baseline_ocr_overlap_hidden_s"))
+                candidate_hidden = parse_nonnegative_float(
+                    delta.get("candidate_ocr_overlap_hidden_s")
+                )
+                if baseline_hidden is not None:
+                    violation["baseline_ocr_overlap_hidden_s"] = round(baseline_hidden, 6)
+                if candidate_hidden is not None:
+                    violation["candidate_ocr_overlap_hidden_s"] = round(candidate_hidden, 6)
+                violations.append(violation)
     if max_stage_total_regression_s is not None:
         max_stage_total = round(float(max_stage_total_regression_s), 6)
         budget["max_stage_total_regression_s"] = max_stage_total
@@ -8161,6 +8247,11 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     max_ocr_count = parse_nonnegative_float(regression_budget.get("max_ocr_engine_count_regression"))
     if max_ocr_count is not None:
         limits.append(f"primary_ocr_count<={max_ocr_count:.1f}")
+    max_hidden = parse_nonnegative_float(
+        regression_budget.get("max_ocr_overlap_hidden_regression_s")
+    )
+    if max_hidden is not None:
+        limits.append(f"primary_ocr_hidden<={max_hidden:.3f}s")
     max_stage_total = parse_nonnegative_float(regression_budget.get("max_stage_total_regression_s"))
     if max_stage_total is not None:
         limits.append(f"primary_stage<={max_stage_total:.3f}s")
@@ -8251,6 +8342,8 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "primary_ocr_total_delta_missing": "primary_ocr_missing",
         "primary_ocr_count_regression_exceeded": "primary_ocr_count",
         "primary_ocr_count_delta_missing": "primary_ocr_count_missing",
+        "primary_ocr_overlap_hidden_regression_exceeded": "primary_ocr_hidden",
+        "primary_ocr_overlap_hidden_delta_missing": "primary_ocr_hidden_missing",
         "primary_stage_total_regression_exceeded": "primary_stage",
         "primary_stage_total_delta_missing": "primary_stage_missing",
         "primary_stage_row_regression_exceeded": "primary_stage_row",
@@ -8367,6 +8460,19 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         slug_text = f" {slug}" if isinstance(slug, str) and slug else ""
         budget_text = f" budget {budget:.1f}" if budget is not None else ""
         return f"primary ocr count{slug_text} delta missing{budget_text}"
+    if kind == "primary_ocr_overlap_hidden_regression_exceeded":
+        slug = violation.get("slug")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_ocr_overlap_hidden_regression_s"))
+        if not isinstance(slug, str) or delta is None or budget is None:
+            return ""
+        return f"primary ocr hidden {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "primary_ocr_overlap_hidden_delta_missing":
+        slug = violation.get("slug")
+        budget = parse_nonnegative_float(violation.get("max_ocr_overlap_hidden_regression_s"))
+        slug_text = f" {slug}" if isinstance(slug, str) and slug else ""
+        budget_text = f" budget {budget:.3f}s" if budget is not None else ""
+        return f"primary ocr hidden{slug_text} delta missing{budget_text}"
     if kind == "primary_stage_total_regression_exceeded":
         stage = violation.get("stage")
         delta = parse_signed_float(violation.get("delta_s"))

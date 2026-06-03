@@ -1280,6 +1280,72 @@ def test_baseline_primary_ocr_count_budget_flags_growth_without_latency_regressi
     )
 
 
+def test_baseline_primary_ocr_hidden_budget_flags_growth_without_latency_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "hidden-growth",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "ocr_overlap_hidden_s": 0.02,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.24,
+                },
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "hidden-growth",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.48,
+                "ocr_overlap_hidden_s": 0.055,
+                "ocr_engine_profile": {
+                    "calls": 1,
+                    "total_s": 0.23,
+                },
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_total_elapsed_regression_s=0.05,
+        max_ocr_engine_total_regression_s=0.05,
+        max_ocr_overlap_hidden_regression_s=0.025,
+    )
+
+    row_delta = comparison["latency_deltas"][0]
+    assert row_delta["total_elapsed_delta_s"] == -0.02
+    assert row_delta["ocr_engine_total_delta_s"] == -0.01
+    assert row_delta["ocr_overlap_hidden_delta_s"] == 0.035
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_ocr_overlap_hidden_regression_exceeded",
+            "slug": "hidden-growth",
+            "delta_s": 0.035,
+            "max_ocr_overlap_hidden_regression_s": 0.025,
+            "baseline_ocr_overlap_hidden_s": 0.02,
+            "candidate_ocr_overlap_hidden_s": 0.055,
+        }
+    ]
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: failed primary<=0.050s primary_ocr<=0.050s "
+        "primary_ocr_hidden<=0.025s violations=1 by_kind=primary_ocr_hidden:1"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "primary ocr hidden hidden-growth +0.035s > budget 0.025s"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_regression() -> None:
     baseline = {
         "rows": [
@@ -6059,6 +6125,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.015
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.03
         assert kwargs["max_baseline_ocr_count_regression"] == 2.25
+        assert kwargs["max_baseline_ocr_overlap_hidden_regression_s"] == 0.022
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.04
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.01
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.012
@@ -6086,6 +6153,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "max_repeat_stage_p95_regression_s": 0.015,
                     "max_ocr_engine_total_regression_s": 0.03,
                     "max_ocr_engine_count_regression": 2.25,
+                    "max_ocr_overlap_hidden_regression_s": 0.022,
                     "max_stage_total_regression_s": 0.04,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.012,
@@ -6125,6 +6193,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "0.03",
             "--max-baseline-ocr-count-regression",
             "2.25",
+            "--max-baseline-ocr-overlap-hidden-regression-s",
+            "0.022",
             "--max-baseline-stage-total-regression-s",
             "0.04",
             "--max-baseline-repeat-ocr-total-p95-regression-s",
@@ -6524,6 +6594,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_count_regression"] == 2.0
+        assert kwargs["max_baseline_ocr_overlap_hidden_regression_s"] == 0.05
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
@@ -6571,6 +6642,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_ocr_engine_count_regression": 2.0,
+                    "max_ocr_overlap_hidden_regression_s": 0.05,
                     "max_stage_total_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,
@@ -6766,6 +6838,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_count_regression"] == 2.0
+        assert kwargs["max_baseline_ocr_overlap_hidden_regression_s"] == 0.05
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
@@ -6816,6 +6889,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_ocr_engine_count_regression": 2.0,
+                    "max_ocr_overlap_hidden_regression_s": 0.05,
                     "max_stage_total_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,

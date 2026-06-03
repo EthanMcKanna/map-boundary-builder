@@ -17718,3 +17718,19 @@ with zero failures in 0.531s.
   `+0.030107s`, while the new count gate failed
   `tesla-austin-route-active-dark` selected/result count deltas of `+2.0`.
   Benchmark acceptance reliability only; no runtime default changed.
+- Added a primary OCR hidden-overlap regression budget for baseline
+  comparisons. This catches masked OCR workload growth: OCR can overlap enough
+  with other stages that total elapsed and OCR total budgets stay green while
+  hidden OCR overlap gets worse. The CLI/API now accept
+  `--max-baseline-ocr-overlap-hidden-regression-s`, and the focused
+  real-screenshot hard gate defaults it to `0.050s`. Focused stress tests
+  passed (`142 passed in 0.40s`) and the full suite passed (`718 passed,
+  31 subtests passed in 5.22s`). A saved proof in
+  `out/primary-ocr-hidden-overlap-budget-proof-20260603/comparison.json`
+  compared `out/current-leaders-full49-hard-20260603` against
+  `out/warm-sample-900-primary-tail-control-20260603` with primary and OCR
+  runtime regression budgets of `0.100s` plus a hidden-overlap budget of
+  `0.050s`; largest primary total delta stayed at `+0.029072s` and largest OCR
+  total delta stayed at `+0.025404s`, while the new hidden-overlap gate failed
+  `dallas-waymo` at `+0.057s`. Benchmark acceptance reliability only; no
+  runtime default changed.
