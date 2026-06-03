@@ -17413,3 +17413,18 @@ with zero failures in 0.531s.
   regression budget with `49` compared rows, repeat-profile case coverage
   `49/49`, no missing repeat cases, and no under-analyzed baseline or candidate
   repeat cases. This is benchmark acceptance reliability only.
+- Preserved compact georeference event segments in stress rows and surfaced the
+  slowest georeference segment in `primary slowest cases` whenever
+  georeference is the top primary stage. This follows the rejected first v11
+  baseline, where Ann Arbor failed only because the opaque georeference stage
+  spiked to `0.783s`; future outliers now show the dominant georeference
+  message rather than only the stage total. Focused stress tests passed
+  (`131 passed in 0.35s`) and the full suite passed (`707 passed, 31 subtests
+  passed in 5.89s`). A focused Ann Arbor probe at
+  `out/ann-arbor-georef-events-20260603` passed `1/1` with primary total
+  `0.554829s`, georeference `0.261636s`, repeat p95 `0.367s`, and the primary
+  slowest line now prints
+  `geo_step=inferring_map_location_from_labels:0.262s`. The saved row also
+  stores `georeference_events` with `Inferring map location from labels`
+  lasting `0.261634s` before `Map transform fitted`. This is benchmark
+  feedback-loop reliability only.

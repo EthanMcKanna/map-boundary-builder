@@ -6700,6 +6700,100 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
     )
 
 
+def test_stage_event_segments_summarizes_georeference_timing() -> None:
+    segments = stress_module.stage_event_segments(
+        {
+            "total_elapsed_s": 1.0,
+            "events": [
+                {"elapsed_s": 0.1, "stage": "extract", "message": "Extracting"},
+                {
+                    "elapsed_s": 0.2,
+                    "stage": "georeference",
+                    "message": "Trying regional label context",
+                    "details": {
+                        "candidates": [
+                            "Ann Arbor",
+                            "Ypsilanti",
+                            "Detroit",
+                            "Toledo",
+                            "Lansing",
+                            "Ignored extra",
+                        ],
+                        "ignored": "not copied",
+                    },
+                },
+                {
+                    "elapsed_s": 0.45,
+                    "stage": "georeference",
+                    "message": "Matching readable map labels",
+                    "details": {"label_count": 14},
+                },
+                {"elapsed_s": 0.8, "stage": "complete", "message": "Complete"},
+            ],
+        },
+        stage="georeference",
+    )
+
+    assert segments == [
+        {
+            "message": "Trying regional label context",
+            "at_s": 0.2,
+            "elapsed_s": 0.25,
+            "details": {
+                "candidates": ["Ann Arbor", "Ypsilanti", "Detroit", "Toledo", "Lansing"],
+            },
+        },
+        {
+            "message": "Matching readable map labels",
+            "at_s": 0.45,
+            "elapsed_s": 0.35,
+            "details": {"label_count": 14},
+        },
+    ]
+
+
+def test_primary_slowest_cases_include_georeference_event_context() -> None:
+    cases = stress_module.primary_slowest_cases_from_rows(
+        [
+            {
+                "slug": "ann-arbor",
+                "observed_status": "complete",
+                "expectation_passed": True,
+                "total_elapsed_s": 1.05,
+                "stages": {"georeference": 0.78, "ocr": 0.15},
+                "georeference_events": [
+                    {
+                        "message": "Trying regional label context",
+                        "elapsed_s": 0.62,
+                    }
+                ],
+            }
+        ],
+        limit=1,
+    )
+
+    assert cases == [
+        {
+            "slug": "ann-arbor",
+            "total_elapsed_s": 1.05,
+            "observed_status": "complete",
+            "expectation_passed": True,
+            "top_stage": {"stage": "georeference", "elapsed_s": 0.78},
+            "georeference_events": [
+                {
+                    "message": "Trying regional label context",
+                    "elapsed_s": 0.62,
+                }
+            ],
+        }
+    ]
+    assert (
+        stress_module.primary_slow_case_text_from_summary(cases[0])
+        == "ann-arbor=1.050s georeference=0.780s "
+        "geo_step=trying_regional_label_context:0.620s"
+    )
+
+
 def test_run_stress_benchmark_supports_in_process_execution(tmp_path, monkeypatch) -> None:
     image = tmp_path / "map.png"
     image.write_bytes(b"not a real image")

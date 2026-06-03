@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -2663,6 +2664,10 @@ def row_from_process(
                 if isinstance(event_profile.get("stage_elapsed_s"), dict)
                 else {}
             ),
+            "georeference_events": stage_event_segments(
+                event_profile,
+                stage="georeference",
+            ),
             "error": summary.get("error"),
             "stdout_json_error": parse_error,
             "stderr": truncate_text(completed.stderr),
@@ -2822,6 +2827,83 @@ def event_profile_events(event_profile: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(events, list):
         return []
     return [event for event in events if isinstance(event, dict)]
+
+
+def stage_event_segments(
+    event_profile: dict[str, Any],
+    *,
+    stage: str,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    events = event_profile_events(event_profile)
+    total_elapsed_s = parse_nonnegative_float(event_profile.get("total_elapsed_s"))
+    segments: list[dict[str, Any]] = []
+    for index, event in enumerate(events):
+        if event.get("stage") != stage:
+            continue
+        started_s = parse_nonnegative_float(event.get("elapsed_s"))
+        next_elapsed_s = stage_next_event_elapsed_s(
+            events,
+            index,
+            total_elapsed_s=total_elapsed_s,
+        )
+        segment: dict[str, Any] = {}
+        message = event.get("message")
+        if isinstance(message, str) and message:
+            segment["message"] = message
+        if started_s is not None:
+            segment["at_s"] = round(started_s, 6)
+        if started_s is not None and next_elapsed_s is not None:
+            segment["elapsed_s"] = round(max(0.0, next_elapsed_s - started_s), 6)
+        details = compact_stage_event_details(event.get("details"))
+        if details:
+            segment["details"] = details
+        if segment:
+            segments.append(segment)
+    return segments[: max(0, limit)]
+
+
+def stage_next_event_elapsed_s(
+    events: list[dict[str, Any]],
+    index: int,
+    *,
+    total_elapsed_s: float | None,
+) -> float | None:
+    for next_event in events[index + 1 :]:
+        next_elapsed_s = parse_nonnegative_float(next_event.get("elapsed_s"))
+        if next_elapsed_s is not None:
+            return next_elapsed_s
+    return total_elapsed_s
+
+
+def compact_stage_event_details(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    details: dict[str, Any] = {}
+    for key in (
+        "candidates",
+        "label_count",
+        "top_labels",
+        "route_ui_categories",
+        "non_map_ui_categories",
+        "thematic_map_labels",
+    ):
+        compacted = compact_stage_event_detail_value(value.get(key))
+        if compacted is not None:
+            details[key] = compacted
+    return details
+
+
+def compact_stage_event_detail_value(value: Any) -> Any:
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        return value
+    if not isinstance(value, list):
+        return None
+    compacted: list[Any] = []
+    for item in value[:5]:
+        if isinstance(item, (str, int, float)) and not isinstance(item, bool):
+            compacted.append(item)
+    return compacted if compacted else None
 
 
 def latest_event_details(
@@ -3361,6 +3443,12 @@ def primary_slowest_case_summary(
     top_stage = slowest_stage_summary(row)
     if top_stage is not None:
         result["top_stage"] = top_stage
+        if top_stage.get("stage") == "georeference":
+            georeference_events = row.get("georeference_events")
+            if isinstance(georeference_events, list) and georeference_events:
+                result["georeference_events"] = [
+                    event for event in georeference_events if isinstance(event, dict)
+                ][:5]
     ocr_engine = slowest_sample_ocr_engine_summary(row)
     if ocr_engine:
         result["ocr_engine"] = ocr_engine
@@ -5843,6 +5931,10 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
         stage_elapsed_s = parse_nonnegative_float(top_stage.get("elapsed_s"))
         if isinstance(stage, str) and stage and stage_elapsed_s is not None:
             parts.append(f"{stage}={stage_elapsed_s:.3f}s")
+            if stage == "georeference":
+                georeference_text = primary_slow_case_georeference_event_text(case)
+                if georeference_text:
+                    parts.append(georeference_text)
     ocr_engine = case.get("ocr_engine")
     if isinstance(ocr_engine, dict):
         total_s = parse_nonnegative_float(ocr_engine.get("total_s"))
@@ -5883,6 +5975,30 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
     if expectation_passed is False:
         parts.append("unexpected")
     return " ".join(parts)
+
+
+def primary_slow_case_georeference_event_text(case: dict[str, Any]) -> str:
+    events = case.get("georeference_events")
+    if not isinstance(events, list):
+        return ""
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        elapsed_s = parse_nonnegative_float(event.get("elapsed_s"))
+        if elapsed_s is None:
+            continue
+        ranked.append((elapsed_s, event))
+    if not ranked:
+        return ""
+    elapsed_s, event = max(ranked, key=lambda item: item[0])
+    message = event.get("message")
+    if not isinstance(message, str) or not message:
+        message = "georeference"
+    label = re.sub(r"[^A-Za-z0-9]+", "_", message.strip().lower()).strip("_")
+    if not label:
+        label = "georeference"
+    return f"geo_step={label}:{elapsed_s:.3f}s"
 
 
 def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:
