@@ -16539,3 +16539,16 @@ with zero failures in 0.531s.
   `{"complete":38,"failed":11}`, primary max `0.583s`, repeat p95 `0.360s`,
   repeat max `0.395s`, repeat OCR-engine p95 `0.316s`, and all manifest
   latency/OCR-count contracts.
+- Normalized the browser local-history run-cache settings signature to mirror
+  the API's parsed request values instead of raw form strings. The browser now
+  collapses `Auto`/`automatic`/`Auto-detect` city placeholders to the same
+  no-hint key, canonicalizes boolean defaults, clamps/rounds float thresholds,
+  and parses integer thresholds before hashing settings. The local cache
+  namespace moved to raw `image-to-geojson-v4` and pixel `image-to-geojson-v6`
+  so stale raw-string keys do not trigger current-cache work. Validation passed
+  with `git diff --check`, `node --check map_boundary_builder/web_assets/app.js`,
+  focused API/frontend cache tests (`85 passed in 0.82s`), the full suite (`664
+  passed, 31 subtests passed in 7.65s`), and a local web smoke at
+  `http://127.0.0.1:8876` confirming served HTML/JS includes the current
+  pipeline/runtime health and new cache normalizer. No screenshot hard gate was
+  rerun because this only changes pre-upload browser cache admission/keying.

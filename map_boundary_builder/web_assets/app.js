@@ -96,8 +96,8 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_RAW_VERSION = "image-to-geojson-v3";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v5";
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v4";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v6";
 const RUN_CACHE_SETTING_FIELDS = [
   "city",
   "include_overlay",
@@ -106,6 +106,8 @@ const RUN_CACHE_SETTING_FIELDS = [
   "simplify_px",
   "source_was_svg",
 ];
+const RUN_CACHE_AUTO_CITY_TOKENS = new Set(["auto", "automatic", "autodetect", "detect"]);
+const RUN_CACHE_FALSE_BOOLEAN_TOKENS = new Set(["0", "false", "no", "off", ""]);
 const SVG_RASTER_MAX_DIMENSION = 1600;
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const RUN_CACHE_DEFERRED_HISTORY_WAIT_MS = 180;
@@ -1270,9 +1272,49 @@ function runCacheSettingsSignature(file, formData) {
   return JSON.stringify({
     filename_hint: filenameHintCacheValue(file.name || ""),
     settings: Object.fromEntries(
-      RUN_CACHE_SETTING_FIELDS.map((field) => [field, String(formData.get(field) ?? "")]),
+      RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData)]),
     ),
   });
+}
+
+function normalizedRunCacheSettingValue(field, formData) {
+  const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
+  if (field === "city") return normalizedRunCacheCity(rawValue);
+  if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
+  if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
+  if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);
+  if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);
+  if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);
+  return rawValue;
+}
+
+function normalizedRunCacheCity(value) {
+  const city = String(value || "").trim();
+  if (!city) return "";
+  const token = city.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return RUN_CACHE_AUTO_CITY_TOKENS.has(token) ? "" : city;
+}
+
+function normalizedRunCacheBoolean(value, defaultValue) {
+  if (value === null || value === undefined) return String(Boolean(defaultValue));
+  return String(!RUN_CACHE_FALSE_BOOLEAN_TOKENS.has(String(value).trim().toLowerCase()));
+}
+
+function normalizedRunCacheFloat(value, defaultValue, minimum, maximum) {
+  const text = String(value || "").trim();
+  const parsed = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)
+    ? Number(text)
+    : defaultValue;
+  const number = Number.isFinite(parsed) ? parsed : defaultValue;
+  const clamped = Math.max(minimum, Math.min(maximum, number));
+  return String(Math.round(clamped * 10000) / 10000);
+}
+
+function normalizedRunCacheInteger(value, defaultValue, minimum, maximum) {
+  const text = String(value).trim();
+  const parsed = /^[+-]?\d+$/.test(text) ? Number.parseInt(text, 10) : defaultValue;
+  const number = Number.isFinite(parsed) ? parsed : defaultValue;
+  return String(Math.max(minimum, Math.min(maximum, number)));
 }
 
 function lazyRunCacheKeys(file, settingsSignature) {

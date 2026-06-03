@@ -1943,6 +1943,54 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(sorted_entries, encoded_entries)
         self.assertNotIn(b"let cachedRunCachePipelineVersion = embeddedRunCachePipelineVersion();", app_js)
 
+    def test_frontend_normalizes_local_run_cache_settings_like_api(self) -> None:
+        app_js, mime = web_asset_response("app.js")
+
+        self.assertEqual(mime, "text/javascript; charset=utf-8")
+        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v4";', app_js)
+        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v6";', app_js)
+        self.assertIn(
+            b'const RUN_CACHE_AUTO_CITY_TOKENS = new Set(["auto", "automatic", "autodetect", "detect"]);',
+            app_js,
+        )
+        self.assertIn(
+            b'const RUN_CACHE_FALSE_BOOLEAN_TOKENS = new Set(["0", "false", "no", "off", ""]);',
+            app_js,
+        )
+
+        settings_signature = app_js.index(b"function runCacheSettingsSignature(file, formData) {")
+        normalized_call = app_js.index(
+            b"RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData)])",
+            settings_signature,
+        )
+        helper_start = app_js.index(b"function normalizedRunCacheSettingValue(field, formData) {")
+        city_helper = app_js.index(b"function normalizedRunCacheCity(value) {", helper_start)
+        bool_helper = app_js.index(b"function normalizedRunCacheBoolean(value, defaultValue) {", city_helper)
+        float_helper = app_js.index(b"function normalizedRunCacheFloat(value, defaultValue, minimum, maximum) {", bool_helper)
+        int_helper = app_js.index(b"function normalizedRunCacheInteger(value, defaultValue, minimum, maximum) {", float_helper)
+
+        self.assertLess(settings_signature, normalized_call)
+        self.assertLess(normalized_call, helper_start)
+        self.assertLess(helper_start, city_helper)
+        self.assertLess(city_helper, bool_helper)
+        self.assertLess(bool_helper, float_helper)
+        self.assertLess(float_helper, int_helper)
+        self.assertIn(b'const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;', app_js)
+        self.assertIn(b'if (field === "city") return normalizedRunCacheCity(rawValue);', app_js)
+        self.assertIn(b'if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);', app_js)
+        self.assertIn(b'if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);', app_js)
+        self.assertIn(b'if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);', app_js)
+        self.assertIn(b'if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);', app_js)
+        self.assertIn(b'if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);', app_js)
+        self.assertIn(b'replace(/[^a-z0-9]+/g, "");', app_js[city_helper:bool_helper])
+        self.assertIn(
+            b"if (value === null || value === undefined) return String(Boolean(defaultValue));",
+            app_js[bool_helper:float_helper],
+        )
+        self.assertIn(b"RUN_CACHE_FALSE_BOOLEAN_TOKENS.has", app_js[bool_helper:float_helper])
+        self.assertIn(b"Math.round(clamped * 10000) / 10000", app_js[float_helper:int_helper])
+        self.assertIn(b"/^[+-]?\\d+$/.test(text)", app_js[int_helper : int_helper + 500])
+
     def test_frontend_lazily_builds_cache_keys_without_cached_history(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
