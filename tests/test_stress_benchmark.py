@@ -239,6 +239,14 @@ def test_repeat_profile_ocr_engine_count_metric_text_includes_confidence_counts(
 
 def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     report = {
+        "manifest_contracts": {
+            "total_cases": 2,
+            "ocr_call_contract_rows": 2,
+            "ocr_positive_call_contract_rows": 1,
+            "ocr_zero_call_contract_rows": 1,
+            "ocr_count_contract_rows": 1,
+            "ocr_positive_call_rows_without_count_contract": [],
+        },
         "summary": {
             "total": 1,
             "expectation_passed": 1,
@@ -288,6 +296,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     stress_module.print_stress_table(report)
 
     output = capsys.readouterr().out
+    assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
     assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
     assert "repeat ocr engine counts: label_count=p95 12.0 max 14.0" in output
     assert "conf_lt70=p95 0.0 max 0.0" in output
@@ -704,6 +713,69 @@ def test_check_expectations_rejects_invalid_ocr_engine_count_budget_metric() -> 
     )
 
     assert issues == ["ocr_engine_profile metric 'unknown_count' is invalid"]
+
+
+def test_summarize_manifest_contracts_reports_ocr_count_coverage() -> None:
+    contracts = stress_module.summarize_manifest_contracts(
+        [
+            {
+                "slug": "count-capped-ocr",
+                "expect": {
+                    "max_ocr_engine_calls": 1,
+                    "max_ocr_engine_counts": {
+                        "raw_box_count": 12,
+                        "selected_box_count": 8,
+                    },
+                },
+            },
+            {
+                "slug": "call-only-ocr",
+                "expect": {
+                    "max_ocr_engine_calls": 1,
+                },
+            },
+            {
+                "slug": "pure-catalog",
+                "expect": {
+                    "max_ocr_engine_calls": 0,
+                },
+            },
+            {
+                "slug": "missing-call-contract",
+                "expect": {},
+            },
+            {
+                "slug": "invalid-count-contract",
+                "expect": {
+                    "max_ocr_engine_calls": 1,
+                    "max_ocr_engine_counts": {
+                        "unknown_count": 4,
+                    },
+                },
+            },
+        ]
+    )
+
+    assert contracts == {
+        "total_cases": 5,
+        "ocr_call_contract_rows": 4,
+        "ocr_call_contract_missing_rows": ["missing-call-contract"],
+        "ocr_positive_call_contract_rows": 3,
+        "ocr_zero_call_contract_rows": 1,
+        "ocr_count_contract_rows": 1,
+        "ocr_count_contract_slugs": ["count-capped-ocr"],
+        "ocr_positive_call_rows_without_count_contract": [
+            "call-only-ocr",
+            "invalid-count-contract",
+        ],
+        "ocr_count_contract_metric_counts": {
+            "raw_box_count": 1,
+            "selected_box_count": 1,
+        },
+        "invalid_ocr_count_contract_rows": [
+            {"slug": "invalid-count-contract", "metric": "unknown_count"},
+        ],
+    }
 
 
 def test_check_expectations_rejects_route_ui_evidence_drift() -> None:

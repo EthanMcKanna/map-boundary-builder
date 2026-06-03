@@ -454,6 +454,7 @@ def run_stress_benchmark(
         "repeat_profile_runs": repeat_profile_runs,
         "repeat_profile_warmups": repeat_profile_warmups,
         "runtime_config": runtime_config,
+        "manifest_contracts": summarize_manifest_contracts(cases),
         "summary": summarize_rows(rows),
         "rows": rows,
     }
@@ -518,6 +519,67 @@ def select_cases(cases: list[dict[str, Any]], only_slugs: list[str]) -> list[dic
     if missing:
         raise ValueError(f"Unknown stress slug(s): {', '.join(missing)}")
     return selected
+
+
+def summarize_manifest_contracts(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    call_contract_slugs: list[str] = []
+    missing_call_contract_slugs: list[str] = []
+    positive_call_contract_slugs: list[str] = []
+    zero_call_contract_slugs: list[str] = []
+    count_contract_slugs: list[str] = []
+    positive_call_rows_without_count_contract: list[str] = []
+    invalid_count_contract_rows: list[dict[str, Any]] = []
+    metric_counts: dict[str, int] = {}
+
+    for case in cases:
+        slug = str(case.get("slug"))
+        expect = case.get("expect") if isinstance(case.get("expect"), dict) else {}
+        max_ocr_calls = parse_nonnegative_count_metric(expect.get("max_ocr_engine_calls"))
+        if max_ocr_calls is None:
+            missing_call_contract_slugs.append(slug)
+        else:
+            call_contract_slugs.append(slug)
+            if max_ocr_calls == 0:
+                zero_call_contract_slugs.append(slug)
+            elif max_ocr_calls > 0:
+                positive_call_contract_slugs.append(slug)
+
+        count_metrics: set[str] = set()
+        raw_count_budgets = expect.get("max_ocr_engine_counts")
+        if isinstance(raw_count_budgets, dict):
+            for raw_metric, raw_budget in raw_count_budgets.items():
+                if not isinstance(raw_metric, str):
+                    invalid_count_contract_rows.append({"slug": slug, "metric": raw_metric})
+                    continue
+                try:
+                    metric = normalize_ocr_engine_count_metric(raw_metric)
+                except ValueError:
+                    invalid_count_contract_rows.append({"slug": slug, "metric": raw_metric})
+                    continue
+                if parse_nonnegative_count_metric(raw_budget) is None:
+                    invalid_count_contract_rows.append({"slug": slug, "metric": raw_metric})
+                    continue
+                count_metrics.add(metric)
+            if count_metrics:
+                count_contract_slugs.append(slug)
+                for metric in count_metrics:
+                    metric_counts[metric] = metric_counts.get(metric, 0) + 1
+
+        if max_ocr_calls is not None and max_ocr_calls > 0 and not count_metrics:
+            positive_call_rows_without_count_contract.append(slug)
+
+    return {
+        "total_cases": len(cases),
+        "ocr_call_contract_rows": len(call_contract_slugs),
+        "ocr_call_contract_missing_rows": missing_call_contract_slugs,
+        "ocr_positive_call_contract_rows": len(positive_call_contract_slugs),
+        "ocr_zero_call_contract_rows": len(zero_call_contract_slugs),
+        "ocr_count_contract_rows": len(count_contract_slugs),
+        "ocr_count_contract_slugs": count_contract_slugs,
+        "ocr_positive_call_rows_without_count_contract": positive_call_rows_without_count_contract,
+        "ocr_count_contract_metric_counts": dict(sorted(metric_counts.items())),
+        "invalid_ocr_count_contract_rows": invalid_count_contract_rows,
+    }
 
 
 def run_stress_case(
@@ -2770,6 +2832,35 @@ def print_stress_table(report: dict[str, Any]) -> None:
         f"statuses={summary['statuses']}, "
         f"max_total_elapsed_s={summary['max_total_elapsed_s']}"
     )
+    manifest_contracts = report.get("manifest_contracts")
+    if isinstance(manifest_contracts, dict):
+        total_cases = manifest_contracts.get("total_cases")
+        call_contract_rows = manifest_contracts.get("ocr_call_contract_rows")
+        positive_call_rows = manifest_contracts.get("ocr_positive_call_contract_rows")
+        count_contract_rows = manifest_contracts.get("ocr_count_contract_rows")
+        positive_call_rows_without_count_contract = manifest_contracts.get(
+            "ocr_positive_call_rows_without_count_contract"
+        )
+        count_contract_missing = (
+            len(positive_call_rows_without_count_contract)
+            if isinstance(positive_call_rows_without_count_contract, list)
+            else 0
+        )
+        if all(
+            isinstance(value, int)
+            for value in (
+                total_cases,
+                call_contract_rows,
+                positive_call_rows,
+                count_contract_rows,
+            )
+        ):
+            print(
+                "manifest OCR contracts: "
+                f"calls={call_contract_rows}/{total_cases}, "
+                f"count-capped={count_contract_rows}/{positive_call_rows} positive-call rows, "
+                f"positive-call-only={count_contract_missing}"
+            )
     if summary.get("stage_duration_s"):
         stage_total_text = ", ".join(
             f"{stage}={elapsed_s:.3f}s" for stage, elapsed_s in summary["stage_duration_s"].items()

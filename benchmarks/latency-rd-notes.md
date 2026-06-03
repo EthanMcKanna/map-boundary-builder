@@ -16153,3 +16153,15 @@ with zero failures in 0.531s.
   `label_confidence_lt_90_count` p95/max `2.2`/`3`, prewarm `1.182s`, and
   stable repeat signatures. This completes row-level OCR work-volume locks for
   the current no-catalog Waymo OCR set; no runtime deploy is needed.
+- Added manifest OCR contract coverage reporting to the stress benchmark so
+  future R&D runs can see whether selected rows are only call-capped or also
+  box/confidence-count capped. The real manifest currently reports `49/49`
+  rows with `max_ocr_engine_calls`, `38` positive-call rows, `11` zero-call
+  rows, and `12` rows with full count/confidence caps; the remaining `26`
+  positive-call rows are intentionally call-only until they become high-risk
+  tails. A real one-row smoke at `out/contract-coverage-smoke-20260603` passed
+  `dallas-waymo` with `1/1` expected, primary `0.963716s` under OCR profiling,
+  and printed coverage as calls `1/1`, count-capped `1/1` positive-call rows,
+  and positive-call-only `0`. The full unit suite passed `640` tests plus `31`
+  subtests. This is a harness reliability/reporting improvement only; no
+  runtime deploy is needed.
