@@ -16030,3 +16030,17 @@ with zero failures in 0.531s.
   `out/route-ui-crop028-compare-20260603` passed `6/6` with repeat p95
   `0.435s` and repeat OCR-engine p95 `0.399s`. Keep the route-UI crop at
   `0.28`.
+- Added per-row `max_ocr_engine_counts` stress expectations and used them to
+  lock the current selected-box tail. `tesla-austin-route-receipt-long` and
+  `tesla-austin-route-receipt-gray-long` now cap `selected_box_count` at `29`;
+  `los-angeles-waymo` caps it at `30`. This protects the one-call OCR contract
+  from regressions that keep `calls=1` while increasing recognizer crop count.
+  Focused validation at `out/selected-box-contract-focused-20260603` passed
+  `3/3`, repeat p95 `0.511s`, repeat OCR-engine p95 `0.461s`, and repeat
+  selected-box max `30`. The full hard gate at
+  `out/selected-box-contract-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.536077s`, repeat p95 `0.471s`,
+  repeat max `0.527s`, repeat OCR-engine p95 `0.432s`, repeat selected-box p95
+  `29`, repeat selected-box max `30`, prewarm `1.326s`, and stable repeat
+  signatures. This is a stress-harness reliability contract only; no runtime
+  deploy is needed.

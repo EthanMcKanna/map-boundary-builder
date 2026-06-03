@@ -1207,6 +1207,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         append_thematic_map_expectation_issues(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
         append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
+        append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
         return issues
 
     source_equals = expect.get("source_equals")
@@ -1234,6 +1235,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
     append_min_ocr_labels_expectation_issue(row, expect, issues)
     append_ocr_top_labels_expectation_issues(row, expect, issues)
     append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
+    append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
 
     append_min_confidence_expectation_issue(
         row,
@@ -1372,6 +1374,31 @@ def append_max_ocr_engine_calls_expectation_issue(
     if calls is None or calls > max_ocr_engine_calls:
         call_text = repr(raw_calls) if calls is None else f"{calls:g}"
         issues.append(f"ocr_engine_profile.calls {call_text} above {max_ocr_engine_calls:g}")
+
+
+def append_max_ocr_engine_counts_expectation_issues(
+    row: dict[str, Any], expect: dict[str, Any], issues: list[str]
+) -> None:
+    raw_budgets = expect.get("max_ocr_engine_counts")
+    if not isinstance(raw_budgets, dict):
+        return
+    for raw_metric, raw_budget in sorted(raw_budgets.items()):
+        if not isinstance(raw_metric, str):
+            issues.append(f"ocr_engine_profile metric {raw_metric!r} is invalid")
+            continue
+        try:
+            metric = normalize_ocr_engine_count_metric(raw_metric)
+        except ValueError:
+            issues.append(f"ocr_engine_profile metric {raw_metric!r} is invalid")
+            continue
+        budget = parse_nonnegative_count_metric(raw_budget)
+        if budget is None:
+            issues.append(f"ocr_engine_profile.{metric} budget {raw_budget!r} is invalid")
+            continue
+        count = row_ocr_engine_metric(row, metric)
+        if count is None or count > budget:
+            count_text = "missing" if count is None else f"{count:g}"
+            issues.append(f"ocr_engine_profile.{metric} {count_text} above {budget:g}")
 
 
 def append_total_elapsed_expectation_issue(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:

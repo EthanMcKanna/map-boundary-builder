@@ -123,6 +123,7 @@
         "route_ui_categories_include": ["dropoff", "plate", "receipt"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {"selected_box_count": 29},
         "max_total_elapsed_s": 1.0
       }
     },
@@ -138,6 +139,7 @@
         "route_ui_categories_include": ["dropoff", "plate", "receipt"],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {"selected_box_count": 29},
         "max_total_elapsed_s": 1.0
       }
     },
@@ -741,6 +743,7 @@
         "min_combined_confidence": 0.83,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {"selected_box_count": 30},
         "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
         "max_bbox_error_m": 1000
       }

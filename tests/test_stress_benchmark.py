@@ -637,6 +637,75 @@ def test_check_expectations_rejects_excess_ocr_engine_calls() -> None:
     assert issues == ["ocr_engine_profile.calls 1 above 0"]
 
 
+def test_check_expectations_accepts_ocr_engine_count_budgets() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "selected_box_count": 30,
+                "result_count": 29,
+            },
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "max_ocr_engine_calls": 1,
+            "max_ocr_engine_counts": {
+                "selected_box_count": 30,
+                "result_count": 29,
+            },
+        },
+    )
+
+    assert issues == []
+
+
+def test_check_expectations_rejects_excess_ocr_engine_count_budget() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a service-area boundary from ride-route UI.",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "selected_box_count": 31,
+            },
+        },
+        {
+            "status": "failed",
+            "error_contains": "ride-route UI",
+            "max_ocr_engine_counts": {
+                "selected_box_count": 30,
+            },
+        },
+    )
+
+    assert issues == ["ocr_engine_profile.selected_box_count 31 above 30"]
+
+
+def test_check_expectations_rejects_invalid_ocr_engine_count_budget_metric() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "complete",
+            "source": "ocr-georeference:nominatim-label-fit",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "selected_box_count": 12,
+            },
+        },
+        {
+            "status": "complete",
+            "source_prefix": "ocr-georeference:",
+            "max_ocr_engine_counts": {
+                "unknown_count": 30,
+            },
+        },
+    )
+
+    assert issues == ["ocr_engine_profile metric 'unknown_count' is invalid"]
+
+
 def test_check_expectations_rejects_route_ui_evidence_drift() -> None:
     issues = stress_module.check_expectations(
         {
