@@ -335,6 +335,23 @@
       }
     },
     {
+      "slug": "zoox-sf-service-area-current",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "San Francisco",
+        "min_control_points": 3,
+        "min_ocr_labels": 24,
+        "min_combined_confidence": 0.80,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-122.444478, 37.7473519, -122.3829801, 37.8107792],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "tesla-dallas-jpeg",
       "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
       "no_catalog": true,

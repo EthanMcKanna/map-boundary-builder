@@ -15652,3 +15652,37 @@ with zero failures in 0.531s.
   `out/ocr-onnx-nospin-default-full36-hard-20260602/stress-summary.json` showed
   zero changes for status, source, city, bbox, geometry hash, coordinate count,
   confidence, control count, OCR label count, or top labels.
+- Rechecked the remaining uncovered current service-area screenshots under the
+  warmed in-process stress runner instead of the colder one-process-per-image
+  CLI screen. The scratch manifest at
+  `out/current-service-area-warm-probe-20260602/manifest.json` ran six images
+  with no catalog, neutral filename hints, network blocked, extraction/OCR
+  caches disabled, prewarm enabled, three repeat profiles, and OCR engine
+  profiling. It completed `5/6` with primary max `1.134676s`, repeat p95
+  `1.060s`, and one full-detail OCR retry on Waymo Nashville. The useful
+  correction was that `/Users/ethanmckanna/Downloads/service area images/Zoox
+  San Francisco.PNG` should be compared against the `bay-area-zoox` catalog
+  entry, not `san-francisco-zoox`: it scored IoU `0.982760`, area ratio
+  `0.982881`, and centroid distance `3.3m`, despite scoring only IoU
+  `0.520240` against `san-francisco-zoox`. Other rows stayed out for this pass:
+  Tesla Bay Area was fast but only IoU `0.843889` against `bay-area-tesla`;
+  current Waymo Houston was warm-subsecond but only IoU `0.411906` against
+  `houston-waymo`; Waymo Phoenix was warm-subsecond but still inferred generic
+  city text and only IoU `0.853339` against `phoenix-waymo`; Waymo Nashville
+  remained over the hard latency budget with two OCR calls; and Waymo Miami
+  still failed sparse OCR.
+- Accepted `zoox-sf-service-area-current` as a third current service-area
+  no-catalog stress row. The focused gate at
+  `out/zoox-sf-current-focused-20260602/stress-summary.json` passed `1/1`,
+  primary `0.424499s`, repeat `3/3` subsecond, repeat p95 `0.295s`, repeat
+  OCR-engine p95 `0.203s`, and prewarm `1.307s`. The full expanded hard gate at
+  `out/zoox-sf-current-full39-hard-20260602/stress-summary.json` passed
+  `39/39`, statuses `{"complete":28,"failed":11}`, primary max `0.796388s`,
+  repeat `39/39` subsecond, repeat p95 `0.568s`, repeat max `0.599s`, repeat
+  OCR-engine p95 `0.479s`, and prewarm `1.292s`. The new row completed in
+  `0.295717s` in the full gate with `ocr-georeference:nominatim-label-fit`,
+  city `San Francisco`, 3 controls, 30 stress labels, confidence `0.83`, and
+  OCR engine total `0.200970s`. Comparing all 38 common rows against
+  `out/service-area-full38-hard-20260602/stress-summary.json` showed zero
+  changes for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, control count, OCR label count, or top labels.
