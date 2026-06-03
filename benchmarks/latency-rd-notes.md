@@ -17563,3 +17563,19 @@ with zero failures in 0.531s.
   `georeference=-0.000286s`. This keeps focused speed candidates from getting
   misleading repeat-profile acceptance signals. Benchmark acceptance reliability
   only; no runtime default changed.
+- Added an aggregate repeat-stage p95 regression budget for baseline
+  comparisons. The existing repeat budget could fail total repeat p95 and
+  per-case repeat p95, but it could not fail a candidate whose aggregate
+  `ocr`, `extract`, or other pipeline-stage p95 drifted while total repeat p95
+  stayed inside budget. The CLI/API now accept
+  `--max-baseline-repeat-stage-p95-regression-s`, and the real-screenshot hard
+  gate fills the same conservative `0.25s` default used by the other baseline
+  budgets. Focused stress tests passed (`134 passed in 0.44s`) and the full
+  suite passed (`710 passed, 31 subtests passed in 5.07s`). A saved proof in
+  `out/repeat-stage-p95-budget-proof-20260603/comparison.json` compared
+  `out/ann-arbor-repeat-case-stage-20260603` against
+  `out/ann-arbor-repeat-stage-delta-20260603` with
+  `max_repeat_stage_p95_regression_s=0.004`; the new budget failed exactly on
+  aggregate OCR p95, printing `repeat stage ocr p95 +0.005s > budget 0.004s`
+  with raw `ocr_delta=0.005140s`. Benchmark acceptance reliability only; no
+  runtime default changed.

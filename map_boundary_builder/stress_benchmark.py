@@ -224,6 +224,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-baseline-repeat-stage-p95-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when any aggregate repeat-profile pipeline stage p95 is "
+            "more than this many seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
         "--max-baseline-ocr-total-regression-s",
         type=float,
         default=None,
@@ -443,6 +452,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-repeat-p95-regression-s requires --compare-baseline-report")
+    if (
+        args.max_baseline_repeat_stage_p95_regression_s is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-repeat-stage-p95-regression-s requires --compare-baseline-report")
     if args.max_baseline_ocr_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-ocr-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_stage_total_regression_s is not None and not args.compare_baseline_report:
@@ -465,6 +479,11 @@ def main(argv: list[str] | None = None) -> int:
         and args.max_baseline_repeat_p95_regression_s < 0.0
     ):
         parser.error("--max-baseline-repeat-p95-regression-s must be non-negative")
+    if (
+        args.max_baseline_repeat_stage_p95_regression_s is not None
+        and args.max_baseline_repeat_stage_p95_regression_s < 0.0
+    ):
+        parser.error("--max-baseline-repeat-stage-p95-regression-s must be non-negative")
     if (
         args.max_baseline_ocr_total_regression_s is not None
         and args.max_baseline_ocr_total_regression_s < 0.0
@@ -545,6 +564,7 @@ def main(argv: list[str] | None = None) -> int:
         compare_baseline_report=Path(args.compare_baseline_report) if args.compare_baseline_report else None,
         max_baseline_total_regression_s=args.max_baseline_total_regression_s,
         max_baseline_repeat_p95_regression_s=args.max_baseline_repeat_p95_regression_s,
+        max_baseline_repeat_stage_p95_regression_s=args.max_baseline_repeat_stage_p95_regression_s,
         max_baseline_ocr_total_regression_s=args.max_baseline_ocr_total_regression_s,
         max_baseline_stage_total_regression_s=args.max_baseline_stage_total_regression_s,
         max_baseline_repeat_ocr_total_p95_regression_s=(
@@ -608,6 +628,10 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
             args.max_baseline_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_p95_regression_s is None:
             args.max_baseline_repeat_p95_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_repeat_stage_p95_regression_s is None:
+            args.max_baseline_repeat_stage_p95_regression_s = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+            )
         if args.max_baseline_ocr_total_regression_s is None:
             args.max_baseline_ocr_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_stage_total_regression_s is None:
@@ -711,6 +735,7 @@ def run_stress_benchmark(
     compare_baseline_report: Path | None = None,
     max_baseline_total_regression_s: float | None = None,
     max_baseline_repeat_p95_regression_s: float | None = None,
+    max_baseline_repeat_stage_p95_regression_s: float | None = None,
     max_baseline_ocr_total_regression_s: float | None = None,
     max_baseline_stage_total_regression_s: float | None = None,
     max_baseline_repeat_ocr_total_p95_regression_s: float | None = None,
@@ -737,6 +762,11 @@ def run_stress_benchmark(
         raise ValueError("max_baseline_total_regression_s must be non-negative")
     if max_baseline_repeat_p95_regression_s is not None and max_baseline_repeat_p95_regression_s < 0.0:
         raise ValueError("max_baseline_repeat_p95_regression_s must be non-negative")
+    if (
+        max_baseline_repeat_stage_p95_regression_s is not None
+        and max_baseline_repeat_stage_p95_regression_s < 0.0
+    ):
+        raise ValueError("max_baseline_repeat_stage_p95_regression_s must be non-negative")
     if max_baseline_ocr_total_regression_s is not None and max_baseline_ocr_total_regression_s < 0.0:
         raise ValueError("max_baseline_ocr_total_regression_s must be non-negative")
     if (
@@ -871,6 +901,7 @@ def run_stress_benchmark(
             baseline_report_path=compare_baseline_report,
             max_total_elapsed_regression_s=max_baseline_total_regression_s,
             max_repeat_p95_regression_s=max_baseline_repeat_p95_regression_s,
+            max_repeat_stage_p95_regression_s=max_baseline_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_baseline_ocr_total_regression_s,
             max_stage_total_regression_s=max_baseline_stage_total_regression_s,
             max_repeat_ocr_engine_total_p95_regression_s=(
@@ -895,6 +926,7 @@ def compare_stress_reports(
     baseline_report_path: Path | None = None,
     max_total_elapsed_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
+    max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
@@ -1076,6 +1108,7 @@ def compare_stress_reports(
     if (
         max_total_elapsed_regression_s is not None
         or max_repeat_p95_regression_s is not None
+        or max_repeat_stage_p95_regression_s is not None
         or max_ocr_engine_total_regression_s is not None
         or max_stage_total_regression_s is not None
         or max_repeat_ocr_engine_total_p95_regression_s is not None
@@ -1084,6 +1117,7 @@ def compare_stress_reports(
             comparison,
             max_total_elapsed_regression_s=max_total_elapsed_regression_s,
             max_repeat_p95_regression_s=max_repeat_p95_regression_s,
+            max_repeat_stage_p95_regression_s=max_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_ocr_engine_total_regression_s,
             max_stage_total_regression_s=max_stage_total_regression_s,
             max_repeat_ocr_engine_total_p95_regression_s=(
@@ -1098,6 +1132,7 @@ def baseline_regression_budget(
     *,
     max_total_elapsed_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
+    max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_stage_total_regression_s: float | None = None,
     max_repeat_ocr_engine_total_p95_regression_s: float | None = None,
@@ -1285,6 +1320,55 @@ def baseline_regression_budget(
                 if candidate_case_p95 is not None:
                     violation["candidate_p95_total_elapsed_s"] = round(candidate_case_p95, 6)
                 violations.append(violation)
+    if max_repeat_stage_p95_regression_s is not None:
+        max_repeat_stage = round(float(max_repeat_stage_p95_regression_s), 6)
+        budget["max_repeat_stage_p95_regression_s"] = max_repeat_stage
+        repeat_delta = comparison.get("repeat_profile_delta")
+        stage_duration = (
+            repeat_delta.get("stage_duration_s")
+            if isinstance(repeat_delta, dict)
+            else None
+        )
+        if isinstance(stage_duration, dict):
+            for stage in sorted(
+                (stage for stage in stage_duration if isinstance(stage, str) and stage),
+                key=pipeline_stage_sort_key,
+            ):
+                p95_delta = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("stage_duration_s", stage, "p95_duration_s"),
+                    "delta_s",
+                )
+                if p95_delta is None or p95_delta <= max_repeat_stage_p95_regression_s:
+                    continue
+                violation = {
+                    "kind": "repeat_stage_p95_regression_exceeded",
+                    "stage": stage,
+                    "delta_s": round(p95_delta, 6),
+                    "max_repeat_stage_p95_regression_s": max_repeat_stage,
+                }
+                baseline_stage_p95 = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("stage_duration_s", stage, "p95_duration_s"),
+                    "baseline",
+                )
+                candidate_stage_p95 = repeat_delta_metric_value(
+                    repeat_delta,
+                    ("stage_duration_s", stage, "p95_duration_s"),
+                    "candidate",
+                )
+                if baseline_stage_p95 is not None:
+                    violation["baseline_stage_p95_duration_s"] = round(baseline_stage_p95, 6)
+                if candidate_stage_p95 is not None:
+                    violation["candidate_stage_p95_duration_s"] = round(candidate_stage_p95, 6)
+                violations.append(violation)
+        else:
+            violations.append(
+                {
+                    "kind": "repeat_stage_p95_delta_missing",
+                    "max_repeat_stage_p95_regression_s": max_repeat_stage,
+                }
+            )
     if max_repeat_ocr_engine_total_p95_regression_s is not None:
         max_repeat_ocr_total = round(float(max_repeat_ocr_engine_total_p95_regression_s), 6)
         budget["max_repeat_ocr_engine_total_p95_regression_s"] = max_repeat_ocr_total
@@ -6994,6 +7078,11 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     max_repeat = parse_nonnegative_float(regression_budget.get("max_repeat_p95_regression_s"))
     if max_repeat is not None:
         limits.append(f"repeat_p95<={max_repeat:.3f}s")
+    max_repeat_stage = parse_nonnegative_float(
+        regression_budget.get("max_repeat_stage_p95_regression_s")
+    )
+    if max_repeat_stage is not None:
+        limits.append(f"repeat_stage_p95<={max_repeat_stage:.3f}s")
     max_repeat_ocr_total = parse_nonnegative_float(
         regression_budget.get("max_repeat_ocr_engine_total_p95_regression_s")
     )
@@ -7057,6 +7146,8 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_profile_p95_regression_exceeded": "repeat_p95",
         "repeat_profile_p95_delta_missing": "repeat_p95_missing",
         "repeat_profile_case_p95_regression_exceeded": "repeat_case_p95",
+        "repeat_stage_p95_regression_exceeded": "repeat_stage_p95",
+        "repeat_stage_p95_delta_missing": "repeat_stage_p95_missing",
         "repeat_ocr_total_p95_regression_exceeded": "repeat_ocr_p95",
         "repeat_ocr_total_p95_delta_missing": "repeat_ocr_p95_missing",
         "repeat_ocr_case_total_p95_regression_exceeded": "repeat_ocr_case_p95",
@@ -7142,6 +7233,17 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         if not isinstance(slug, str) or delta is None or budget is None:
             return ""
         return f"repeat case p95 {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_stage_p95_regression_exceeded":
+        stage = violation.get("stage")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_repeat_stage_p95_regression_s"))
+        if not isinstance(stage, str) or delta is None or budget is None:
+            return ""
+        return f"repeat stage {stage} p95 {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_stage_p95_delta_missing":
+        budget = parse_nonnegative_float(violation.get("max_repeat_stage_p95_regression_s"))
+        budget_text = f" budget {budget:.3f}s" if budget is not None else ""
+        return f"repeat stage p95 delta missing{budget_text}"
     if kind == "repeat_ocr_total_p95_regression_exceeded":
         delta = parse_signed_float(violation.get("delta_s"))
         budget = parse_nonnegative_float(violation.get("max_repeat_ocr_engine_total_p95_regression_s"))
