@@ -3578,11 +3578,26 @@ def stress_row_ocr_overlap_hidden_values(
     baseline_row: dict[str, Any],
     candidate_row: dict[str, Any],
 ) -> tuple[float, float] | None:
-    baseline_hidden = stress_row_ocr_overlap_hidden_value(baseline_row)
-    candidate_hidden = stress_row_ocr_overlap_hidden_value(candidate_row)
+    baseline_hidden = stress_row_ocr_overlap_hidden_comparison_value(baseline_row)
+    candidate_hidden = stress_row_ocr_overlap_hidden_comparison_value(candidate_row)
     if baseline_hidden is None or candidate_hidden is None:
         return None
     return baseline_hidden, candidate_hidden
+
+
+def stress_row_ocr_overlap_hidden_comparison_value(row: dict[str, Any]) -> float | None:
+    hidden_s = stress_row_ocr_overlap_hidden_value(row)
+    if hidden_s is not None:
+        return hidden_s
+    profile = row.get("ocr_engine_profile")
+    stages = row.get("stages")
+    if not isinstance(profile, dict) or not isinstance(stages, dict):
+        return None
+    ocr_total_s = parse_nonnegative_float(profile.get("total_s"))
+    stage_ocr_s = parse_nonnegative_float(stages.get("ocr"))
+    if ocr_total_s is None or stage_ocr_s is None:
+        return None
+    return 0.0
 
 
 def stress_row_ocr_overlap_hidden_value(row: dict[str, Any]) -> float | None:

@@ -18102,3 +18102,24 @@ with zero failures in 0.531s.
   `0.407226s`, repeat p95 `0.320s`, and baseline regression budget passed; the
   single shared bright-blue Waymo workload showed primary delta `+0.046s` and
   repeat delta `+0.088s`.
+- Rejected changing the bright-blue PP-OCRv5 warm sample side away from the
+  current `1000px` default. A current 10-row Waymo/bright-blue control at
+  `out/brightblue-warm1000-control-20260603` passed `10/10` with max primary
+  `0.360425s`, repeat p95 `0.297s`, prewarm `0.636s`, and the shared
+  `1400x1400 array det=256/max rec=en-ppocrv5 batch=12 min_area=2300` group at
+  `total_s=1.735s` primary / `3.138s` repeat. `608px` lowered prewarm to
+  `0.575s` but worsened max primary to `0.398455s`, primary OCR stage by
+  `+0.112s`, repeat p95 by `+0.015s`, and shared repeat workload by `+0.059s`.
+  `1200px` improved primary OCR and repeat workload slightly, but raised prewarm
+  to `0.712s` and failed the repeat hidden-overlap total regression budget
+  (`+0.116331s > 0.100s`). `1400px` raised prewarm further to `0.792s` and was
+  mixed, with repeat workload `+0.030s`. No runtime default changed. The probe
+  did expose a benchmark comparison false positive for rows where measured OCR
+  total is less than the visible `ocr` stage; row-level hidden-overlap deltas now
+  treat that as `0.0` instead of missing while summary totals still report only
+  positive hidden overlap. Focused hidden-overlap tests passed (`3 passed`), the
+  full stress benchmark module passed (`145 passed`), and full pytest passed
+  `729 passed, 31 subtests passed`. Recomputing the `1200px` comparison after
+  the fix removed the SVG row's spurious primary hidden-missing violation while
+  preserving the real repeat hidden-total violation, so `1200px` remains
+  rejected.

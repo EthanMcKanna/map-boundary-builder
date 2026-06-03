@@ -1473,6 +1473,44 @@ def test_baseline_primary_ocr_hidden_budget_flags_growth_without_latency_regress
     )
 
 
+def test_baseline_primary_ocr_hidden_budget_treats_measured_no_overlap_as_zero() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "hidden-cleared",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "ocr_overlap_hidden_s": 0.04,
+                "ocr_engine_profile": {"calls": 1, "total_s": 0.24},
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "hidden-cleared",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "stages": {"ocr": 0.25},
+                "ocr_engine_profile": {"calls": 1, "total_s": 0.24},
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_overlap_hidden_regression_s=0.025,
+    )
+
+    row_delta = comparison["latency_deltas"][0]
+    assert row_delta["baseline_ocr_overlap_hidden_s"] == 0.04
+    assert row_delta["candidate_ocr_overlap_hidden_s"] == 0.0
+    assert row_delta["ocr_overlap_hidden_delta_s"] == -0.04
+    assert comparison["regression_budget"]["passed"] is True
+    assert comparison["regression_budget"]["violations"] == []
+
+
 def test_baseline_repeat_ocr_hidden_total_budget_flags_masked_growth() -> None:
     baseline = {
         "rows": [
