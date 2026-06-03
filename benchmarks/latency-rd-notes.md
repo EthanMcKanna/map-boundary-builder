@@ -17126,3 +17126,19 @@ with zero failures in 0.531s.
   detector p95 `+0.036s`. Keep the non-SVG bright-blue detector limit at
   `256/max`; `min` makes the detector materially heavier without buying
   additional labels or output stability.
+- Added explicit OCR/extraction overlap accounting to stress summaries. Each
+  row now derives positive `ocr_overlap_hidden_s` from OCR engine total minus
+  the observed OCR-stage wait, summaries print aggregate hidden OCR time, and
+  primary slow-case / primary OCR slow-case lines include `hidden_ocr=...`.
+  Saved-report replay is also enriched from raw rows when older summaries lack
+  the field: replaying `out/ocr-context-full49-hard-20260603/stress-summary.json`
+  now shows `ocr overlap hidden: total=0.962s, max=0.073s@miami-waymo, rows=28`
+  plus hidden OCR on the Waymo primary tail (`dallas-waymo hidden_ocr=0.036s`,
+  `los-angeles-waymo hidden_ocr=0.067s`, `bay-area-waymo hidden_ocr=0.072s`).
+  A fresh focused real gate at `out/ocr-overlap-hidden-focused-20260603` passed
+  `2/2`, primary max `0.483s`, repeat p95 `0.335s`, repeat OCR p95 `0.299s`,
+  and printed hidden overlap `total=0.105s`, `max=0.067s@los-angeles-waymo`,
+  `rows=2`. Focused stress benchmark tests passed `109 passed in 0.42s`, the
+  full suite passed `685 passed, 31 subtests passed in 5.70s` with
+  `PYTHONPATH=.`, and `git diff --check` was clean. This is benchmark
+  feedback-loop reliability only; no runtime deploy is needed.

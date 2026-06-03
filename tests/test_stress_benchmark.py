@@ -259,6 +259,12 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
             "expectation_passed": 1,
             "statuses": {"complete": 1},
             "max_total_elapsed_s": 0.5,
+            "ocr_overlap_hidden_s": {
+                "rows": 2,
+                "total_s": 0.145,
+                "max_s": 0.12,
+                "max_slug": "dallas",
+            },
             "ocr_engine_stage_max_rows": {
                 "det_elapsed_s": {
                     "slug": "kept",
@@ -406,6 +412,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     output = capsys.readouterr().out
     assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
     assert "manifest contract budget: passed" in output
+    assert "ocr overlap hidden: total=0.145s, max=0.120s@dallas, rows=2" in output
     assert (
         "repeat slowest: kept#2=0.500s ocr_total=0.300s input=0.020s "
         "rec=0.120s kind=array conf_p50=88.2 conf_lt80=1"
@@ -548,7 +555,7 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
                 "expectation_passed": True,
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 0.5,
-                "stages": {"ocr": 0.4},
+                "stages": {"ocr": 0.1},
                 "ocr_engine_profile": {
                     "calls": 1,
                     "total_s": 0.3,
@@ -575,7 +582,9 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
     stress_module.print_stress_table(report)
 
     output = capsys.readouterr().out
-    assert "primary slowest cases: kept=0.500s ocr=0.400s ocr_total=0.300s" in output
+    assert "ocr overlap hidden: total=0.200s, max=0.200s@kept, rows=1" in output
+    assert "primary slowest cases: kept=0.500s ocr=0.100s ocr_total=0.300s" in output
+    assert "hidden_ocr=0.200s" in output
     assert "primary slowest cases: " in output and "kind=array" in output
     assert "repeat slowest: kept#1=0.500s ocr_total=0.300s input=0.020s rec=0.120s kind=array" in output
     assert "ocr engine max: " in output
@@ -1331,7 +1340,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
                         "raw_box_count": 4,
                         "selected_box_count": 3,
                     },
-                    "event_profile": {"total_elapsed_s": 0.7, "stage_elapsed_s": {"ocr": 0.6}},
+                    "event_profile": {"total_elapsed_s": 0.7, "stage_elapsed_s": {"ocr": 0.4}},
                 }
             ),
             stderr="map-boundary-builder: error",
@@ -1351,6 +1360,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
     assert row["status"] == "failed"
     assert row["expectation_passed"] is True
     assert row["ocr_engine_profile"]["det_elapsed_s"] == 0.2
+    assert row["ocr_overlap_hidden_s"] == 0.15
     assert report["summary"]["ocr_engine_profile"] == {
         "fixtures": 1,
         "calls": 1,
@@ -1360,6 +1370,12 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
         "total_s": 0.55,
         "raw_box_count": 4,
         "selected_box_count": 3,
+    }
+    assert report["summary"]["ocr_overlap_hidden_s"] == {
+        "rows": 1,
+        "total_s": 0.15,
+        "max_s": 0.15,
+        "max_slug": "profiled-map",
     }
     assert report["summary"]["ocr_engine_stage_max_rows"] == {
         "input_s": {
@@ -1394,6 +1410,7 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "input_s": 0.05,
             "rec_elapsed_s": 0.3,
             "det_elapsed_s": 0.2,
+            "overlap_hidden_s": 0.15,
             "dominant_stage": "rec",
             "dominant_stage_s": 0.3,
             "calls": 1,
@@ -1407,12 +1424,13 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "total_elapsed_s": 0.7,
             "observed_status": "failed",
             "expectation_passed": True,
-            "top_stage": {"stage": "ocr", "elapsed_s": 0.6},
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
             "ocr_engine": {
                 "input_s": 0.05,
                 "det_elapsed_s": 0.2,
                 "rec_elapsed_s": 0.3,
                 "total_s": 0.55,
+                "overlap_hidden_s": 0.15,
                 "calls": 1,
                 "raw_box_count": 4,
                 "selected_box_count": 3,
@@ -5271,6 +5289,7 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
         },
         {
             "slug": "slow",
+            "stages": {"ocr": 0.5},
             "ocr_engine_profile": {
                 "calls": 2,
                 "total_s": 0.62,
@@ -5319,6 +5338,7 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
             "input_s": 0.04,
             "rec_elapsed_s": 0.35,
             "det_elapsed_s": 0.18,
+            "overlap_hidden_s": 0.12,
             "dominant_stage": "rec",
             "dominant_stage_s": 0.35,
             "calls": 2,
@@ -5337,7 +5357,7 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
     ]
     assert (
         stress_module.primary_ocr_engine_slow_case_text(cases[0])
-        == "slow ocr=0.620s input=0.040s rec=0.350s det=0.180s dom=rec:0.350s "
+        == "slow ocr=0.620s input=0.040s rec=0.350s det=0.180s hidden_ocr=0.120s dom=rec:0.350s "
         "shape=1400x1400 kind=array det_limit=256/max rec_profile=en-ppocrv5 min_area=2300 "
         "selected=37 raw=44 labels=31 sel_lt1300=5 conf_lt90=4"
     )
@@ -5356,7 +5376,7 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
             "total_elapsed_s": 0.62,
             "observed_status": "complete",
             "expectation_passed": True,
-            "stages": {"ocr": 0.4, "georeference": 0.11},
+            "stages": {"ocr": 0.2, "georeference": 0.11},
             "ocr_engine_profile": {
                 "calls": 1,
                 "total_s": 0.36,
@@ -5379,12 +5399,13 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
             "total_elapsed_s": 0.62,
             "observed_status": "complete",
             "expectation_passed": True,
-            "top_stage": {"stage": "ocr", "elapsed_s": 0.4},
+            "top_stage": {"stage": "ocr", "elapsed_s": 0.2},
             "ocr_engine": {
                 "input_s": 0.02,
                 "det_elapsed_s": 0.17,
                 "rec_elapsed_s": 0.15,
                 "total_s": 0.36,
+                "overlap_hidden_s": 0.16,
                 "calls": 1,
                 "input_kind": "array",
                 "selected_box_count": 18,
@@ -5395,8 +5416,8 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
     ]
     assert (
         stress_module.primary_slow_case_text_from_summary(cases[0])
-        == "slow=0.620s ocr=0.400s ocr_total=0.360s input=0.020s rec=0.150s "
-        "det=0.170s dom=det:0.170s kind=array selected=18 sel_lt1300=3 conf_p50=98.2"
+        == "slow=0.620s ocr=0.200s ocr_total=0.360s input=0.020s rec=0.150s "
+        "det=0.170s hidden_ocr=0.160s dom=det:0.170s kind=array selected=18 sel_lt1300=3 conf_p50=98.2"
     )
 
 
@@ -5571,6 +5592,7 @@ def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 1.5,
                 "stages": {"ocr": 1.1, "extract": 0.2},
+                "ocr_engine_profile": {"total_s": 1.32},
                 "ocr_label_events": [
                     {"message": "Focused map labels read", "label_count": 2},
                     {"message": "Full-detail map labels read", "label_count": 12},
@@ -5591,6 +5613,12 @@ def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
     assert summary["stage_max_rows"] == {
         "extract": {"slug": "ann-arbor", "elapsed_s": 0.3},
         "ocr": {"slug": "bay-area", "elapsed_s": 1.1},
+    }
+    assert summary["ocr_overlap_hidden_s"] == {
+        "rows": 1,
+        "total_s": 0.22,
+        "max_s": 0.22,
+        "max_slug": "bay-area",
     }
 
 

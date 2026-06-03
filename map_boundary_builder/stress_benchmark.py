@@ -2034,6 +2034,9 @@ def row_from_process(
             "command": command,
         }
     )
+    ocr_hidden_s = ocr_overlap_hidden_seconds(row)
+    if ocr_hidden_s is not None:
+        row["ocr_overlap_hidden_s"] = ocr_hidden_s
     return row
 
 
@@ -2619,9 +2622,32 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(rows),
         "ocr_engine_slowest_cases": primary_ocr_engine_slowest_cases(rows),
         "slowest_cases": primary_slowest_cases_from_rows(rows),
+        "ocr_overlap_hidden_s": summarize_ocr_overlap_hidden(rows),
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
+    }
+
+
+def summarize_ocr_overlap_hidden(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    measured: list[tuple[float, str]] = []
+    for row in rows:
+        hidden_s = row.get("ocr_overlap_hidden_s")
+        if hidden_s is None:
+            hidden_s = ocr_overlap_hidden_seconds(row)
+        hidden = parse_nonnegative_float(hidden_s)
+        if hidden is None:
+            continue
+        measured.append((hidden, str(row.get("slug") or "")))
+    if not measured:
+        return None
+    total_s = sum(value for value, _slug in measured)
+    max_s, max_slug = max(measured, key=lambda item: (item[0], item[1]))
+    return {
+        "rows": len(measured),
+        "total_s": round(total_s, 6),
+        "max_s": round(max_s, 6),
+        "max_slug": max_slug or None,
     }
 
 
@@ -2742,6 +2768,12 @@ def primary_ocr_engine_slowest_case_summary(
         elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
         if elapsed_s is not None:
             result[key] = round(elapsed_s, 6)
+    hidden_s = row.get("ocr_overlap_hidden_s")
+    if hidden_s is None:
+        hidden_s = ocr_overlap_hidden_seconds(row)
+    hidden = parse_nonnegative_float(hidden_s)
+    if hidden is not None:
+        result["overlap_hidden_s"] = round(hidden, 6)
     add_ocr_engine_dominant_stage_summary(
         result,
         OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS,
@@ -3284,6 +3316,12 @@ def slowest_sample_ocr_engine_summary(sample: dict[str, Any]) -> dict[str, Any]:
         elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
         if elapsed_s is not None:
             summary[key] = round(elapsed_s, 6)
+    hidden_s = sample.get("ocr_overlap_hidden_s")
+    if hidden_s is None:
+        hidden_s = ocr_overlap_hidden_seconds(sample)
+    hidden = parse_nonnegative_float(hidden_s)
+    if hidden is not None:
+        summary["overlap_hidden_s"] = round(hidden, 6)
     calls = ocr_engine_profile.get("calls")
     if isinstance(calls, int):
         summary["calls"] = calls
@@ -4209,6 +4247,21 @@ def parse_nonnegative_float(value: Any) -> float | None:
     return parsed if parsed >= 0.0 else None
 
 
+def ocr_overlap_hidden_seconds(row: dict[str, Any]) -> float | None:
+    profile = row.get("ocr_engine_profile")
+    stages = row.get("stages")
+    if not isinstance(profile, dict) or not isinstance(stages, dict):
+        return None
+    ocr_total_s = parse_nonnegative_float(profile.get("total_s"))
+    stage_ocr_s = parse_nonnegative_float(stages.get("ocr"))
+    if ocr_total_s is None or stage_ocr_s is None:
+        return None
+    hidden_s = ocr_total_s - stage_ocr_s
+    if hidden_s <= 0.0:
+        return None
+    return round(hidden_s, 6)
+
+
 def primary_slowest_cases_include_input_kind(cases: list[dict[str, Any]]) -> bool:
     for case in cases:
         ocr_engine = case.get("ocr_engine")
@@ -4217,8 +4270,20 @@ def primary_slowest_cases_include_input_kind(cases: list[dict[str, Any]]) -> boo
     return False
 
 
+def primary_slowest_cases_include_overlap_hidden(cases: list[dict[str, Any]]) -> bool:
+    for case in cases:
+        ocr_engine = case.get("ocr_engine")
+        if isinstance(ocr_engine, dict) and parse_nonnegative_float(ocr_engine.get("overlap_hidden_s")) is not None:
+            return True
+    return False
+
+
 def primary_ocr_engine_slowest_cases_include_input_kind(cases: list[dict[str, Any]]) -> bool:
     return any(isinstance(case.get("input_kind"), str) for case in cases)
+
+
+def primary_ocr_engine_slowest_cases_include_overlap_hidden(cases: list[dict[str, Any]]) -> bool:
+    return any(parse_nonnegative_float(case.get("overlap_hidden_s")) is not None for case in cases)
 
 
 def repeat_profile_slowest_samples_include_input_kind(samples: list[dict[str, Any]]) -> bool:
@@ -4451,16 +4516,33 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"{stage}={row['elapsed_s']:.3f}s@{row['slug']}" for stage, row in summary["stage_max_rows"].items()
         )
         print(f"stage max: {stage_max_text}")
-    primary_slowest_cases = summary.get("slowest_cases")
     rows = report.get("rows")
+    ocr_overlap_hidden = summary.get("ocr_overlap_hidden_s")
+    if not isinstance(ocr_overlap_hidden, dict) and isinstance(rows, list):
+        ocr_overlap_hidden = summarize_ocr_overlap_hidden(rows)
+    if isinstance(ocr_overlap_hidden, dict):
+        hidden_total = parse_nonnegative_float(ocr_overlap_hidden.get("total_s"))
+        hidden_max = parse_nonnegative_float(ocr_overlap_hidden.get("max_s"))
+        hidden_rows = ocr_overlap_hidden.get("rows")
+        hidden_slug = ocr_overlap_hidden.get("max_slug")
+        if hidden_total is not None and hidden_max is not None and isinstance(hidden_rows, int):
+            suffix = f"@{hidden_slug}" if isinstance(hidden_slug, str) and hidden_slug else ""
+            print(
+                "ocr overlap hidden: "
+                f"total={hidden_total:.3f}s, max={hidden_max:.3f}s{suffix}, rows={hidden_rows}"
+            )
+    primary_slowest_cases = summary.get("slowest_cases")
     if not isinstance(primary_slowest_cases, list):
         primary_slowest_cases = primary_slowest_cases_from_rows(rows) if isinstance(rows, list) else []
-    elif (
-        not primary_slowest_cases_include_input_kind(primary_slowest_cases)
-        and isinstance(rows, list)
-    ):
+    elif isinstance(rows, list):
         enriched_primary_slowest_cases = primary_slowest_cases_from_rows(rows)
-        if primary_slowest_cases_include_input_kind(enriched_primary_slowest_cases):
+        if (
+            not primary_slowest_cases_include_input_kind(primary_slowest_cases)
+            and primary_slowest_cases_include_input_kind(enriched_primary_slowest_cases)
+        ) or (
+            not primary_slowest_cases_include_overlap_hidden(primary_slowest_cases)
+            and primary_slowest_cases_include_overlap_hidden(enriched_primary_slowest_cases)
+        ):
             primary_slowest_cases = enriched_primary_slowest_cases
     if primary_slowest_cases:
         primary_slow_case_text = ", ".join(
@@ -4510,12 +4592,15 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_ocr_slowest_cases = (
             primary_ocr_engine_slowest_cases(rows) if isinstance(rows, list) else []
         )
-    elif (
-        not primary_ocr_engine_slowest_cases_include_input_kind(primary_ocr_slowest_cases)
-        and isinstance(rows, list)
-    ):
+    elif isinstance(rows, list):
         enriched_primary_ocr_slowest_cases = primary_ocr_engine_slowest_cases(rows)
-        if primary_ocr_engine_slowest_cases_include_input_kind(enriched_primary_ocr_slowest_cases):
+        if (
+            not primary_ocr_engine_slowest_cases_include_input_kind(primary_ocr_slowest_cases)
+            and primary_ocr_engine_slowest_cases_include_input_kind(enriched_primary_ocr_slowest_cases)
+        ) or (
+            not primary_ocr_engine_slowest_cases_include_overlap_hidden(primary_ocr_slowest_cases)
+            and primary_ocr_engine_slowest_cases_include_overlap_hidden(enriched_primary_ocr_slowest_cases)
+        ):
             primary_ocr_slowest_cases = enriched_primary_ocr_slowest_cases
     if primary_ocr_slowest_cases:
         primary_ocr_slow_case_text = ", ".join(
@@ -4823,6 +4908,7 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
         total_elapsed_s = parse_nonnegative_float(ocr_engine.get("total_s"))
         input_elapsed_s = parse_nonnegative_float(ocr_engine.get("input_s"))
         rec_elapsed_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
+        hidden_s = parse_nonnegative_float(ocr_engine.get("overlap_hidden_s"))
         parts = []
         if total_elapsed_s is not None:
             parts.append(f"ocr_total={total_elapsed_s:.3f}s")
@@ -4830,6 +4916,8 @@ def repeat_profile_slow_sample_text(sample: dict[str, Any]) -> str:
             parts.append(f"input={input_elapsed_s:.3f}s")
         if rec_elapsed_s is not None:
             parts.append(f"rec={rec_elapsed_s:.3f}s")
+        if hidden_s is not None:
+            parts.append(f"hidden_ocr={hidden_s:.3f}s")
         input_kind = ocr_engine.get("input_kind")
         if isinstance(input_kind, str) and input_kind:
             parts.append(f"kind={input_kind}")
@@ -4916,6 +5004,7 @@ def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     input_s = parse_nonnegative_float(case.get("input_s"))
     rec_s = parse_nonnegative_float(case.get("rec_elapsed_s"))
     det_s = parse_nonnegative_float(case.get("det_elapsed_s"))
+    hidden_s = parse_nonnegative_float(case.get("overlap_hidden_s"))
     parts = [str(slug)]
     if total_s is not None:
         parts.append(f"ocr={total_s:.3f}s")
@@ -4925,6 +5014,8 @@ def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"rec={rec_s:.3f}s")
     if det_s is not None:
         parts.append(f"det={det_s:.3f}s")
+    if hidden_s is not None:
+        parts.append(f"hidden_ocr={hidden_s:.3f}s")
     dominant_text = ocr_engine_dominant_stage_text(case.get("dominant_stage"), case.get("dominant_stage_s"))
     if dominant_text is None:
         dominant = ocr_engine_dominant_stage(case, OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS)
@@ -4986,6 +5077,7 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
         input_s = parse_nonnegative_float(ocr_engine.get("input_s"))
         rec_s = parse_nonnegative_float(ocr_engine.get("rec_elapsed_s"))
         det_s = parse_nonnegative_float(ocr_engine.get("det_elapsed_s"))
+        hidden_s = parse_nonnegative_float(ocr_engine.get("overlap_hidden_s"))
         selected_count = ocr_engine.get("selected_box_count")
         selected_lt_1300 = ocr_engine.get("selected_box_area_lt_1300_count")
         confidence_p50 = parse_nonnegative_float(ocr_engine.get("label_confidence_p50"))
@@ -4997,6 +5089,8 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
             parts.append(f"rec={rec_s:.3f}s")
         if det_s is not None:
             parts.append(f"det={det_s:.3f}s")
+        if hidden_s is not None:
+            parts.append(f"hidden_ocr={hidden_s:.3f}s")
         dominant = ocr_engine_dominant_stage(
             ocr_engine,
             OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS,
