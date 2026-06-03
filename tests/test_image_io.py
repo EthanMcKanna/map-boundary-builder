@@ -245,6 +245,35 @@ class SvgImageIoTests(unittest.TestCase):
         self.assertIsNot(first, second)
         self.assertIsNot(first["resvg_py"], second["resvg_py"])
 
+    def test_svg_rasterizer_diagnostics_retries_failed_probe(self) -> None:
+        png_bytes = png_fixture_bytes((4, 3), rect=(1, 1, 3, 2))
+        calls: list[str] = []
+        fail_resvg_once = True
+        svg_rasterizer_diagnostics.cache_clear()
+        self.addCleanup(svg_rasterizer_diagnostics.cache_clear)
+
+        def fake_import_module(name: str):
+            nonlocal fail_resvg_once
+            calls.append(name)
+            if name == "cairosvg":
+                raise OSError("libcairo missing")
+            if name == "resvg_py":
+                if fail_resvg_once:
+                    fail_resvg_once = False
+                    raise RuntimeError("transient resvg failure")
+                return SimpleNamespace(svg_to_bytes=lambda **_kwargs: png_bytes)
+            raise AssertionError(name)
+
+        with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
+            first = svg_rasterizer_diagnostics()
+            second = svg_rasterizer_diagnostics()
+
+        self.assertEqual(calls, ["cairosvg", "resvg_py", "cairosvg", "resvg_py"])
+        self.assertFalse(first["ok"])
+        self.assertIsNone(first["preferred"])
+        self.assertTrue(second["ok"])
+        self.assertEqual(second["preferred"], "resvg-py")
+
     def test_transparent_png_is_composited_before_processing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)

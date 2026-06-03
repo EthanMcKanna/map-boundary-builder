@@ -181,7 +181,10 @@ def rasterize_svg_with_resvg(
 
 
 def svg_rasterizer_diagnostics() -> dict[str, Any]:
-    return deepcopy(_svg_rasterizer_diagnostics_cached())
+    diagnostics = deepcopy(_svg_rasterizer_diagnostics_cached())
+    if diagnostics.get("ok") is not True:
+        _svg_rasterizer_diagnostics_cached.cache_clear()
+    return diagnostics
 
 
 @lru_cache(maxsize=1)

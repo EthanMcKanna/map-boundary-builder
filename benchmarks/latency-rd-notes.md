@@ -16371,3 +16371,21 @@ with zero failures in 0.531s.
   two-call smoke showed the first diagnostic call at `0.094830s` and the cached
   second call at `0.000004s`, with the same `ok=true` / `preferred=resvg-py`
   result. This is a small production health-path latency/reliability change.
+- Rejected broad bright-blue focused OCR as a fallback speed path. A narrow
+  Nashville-only monkeypatch that enabled focus cropping for bright-blue passed,
+  but it was not materially better than the matched default control
+  (`repeat OCR-engine p95 0.146s` vs `0.161s`, same `14/11/11/11` OCR counts).
+  Expanding the temporary focus crop threshold to `0.50` for eight ordinary
+  Waymo OCR rows failed `5/8` expectations at
+  `out/brightblue-focus-ratio050-20260603`: Bay Area and Miami bbox drifted,
+  Houston/Orlando/Miami needed full-detail OCR retries, and several rows broke
+  OCR count ceilings despite repeat samples staying subsecond. Keep bright-blue
+  fallback OCR on the full map unless a more selective crop proves no label or
+  bbox regression.
+- Made the cached SVG rasterizer diagnostics retryable after unhealthy probes:
+  successful diagnostics remain cached, but an `ok=false` result clears the
+  one-entry cache so a transient optional-library failure does not poison later
+  health checks in the same process. Validation passed with `git diff --check`,
+  focused image/API tests (`105 passed in 0.73s`), a real healthy-cache smoke
+  (`0.115949s` then `0.000005s`), and the full suite (`654 passed, 31 subtests
+  passed in 7.03s`). This is a production health-path reliability hardening.
