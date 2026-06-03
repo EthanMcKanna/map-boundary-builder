@@ -17359,3 +17359,21 @@ with zero failures in 0.531s.
   `robotaxi-austin +0.027985s`, and the best repeat OCR case was
   `grand-rapids-may-mobility -0.038167s`. This is benchmark acceptance
   reliability only.
+- Added repeat-profile case coverage to baseline comparisons so the stricter
+  per-case repeat p95 and repeat OCR p95 guards cannot silently compare fewer
+  slugs when a saved repeat profile is incomplete. The comparator now stores
+  `repeat_profile_case_expected_rows`, `repeat_profile_case_compared_rows`, and
+  missing repeat-case slugs on each side; the existing
+  `--fail-on-baseline-coverage-gap` gate now treats those missing repeat-case
+  slugs as coverage gaps, and printed baseline summaries show the repeat-case
+  coverage count when it is incomplete. Because default comparison semantics
+  changed, hard/focused preset metadata moved to v9/v8. Focused stress tests
+  passed (`127 passed in 0.34s`) and the full suite passed (`703 passed, 31
+  subtests passed in 5.63s`). The fresh v9 baseline at
+  `out/current-v9-full49-hard-20260603` passed `49/49` expectations with
+  primary max `0.519691s`, repeat analyzed samples `98`, and repeat p95
+  `0.307056s`. The same-version comparison at
+  `out/repeat-case-coverage-current-v9-20260603` passed the regression budget
+  with primary max `0.503267s`, repeat p95 `0.296989s`, and repeat-profile
+  case coverage `49/49` with no missing baseline or candidate repeat cases.
+  This is benchmark acceptance reliability only.

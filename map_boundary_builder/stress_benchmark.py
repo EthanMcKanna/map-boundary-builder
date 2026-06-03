@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 8
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 9
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 7
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 8
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -986,7 +986,25 @@ def compare_stress_reports(
     repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
     if repeat_delta is not None:
         comparison["repeat_profile_delta"] = repeat_delta
-    repeat_case_deltas = stress_repeat_profile_case_deltas(baseline_report, candidate_report)
+    repeat_case_coverage = stress_repeat_profile_case_coverage(
+        baseline_report,
+        candidate_report,
+        compared_slugs,
+    )
+    if repeat_case_coverage is not None:
+        comparison["repeat_profile_case_expected_rows"] = repeat_case_coverage["expected_rows"]
+        comparison["repeat_profile_case_compared_rows"] = repeat_case_coverage["compared_rows"]
+        comparison["repeat_profile_case_missing_in_baseline"] = repeat_case_coverage[
+            "missing_in_baseline"
+        ]
+        comparison["repeat_profile_case_missing_in_candidate"] = repeat_case_coverage[
+            "missing_in_candidate"
+        ]
+    repeat_case_deltas = stress_repeat_profile_case_deltas(
+        baseline_report,
+        candidate_report,
+        slugs=compared_slugs,
+    )
     if repeat_case_deltas:
         comparison["repeat_profile_case_deltas"] = repeat_case_deltas
         comparison["largest_repeat_profile_case_p95_regressions"] = ranked_repeat_profile_case_deltas(
@@ -1341,13 +1359,20 @@ def stress_repeat_profile_delta(
 def stress_repeat_profile_case_deltas(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     baseline_cases = stress_report_repeat_profile_cases(baseline_report)
     candidate_cases = stress_report_repeat_profile_cases(candidate_report)
     if baseline_cases is None or candidate_cases is None:
         return []
     deltas: list[dict[str, Any]] = []
-    for slug in sorted(set(baseline_cases) & set(candidate_cases)):
+    compared_slugs = (
+        [slug for slug in slugs if slug in baseline_cases and slug in candidate_cases]
+        if slugs is not None
+        else sorted(set(baseline_cases) & set(candidate_cases))
+    )
+    for slug in compared_slugs:
         baseline_case = baseline_cases[slug]
         candidate_case = candidate_cases[slug]
         delta: dict[str, Any] = {"slug": slug}
@@ -1376,6 +1401,32 @@ def stress_repeat_profile_case_deltas(
         if len(delta) > 1:
             deltas.append(delta)
     return deltas
+
+
+def stress_repeat_profile_case_coverage(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    compared_slugs: list[str],
+) -> dict[str, Any] | None:
+    baseline_cases = stress_report_repeat_profile_cases(baseline_report)
+    candidate_cases = stress_report_repeat_profile_cases(candidate_report)
+    if baseline_cases is None and candidate_cases is None:
+        return None
+    baseline_case_slugs = set(baseline_cases or {})
+    candidate_case_slugs = set(candidate_cases or {})
+    missing_in_baseline = sorted(slug for slug in compared_slugs if slug not in baseline_case_slugs)
+    missing_in_candidate = sorted(slug for slug in compared_slugs if slug not in candidate_case_slugs)
+    compared_case_slugs = [
+        slug
+        for slug in compared_slugs
+        if slug in baseline_case_slugs and slug in candidate_case_slugs
+    ]
+    return {
+        "expected_rows": len(compared_slugs),
+        "compared_rows": len(compared_case_slugs),
+        "missing_in_baseline": missing_in_baseline,
+        "missing_in_candidate": missing_in_candidate,
+    }
 
 
 def stress_report_repeat_profile_cases(report: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -3938,6 +3989,24 @@ def baseline_comparison_coverage_gaps(report: dict[str, Any]) -> list[dict[str, 
         slugs = [str(slug) for slug in missing_in_candidate if isinstance(slug, (str, int))]
         if slugs:
             gaps.append({"kind": "missing_in_candidate", "slugs": slugs})
+    repeat_case_missing_in_baseline = comparison.get("repeat_profile_case_missing_in_baseline")
+    if isinstance(repeat_case_missing_in_baseline, list):
+        slugs = [
+            str(slug)
+            for slug in repeat_case_missing_in_baseline
+            if isinstance(slug, (str, int))
+        ]
+        if slugs:
+            gaps.append({"kind": "repeat_profile_case_missing_in_baseline", "slugs": slugs})
+    repeat_case_missing_in_candidate = comparison.get("repeat_profile_case_missing_in_candidate")
+    if isinstance(repeat_case_missing_in_candidate, list):
+        slugs = [
+            str(slug)
+            for slug in repeat_case_missing_in_candidate
+            if isinstance(slug, (str, int))
+        ]
+        if slugs:
+            gaps.append({"kind": "repeat_profile_case_missing_in_candidate", "slugs": slugs})
     compared_rows = comparison.get("compared_rows")
     if isinstance(compared_rows, int) and compared_rows <= 0:
         gaps.append({"kind": "no_compared_rows"})
@@ -5030,6 +5099,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             if isinstance(median_delta, (int, float))
             else ""
         )
+        repeat_case_coverage_text = baseline_repeat_case_coverage_text(baseline_comparison)
         signature_field_counts_text = baseline_signature_field_counts_text(baseline_comparison)
         print(
             "baseline comparison: "
@@ -5038,6 +5108,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"missing_baseline={missing_baseline_count}, "
             f"missing_candidate={missing_candidate_count}"
             f"{baseline_out_of_scope_text}"
+            f"{repeat_case_coverage_text}"
             f"{median_delta_text}"
             f"{signature_field_counts_text}"
         )
@@ -5860,6 +5931,37 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
         if value is not None:
             parts.append(f"{label}={formatter.format(value)}")
     return ", ".join(parts)
+
+
+def baseline_repeat_case_coverage_text(baseline_comparison: dict[str, Any]) -> str:
+    missing_baseline = baseline_comparison.get("repeat_profile_case_missing_in_baseline")
+    missing_candidate = baseline_comparison.get("repeat_profile_case_missing_in_candidate")
+    compared_rows = parse_nonnegative_int(
+        baseline_comparison.get("repeat_profile_case_compared_rows")
+    )
+    expected_rows = parse_nonnegative_int(
+        baseline_comparison.get("repeat_profile_case_expected_rows")
+    )
+    missing_baseline_count = (
+        len(missing_baseline) if isinstance(missing_baseline, list) else 0
+    )
+    missing_candidate_count = (
+        len(missing_candidate) if isinstance(missing_candidate, list) else 0
+    )
+    if (
+        not missing_baseline_count
+        and not missing_candidate_count
+        and (compared_rows is None or expected_rows is None or compared_rows == expected_rows)
+    ):
+        return ""
+    parts: list[str] = []
+    if compared_rows is not None and expected_rows is not None:
+        parts.append(f"repeat_case_compared={compared_rows}/{expected_rows}")
+    if missing_baseline_count:
+        parts.append(f"repeat_case_missing_baseline={missing_baseline_count}")
+    if missing_candidate_count:
+        parts.append(f"repeat_case_missing_candidate={missing_candidate_count}")
+    return ", " + ", ".join(parts) if parts else ""
 
 
 def baseline_repeat_case_delta_text(baseline_comparison: dict[str, Any]) -> str:
