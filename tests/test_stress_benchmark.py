@@ -3906,19 +3906,19 @@ def test_real_screenshot_manifest_preserves_ocr_contract_coverage() -> None:
     contracts = stress_module.summarize_manifest_contracts(manifest["cases"])
     budget = stress_module.build_manifest_contract_budget_summary(
         contracts,
-        min_ocr_call_contract_rows=49,
-        min_ocr_count_contract_rows=38,
+        min_ocr_call_contract_rows=50,
+        min_ocr_count_contract_rows=39,
         max_positive_ocr_call_only_rows=0,
         fail_on_invalid_ocr_count_contracts=True,
     )
 
-    assert contracts["total_cases"] == 49
+    assert contracts["total_cases"] == 50
     assert contracts["ocr_call_contract_rows"] == contracts["total_cases"]
     assert contracts["ocr_call_contract_missing_rows"] == []
-    assert contracts["ocr_positive_call_contract_rows"] == 38
+    assert contracts["ocr_positive_call_contract_rows"] == 39
     assert contracts["ocr_zero_call_contract_rows"] == 11
     assert contracts["ocr_count_contract_rows"] == contracts["ocr_positive_call_contract_rows"]
-    assert len(contracts["ocr_count_contract_slugs"]) == 38
+    assert len(contracts["ocr_count_contract_slugs"]) == 39
     assert contracts["ocr_positive_call_rows_without_count_contract"] == []
     assert contracts["invalid_ocr_count_contract_rows"] == []
     assert budget["passed"] is True
@@ -6397,22 +6397,22 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         }
         assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
         assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
-        assert kwargs["min_ocr_call_contract_rows"] == 49
-        assert kwargs["min_ocr_count_contract_rows"] == 38
+        assert kwargs["min_ocr_call_contract_rows"] == 50
+        assert kwargs["min_ocr_count_contract_rows"] == 39
         assert kwargs["max_positive_ocr_call_only_rows"] == 0
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 12,
+            "version": 13,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
             "manifest_contracts": {
-                "total_cases": 49,
-                "ocr_call_contract_rows": 49,
-                "ocr_positive_call_contract_rows": 38,
+                "total_cases": 50,
+                "ocr_call_contract_rows": 50,
+                "ocr_positive_call_contract_rows": 39,
                 "ocr_zero_call_contract_rows": 11,
-                "ocr_count_contract_rows": 38,
+                "ocr_count_contract_rows": 39,
                 "ocr_positive_call_rows_without_count_contract": [],
             },
             "manifest_contract_budget": {
@@ -6420,19 +6420,19 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
                 "violations": [],
             },
             "summary": {
-                "total": 49,
-                "expectation_passed": 49,
+                "total": 50,
+                "expectation_passed": 50,
                 "unexpected": [],
-                "statuses": {"complete": 38, "failed": 11},
+                "statuses": {"complete": 39, "failed": 11},
                 "max_total_elapsed_s": 0.6,
             },
             "rows": [],
             "repeat_profile": {
                 "summary": {
-                    "analyzed_samples": 98,
-                    "expectation_passed_samples": 98,
+                    "analyzed_samples": 100,
+                    "expectation_passed_samples": 100,
                     "unexpected_samples": 0,
-                    "subsecond_samples": 98,
+                    "subsecond_samples": 100,
                     "median_total_elapsed_s": 0.42,
                     "p95_total_elapsed_s": 0.47,
                     "max_total_elapsed_s": 0.51,

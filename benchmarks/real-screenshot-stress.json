@@ -31,6 +31,34 @@
       }
     },
     {
+      "slug": "ann-arbor-may-mobility-avif-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Ann Arbor",
+        "min_control_points": 3,
+        "min_ocr_labels": 16,
+        "min_combined_confidence": 0.8,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 17,
+          "selected_box_count": 14,
+          "result_count": 14,
+          "label_count": 14,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 3
+        },
+        "bbox_approx": [-83.7511022, 42.2636441, -83.7308241, 42.2879191],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "grand-rapids-may-mobility",
       "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
       "no_catalog": true,

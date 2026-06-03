@@ -17811,3 +17811,23 @@ with zero failures in 0.531s.
   hidden-overlap budget passed the regression budget and showed prewarm total
   `0.654165s -> 0.634087s` and RapidOCR warm `0.615736s -> 0.591502s`. Full
   suite passed (`720 passed, 31 subtests passed in 6.08s`).
+- Added a production-default Ann Arbor stress row after the live cache-miss
+  smoke on `pipeline-6f85eae219b0f754` showed the UI path still matters as a
+  distinct guard from the existing forced no-catalog row. The live run
+  `1780504111-02afa2ef` was a raw cache miss with the default catalog-enabled
+  request shape, completed through `ocr-georeference:nominatim-label-fit`, and
+  captured the focused OCR key (`input_shape=[550,216]`, detector `320`, rec
+  batch `8`) but remained production-runtime bound at `build_boundary_s=1.351899`
+  with stage timings `inspect=0.211618`, `extract=0.427503`, `ocr=0.432681`,
+  `georeference=0.196530`. A local fresh-cache/network-blocked focused gate
+  using the same image with `no_catalog=false` passed at
+  `out/ann-arbor-ui-default-20260603`: primary `0.186696s`, extract `0.068585s`,
+  OCR `0.096044s`, georeference `0.014488s`, repeat p95 `0.170s`, source
+  `ocr-georeference:nominatim-label-fit`, city `Ann Arbor`, and one focused OCR
+  call. The real-screenshot hard-gate preset is bumped to v13 with manifest OCR
+  contract coverage `50/50` and count-contract coverage `39/39`. The expanded
+  full hard gate at `out/full50-ui-default-hard-20260603` passed `50/50`,
+  statuses `{"complete":39,"failed":11}`, max primary `0.328553s`, repeat p95
+  `0.277s`, repeat max `0.295s`, prewarm `0.618s`, and the new UI-default Ann
+  Arbor row completed at `0.170s`. This is acceptance-surface hardening only,
+  not a runtime-code speed change.
