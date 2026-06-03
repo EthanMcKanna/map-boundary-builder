@@ -16303,3 +16303,17 @@ with zero failures in 0.531s.
   to `6.945s` and many timing budgets failed. The full suite passed `651` tests
   plus `31` subtests. This is a stress-manifest reliability change only; no
   runtime deploy is needed.
+- Completed OCR count-contract coverage for every OCR-dependent real-screenshot
+  stress row. The remaining `18` positive rows with `max_ocr_engine_calls=1`
+  now also cap raw/selected/result/label counts and low-confidence label counts,
+  using maxima from the latest clean hard-gate artifact's primary and repeat
+  profiles. A coverage check over `benchmarks/real-screenshot-stress.json`
+  reported `call_rows=38`, `count_rows=38`, and `call_only=0`. Focused
+  validation at `out/positive-ocr-count-contracts-20260603` confirmed
+  `count-capped=18/18`, `positive-call-only=0`, and no count-related
+  expectation issues, but is rejected as latency evidence because local profiled
+  OCR timing was noisy. The contract-only rerun at
+  `out/positive-ocr-count-contracts-contractonly-20260603` exited cleanly with
+  `18/18` count-capped rows, zero positive-call-only rows, and the manifest
+  contract budget passed. This is another stress-manifest reliability change
+  only; no runtime deploy is needed.
