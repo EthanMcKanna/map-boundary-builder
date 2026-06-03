@@ -1395,6 +1395,101 @@ def test_baseline_repeat_ocr_budget_flags_stage_p95_without_total_regression() -
     )
 
 
+def test_baseline_repeat_max_budget_flags_outlier_without_p95_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.5,
+                "max_total_elapsed_s": 0.55,
+            },
+            "cases": {
+                "case-only": {
+                    "p95_total_elapsed_s": 0.5,
+                    "max_total_elapsed_s": 0.55,
+                }
+            },
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.49,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.49,
+                "max_total_elapsed_s": 0.64,
+            },
+            "cases": {
+                "case-only": {
+                    "p95_total_elapsed_s": 0.49,
+                    "max_total_elapsed_s": 0.64,
+                }
+            },
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_p95_regression_s=0.05,
+        max_repeat_max_regression_s=0.05,
+    )
+
+    assert comparison["repeat_profile_delta"]["duration_s"]["p95_total_elapsed_s"][
+        "delta_s"
+    ] == -0.01
+    assert comparison["repeat_profile_delta"]["duration_s"]["max_total_elapsed_s"][
+        "delta_s"
+    ] == 0.09
+    assert comparison["repeat_profile_case_deltas"][0]["duration_s"][
+        "p95_total_elapsed_s"
+    ]["delta_s"] == -0.01
+    assert comparison["repeat_profile_case_deltas"][0]["duration_s"][
+        "max_total_elapsed_s"
+    ]["delta_s"] == 0.09
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "repeat_profile_max_regression_exceeded",
+            "delta_s": 0.09,
+            "max_repeat_max_regression_s": 0.05,
+            "baseline_max_total_elapsed_s": 0.55,
+            "candidate_max_total_elapsed_s": 0.64,
+        },
+        {
+            "kind": "repeat_profile_case_max_regression_exceeded",
+            "slug": "case-only",
+            "delta_s": 0.09,
+            "max_repeat_max_regression_s": 0.05,
+            "baseline_max_total_elapsed_s": 0.55,
+            "candidate_max_total_elapsed_s": 0.64,
+        },
+    ]
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "repeat max +0.090s > budget 0.050s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][1]
+        )
+        == "repeat case max case-only +0.090s > budget 0.050s"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> None:
     baseline = {
         "rows": [
@@ -2445,6 +2540,17 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
                 "max_repeat_p95_regression_s": 0.02,
             },
             {
+                "kind": "repeat_profile_max_regression_exceeded",
+                "delta_s": 0.13,
+                "max_repeat_max_regression_s": 0.03,
+            },
+            {
+                "kind": "repeat_profile_case_max_regression_exceeded",
+                "slug": "case-max-slow",
+                "delta_s": 0.11,
+                "max_repeat_max_regression_s": 0.03,
+            },
+            {
                 "kind": "repeat_stage_p95_regression_exceeded",
                 "stage": "ocr",
                 "delta_s": 0.06,
@@ -2484,7 +2590,7 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         ]
     )
 
-    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=13)
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=15)
     sample_kinds = [sample["kind"] for sample in samples]
 
     assert sample_kinds == [
@@ -2495,6 +2601,8 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         "primary_stage_row_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
         "repeat_profile_case_p95_regression_exceeded",
+        "repeat_profile_max_regression_exceeded",
+        "repeat_profile_case_max_regression_exceeded",
         "repeat_stage_p95_regression_exceeded",
         "repeat_stage_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
@@ -2505,7 +2613,8 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
     assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
         " by_kind=primary:6,primary_ocr:1,primary_ocr_stage:1,"
         "primary_stage:1,primary_stage_row:1,"
-        "repeat_p95:1,repeat_case_p95:1,repeat_stage_p95:1,repeat_stage_case_p95:1,"
+        "repeat_p95:1,repeat_case_p95:1,repeat_max:1,repeat_case_max:1,"
+        "repeat_stage_p95:1,repeat_stage_case_p95:1,"
         "repeat_ocr_p95:1,repeat_ocr_stage_p95:1,"
         "repeat_ocr_case_p95:1,repeat_ocr_case_stage_p95:1"
     )
@@ -2519,22 +2628,30 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[12])
-        == "repeat stage ocr p95 +0.060s > budget 0.020s"
+        == "repeat max +0.130s > budget 0.030s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[13])
-        == "repeat stage case p95 stage-case-slow georeference +0.050s > budget 0.020s"
+        == "repeat case max case-max-slow +0.110s > budget 0.030s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[14])
+        == "repeat stage ocr p95 +0.060s > budget 0.020s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[15])
-        == "repeat ocr stage rec p95 +0.060s > budget 0.010s"
-    )
-    assert (
-        stress_module.baseline_regression_budget_violation_text(violations[16])
-        == "repeat ocr case p95 ocr-case-slow +0.070s > budget 0.010s"
+        == "repeat stage case p95 stage-case-slow georeference +0.050s > budget 0.020s"
     )
     assert (
         stress_module.baseline_regression_budget_violation_text(violations[17])
+        == "repeat ocr stage rec p95 +0.060s > budget 0.010s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[18])
+        == "repeat ocr case p95 ocr-case-slow +0.070s > budget 0.010s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[19])
         == "repeat ocr case stage p95 ocr-case-stage-slow det +0.080s > budget 0.010s"
     )
     assert (
@@ -5523,6 +5640,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.05
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.02
+        assert kwargs["max_baseline_repeat_max_regression_s"] == 0.025
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.015
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.03
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.04
@@ -5545,6 +5663,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "passed": False,
                     "max_total_elapsed_regression_s": 0.05,
                     "max_repeat_p95_regression_s": 0.02,
+                    "max_repeat_max_regression_s": 0.025,
                     "max_repeat_stage_p95_regression_s": 0.015,
                     "max_ocr_engine_total_regression_s": 0.03,
                     "max_stage_total_regression_s": 0.04,
@@ -5575,6 +5694,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "0.05",
             "--max-baseline-repeat-p95-regression-s",
             "0.02",
+            "--max-baseline-repeat-max-regression-s",
+            "0.025",
             "--max-baseline-repeat-stage-p95-regression-s",
             "0.015",
             "--max-baseline-ocr-total-regression-s",
@@ -5962,6 +6083,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
@@ -6004,6 +6126,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
                     "passed": False,
                     "max_total_elapsed_regression_s": 0.25,
                     "max_repeat_p95_regression_s": 0.25,
+                    "max_repeat_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_stage_total_regression_s": 0.25,
@@ -6194,6 +6317,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_stage_total_regression_s"] == 0.25
@@ -6239,6 +6363,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
                     "passed": True,
                     "max_total_elapsed_regression_s": 0.25,
                     "max_repeat_p95_regression_s": 0.25,
+                    "max_repeat_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_stage_total_regression_s": 0.25,

@@ -17636,3 +17636,20 @@ with zero failures in 0.531s.
   with case total OCR `+0.002280s`, and `los-angeles-waymo rec +0.019676s`
   with case total OCR `-0.008060s`. Benchmark acceptance reliability only; no
   runtime default changed.
+- Added a repeat max latency regression budget for baseline comparisons.
+  The existing repeat p95 budget covered aggregate and per-case p95 tails, but
+  a single repeat-profile max outlier could still slip through when the p95
+  delta remained inside budget. The CLI/API now accept
+  `--max-baseline-repeat-max-regression-s`, and the focused real-screenshot
+  hard gate defaults it to the same conservative `0.25s` baseline regression
+  limit used by the other hard-gate budgets. Focused stress tests passed
+  (`137 passed in 0.93s`) and the full suite passed (`713 passed,
+  31 subtests passed in 5.45s`). A saved proof in
+  `out/repeat-max-budget-proof-20260603/comparison.json` compared
+  `out/warm-sample-900-primary-tail-control-20260603` against
+  `out/warm-sample-900-primary-tail-candidate-20260603` with
+  `max_repeat_p95_regression_s=0.100` and
+  `max_repeat_max_regression_s=0.100`; it failed exactly one
+  `repeat_case_max` violation, where `los-angeles-waymo` case p95 delta stayed
+  under budget at `+0.098149s` but case max delta reached `+0.101615s`.
+  Benchmark acceptance reliability only; no runtime default changed.
