@@ -18051,3 +18051,18 @@ with zero failures in 0.531s.
   it exited nonzero for the intentional signature drift plus known
   hidden-overlap baseline-field gaps and OCR timing noise, not an unexpected
   boundary change.
+- Added OCR engine workload grouping to the stress summary and console output
+  so future latency work can see aggregate OCR cost by real engine
+  configuration instead of only per-row maxima. This is a benchmark
+  feedback-loop improvement; no runtime defaults changed. Targeted stress
+  benchmark tests passed `144 passed`, full pytest passed `728 passed,
+  31 subtests passed`, and `git diff --check` passed. A focused real-image gate
+  at `out/ocr-workload-groups-focused-20260603` passed its latency budget with
+  5/5 expected outcomes and max primary `0.358095s`; the new grouping showed
+  the bright-blue Waymo workload as one shared `1400x1400 array det=256/max
+  rec=en-ppocrv5 batch=12 min_area=2300` group across 4 rows / 4 calls with
+  `total_s=1.011629`, `det_elapsed_s=0.591770`, and
+  `rec_elapsed_s=0.315337`, while `tesla-austin-route-receipt-long` remained a
+  separate default recognizer group at `total_s=0.261154`. That keeps the next
+  plausible optimization lane focused on shared bright-blue detector work
+  rather than another route-receipt-only knob.

@@ -4891,6 +4891,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ocr_full_detail_retry_rows": ocr_full_detail_retry_rows,
         "ocr_engine_profile": summarize_rapidocr_profile_summaries(ocr_engine_profiles),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(rows),
+        "ocr_engine_workload_groups": primary_ocr_engine_workload_groups(rows),
         "ocr_engine_slowest_cases": primary_ocr_engine_slowest_cases(rows),
         "slowest_cases": primary_slowest_cases_from_rows(rows),
         "ocr_overlap_hidden_s": summarize_ocr_overlap_hidden(rows),
@@ -5078,6 +5079,111 @@ def primary_ocr_engine_slowest_case_summary(
         elif isinstance(value, float):
             result[key] = round(value, 6)
     return result
+
+
+def primary_ocr_engine_workload_groups(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    groups: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        slug = str(row.get("slug") or "")
+        ocr_engine_profile = row.get("ocr_engine_profile")
+        if not isinstance(ocr_engine_profile, dict):
+            continue
+        calls = ocr_engine_profile.get("calls_detail")
+        call_profiles = [call for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+        if not call_profiles:
+            call_profiles = [ocr_engine_profile]
+        for call in call_profiles:
+            total_s = parse_nonnegative_float(call.get("total_s"))
+            if total_s is None or total_s <= 0.0:
+                continue
+            context = ocr_engine_workload_context(call)
+            key = ocr_engine_workload_group_key(context)
+            group = groups.setdefault(
+                key,
+                {
+                    **context,
+                    "rows": set(),
+                    "calls": 0,
+                    "total_s": 0.0,
+                    "input_s": 0.0,
+                    "det_elapsed_s": 0.0,
+                    "rec_elapsed_s": 0.0,
+                    "raw_box_count": 0,
+                    "selected_box_count": 0,
+                    "result_count": 0,
+                    "label_count": 0,
+                    "slowest_slug": None,
+                    "slowest_total_s": 0.0,
+                    "_slug_totals": {},
+                },
+            )
+            if slug:
+                group["rows"].add(slug)
+                slug_totals = group["_slug_totals"]
+                slug_totals[slug] = round(float(slug_totals.get(slug, 0.0)) + total_s, 6)
+            group["calls"] += 1
+            group["total_s"] += total_s
+            for metric in ("input_s", "det_elapsed_s", "rec_elapsed_s"):
+                elapsed_s = parse_nonnegative_float(call.get(metric))
+                if elapsed_s is not None:
+                    group[metric] += elapsed_s
+            for metric in ("raw_box_count", "selected_box_count", "result_count", "label_count"):
+                count = call.get(metric)
+                if isinstance(count, int) and not isinstance(count, bool):
+                    group[metric] += count
+            if total_s > float(group["slowest_total_s"]):
+                group["slowest_slug"] = slug or None
+                group["slowest_total_s"] = total_s
+
+    ranked: list[dict[str, Any]] = []
+    for group in groups.values():
+        slug_totals = group.pop("_slug_totals")
+        top_slugs = [
+            slug
+            for slug, _total in sorted(
+                slug_totals.items(),
+                key=lambda item: (-float(item[1]), item[0]),
+            )[:3]
+        ]
+        rows = sorted(group.pop("rows"))
+        group["row_count"] = len(rows)
+        group["top_slugs"] = top_slugs
+        for metric in ("total_s", "input_s", "det_elapsed_s", "rec_elapsed_s", "slowest_total_s"):
+            group[metric] = round(float(group[metric]), 6)
+        ranked.append(group)
+    ranked.sort(
+        key=lambda group: (
+            -float(group.get("total_s") or 0.0),
+            str(group.get("recognition_profile") or ""),
+            str(group.get("input_shape") or ""),
+        )
+    )
+    return ranked[: max(0, limit)]
+
+
+def ocr_engine_workload_context(call: dict[str, Any]) -> dict[str, Any]:
+    context: dict[str, Any] = {}
+    for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS:
+        value = call.get(key)
+        if isinstance(value, list):
+            context[key] = list(value)
+        elif value is not None:
+            context[key] = value
+    return context
+
+
+def ocr_engine_workload_group_key(context: dict[str, Any]) -> tuple[Any, ...]:
+    key_parts: list[Any] = []
+    for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS:
+        value = context.get(key)
+        if isinstance(value, list):
+            value = tuple(value)
+        key_parts.append(value)
+    return tuple(key_parts)
 
 
 def build_repeat_profile(
@@ -6855,6 +6961,16 @@ def ocr_engine_stage_max_rows_include_input_kind(max_rows: Any) -> bool:
     )
 
 
+def ocr_engine_workload_groups_include_context(groups: Any) -> bool:
+    if not isinstance(groups, list):
+        return False
+    return any(
+        isinstance(group, dict)
+        and any(group.get(key) is not None for key in OCR_ENGINE_DETAIL_CONTEXT_KEYS)
+        for group in groups
+    )
+
+
 def print_stress_table(report: dict[str, Any]) -> None:
     summary = report["summary"]
     print(
@@ -7115,6 +7231,21 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if max_text:
             print(f"ocr engine max: {max_text}")
+    workload_groups = summary.get("ocr_engine_workload_groups")
+    if not isinstance(workload_groups, list):
+        workload_groups = primary_ocr_engine_workload_groups(rows) if isinstance(rows, list) else []
+    elif isinstance(rows, list) and not ocr_engine_workload_groups_include_context(workload_groups):
+        enriched_workload_groups = primary_ocr_engine_workload_groups(rows)
+        if ocr_engine_workload_groups_include_context(enriched_workload_groups):
+            workload_groups = enriched_workload_groups
+    if workload_groups:
+        workload_text = ", ".join(
+            ocr_engine_workload_group_text(group)
+            for group in workload_groups[:3]
+            if isinstance(group, dict)
+        )
+        if workload_text:
+            print(f"ocr engine workload groups: {workload_text}")
     primary_ocr_slowest_cases = summary.get("ocr_engine_slowest_cases")
     if not isinstance(primary_ocr_slowest_cases, list):
         primary_ocr_slowest_cases = (
@@ -7529,6 +7660,55 @@ def ocr_engine_stage_max_row_text(stage_label: str, row: dict[str, Any]) -> str:
     confidence_lt_90 = row.get("label_confidence_lt_90_count")
     if isinstance(confidence_lt_90, int):
         parts.append(f"conf_lt90={confidence_lt_90}")
+    return " ".join(parts)
+
+
+def ocr_engine_workload_group_text(group: dict[str, Any]) -> str:
+    parts: list[str] = []
+    shape_text = ocr_engine_input_shape_text(group.get("input_shape"))
+    if shape_text:
+        parts.append(shape_text)
+    input_kind = group.get("input_kind")
+    if isinstance(input_kind, str) and input_kind:
+        parts.append(str(input_kind))
+    detector_limit = group.get("detector_limit")
+    if isinstance(detector_limit, int) and not isinstance(detector_limit, bool):
+        detector_type = group.get("detector_limit_type")
+        type_suffix = f"/{detector_type}" if isinstance(detector_type, str) and detector_type else ""
+        parts.append(f"det={detector_limit}{type_suffix}")
+    recognition_profile = group.get("recognition_profile")
+    if isinstance(recognition_profile, str) and recognition_profile:
+        parts.append(f"rec={recognition_profile}")
+    rec_batch_num = group.get("rec_batch_num")
+    if isinstance(rec_batch_num, int) and not isinstance(rec_batch_num, bool):
+        parts.append(f"batch={rec_batch_num}")
+    min_text_area = parse_nonnegative_float(group.get("min_text_area"))
+    if min_text_area is not None:
+        parts.append(f"min_area={min_text_area:.0f}")
+    row_count = group.get("row_count")
+    calls = group.get("calls")
+    if isinstance(row_count, int) and not isinstance(row_count, bool):
+        parts.append(f"rows={row_count}")
+    if isinstance(calls, int) and not isinstance(calls, bool):
+        parts.append(f"calls={calls}")
+    total_s = parse_nonnegative_float(group.get("total_s"))
+    det_s = parse_nonnegative_float(group.get("det_elapsed_s"))
+    rec_s = parse_nonnegative_float(group.get("rec_elapsed_s"))
+    if total_s is not None:
+        parts.append(f"total={total_s:.3f}s")
+    if det_s is not None:
+        parts.append(f"det={det_s:.3f}s")
+    if rec_s is not None:
+        parts.append(f"rec={rec_s:.3f}s")
+    slowest_slug = group.get("slowest_slug")
+    slowest_total_s = parse_nonnegative_float(group.get("slowest_total_s"))
+    if isinstance(slowest_slug, str) and slowest_slug and slowest_total_s is not None:
+        parts.append(f"slowest={slowest_slug}:{slowest_total_s:.3f}s")
+    top_slugs = group.get("top_slugs")
+    if isinstance(top_slugs, list) and top_slugs:
+        display_slugs = [str(slug) for slug in top_slugs[:3] if isinstance(slug, (str, int))]
+        if display_slugs:
+            parts.append(f"top={'+'.join(display_slugs)}")
     return " ".join(parts)
 
 

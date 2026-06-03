@@ -3400,6 +3400,23 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "selected_box_count": 3,
         },
     }
+    assert report["summary"]["ocr_engine_workload_groups"] == [
+        {
+            "calls": 1,
+            "total_s": 0.55,
+            "input_s": 0.05,
+            "det_elapsed_s": 0.2,
+            "rec_elapsed_s": 0.3,
+            "raw_box_count": 4,
+            "selected_box_count": 3,
+            "result_count": 0,
+            "label_count": 0,
+            "slowest_slug": "profiled-map",
+            "slowest_total_s": 0.55,
+            "row_count": 1,
+            "top_slugs": ["profiled-map"],
+        }
+    ]
     assert report["summary"]["ocr_engine_slowest_cases"] == [
         {
             "slug": "profiled-map",
@@ -3434,6 +3451,103 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             },
         }
     ]
+
+
+def test_primary_ocr_engine_workload_groups_aggregate_by_profile_context() -> None:
+    rows = [
+        {
+            "slug": "la",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "total_s": 0.25,
+                "input_s": 0.02,
+                "det_elapsed_s": 0.13,
+                "rec_elapsed_s": 0.10,
+                "input_kind": "array",
+                "input_shape": [1400, 1400],
+                "detector_limit": 256,
+                "detector_limit_type": "max",
+                "recognition_profile": "en-ppocrv5",
+                "rec_batch_num": 12,
+                "min_text_area": 2300.0,
+                "raw_box_count": 50,
+                "selected_box_count": 30,
+                "result_count": 29,
+                "label_count": 29,
+            },
+        },
+        {
+            "slug": "dallas",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "total_s": 0.20,
+                "input_s": 0.01,
+                "det_elapsed_s": 0.15,
+                "rec_elapsed_s": 0.04,
+                "input_kind": "array",
+                "input_shape": [1400, 1400],
+                "detector_limit": 256,
+                "detector_limit_type": "max",
+                "recognition_profile": "en-ppocrv5",
+                "rec_batch_num": 12,
+                "min_text_area": 2300.0,
+                "raw_box_count": 16,
+                "selected_box_count": 7,
+                "result_count": 7,
+                "label_count": 7,
+            },
+        },
+        {
+            "slug": "route",
+            "ocr_engine_profile": {
+                "calls": 1,
+                "total_s": 0.18,
+                "det_elapsed_s": 0.04,
+                "rec_elapsed_s": 0.13,
+                "input_kind": "array",
+                "input_shape": [1000, 639],
+                "detector_limit": 608,
+                "detector_limit_type": "default",
+                "recognition_profile": "default",
+                "rec_batch_num": 12,
+                "min_text_area": 1500.0,
+                "raw_box_count": 33,
+                "selected_box_count": 29,
+                "result_count": 29,
+                "label_count": 25,
+            },
+        },
+    ]
+
+    groups = stress_module.primary_ocr_engine_workload_groups(rows)
+
+    assert groups[0] == {
+        "input_kind": "array",
+        "input_shape": [1400, 1400],
+        "detector_limit": 256,
+        "detector_limit_type": "max",
+        "recognition_profile": "en-ppocrv5",
+        "rec_batch_num": 12,
+        "min_text_area": 2300.0,
+        "calls": 2,
+        "total_s": 0.45,
+        "input_s": 0.03,
+        "det_elapsed_s": 0.28,
+        "rec_elapsed_s": 0.14,
+        "raw_box_count": 66,
+        "selected_box_count": 37,
+        "result_count": 36,
+        "label_count": 36,
+        "slowest_slug": "la",
+        "slowest_total_s": 0.25,
+        "row_count": 2,
+        "top_slugs": ["la", "dallas"],
+    }
+    assert stress_module.ocr_engine_workload_group_text(groups[0]) == (
+        "1400x1400 array det=256/max rec=en-ppocrv5 batch=12 min_area=2300 "
+        "rows=2 calls=2 total=0.450s det=0.280s rec=0.140s "
+        "slowest=la:0.250s top=la+dallas"
+    )
 
 
 def test_run_stress_case_can_disable_runner_ocr_cache_for_subprocess(tmp_path, monkeypatch) -> None:
