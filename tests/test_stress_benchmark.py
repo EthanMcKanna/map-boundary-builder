@@ -428,7 +428,12 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         },
     }
 
-    comparison = stress_module.compare_stress_reports(baseline, candidate)
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_total_elapsed_regression_s=0.1,
+        max_repeat_p95_regression_s=0.02,
+    )
 
     assert comparison["compared_rows"] == 2
     assert comparison["missing_in_baseline"] == ["candidate-only"]
@@ -448,6 +453,17 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
     assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
+    regression_budget = comparison["regression_budget"]
+    assert regression_budget["passed"] is False
+    assert regression_budget["max_total_elapsed_regression_s"] == 0.1
+    assert regression_budget["max_repeat_p95_regression_s"] == 0.02
+    assert [violation["kind"] for violation in regression_budget["violations"]] == [
+        "primary_total_regression_exceeded",
+        "repeat_profile_p95_regression_exceeded",
+    ]
+    assert regression_budget["violations"][0]["slug"] == "houston"
+    assert regression_budget["violations"][0]["total_elapsed_delta_s"] == 0.2
+    assert regression_budget["violations"][1]["delta_s"] == 0.03
 
 
 def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -> None:
@@ -531,6 +547,24 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "largest_total_improvements": [
                 {"slug": "dallas", "total_elapsed_delta_s": -0.1},
             ],
+            "regression_budget": {
+                "passed": False,
+                "max_total_elapsed_regression_s": 0.1,
+                "max_repeat_p95_regression_s": 0.02,
+                "violations": [
+                    {
+                        "kind": "primary_total_regression_exceeded",
+                        "slug": "houston",
+                        "total_elapsed_delta_s": 0.2,
+                        "max_total_elapsed_regression_s": 0.1,
+                    },
+                    {
+                        "kind": "repeat_profile_p95_regression_exceeded",
+                        "delta_s": 0.03,
+                        "max_repeat_p95_regression_s": 0.02,
+                    },
+                ],
+            },
             "candidate_scope": {
                 "baseline_rows_outside_candidate_scope_count": 3,
             },
@@ -558,6 +592,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "median_delta=-0.040s" in output
     assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
+    assert "baseline regression budget: failed primary<=0.100s repeat_p95<=0.020s violations=2" in output
+    assert "primary houston +0.200s > budget 0.100s" in output
+    assert "repeat p95 +0.030s > budget 0.020s" in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston fields=city,control_points" in output
@@ -3151,6 +3188,63 @@ def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> No
             str(tmp_path / "out"),
             "--max-total-elapsed-s",
             "1.0",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        assert kwargs["max_baseline_total_regression_s"] == 0.05
+        assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.02
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "baseline_comparison": {
+                "compared_rows": 1,
+                "missing_in_baseline": [],
+                "missing_in_candidate": [],
+                "signature_changes": [],
+                "regression_budget": {
+                    "passed": False,
+                    "max_total_elapsed_regression_s": 0.05,
+                    "max_repeat_p95_regression_s": 0.02,
+                    "violations": [
+                        {
+                            "kind": "primary_total_regression_exceeded",
+                            "slug": "slow-map",
+                            "total_elapsed_delta_s": 0.08,
+                            "max_total_elapsed_regression_s": 0.05,
+                        }
+                    ],
+                },
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--compare-baseline-report",
+            "baseline.json",
+            "--max-baseline-total-regression-s",
+            "0.05",
+            "--max-baseline-repeat-p95-regression-s",
+            "0.02",
         ]
     )
 

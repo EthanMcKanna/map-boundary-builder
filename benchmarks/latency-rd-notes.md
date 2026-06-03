@@ -16738,3 +16738,20 @@ with zero failures in 0.531s.
   those row deltas. Repeat p95 in that smoke was `+0.045s`, so this is
   harness readability only, not a new speed acceptance; no runtime deploy is
   needed.
+- Added relative baseline regression gates to `--compare-baseline-report`:
+  `--max-baseline-total-regression-s` fails when any compared primary row is
+  too much slower than baseline, and
+  `--max-baseline-repeat-p95-regression-s` fails when repeat-profile p95 is too
+  much slower than baseline. The saved comparison now carries
+  `baseline_comparison.regression_budget` with thresholds, pass/fail state, and
+  concrete violating rows/metrics, and the CLI prints that budget beside the
+  primary/repeat delta lines. Focused stress benchmark tests passed
+  `101 passed in 0.42s`, the full suite passed `677 passed in 5.78s`, and
+  `git diff --check` was clean. A strict real six-route smoke at
+  `out/baseline-regression-gate-fail-route-20260603` intentionally exited
+  nonzero despite `6/6` expectations and absolute latency budgets passing:
+  thresholds `0.001s` caught six primary row regressions plus repeat p95
+  `+0.138s`. The matched loose-threshold smoke at
+  `out/baseline-regression-gate-pass-route-20260603` passed with
+  `primary<=0.250s` and `repeat_p95<=0.250s`. This is A/B harness acceptance
+  hardening only; no runtime deploy is needed.

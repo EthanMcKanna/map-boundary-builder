@@ -156,6 +156,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero when --compare-baseline-report finds output signature changes.",
     )
     parser.add_argument(
+        "--max-baseline-total-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when any compared primary row is more than this many "
+            "seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-repeat-p95-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when analyzed repeat-profile p95 is more than this many "
+            "seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
         "--real-screenshot-hard-gate",
         action="store_true",
         help=(
@@ -338,12 +356,23 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-repeat-signature-drift requires --repeat-profile-runs")
     if args.fail_on_baseline_signature_drift and not args.compare_baseline_report:
         parser.error("--fail-on-baseline-signature-drift requires --compare-baseline-report")
+    if args.max_baseline_total_regression_s is not None and not args.compare_baseline_report:
+        parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
+    if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
+        parser.error("--max-baseline-repeat-p95-regression-s requires --compare-baseline-report")
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
     if args.max_repeat_profile_p95_duration_s is not None and args.max_repeat_profile_p95_duration_s <= 0.0:
         parser.error("--max-repeat-profile-p95-duration-s must be positive")
     if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
         parser.error("--max-prewarm-runtime-s must be positive")
+    if args.max_baseline_total_regression_s is not None and args.max_baseline_total_regression_s < 0.0:
+        parser.error("--max-baseline-total-regression-s must be non-negative")
+    if (
+        args.max_baseline_repeat_p95_regression_s is not None
+        and args.max_baseline_repeat_p95_regression_s < 0.0
+    ):
+        parser.error("--max-baseline-repeat-p95-regression-s must be non-negative")
     if args.min_ocr_call_contract_rows is not None and args.min_ocr_call_contract_rows < 0:
         parser.error("--min-ocr-call-contract-rows must be non-negative")
     if args.min_ocr_count_contract_rows is not None and args.min_ocr_count_contract_rows < 0:
@@ -407,6 +436,8 @@ def main(argv: list[str] | None = None) -> int:
         max_positive_ocr_call_only_rows=args.max_positive_ocr_call_only_rows,
         fail_on_invalid_ocr_count_contracts=args.fail_on_invalid_ocr_count_contracts,
         compare_baseline_report=Path(args.compare_baseline_report) if args.compare_baseline_report else None,
+        max_baseline_total_regression_s=args.max_baseline_total_regression_s,
+        max_baseline_repeat_p95_regression_s=args.max_baseline_repeat_p95_regression_s,
         preset=stress_preset_from_args(args),
     )
     print_stress_table(report)
@@ -421,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.fail_on_repeat_signature_drift and repeat_profile_signature_drift_cases(report):
         return 1
     if args.fail_on_baseline_signature_drift and baseline_comparison_signature_drift_cases(report):
+        return 1
+    if baseline_comparison_regression_budget_failed(report):
         return 1
     if args.fail_on_unexpected and (
         report["summary"]["unexpected"] or repeat_profile_unexpected_sample_count(report)
@@ -538,6 +571,8 @@ def run_stress_benchmark(
     max_positive_ocr_call_only_rows: int | None = None,
     fail_on_invalid_ocr_count_contracts: bool = False,
     compare_baseline_report: Path | None = None,
+    max_baseline_total_regression_s: float | None = None,
+    max_baseline_repeat_p95_regression_s: float | None = None,
     preset: dict[str, Any] | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
@@ -557,6 +592,10 @@ def run_stress_benchmark(
         raise ValueError("min_ocr_count_contract_rows must be non-negative")
     if max_positive_ocr_call_only_rows is not None and max_positive_ocr_call_only_rows < 0:
         raise ValueError("max_positive_ocr_call_only_rows must be non-negative")
+    if max_baseline_total_regression_s is not None and max_baseline_total_regression_s < 0.0:
+        raise ValueError("max_baseline_total_regression_s must be non-negative")
+    if max_baseline_repeat_p95_regression_s is not None and max_baseline_repeat_p95_regression_s < 0.0:
+        raise ValueError("max_baseline_repeat_p95_regression_s must be non-negative")
     ocr_engine_budgets = dict(max_ocr_engine_duration_s or {})
     ocr_engine_count_budgets = dict(max_ocr_engine_count or {})
     ocr_engine_p95_budgets = dict(max_repeat_ocr_engine_p95_duration_s or {})
@@ -677,6 +716,8 @@ def run_stress_benchmark(
             load_stress_report(compare_baseline_report),
             report,
             baseline_report_path=compare_baseline_report,
+            max_total_elapsed_regression_s=max_baseline_total_regression_s,
+            max_repeat_p95_regression_s=max_baseline_repeat_p95_regression_s,
         )
     (out_dir / "stress-summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -694,6 +735,8 @@ def compare_stress_reports(
     candidate_report: dict[str, Any],
     *,
     baseline_report_path: Path | None = None,
+    max_total_elapsed_regression_s: float | None = None,
+    max_repeat_p95_regression_s: float | None = None,
 ) -> dict[str, Any]:
     baseline_rows = stress_report_rows_by_slug(baseline_report)
     candidate_rows = stress_report_rows_by_slug(candidate_report)
@@ -771,7 +814,89 @@ def compare_stress_reports(
     repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
     if repeat_delta is not None:
         comparison["repeat_profile_delta"] = repeat_delta
+    if max_total_elapsed_regression_s is not None or max_repeat_p95_regression_s is not None:
+        comparison["regression_budget"] = baseline_regression_budget(
+            comparison,
+            max_total_elapsed_regression_s=max_total_elapsed_regression_s,
+            max_repeat_p95_regression_s=max_repeat_p95_regression_s,
+        )
     return comparison
+
+
+def baseline_regression_budget(
+    comparison: dict[str, Any],
+    *,
+    max_total_elapsed_regression_s: float | None = None,
+    max_repeat_p95_regression_s: float | None = None,
+) -> dict[str, Any]:
+    budget: dict[str, Any] = {"violations": []}
+    violations: list[dict[str, Any]] = []
+    if max_total_elapsed_regression_s is not None:
+        max_total = round(float(max_total_elapsed_regression_s), 6)
+        budget["max_total_elapsed_regression_s"] = max_total
+        latency_deltas = comparison.get("latency_deltas")
+        if isinstance(latency_deltas, list):
+            for delta in latency_deltas:
+                if not isinstance(delta, dict):
+                    continue
+                total_delta = parse_signed_float(delta.get("total_elapsed_delta_s"))
+                if total_delta is None or total_delta <= max_total_elapsed_regression_s:
+                    continue
+                violation = {
+                    "kind": "primary_total_regression_exceeded",
+                    "slug": delta.get("slug"),
+                    "total_elapsed_delta_s": round(total_delta, 6),
+                    "max_total_elapsed_regression_s": max_total,
+                }
+                for key in ("baseline_total_elapsed_s", "candidate_total_elapsed_s"):
+                    value = parse_nonnegative_float(delta.get(key))
+                    if value is not None:
+                        violation[key] = round(value, 6)
+                violations.append(violation)
+    if max_repeat_p95_regression_s is not None:
+        max_repeat = round(float(max_repeat_p95_regression_s), 6)
+        budget["max_repeat_p95_regression_s"] = max_repeat
+        repeat_delta = comparison.get("repeat_profile_delta")
+        repeat_p95_delta = (
+            repeat_delta_metric_value(
+                repeat_delta,
+                ("duration_s", "p95_total_elapsed_s"),
+                "delta_s",
+            )
+            if isinstance(repeat_delta, dict)
+            else None
+        )
+        if repeat_p95_delta is None:
+            violations.append(
+                {
+                    "kind": "repeat_profile_p95_delta_missing",
+                    "max_repeat_p95_regression_s": max_repeat,
+                }
+            )
+        elif repeat_p95_delta > max_repeat_p95_regression_s:
+            repeat_p95 = repeat_delta_metric_value(
+                repeat_delta,
+                ("duration_s", "p95_total_elapsed_s"),
+                "candidate",
+            )
+            baseline_p95 = repeat_delta_metric_value(
+                repeat_delta,
+                ("duration_s", "p95_total_elapsed_s"),
+                "baseline",
+            )
+            violation = {
+                "kind": "repeat_profile_p95_regression_exceeded",
+                "delta_s": round(repeat_p95_delta, 6),
+                "max_repeat_p95_regression_s": max_repeat,
+            }
+            if baseline_p95 is not None:
+                violation["baseline_p95_total_elapsed_s"] = round(baseline_p95, 6)
+            if repeat_p95 is not None:
+                violation["candidate_p95_total_elapsed_s"] = round(repeat_p95, 6)
+            violations.append(violation)
+    budget["violations"] = violations
+    budget["passed"] = not violations
+    return budget
 
 
 def stress_repeat_profile_delta(
@@ -2623,6 +2748,14 @@ def baseline_comparison_signature_drift_cases(report: dict[str, Any]) -> list[st
     return slugs
 
 
+def baseline_comparison_regression_budget_failed(report: dict[str, Any]) -> bool:
+    comparison = report.get("baseline_comparison")
+    if not isinstance(comparison, dict):
+        return False
+    regression_budget = comparison.get("regression_budget")
+    return isinstance(regression_budget, dict) and regression_budget.get("passed") is False
+
+
 def repeat_profile_unexpected_sample_count(report: dict[str, Any]) -> int:
     repeat_profile = report.get("repeat_profile")
     if not isinstance(repeat_profile, dict):
@@ -3591,6 +3724,15 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if repeat_delta_text:
             print(f"baseline repeat delta: {repeat_delta_text}")
+        regression_budget = baseline_comparison.get("regression_budget")
+        if isinstance(regression_budget, dict):
+            print(baseline_regression_budget_text(regression_budget))
+            violations = regression_budget.get("violations")
+            if regression_budget.get("passed") is False and isinstance(violations, list):
+                for violation in violations[:5]:
+                    violation_text = baseline_regression_budget_violation_text(violation)
+                    if violation_text:
+                        print(f"   - {violation_text}")
         if isinstance(signature_changes, list):
             for change in signature_changes[:5]:
                 if not isinstance(change, dict):
@@ -3990,6 +4132,46 @@ def baseline_primary_delta_item_text(items: Any) -> str:
     if not isinstance(slug, str) or not slug or delta is None:
         return ""
     return f"{slug} {delta:+.3f}s"
+
+
+def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
+    limits: list[str] = []
+    max_total = parse_nonnegative_float(regression_budget.get("max_total_elapsed_regression_s"))
+    if max_total is not None:
+        limits.append(f"primary<={max_total:.3f}s")
+    max_repeat = parse_nonnegative_float(regression_budget.get("max_repeat_p95_regression_s"))
+    if max_repeat is not None:
+        limits.append(f"repeat_p95<={max_repeat:.3f}s")
+    limit_text = f" {' '.join(limits)}" if limits else ""
+    if regression_budget.get("passed") is False:
+        violations = regression_budget.get("violations")
+        violation_count = len(violations) if isinstance(violations, list) else 0
+        return f"baseline regression budget: failed{limit_text} violations={violation_count}"
+    return f"baseline regression budget: passed{limit_text}"
+
+
+def baseline_regression_budget_violation_text(violation: Any) -> str:
+    if not isinstance(violation, dict):
+        return ""
+    kind = violation.get("kind")
+    if kind == "primary_total_regression_exceeded":
+        slug = violation.get("slug")
+        delta = parse_signed_float(violation.get("total_elapsed_delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_total_elapsed_regression_s"))
+        if not isinstance(slug, str) or delta is None or budget is None:
+            return ""
+        return f"primary {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_profile_p95_regression_exceeded":
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_repeat_p95_regression_s"))
+        if delta is None or budget is None:
+            return ""
+        return f"repeat p95 {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "repeat_profile_p95_delta_missing":
+        budget = parse_nonnegative_float(violation.get("max_repeat_p95_regression_s"))
+        budget_text = f" budget {budget:.3f}s" if budget is not None else ""
+        return f"repeat p95 delta missing{budget_text}"
+    return ""
 
 
 def repeat_delta_metric_value(
