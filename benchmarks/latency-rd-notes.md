@@ -17856,3 +17856,39 @@ with zero failures in 0.531s.
   acceptance evidence because it surfaced unrelated `robotaxi-austin`
   no-catalog JPEG signature variance plus hidden-overlap missing-budget noise,
   while still passing all manifest expectations.
+- Rejected lowering the generic-AVIF auto-handoff extraction refinement cap
+  below the existing `CATALOG_MISS_REFINE_MAX_DIMENSION`. The production
+  Ann Arbor profile made extraction look like a plausible remaining cold-path
+  target, but the focused sweep showed the cap is shape-sensitive. A 1000px
+  prototype passed the two Ann Arbor AVIF manifest rows and looked faster
+  (`out/generic-avif-refine1000-focused-20260603` max primary `0.219859s`,
+  repeat p95 `0.176s`), but formal comparison against
+  `out/avif-refine-cap-control-20260603` failed with one UI-default signature
+  drift (`bbox`, coordinate count, geometry hash) in
+  `out/generic-avif-refine1000-focused-compare-20260603`. Nearby caps were not
+  safe either: 900px misidentified the UI-default context as `Yost Ice Arena`,
+  700px changed OCR counts, and 1250/1300/1350px still drifted the UI-default
+  geometry signature while offering no clean latency win. Keep the 1400px
+  catalog-miss refinement default until a cap can prove zero signature drift,
+  not just pass the loose bbox expectation.
+- Accepted eager RGB loading for the automatic generic-AVIF handoff path. This
+  keeps extraction/OCR inputs and the 1400px refinement cap unchanged, but for
+  byte-detected generic AVIF uploads that already skip the redundant catalog
+  probe it decodes the raster once and derives dimensions from the RGB array
+  instead of doing a metadata open followed by a second RGB load. The scope guard
+  excludes explicit frontend `catalog_probe_missed`, SVG-derived uploads, city
+  hints, and provider/area filename hints. Focused runner tests passed
+  (`110 passed in 0.60s`). The focused Ann Arbor AVIF gate at
+  `out/generic-avif-eager-rgb-focused-20260603` passed both AVIF rows with max
+  primary `0.239833s`, repeat p95 `0.175s`, and stable OCR count contracts.
+  The focused comparison at
+  `out/generic-avif-eager-rgb-focused-compare-20260603` had
+  `signature_changes=0`; it exited nonzero only because the older partial
+  baseline lacks hidden-overlap budget fields. The full hard gate at
+  `out/generic-avif-eager-rgb-full50-hard-20260603` passed `50/50`, statuses
+  `{"complete":39,"failed":11}`, max primary `0.332212s`, repeat p95
+  `0.279s`, repeat max `0.312s`, prewarm `0.596s`, and Ann Arbor UI-default
+  primary `0.159s`. The full comparison at
+  `out/generic-avif-eager-rgb-full50-compare-20260603` compared all 50 rows
+  with `signature_changes=0`; its nonzero exit was the known older-baseline
+  missing primary hidden-overlap fields, not output drift.

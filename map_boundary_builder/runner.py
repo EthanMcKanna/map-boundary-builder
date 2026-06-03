@@ -863,8 +863,23 @@ def build_boundary(
         composite_transparent_rasters=False,
         svg_max_dimension=SVG_RASTER_MAX_DIMENSION if upload_is_svg else None,
     )
-    with Image.open(image_path) as img:
-        width, height = img.size
+    eager_rgb = (
+        load_rgb(image_path)
+        if should_eager_load_generic_avif_handoff_rgb(
+            skip_redundant_probe=skip_redundant_probe,
+            explicit_probe_miss=explicit_catalog_probe_miss,
+            source_is_svg=source_is_svg,
+            source_is_avif=source_is_avif,
+            city_input=city_input,
+            filename_hint=filename_hint,
+        )
+        else None
+    )
+    if eager_rgb is not None:
+        height, width = eager_rgb.shape[:2]
+    else:
+        with Image.open(image_path) as img:
+            width, height = img.size
     svg_service_path_extraction = svg_service_path_extraction_for_raster(
         svg_service_path_candidate,
         width=width,
@@ -915,6 +930,14 @@ def build_boundary(
             low_res_catalog_rgb = False
             catalog_extract_max_dimension = 0
             rgb = load_rgb(image_path)
+        elif eager_rgb is not None:
+            low_res_catalog_rgb = False
+            catalog_extract_max_dimension = initial_catalog_extract_max_dimension(
+                city_input=city_input,
+                filename_hint=filename_hint,
+                allow_pre_ocr_catalog=allow_pre_ocr_catalog,
+            )
+            rgb = eager_rgb
         else:
             low_res_catalog_rgb = should_load_low_res_catalog_rgb(
                 city_input=city_input,
@@ -3651,6 +3674,27 @@ def should_auto_handoff_generic_catalog_probe_miss(
     ):
         return False
     return is_generic_catalog_handoff_filename_hint(filename_hint)
+
+
+def should_eager_load_generic_avif_handoff_rgb(
+    *,
+    skip_redundant_probe: bool,
+    explicit_probe_miss: bool,
+    source_is_svg: bool,
+    source_is_avif: bool,
+    city_input: str | None,
+    filename_hint: str | None,
+) -> bool:
+    return (
+        skip_redundant_probe
+        and not explicit_probe_miss
+        and not source_is_svg
+        and should_auto_handoff_generic_catalog_probe_miss(
+            city_input=city_input,
+            filename_hint=filename_hint,
+            source_is_avif=source_is_avif,
+        )
+    )
 
 
 def is_avif_image_content(path: str | Path) -> bool:

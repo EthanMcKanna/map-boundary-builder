@@ -3755,6 +3755,49 @@ def test_generic_avif_uploads_auto_skip_redundant_catalog_probe() -> None:
     )
 
 
+def test_generic_avif_auto_handoff_eager_loads_rgb_once() -> None:
+    assert runner.should_eager_load_generic_avif_handoff_rgb(
+        skip_redundant_probe=True,
+        explicit_probe_miss=False,
+        source_is_svg=False,
+        source_is_avif=True,
+        city_input=None,
+        filename_hint="upload.png",
+    )
+    assert not runner.should_eager_load_generic_avif_handoff_rgb(
+        skip_redundant_probe=True,
+        explicit_probe_miss=True,
+        source_is_svg=False,
+        source_is_avif=True,
+        city_input=None,
+        filename_hint="upload.png",
+    )
+    assert not runner.should_eager_load_generic_avif_handoff_rgb(
+        skip_redundant_probe=True,
+        explicit_probe_miss=False,
+        source_is_svg=True,
+        source_is_avif=True,
+        city_input=None,
+        filename_hint="upload.png",
+    )
+    assert not runner.should_eager_load_generic_avif_handoff_rgb(
+        skip_redundant_probe=True,
+        explicit_probe_miss=False,
+        source_is_svg=False,
+        source_is_avif=True,
+        city_input=None,
+        filename_hint="Waymo Phoenix.png",
+    )
+    assert not runner.should_eager_load_generic_avif_handoff_rgb(
+        skip_redundant_probe=False,
+        explicit_probe_miss=False,
+        source_is_svg=False,
+        source_is_avif=True,
+        city_input=None,
+        filename_hint="upload.png",
+    )
+
+
 def test_catalog_hints_and_probe_only_keep_low_res_catalog_probe() -> None:
     assert not runner.catalog_probe_missed_handoff_enabled(
         runner.BoundaryBuildOptions(filename_hint="Waymo Phoenix.png"),
