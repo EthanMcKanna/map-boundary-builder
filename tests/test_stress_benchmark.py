@@ -449,6 +449,27 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
 
 
+def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -> None:
+    baseline = {
+        "rows": [
+            {"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5},
+            {"slug": "baseline-out-of-scope", "observed_status": "complete", "total_elapsed_s": 0.6},
+        ],
+    }
+    candidate = {
+        "preset": {"name": "focused-real-screenshot-gate", "only": ["dallas"]},
+        "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["compared_rows"] == 1
+    assert comparison["missing_in_candidate"] == []
+    assert comparison["candidate_scope"]["slugs"] == ["dallas"]
+    assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope_count"] == 1
+    assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope"] == ["baseline-out-of-scope"]
+
+
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     report = {
         "summary": {
@@ -463,6 +484,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "missing_in_candidate": [],
             "signature_changes": [{"slug": "houston"}],
             "median_total_elapsed_delta_s": -0.04,
+            "candidate_scope": {
+                "baseline_rows_outside_candidate_scope_count": 3,
+            },
             "repeat_profile_delta": {
                 "duration_s": {
                     "p95_total_elapsed_s": {"delta_s": 0.03},
@@ -483,7 +507,8 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
 
     output = capsys.readouterr().out
     assert "baseline comparison: compared=2, signature_changes=1" in output
-    assert "missing_baseline=1, missing_candidate=0, median_delta=-0.040s" in output
+    assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
+    assert "median_delta=-0.040s" in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output

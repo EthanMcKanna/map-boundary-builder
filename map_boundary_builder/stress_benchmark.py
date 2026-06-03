@@ -699,8 +699,19 @@ def compare_stress_reports(
     candidate_rows = stress_report_rows_by_slug(candidate_report)
     candidate_order = [slug for slug in stress_report_slug_order(candidate_report) if slug in candidate_rows]
     compared_slugs = [slug for slug in candidate_order if slug in baseline_rows]
+    candidate_scope_slugs = stress_report_candidate_scope_slugs(candidate_report)
+    candidate_scope_set = set(candidate_scope_slugs) if candidate_scope_slugs is not None else None
     missing_in_baseline = sorted(slug for slug in candidate_rows if slug not in baseline_rows)
-    missing_in_candidate = sorted(slug for slug in baseline_rows if slug not in candidate_rows)
+    if candidate_scope_set is None:
+        missing_in_candidate = sorted(slug for slug in baseline_rows if slug not in candidate_rows)
+        baseline_rows_outside_candidate_scope: list[str] = []
+    else:
+        missing_in_candidate = sorted(
+            slug for slug in candidate_scope_slugs if slug in baseline_rows and slug not in candidate_rows
+        )
+        baseline_rows_outside_candidate_scope = sorted(
+            slug for slug in baseline_rows if slug not in candidate_scope_set
+        )
     signature_changes: list[dict[str, Any]] = []
     latency_deltas: list[dict[str, Any]] = []
 
@@ -737,6 +748,13 @@ def compare_stress_reports(
         "largest_total_regressions": ranked_latency_deltas(latency_deltas, reverse=True),
         "largest_total_improvements": ranked_latency_deltas(latency_deltas, reverse=False),
     }
+    if candidate_scope_slugs is not None:
+        comparison["candidate_scope"] = {
+            "kind": "only",
+            "slugs": candidate_scope_slugs,
+            "baseline_rows_outside_candidate_scope_count": len(baseline_rows_outside_candidate_scope),
+            "baseline_rows_outside_candidate_scope": baseline_rows_outside_candidate_scope,
+        }
     if total_deltas:
         comparison.update(
             {
@@ -812,6 +830,23 @@ def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, An
         return None
     summary = repeat_profile.get("summary")
     return summary if isinstance(summary, dict) else None
+
+
+def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | None:
+    preset = report.get("preset")
+    if not isinstance(preset, dict):
+        return None
+    only_slugs = preset.get("only")
+    if not isinstance(only_slugs, list):
+        return None
+    slugs: list[str] = []
+    seen: set[str] = set()
+    for value in only_slugs:
+        if not isinstance(value, str) or not value or value in seen:
+            continue
+        seen.add(value)
+        slugs.append(value)
+    return slugs
 
 
 def stress_scalar_delta(
@@ -3489,6 +3524,17 @@ def print_stress_table(report: dict[str, Any]) -> None:
         missing_in_candidate = baseline_comparison.get("missing_in_candidate")
         missing_baseline_count = len(missing_in_baseline) if isinstance(missing_in_baseline, list) else 0
         missing_candidate_count = len(missing_in_candidate) if isinstance(missing_in_candidate, list) else 0
+        candidate_scope = baseline_comparison.get("candidate_scope")
+        baseline_out_of_scope_count = (
+            candidate_scope.get("baseline_rows_outside_candidate_scope_count")
+            if isinstance(candidate_scope, dict)
+            else None
+        )
+        baseline_out_of_scope_text = (
+            f", baseline_out_of_scope={baseline_out_of_scope_count}"
+            if isinstance(baseline_out_of_scope_count, int) and baseline_out_of_scope_count
+            else ""
+        )
         median_delta = baseline_comparison.get("median_total_elapsed_delta_s")
         median_delta_text = (
             f", median_delta={float(median_delta):+.3f}s"
@@ -3501,6 +3547,7 @@ def print_stress_table(report: dict[str, Any]) -> None:
             f"signature_changes={signature_change_count}, "
             f"missing_baseline={missing_baseline_count}, "
             f"missing_candidate={missing_candidate_count}"
+            f"{baseline_out_of_scope_text}"
             f"{median_delta_text}"
         )
         repeat_delta = baseline_comparison.get("repeat_profile_delta")

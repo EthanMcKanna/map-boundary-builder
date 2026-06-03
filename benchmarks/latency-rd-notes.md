@@ -16684,3 +16684,16 @@ with zero failures in 0.531s.
   `ocr_total_p95=-0.099s`, `selected_box_p95=-7.5`; the saved JSON check
   matched the printed deltas. This is harness reliability only; no runtime
   deploy is needed.
+- Made baseline comparison scope-aware for focused candidate reports. When a
+  candidate report carries a preset `only` scope, `missing_in_candidate` now
+  counts only requested baseline slugs that failed to appear in the candidate,
+  while `candidate_scope.baseline_rows_outside_candidate_scope` keeps the full
+  list of baseline rows excluded by the focused run. This avoids noisy
+  `missing_candidate=47` headlines during two-row A/B smoke checks without
+  hiding the full-baseline evidence. Focused stress benchmark tests passed
+  `99 passed in 0.42s`, the full suite passed `675 passed in 5.70s`, and
+  `git diff --check` was clean. A real focused smoke at
+  `out/baseline-scope-compare-smoke-20260603` compared `dallas-waymo` and
+  `zoox-sf` against the full dark-rec8 hard-gate baseline, passed `2/2`, printed
+  `missing_candidate=0, baseline_out_of_scope=47`, kept `signature_changes=0`,
+  and saved the same scoped comparison plus repeat p95 delta `-0.088s`.
