@@ -18136,3 +18136,18 @@ with zero failures in 0.531s.
   `python3 -m py_compile map_boundary_builder/stress_benchmark.py` passed, the
   full stress benchmark module passed (`146 passed`), and full pytest passed
   `730 passed, 31 subtests passed`.
+- Surfaced nonzero workload count deltas in the compact baseline OCR workload
+  comparison text. The JSON already stored raw/selected/result/label/row deltas,
+  but the console line only showed calls and timing, which made detector-side
+  probes harder to diagnose. The rendered `baseline OCR workload delta` and
+  `baseline repeat OCR workload delta` lines now include changed raw, selected,
+  result, label, and row counts when present. No runtime default changed.
+  Saved-report proof on the rejected `waymo-tail-max1200-candidate-20260603`
+  comparison now explains the primary new `1200x1200` group as `+1.398s` with
+  `calls=+7 raw=+172 selected=+112 results=+111 labels=+111 rows=+7`, while the
+  repeat workload shows `+2.744s` with `calls=+14 raw=+344 selected=+224
+  results=+222 labels=+222 rows=+7`. Verification: focused comparison/print
+  tests passed (`2 passed`), `python3 -m py_compile
+  map_boundary_builder/stress_benchmark.py` passed, the full stress benchmark
+  module passed (`146 passed`), and full pytest passed `730 passed,
+  31 subtests passed`.

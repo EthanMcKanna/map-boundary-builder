@@ -757,6 +757,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "det_elapsed_s": 0.10,
                     "rec_elapsed_s": 0.16,
                     "total_s": 0.28,
+                    "raw_box_count": 18,
+                    "selected_box_count": 9,
+                    "label_count": 8,
                 },
             },
             {
@@ -789,6 +792,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "det_elapsed_s": 0.18,
                     "rec_elapsed_s": 0.24,
                     "total_s": 0.45,
+                    "raw_box_count": 16,
+                    "selected_box_count": 7,
+                    "label_count": 7,
                 },
             },
             {"slug": "baseline-only", "observed_status": "failed"},
@@ -835,6 +841,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                         "input_s": 0.05,
                         "det_elapsed_s": 0.4,
                         "rec_elapsed_s": 0.2,
+                        "raw_box_count": 30,
+                        "selected_box_count": 14,
+                        "label_count": 14,
                         "top_slugs": ["houston"],
                     },
                     {
@@ -851,6 +860,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                         "input_s": 0.04,
                         "det_elapsed_s": 0.16,
                         "rec_elapsed_s": 0.18,
+                        "raw_box_count": 20,
+                        "selected_box_count": 12,
+                        "label_count": 12,
                         "top_slugs": ["dallas"],
                     },
                 ],
@@ -915,6 +927,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "det_elapsed_s": 0.08,
                     "rec_elapsed_s": 0.10,
                     "total_s": 0.2,
+                    "raw_box_count": 14,
+                    "selected_box_count": 6,
+                    "label_count": 6,
                 },
             },
             {
@@ -948,6 +963,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "det_elapsed_s": 0.25,
                     "rec_elapsed_s": 0.31,
                     "total_s": 0.6,
+                    "raw_box_count": 23,
+                    "selected_box_count": 11,
+                    "label_count": 9,
                 },
             },
             {"slug": "candidate-only", "observed_status": "failed"},
@@ -994,6 +1012,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                         "input_s": 0.06,
                         "det_elapsed_s": 0.52,
                         "rec_elapsed_s": 0.25,
+                        "raw_box_count": 37,
+                        "selected_box_count": 22,
+                        "label_count": 18,
                         "top_slugs": ["houston"],
                     },
                     {
@@ -1010,6 +1031,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                         "input_s": 0.03,
                         "det_elapsed_s": 0.12,
                         "rec_elapsed_s": 0.14,
+                        "raw_box_count": 16,
+                        "selected_box_count": 8,
+                        "label_count": 8,
                         "top_slugs": ["dallas"],
                     },
                 ],
@@ -1144,12 +1168,16 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert primary_workload_regression["candidate_total_s"] == 0.6
     assert primary_workload_regression["total_delta_s"] == 0.15
     assert primary_workload_regression["calls_delta"] == 0
+    assert primary_workload_regression["raw_box_count_delta"] == 7
+    assert primary_workload_regression["selected_box_count_delta"] == 4
+    assert primary_workload_regression["label_count_delta"] == 2
     assert primary_workload_regression["det_elapsed_delta_s"] == 0.07
     assert primary_workload_regression["rec_elapsed_delta_s"] == 0.07
     primary_workload_improvement = comparison["largest_ocr_engine_workload_group_improvements"][0]
     assert primary_workload_improvement["input_shape"] == [900, 1200]
     assert primary_workload_improvement["recognition_profile"] == "default"
     assert primary_workload_improvement["total_delta_s"] == -0.08
+    assert primary_workload_improvement["selected_box_count_delta"] == -3
     assert comparison["stage_duration_delta_s"] == {
         "extract": {"baseline": 0.2, "candidate": 0.18, "delta_s": -0.02},
         "ocr": {"baseline": 0.8, "candidate": 0.9, "delta_s": 0.1},
@@ -1170,6 +1198,9 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_workload_regression["baseline_total_s"] == 0.7
     assert repeat_workload_regression["candidate_total_s"] == 0.9
     assert repeat_workload_regression["total_delta_s"] == 0.2
+    assert repeat_workload_regression["raw_box_count_delta"] == 7
+    assert repeat_workload_regression["selected_box_count_delta"] == 8
+    assert repeat_workload_regression["label_count_delta"] == 4
     assert repeat_workload_regression["det_elapsed_delta_s"] == 0.12
     assert repeat_workload_regression["rec_elapsed_delta_s"] == 0.05
     repeat_workload_improvement = comparison[
@@ -1178,6 +1209,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_workload_improvement["input_shape"] == [900, 1200]
     assert repeat_workload_improvement["recognition_profile"] == "default"
     assert repeat_workload_improvement["total_delta_s"] == -0.1
+    assert repeat_workload_improvement["selected_box_count_delta"] == -4
     case_deltas = comparison["repeat_profile_case_deltas"]
     assert [delta["slug"] for delta in case_deltas] == ["dallas", "houston"]
     assert case_deltas[0]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == -0.04
@@ -3021,6 +3053,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "min_text_area": 2300.0,
                     "total_delta_s": 0.2,
                     "calls_delta": 0,
+                    "raw_box_count_delta": 7,
+                    "selected_box_count_delta": 4,
+                    "label_count_delta": 2,
                     "input_delta_s": 0.01,
                     "det_elapsed_delta_s": 0.12,
                     "rec_elapsed_delta_s": 0.05,
@@ -3037,6 +3072,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "min_text_area": 1500.0,
                     "total_delta_s": -0.1,
                     "calls_delta": 0,
+                    "raw_box_count_delta": -4,
+                    "selected_box_count_delta": -4,
+                    "label_count_delta": -4,
                     "input_delta_s": -0.01,
                     "det_elapsed_delta_s": -0.04,
                     "rec_elapsed_delta_s": -0.04,
@@ -3224,6 +3262,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "min_text_area": 2300.0,
                     "total_delta_s": 0.2,
                     "calls_delta": 0,
+                    "raw_box_count_delta": 7,
+                    "selected_box_count_delta": 4,
+                    "label_count_delta": 2,
                     "input_delta_s": 0.01,
                     "det_elapsed_delta_s": 0.12,
                     "rec_elapsed_delta_s": 0.05,
@@ -3240,6 +3281,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "min_text_area": 1500.0,
                     "total_delta_s": -0.1,
                     "calls_delta": 0,
+                    "raw_box_count_delta": -4,
+                    "selected_box_count_delta": -4,
+                    "label_count_delta": -4,
                     "input_delta_s": -0.01,
                     "det_elapsed_delta_s": -0.04,
                     "rec_elapsed_delta_s": -0.04,
@@ -3289,9 +3333,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert (
         "baseline OCR workload delta: worst_group=1400x1400 array det=256/max "
         "rec=en-ppocrv5 batch=12 min_area=2300 +0.200s calls=+0 "
-        "input=+0.010s det=+0.120s rec=+0.050s, best_group=1200x900 array "
+        "raw=+7 selected=+4 labels=+2 input=+0.010s det=+0.120s rec=+0.050s, "
+        "best_group=1200x900 array "
         "det=608/default rec=default batch=12 min_area=1500 -0.100s calls=+0 "
-        "input=-0.010s det=-0.040s rec=-0.040s"
+        "raw=-4 selected=-4 labels=-4 input=-0.010s det=-0.040s rec=-0.040s"
     ) in output
     assert (
         "baseline primary hidden OCR delta: worst_hidden=houston +0.060s "
@@ -3335,9 +3380,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert (
         "baseline repeat OCR workload delta: worst_group=1400x1400 array "
         "det=256/max rec=en-ppocrv5 batch=12 min_area=2300 +0.200s calls=+0 "
-        "input=+0.010s det=+0.120s rec=+0.050s, best_group=1200x900 array "
+        "raw=+7 selected=+4 labels=+2 input=+0.010s det=+0.120s rec=+0.050s, "
+        "best_group=1200x900 array "
         "det=608/default rec=default batch=12 min_area=1500 -0.100s calls=+0 "
-        "input=-0.010s det=-0.040s rec=-0.040s"
+        "raw=-4 selected=-4 labels=-4 input=-0.010s det=-0.040s rec=-0.040s"
     ) in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output

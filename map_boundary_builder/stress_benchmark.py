@@ -8779,6 +8779,20 @@ def baseline_ocr_workload_delta_item_text(items: Any) -> str:
     if isinstance(calls_delta, int) and not isinstance(calls_delta, bool):
         parts.append(f"calls={calls_delta:+d}")
     for metric, label in (
+        ("raw_box_count_delta", "raw"),
+        ("selected_box_count_delta", "selected"),
+        ("result_count_delta", "results"),
+        ("label_count_delta", "labels"),
+        ("row_count_delta", "rows"),
+    ):
+        count_delta = item.get(metric)
+        if (
+            isinstance(count_delta, int)
+            and not isinstance(count_delta, bool)
+            and count_delta != 0
+        ):
+            parts.append(f"{label}={count_delta:+d}")
+    for metric, label in (
         ("input_delta_s", "input"),
         ("det_elapsed_delta_s", "det"),
         ("rec_elapsed_delta_s", "rec"),
