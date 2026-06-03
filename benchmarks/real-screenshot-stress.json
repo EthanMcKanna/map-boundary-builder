@@ -68,7 +68,9 @@
       "expect": {
         "status": "failed",
         "error_contains": "ride-route UI",
-        "min_ocr_labels": 30,
+        "min_ocr_labels": 25,
+        "route_ui_categories_include": ["pickup", "plate", "ride"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -81,6 +83,8 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
+        "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -93,6 +97,8 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
+        "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.5
       }
     },
@@ -105,6 +111,8 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
+        "route_ui_categories_include": ["dropoff", "plate", "receipt"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -117,6 +125,8 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
+        "route_ui_categories_include": ["dropoff", "plate", "receipt"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -129,6 +139,8 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
+        "route_ui_categories_include": ["pickup", "plate", "ride"],
+        "min_route_metric_labels": 1,
         "max_total_elapsed_s": 1.0
       }
     },

@@ -320,6 +320,37 @@ def test_route_ui_fast_ocr_cap_only_targets_tall_phone_route_screens(monkeypatch
     assert runner.route_ui_fast_ocr_max_dimension_for_style("gray-fill", width=1320, height=2714) is None
 
 
+def test_route_ui_ocr_crop_keeps_lower_ui_panel() -> None:
+    rgb = np.zeros((2000, 1000, 3), dtype=np.uint8)
+
+    crop, offset_x, offset_y = runner.route_ui_ocr_crop(rgb)
+
+    assert crop.shape[:2] == (1440, 1000)
+    assert offset_x == 0.0
+    assert offset_y == 560.0
+
+
+def test_route_ui_label_extraction_offsets_cropped_labels(monkeypatch) -> None:
+    rgb = np.zeros((2000, 1000, 3), dtype=np.uint8)
+    calls: list[dict] = []
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
+        calls.append({"shape": prepared_rgb.shape[:2], "kwargs": kwargs})
+        return [OcrLabel("Ride is 16 min away", x=10, y=20, width=200, height=24, confidence=98)]
+
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+
+    labels = runner.extract_route_ui_labels_from_rgb(
+        "route.png",
+        rgb,
+        cache=False,
+        rapidocr_max_dimension=1000,
+    )
+
+    assert calls == [{"shape": (1440, 1000), "kwargs": {"cache": False, "rapidocr_max_dimension": 1000}}]
+    assert labels == [OcrLabel("Ride is 16 min away", x=10.0, y=580.0, width=200, height=24, confidence=98)]
+
+
 def test_focus_georef_ocr_requires_small_dark_teal_crop() -> None:
     rgb = np.zeros((700, 1000, 3), dtype=np.uint8)
     small_dark_teal = ExtractionResult(

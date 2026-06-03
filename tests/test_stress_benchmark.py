@@ -113,6 +113,43 @@ def test_run_stress_case_records_success_summary(tmp_path, monkeypatch) -> None:
     assert row["ocr_full_detail_retry"] is False
 
 
+def test_row_from_process_records_route_ui_reject_details() -> None:
+    row = stress_module.row_from_process(
+        {"slug": "route-ui", "image": "route.png"},
+        command=["in-process"],
+        completed=subprocess.CompletedProcess(["in-process"], 1, stdout="", stderr="route error"),
+        wall_s=0.4,
+        summary={
+            "status": "failed",
+            "error": "Could not infer a service-area boundary from ride-route UI.",
+            "event_profile": {
+                "total_elapsed_s": 0.4,
+                "stage_elapsed_s": {"ocr": 0.2},
+                "events": [
+                    {
+                        "stage": "ocr",
+                        "message": "Map labels read",
+                        "details": {"label_count": 22, "top_labels": ["Ride is 16 min away"]},
+                    },
+                    {
+                        "stage": "georeference",
+                        "message": "Rejecting ride-route UI",
+                        "details": {
+                            "route_ui_categories": ["pickup", "plate", "ride"],
+                            "route_metric_labels": ["Ride is 16 min away"],
+                        },
+                    },
+                ],
+            },
+        },
+        parse_error=None,
+        expected_status="failed",
+    )
+
+    assert row["route_ui_categories"] == ["pickup", "plate", "ride"]
+    assert row["route_metric_labels"] == ["Ride is 16 min away"]
+
+
 def test_repeat_profile_ocr_engine_count_metric_text_includes_confidence_counts() -> None:
     text = stress_module.repeat_profile_ocr_engine_count_metric_text(
         {
@@ -528,6 +565,28 @@ def test_check_expectations_rejects_excess_ocr_engine_calls() -> None:
     )
 
     assert issues == ["ocr_engine_profile.calls 1 above 0"]
+
+
+def test_check_expectations_rejects_route_ui_evidence_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a service-area boundary from ride-route UI.",
+            "route_ui_categories": ["pickup", "ride"],
+            "route_metric_labels": [],
+        },
+        {
+            "status": "failed",
+            "error_contains": "ride-route UI",
+            "route_ui_categories_include": ["pickup", "plate", "ride"],
+            "min_route_metric_labels": 1,
+        },
+    )
+
+    assert issues == [
+        "route_ui_categories missing ['plate']",
+        "route_metric_labels count 0 below 1",
+    ]
 
 
 def test_check_expectations_rejects_low_confidence() -> None:

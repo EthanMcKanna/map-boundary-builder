@@ -15883,3 +15883,34 @@ with zero failures in 0.531s.
   same expected error. Comparing against the hardened full49 baseline showed
   zero drift for status, source, city, bbox, geometry hash, coordinate count,
   confidence, catalog metadata, retry flags, and road-match fields.
+- Accepted a light-fill-only route UI OCR crop for tall Tesla route/receipt
+  negatives. Direct OCR probes showed that a lower `72%` screen crop keeps the
+  route/receipt text large while removing irrelevant upper map chrome: the
+  light route receipt variants preserved concrete route categories and route
+  metrics at an OCR input shape of `1000x639`, while the active route variants
+  still carried pickup/plate/ride/rider evidence. An initially broader
+  light+gray crop was rejected by the full gate
+  `out/route-ui-crop-full49-hard-20260603`: it passed the six route negatives
+  but made `tesla-sync-non-map-ui` read only `18` labels, below its locked
+  `20`-label floor, and the gray route rows had no material speed gain. The
+  shipped crop is therefore limited to `light-fill`; gray-fill route/non-map
+  screens keep the existing full-frame capped OCR path. The stress harness now
+  records `route_ui_categories` and `route_metric_labels` from the rejection
+  event, and the route-negative manifest rows require those evidence fields in
+  addition to OCR label floors. Focused validation at
+  `out/route-ui-light-crop-focused-20260603` passed `6/6`, primary max
+  `0.705251s`, repeat p95 `0.463s`, repeat OCR-engine p95 `0.427s`, and no
+  full-detail retries. The full hard gate at
+  `out/route-ui-light-crop-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.562979s`, repeat p95 `0.465s`,
+  repeat OCR-engine p95 `0.411s`, prewarm `1.425s`, and stable repeat
+  signatures. The cropped light route rows rejected with the same expected
+  `ride-route UI` error and explicit evidence: `tesla-austin-route-receipt`
+  `0.387363s`, `tesla-austin-route-active` `0.315518s`,
+  `tesla-austin-route-active-later` `0.292472s`, and
+  `tesla-austin-route-receipt-long` `0.449287s`. Comparing against
+  `out/profile-app-crop-full49-hard-20260603` showed unchanged status/error,
+  source, city, bbox, geometry hash, coordinate count, catalog metadata, retry
+  flags, and road-match fields; only `robotaxi-austin` georeference confidence
+  and control-count varied within the same bbox/hash output
+  (`0.99`/`13` controls to `0.978`/`12` controls).

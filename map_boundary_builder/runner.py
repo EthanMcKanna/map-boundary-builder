@@ -150,6 +150,8 @@ LIGHT_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.8
 GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT = 1800
 GRAY_FILL_ROUTE_UI_OCR_MAX_WIDTH = 1400
 GRAY_FILL_ROUTE_UI_OCR_MIN_HEIGHT_WIDTH_RATIO = 1.8
+ROUTE_UI_OCR_CROP_TOP_FRACTION = 0.28
+ROUTE_UI_OCR_CROP_STYLES = {"light-fill"}
 NON_MAP_APP_UI_LABEL_MIN_CONFIDENCE = 80.0
 NON_MAP_APP_UI_MAX_COVERAGE_RATIO = 0.01
 NON_MAP_APP_UI_MIN_LABELS = 8
@@ -976,9 +978,17 @@ def build_boundary(
                 if rapidocr_recognition_profile is not None:
                     ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
                 add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
+                crop_route_ui_shortcut = (
+                    labels_future_route_ui_shortcut and early_ocr_style in ROUTE_UI_OCR_CROP_STYLES
+                )
+                ocr_function = (
+                    extract_route_ui_labels_from_rgb
+                    if crop_route_ui_shortcut
+                    else extract_ocr_labels_from_rgb
+                )
                 labels_future = submit_with_rapidocr_profile_context(
                     ocr_executor,
-                    extract_ocr_labels_from_rgb,
+                    ocr_function,
                     str(image_path),
                     rgb,
                     **ocr_kwargs,
@@ -1043,9 +1053,13 @@ def build_boundary(
             if rapidocr_recognition_profile is not None:
                 ocr_kwargs["rapidocr_recognition_profile"] = rapidocr_recognition_profile
             add_rapidocr_rec_batch_num_for_ocr_style(ocr_kwargs, early_ocr_style)
+            crop_route_ui_shortcut = labels_future_route_ui_shortcut and early_ocr_style in ROUTE_UI_OCR_CROP_STYLES
+            ocr_function = (
+                extract_route_ui_labels_from_rgb if crop_route_ui_shortcut else extract_ocr_labels_from_rgb
+            )
             labels_future = submit_with_rapidocr_profile_context(
                 ocr_executor,
-                extract_ocr_labels_from_rgb,
+                ocr_function,
                 str(image_path),
                 rgb,
                 **ocr_kwargs,
@@ -1366,6 +1380,7 @@ def build_boundary(
                         width=width,
                         height=height,
                     )
+                    route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
                     labels_future = submit_ocr_labels_from_rgb(
                         ocr_executor,
                         image_path,
@@ -1377,10 +1392,12 @@ def build_boundary(
                             CURRENT_CATALOG_LABEL_OCR_MAX_DIMENSION if shortcut_ocr else None
                         )
                         or route_ui_ocr_max_dimension,
+                        crop_route_ui_shortcut=route_ui_shortcut
+                        and extraction.style in ROUTE_UI_OCR_CROP_STYLES,
                         source_is_svg=source_is_svg,
                     )
                     labels_future_current_catalog_shortcut = shortcut_ocr
-                    labels_future_route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
+                    labels_future_route_ui_shortcut = route_ui_shortcut
                     ensure_georeference_resource_preload()
             emit_progress(
                 progress,
@@ -1676,6 +1693,7 @@ def build_boundary(
                 width=width,
                 height=height,
             )
+            route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
             labels_future = submit_ocr_labels_from_rgb(
                 ocr_executor,
                 image_path,
@@ -1688,10 +1706,12 @@ def build_boundary(
                     if shortcut_ocr
                     else route_ui_ocr_max_dimension
                 ),
+                crop_route_ui_shortcut=route_ui_shortcut
+                and extraction.style in ROUTE_UI_OCR_CROP_STYLES,
                 source_is_svg=source_is_svg,
             )
             labels_future_current_catalog_shortcut = shortcut_ocr
-            labels_future_route_ui_shortcut = not shortcut_ocr and route_ui_ocr_max_dimension is not None
+            labels_future_route_ui_shortcut = route_ui_shortcut
             ensure_georeference_resource_preload()
         if should_precompute_road_features(extraction.style, width, height):
             road_feature_executor = ThreadPoolExecutor(max_workers=1)
@@ -2251,6 +2271,7 @@ def submit_ocr_labels_from_rgb(
     width: int | None = None,
     height: int | None = None,
     rapidocr_max_dimension_override: int | None = None,
+    crop_route_ui_shortcut: bool = False,
     source_is_svg: bool = False,
 ) -> Future[list[Any]]:
     rapidocr_max_dimension = (
@@ -2285,13 +2306,36 @@ def submit_ocr_labels_from_rgb(
     if rapidocr_min_text_area is not None:
         kwargs["rapidocr_min_text_area"] = rapidocr_min_text_area
     add_rapidocr_rec_batch_num_for_ocr_style(kwargs, style)
+    ocr_function = extract_route_ui_labels_from_rgb if crop_route_ui_shortcut else extract_ocr_labels_from_rgb
     return submit_with_rapidocr_profile_context(
         executor,
-        extract_ocr_labels_from_rgb,
+        ocr_function,
         str(image_path),
         rgb,
         **kwargs,
     )
+
+
+def extract_route_ui_labels_from_rgb(
+    image_path: str | Path,
+    rgb,
+    **ocr_kwargs,
+) -> list[Any]:
+    crop, offset_x, offset_y = route_ui_ocr_crop(rgb)
+    labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
+    if offset_x == 0 and offset_y == 0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + offset_x,
+            y=label.y + offset_y,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
 
 
 def extract_provider_ui_labels_from_rgb(
@@ -2678,6 +2722,14 @@ def profile_app_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
     if right <= left or bottom <= top:
         return rgb, 0.0, 0.0
     return rgb[top:bottom, left:right], float(left), float(top)
+
+
+def route_ui_ocr_crop(rgb):
+    height, _width = rgb.shape[:2]
+    top = max(0, min(height - 1, int(height * ROUTE_UI_OCR_CROP_TOP_FRACTION)))
+    if top <= 0:
+        return rgb, 0.0, 0.0
+    return rgb[top:, :], 0.0, float(top)
 
 
 def provider_ui_ocr_crop_box(
