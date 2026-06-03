@@ -17114,3 +17114,15 @@ with zero failures in 0.531s.
   `109 passed in 0.19s`, the full suite passed
   `685 passed, 31 subtests passed in 5.92s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Rejected switching the current non-SVG bright-blue detector limit policy from
+  `256/max` to `256/min`. A matched focused control at
+  `out/brightblue-dettype-control-slow8-20260603` passed `8/8` with primary max
+  `0.461s`, repeat p95 `0.411s`, repeat OCR p95 `0.349s`, and intact OCR count
+  contracts. The candidate
+  `out/brightblue-dettype-min-candidate-slow8-20260603` also preserved
+  signatures and OCR count contracts, but failed the baseline regression budget:
+  median primary delta `+0.169s`, `dallas-waymo` primary `+0.307s` and OCR total
+  `+0.294s`, `orlando-waymo` primary `+0.254s`, repeat OCR p95 `+0.058s`, and
+  detector p95 `+0.036s`. Keep the non-SVG bright-blue detector limit at
+  `256/max`; `min` makes the detector materially heavier without buying
+  additional labels or output stability.
