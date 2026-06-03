@@ -3568,6 +3568,35 @@ class GeoreferenceFallbackTests(unittest.TestCase):
                 )
             )
 
+    def test_tight_four_control_city_fit_skips_road_refinement(self) -> None:
+        context = CityContext(
+            query="Nashville",
+            center=GeocodeResult(
+                label="Nashville",
+                lon=-86.7743,
+                lat=36.1623,
+                display_name="Nashville, Davidson County, Tennessee, United States",
+                bbox=(-87.054766, 35.967785, -86.515588, 36.405496),
+                importance=0.71,
+                place_type="city",
+            ),
+            inferred=True,
+        )
+
+        with patch("map_boundary_builder.georeference.has_local_road_points", return_value=True):
+            self.assertFalse(
+                should_try_road_refinement(
+                    context,
+                    meters_per_pixel=33.07,
+                    inlier_count=4,
+                    residual_median_m=412.2,
+                    residual_p90_m=1788.9,
+                    spread=66444.0,
+                    width=1600,
+                    height=857,
+                )
+            )
+
     def test_sparse_rotated_fit_requires_road_or_stronger_label_evidence(self) -> None:
         self.assertTrue(
             sparse_rotated_fit_without_road_evidence(

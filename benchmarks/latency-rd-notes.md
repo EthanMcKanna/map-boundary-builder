@@ -18335,3 +18335,24 @@ with zero failures in 0.531s.
   `46` `min_ocr_count_contract_rows` to protect the expanded OCR-contract
   surface. Verification: manifest contract test passed, focused preset test
   passed, and full pytest passed `734 passed`.
+- Removed the remaining forced Nashville SVG latency tail by skipping live OSM
+  road refinement for tight four-control city label fits that already have
+  broad-enough label spread and low residuals. The no-catalog SVG label fit was
+  spending about `0.280s` in `refine_transform_with_osm_roads` and discarding
+  the result, so the guard now accepts the label-only transform for the
+  Nashville-shaped `33m/px`, `4`-control, `412m` median / `1789m` p90 case.
+  The focused forced row at
+  `out/nash-svg-forced-roadskip-focused-green-20260603` passed `1/1`, primary
+  `0.307439s`, repeat p95 `0.263s`, and georeference `0.008s`. The full
+  hard-gate comparison at
+  `out/nash-roadskip-full73-hard-gate-pass-20260603` passed `73/73`, statuses
+  `{"complete":62,"failed":11}`, max primary `0.338967s`, repeat p95
+  `0.3065s`, manifest OCR contracts `46/46`, `73` compared rows,
+  `signature_change_count=0`, and `expectation_passed_delta=0`. The forced
+  Nashville SVG row stayed on source `ocr-georeference:nominatim-label-fit`
+  with bbox `[-86.8416146,36.1049219,-86.676782,36.246163]`, confidence
+  `0.781`, hash `46e8ffee696baaa0`, and dropped to `0.269919s` primary with
+  `0.012495s` georeference. Validation: focused road-refinement tests passed
+  (`3 passed`), `tests/test_ocr_georeference.py` passed (`153 passed`),
+  `python -m compileall -q map_boundary_builder tests` passed, and full pytest
+  passed `735 passed, 31 subtests passed`.
