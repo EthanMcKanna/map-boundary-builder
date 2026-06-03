@@ -985,6 +985,9 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
+    stage_duration_delta = stress_stage_duration_total_deltas(baseline_report, candidate_report)
+    if stage_duration_delta:
+        comparison["stage_duration_delta_s"] = stage_duration_delta
     repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
     if repeat_delta is not None:
         comparison["repeat_profile_delta"] = repeat_delta
@@ -1788,6 +1791,31 @@ def stress_scalar_delta(
         "candidate": round(candidate_value, 6),
         delta_key: round(candidate_value - baseline_value, 6),
     }
+
+
+def stress_stage_duration_total_deltas(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+) -> dict[str, dict[str, float]]:
+    baseline_summary = baseline_report.get("summary")
+    candidate_summary = candidate_report.get("summary")
+    if not isinstance(baseline_summary, dict) or not isinstance(candidate_summary, dict):
+        return {}
+    baseline_stage = baseline_summary.get("stage_duration_s")
+    candidate_stage = candidate_summary.get("stage_duration_s")
+    if not isinstance(baseline_stage, dict) or not isinstance(candidate_stage, dict):
+        return {}
+    shared_stages = {
+        stage
+        for stage in set(baseline_stage) & set(candidate_stage)
+        if isinstance(stage, str) and stage
+    }
+    deltas: dict[str, dict[str, float]] = {}
+    for stage in sorted(shared_stages, key=pipeline_stage_sort_key):
+        metric_delta = stress_scalar_delta(baseline_stage, candidate_stage, stage, delta_key="delta_s")
+        if metric_delta is not None:
+            deltas[stage] = metric_delta
+    return deltas
 
 
 def stress_nested_metric_deltas(
@@ -5433,6 +5461,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
             print(f"baseline primary delta: {primary_delta_text}")
+        primary_stage_delta_text = baseline_primary_stage_delta_text(baseline_comparison)
+        if primary_stage_delta_text:
+            print(f"baseline primary stage delta: {primary_stage_delta_text}")
         primary_ocr_delta_text = baseline_primary_ocr_delta_text(baseline_comparison)
         if primary_ocr_delta_text:
             print(f"baseline primary OCR delta: {primary_ocr_delta_text}")
@@ -6619,6 +6650,24 @@ def baseline_primary_delta_text(baseline_comparison: dict[str, Any]) -> str:
     )
     if best:
         parts.append(f"best_total={best}")
+    return ", ".join(parts)
+
+
+def baseline_primary_stage_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    stage_duration = baseline_comparison.get("stage_duration_delta_s")
+    if not isinstance(stage_duration, dict):
+        return ""
+    parts: list[str] = []
+    for stage in sorted(
+        (stage for stage in stage_duration if isinstance(stage, str) and stage),
+        key=pipeline_stage_sort_key,
+    ):
+        delta = stage_duration.get(stage)
+        if not isinstance(delta, dict):
+            continue
+        value = parse_signed_float(delta.get("delta_s"))
+        if value is not None:
+            parts.append(f"{stage}={value:+.3f}s")
     return ", ".join(parts)
 
 

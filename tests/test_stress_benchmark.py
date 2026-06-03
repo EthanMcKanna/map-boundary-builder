@@ -779,6 +779,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             },
             {"slug": "baseline-only", "observed_status": "failed"},
         ],
+        "summary": {
+            "stage_duration_s": {
+                "extract": 0.2,
+                "ocr": 0.8,
+                "georeference": 0.1,
+            }
+        },
         "repeat_profile": {
             "summary": {
                 "analyzed_samples": 2,
@@ -883,6 +890,13 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
             },
             {"slug": "candidate-only", "observed_status": "failed"},
         ],
+        "summary": {
+            "stage_duration_s": {
+                "extract": 0.18,
+                "ocr": 0.9,
+                "georeference": 0.12,
+            }
+        },
         "repeat_profile": {
             "summary": {
                 "analyzed_samples": 2,
@@ -994,6 +1008,11 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["largest_ocr_engine_total_regressions"][0]["ocr_engine_total_delta_s"] == 0.15
     assert comparison["largest_ocr_engine_total_improvements"][0]["slug"] == "dallas"
     assert comparison["largest_ocr_engine_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
+    assert comparison["stage_duration_delta_s"] == {
+        "extract": {"baseline": 0.2, "candidate": 0.18, "delta_s": -0.02},
+        "ocr": {"baseline": 0.8, "candidate": 0.9, "delta_s": 0.1},
+        "georeference": {"baseline": 0.1, "candidate": 0.12, "delta_s": 0.02},
+    }
     repeat_delta = comparison["repeat_profile_delta"]
     assert repeat_delta["sample_counts"]["ocr_full_detail_retry_samples"]["delta"] == 1.0
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
@@ -1618,6 +1637,11 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "signature_changed_field_counts": {"city": 1, "control_points": 1},
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
+            "stage_duration_delta_s": {
+                "extract": {"baseline": 0.2, "candidate": 0.18, "delta_s": -0.02},
+                "ocr": {"baseline": 0.8, "candidate": 0.9, "delta_s": 0.1},
+                "georeference": {"baseline": 0.1, "candidate": 0.12, "delta_s": 0.02},
+            },
             "largest_total_regressions": [
                 {
                     "slug": "houston",
@@ -1868,6 +1892,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "(ocr_total=+0.150s, input=+0.010s, det=+0.070s, rec=+0.070s), "
         "best_total=dallas -0.100s "
         "(ocr_total=-0.080s, input=+0.000s, det=-0.020s, rec=-0.060s)"
+    ) in output
+    assert (
+        "baseline primary stage delta: extract=-0.020s, ocr=+0.100s, "
+        "georeference=+0.020s"
     ) in output
     assert (
         "baseline primary OCR delta: worst_ocr=houston +0.150s "

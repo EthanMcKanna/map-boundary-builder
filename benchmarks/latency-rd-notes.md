@@ -17491,3 +17491,20 @@ with zero failures in 0.531s.
   `export=+0.001113s`, and `inspect=-0.000011s`, plus the per-case OCR p95
   delta `0.101410s->0.106550s`. This is benchmark feedback-loop reliability
   only; no runtime default changed.
+- Reprobed bright-blue OCR scale/detector levers against the current full-v11
+  baseline and rejected them as defaults. `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION=1300`
+  failed the focused Waymo tail gate (`4/8`, `signature_changes=8`, Miami
+  primary `10.580004s` via georeference retries), confirming the earlier
+  `1200` cliff was not isolated. `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN=240`
+  passed the focused `8/8` and full `49/49` gates with no signature drift, but
+  the full run was mixed/noise rather than an improvement: primary max worsened
+  to `0.511657s`, median primary delta was only `+0.003s`, and repeat p95
+  improved only `-0.003s`. Instead of promoting the runtime knob, added primary
+  aggregate pipeline-stage deltas to baseline comparisons and CLI output.
+  Focused stress tests passed (`133 passed in 0.36s`) and the full suite passed
+  (`709 passed, 31 subtests passed in 6.74s`). Recomputing the det240 full
+  comparison with the new signal showed primary stage deltas of
+  `extract=+0.016s`, `ocr=+0.149s`, `georeference=+0.020s`,
+  `export=-0.006s`, and `inspect=+0.005s`, which explains why the apparent
+  repeat-profile win was not a runtime default worth shipping. This is
+  benchmark feedback-loop reliability only; no runtime default changed.
