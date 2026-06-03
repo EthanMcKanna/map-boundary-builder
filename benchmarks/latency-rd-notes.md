@@ -17959,3 +17959,35 @@ with zero failures in 0.531s.
   `0.330237s`. Treat the profiled production smoke as diagnostic overhead; the
   warmed no-profile production path for this arbitrary AVIF case is already
   subsecond, while first-use georeference setup remains the next visible tail.
+- Rejected another set of focused dark-teal OCR work-reduction knobs for the
+  Ann Arbor AVIF path. Lowering `MAP_BOUNDARY_FOCUS_GEOREF_OCR_MAX_DIMENSION`
+  from `550` was not safe: `500` (`out/focus-ocr-max500-ann-arbor-20260603`)
+  cut repeat OCR by about `0.007s` but dropped OCR label counts below the
+  contract and changed geometry signatures; `525`
+  (`out/focus-ocr-max525-ann-arbor-20260603`) still failed the UI-default row
+  by inferring `Yost Ice Arena`; and `540`/`545`
+  (`out/focus-ocr-max540-ann-arbor-20260603`,
+  `out/focus-ocr-max545-ann-arbor-20260603`) passed expectations but still
+  changed OCR/top-label and geometry signatures for at most a `0.001s` repeat
+  OCR gain. Keep the focused crop at `550`.
+- Rejected focused-recognition batch tuning as too small and too noisy for a
+  default. Env-only Ann Arbor probes with
+  `MAP_BOUNDARY_RAPIDOCR_DARK_TEAL_REC_BATCH_NUM=14/16/24`
+  (`out/focus-recbatch14-ann-arbor-20260603`,
+  `out/focus-recbatch16-ann-arbor-20260603`,
+  `out/focus-recbatch24-ann-arbor-20260603`) preserved the two Ann Arbor AVIF
+  signatures and showed the best repeat OCR p95 improvement at only about
+  `-0.004s` with batch `24`. The broad batch-24 full hard gate
+  (`out/darkteal-recbatch24-full50-hard-20260603`) failed with
+  `signature_changes=3` and regressed `profile-app-non-map-ui` primary OCR by
+  `+0.151s`. A reverted focus-only prototype kept broader dark-teal OCR at
+  batch `8` while using batch `24` only for the focused `320/default` crop; it
+  preserved the Ann Arbor focused signatures
+  (`out/focus-georef-recbatch24-ann-arbor-20260603`) and repeated the same
+  tiny `-0.004s` OCR p95 gain, but the full hard gate
+  (`out/focus-georef-recbatch24-full50-hard-20260603`) still failed strict
+  comparison with one `zoox-las-vegas-mobile-tall` top-label signature drift
+  plus unrelated OCR-stage noise, and prewarm stayed roughly tied to slightly
+  worse (`0.632s` versus the `0.622s` clean baseline; one focused run measured
+  `0.745s`). Keep the existing dark-teal batch `8` and avoid a focus-only batch
+  knob unless production evidence shows a larger cold OCR win.
