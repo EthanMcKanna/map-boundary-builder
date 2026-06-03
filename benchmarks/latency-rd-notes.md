@@ -16000,3 +16000,13 @@ with zero failures in 0.531s.
   repeat p95 `0.444s`, repeat OCR-engine p95 `0.383s`, prewarm `1.222s`, and
   stable repeat signatures. All 11 failed rows reported `ocr_engine_profile`
   `calls=1` and `ocr_full_detail_retry=false`.
+- Locked the remaining successful stress rows to explicit OCR engine call
+  counts. The 24 successful OCR-backed rows that were still unbounded now cap at
+  one call, while the four remaining pure catalog-shape successful rows now cap
+  at zero calls. Together with the earlier fail-closed locks, all 49 real
+  screenshot stress cases now carry a `max_ocr_engine_calls` contract. The full
+  hard gate at `out/success-one-ocr-call-full49-hard-20260603` passed `49/49`,
+  statuses `{"complete":38,"failed":11}`, primary max `0.635701s`, repeat p95
+  `0.447s`, repeat max `0.524s`, repeat OCR-engine p95 `0.403s`, prewarm
+  `1.413s`, stable repeat signatures, and `ocr_full_detail_retry_count=0`.
+  This is another manifest reliability contract; no runtime deploy is needed.
