@@ -17297,3 +17297,15 @@ with zero failures in 0.531s.
   the two lost expected rows before the timing details. Focused stress
   comparator tests passed (`122 passed in 0.19s`); this is benchmark
   feedback-loop reliability only.
+- Added `--fail-on-baseline-expectation-regression` and made hard/focused preset
+  baseline comparisons enable it by default. The new gate fails only when a row
+  that passed baseline expectations fails candidate expectations; candidate
+  improvements are not blocked, and older reports without expectation metadata
+  remain printable. Because default comparison semantics changed, preset
+  metadata moved to `--real-screenshot-hard-gate` version `7` and
+  `--focused-real-screenshot-gate` version `6`. Recomputing the saved
+  route-detector comparison between `out/route-det608-control-20260603` and
+  `out/route-det544-candidate-20260603` now reports expectation delta `-2` and
+  baseline expectation regressions for `tesla-austin-route-receipt-gray-long`
+  and `tesla-austin-route-active-dark`. Focused stress benchmark tests passed
+  (`126 passed in 0.20s`); this is benchmark acceptance reliability only.

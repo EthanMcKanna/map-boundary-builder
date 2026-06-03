@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 6
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 7
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 5
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 6
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -197,6 +197,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on-baseline-coverage-gap",
         action="store_true",
         help="Exit non-zero when --compare-baseline-report did not compare every selected row.",
+    )
+    parser.add_argument(
+        "--fail-on-baseline-expectation-regression",
+        action="store_true",
+        help="Exit non-zero when --compare-baseline-report shows rows that passed baseline expectations but fail candidate expectations.",
     )
     parser.add_argument(
         "--max-baseline-total-regression-s",
@@ -421,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-baseline-config-drift requires --compare-baseline-report")
     if args.fail_on_baseline_coverage_gap and not args.compare_baseline_report:
         parser.error("--fail-on-baseline-coverage-gap requires --compare-baseline-report")
+    if args.fail_on_baseline_expectation_regression and not args.compare_baseline_report:
+        parser.error("--fail-on-baseline-expectation-regression requires --compare-baseline-report")
     if args.max_baseline_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
@@ -543,6 +550,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.fail_on_baseline_coverage_gap and baseline_comparison_coverage_gaps(report):
         return 1
+    if (
+        args.fail_on_baseline_expectation_regression
+        and baseline_comparison_expectation_regressions(report)
+    ):
+        return 1
     if baseline_comparison_regression_budget_failed(report):
         return 1
     if args.fail_on_unexpected and (
@@ -572,6 +584,7 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         args.fail_on_baseline_signature_drift = True
         args.fail_on_baseline_config_drift = True
         args.fail_on_baseline_coverage_gap = True
+        args.fail_on_baseline_expectation_regression = True
         if args.max_baseline_total_regression_s is None:
             args.max_baseline_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_p95_regression_s is None:
@@ -3636,6 +3649,27 @@ def baseline_comparison_configuration_changes(report: dict[str, Any]) -> list[di
     if not isinstance(changes, list):
         return []
     return [change for change in changes if isinstance(change, dict)]
+
+
+def baseline_comparison_expectation_regressions(report: dict[str, Any]) -> list[str]:
+    comparison = report.get("baseline_comparison")
+    if not isinstance(comparison, dict):
+        return []
+    changes = comparison.get("expectation_changes")
+    if not isinstance(changes, list):
+        return []
+    slugs: list[str] = []
+    for change in changes:
+        if not isinstance(change, dict):
+            continue
+        if change.get("baseline_expectation_passed") is not True:
+            continue
+        if change.get("candidate_expectation_passed") is not False:
+            continue
+        slug = change.get("slug")
+        if isinstance(slug, str) and slug:
+            slugs.append(slug)
+    return slugs
 
 
 def baseline_comparison_coverage_gaps(report: dict[str, Any]) -> list[dict[str, Any]]:

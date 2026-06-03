@@ -3898,6 +3898,36 @@ def test_repeat_profile_unexpected_helpers_read_summary_and_cases() -> None:
     assert stress_module.repeat_profile_unexpected_sample_count({}) == 0
 
 
+def test_baseline_expectation_regression_cases_read_comparison() -> None:
+    report = {
+        "baseline_comparison": {
+            "expectation_changes": [
+                {
+                    "slug": "lost-row",
+                    "baseline_expectation_passed": True,
+                    "candidate_expectation_passed": False,
+                },
+                {
+                    "slug": "fixed-row",
+                    "baseline_expectation_passed": False,
+                    "candidate_expectation_passed": True,
+                },
+                {
+                    "slug": "still-drifty",
+                    "baseline_expectation_passed": False,
+                    "candidate_expectation_passed": False,
+                },
+            ]
+        }
+    }
+
+    assert stress_module.baseline_comparison_expectation_regressions(report) == ["lost-row"]
+    assert stress_module.baseline_comparison_expectation_regressions({}) == []
+    assert stress_module.baseline_comparison_expectation_regressions(
+        {"baseline_comparison": {"expectation_changes": "lost-row"}}
+    ) == []
+
+
 def test_main_requires_repeat_runs_for_repeat_signature_drift_gate(monkeypatch) -> None:
     def fake_run_stress_benchmark(*args, **kwargs):
         raise AssertionError("stress benchmark should not run without repeat samples")
@@ -3930,6 +3960,18 @@ def test_main_requires_baseline_for_coverage_gap_gate(monkeypatch) -> None:
 
     with pytest.raises(SystemExit) as exc:
         stress_module.main(["--fail-on-baseline-coverage-gap"])
+
+    assert exc.value.code == 2
+
+
+def test_main_requires_baseline_for_expectation_regression_gate(monkeypatch) -> None:
+    def fake_run_stress_benchmark(*args, **kwargs):
+        raise AssertionError("stress benchmark should not run without baseline comparison")
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    with pytest.raises(SystemExit) as exc:
+        stress_module.main(["--fail-on-baseline-expectation-regression"])
 
     assert exc.value.code == 2
 
@@ -4007,6 +4049,53 @@ def test_main_fails_when_baseline_coverage_gap_is_detected(tmp_path, monkeypatch
             "--compare-baseline-report",
             "baseline.json",
             "--fail-on-baseline-coverage-gap",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_main_fails_when_baseline_expectation_regression_is_detected(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 0,
+                "unexpected": ["lost-row"],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "baseline_comparison": {
+                "configuration_changes": [],
+                "signature_changes": [],
+                "expectation_changes": [
+                    {
+                        "slug": "lost-row",
+                        "baseline_expectation_passed": True,
+                        "candidate_expectation_passed": False,
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--compare-baseline-report",
+            "baseline.json",
+            "--fail-on-baseline-expectation-regression",
         ]
     )
 
@@ -4504,7 +4593,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 6,
+            "version": 7,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -4597,7 +4686,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 5,
+            "version": 6,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {
@@ -4896,6 +4985,84 @@ def test_real_screenshot_gate_baseline_comparison_fails_coverage_gap_by_default(
                 "missing_in_candidate": [],
                 "configuration_changes": [],
                 "signature_changes": [],
+                "regression_budget": {
+                    "passed": True,
+                    "max_total_elapsed_regression_s": 0.25,
+                    "max_repeat_p95_regression_s": 0.25,
+                    "max_ocr_engine_total_regression_s": 0.25,
+                    "max_repeat_ocr_engine_total_p95_regression_s": 0.25,
+                    "violations": [],
+                },
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--focused-real-screenshot-gate",
+            "--only",
+            "dallas-waymo",
+            "--compare-baseline-report",
+            "baseline.json",
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_real_screenshot_gate_baseline_comparison_fails_expectation_regression_by_default(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert kwargs["compare_baseline_report"] == Path("baseline.json")
+        return {
+            "prewarm": {"status": "ok", "total_s": 1.0},
+            "manifest_contract_budget": {
+                "passed": True,
+                "violations": [],
+            },
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.6,
+            },
+            "rows": [],
+            "repeat_profile": {
+                "summary": {
+                    "analyzed_samples": 2,
+                    "expectation_passed_samples": 2,
+                    "unexpected_samples": 0,
+                    "subsecond_samples": 2,
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.47,
+                    "max_total_elapsed_s": 0.51,
+                    "unstable_signature_cases": [],
+                }
+            },
+            "latency_budget": {
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+            },
+            "baseline_comparison": {
+                "compared_rows": 1,
+                "missing_in_baseline": [],
+                "missing_in_candidate": [],
+                "configuration_changes": [],
+                "signature_changes": [],
+                "expectation_changes": [
+                    {
+                        "slug": "dallas-waymo",
+                        "baseline_expectation_passed": True,
+                        "candidate_expectation_passed": False,
+                    }
+                ],
                 "regression_budget": {
                     "passed": True,
                     "max_total_elapsed_regression_s": 0.25,
