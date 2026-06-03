@@ -18445,3 +18445,17 @@ with zero failures in 0.531s.
   scoped `bay-3-svg` hidden delta of `0.0s -> 0.0s`, with no violations.
   Targeted comparator tests passed `5 passed`; the full stress benchmark test
   module passed `151 passed`.
+- Rejected direct SVG service-path vector extraction as a runtime shortcut.
+  The hypothesis was that parsing the single `#07f` service-area path directly
+  and synthesizing an `ExtractionResult` would skip the SVG service-path
+  rasterize/contour step. A local parser spike matched the current raster
+  geometry roughly but not exactly (`bay 3.svg` vector/raster IoU about
+  `0.969`; `Nashville_ServiceArea.svg` about `0.985`). The focused production
+  gate at `out/vector-svg-probe-20260603` proved that this is not safe or fast
+  enough as a default: `nashville-waymo-svg-forced` and `bay-3-svg` both hit
+  signature drift (`bbox`, `geojson_coordinate_count`, and
+  `geojson_geometry_hash`), and `bay-3-svg-ui-default` stayed signature-stable
+  only because the catalog output absorbed the candidate geometry, but slowed
+  from the baseline `0.093431s` to `0.140271s`. The run still passed manifest
+  expectations (`3/3`) and saved extraction-stage time, but total latency and
+  signature stability were worse, so no runtime code changed.
