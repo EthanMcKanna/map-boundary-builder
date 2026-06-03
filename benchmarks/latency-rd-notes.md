@@ -18252,3 +18252,32 @@ with zero failures in 0.531s.
   catalog/stress tests passed (`286 passed`), `python -m compileall -q api
   map_boundary_builder` passed, and full pytest passed `730 passed, 31 subtests
   passed`.
+- Added eight paired stress rows for alternate local service-area screenshots
+  that were present in `~/Downloads` but not yet represented in the real
+  screenshot manifest: `Waymo Orlando.png`, `Waymo Los Angeles.png`, and
+  `waymo bay area.png` under `/Users/ethanmckanna/Downloads/service area images`,
+  plus `/Users/ethanmckanna/Downloads/zoox sf bigger.webp`. Each image now has
+  a forced no-catalog row that preserves the OCR/georeference path plus a
+  UI-default row that locks the catalog shortcut. The discovery probe at
+  `out/new-local-image-probe-20260603/summary.json` showed the default rows
+  resolving through `catalog-shape-match` in `0.046-0.121s` for the Waymo
+  images and `0.087s` for the larger Zoox SF image with zero OCR calls; the
+  forced rows completed through OCR/georeference in `0.300-0.462s`. A profiling
+  rerun at `out/new-local-forced-profile-20260603/summary.json` supplied the
+  OCR count contracts for the four forced rows, all with one OCR call and no
+  low-confidence labels. I skipped `nash.svg` and `bay 3.svg` as green manifest
+  rows in this pass because the forced SVG path exceeded the one-second target
+  (`1.017s` and `1.252s` in the probe), and skipped `h.jpeg` because it remains
+  a route/non-service-area failure rather than a new service-area contract.
+  Focused stress proof at `out/alternate-service-area-focused-20260603` passed
+  `8/8` with max primary `0.407695s`, repeat p95 `0.323s`, and all repeat
+  samples subsecond. The stricter full hard-gate rerun at
+  `out/alternate-service-area-full70-hard-rerun2-20260603` passed `70/70`
+  expected outcomes, statuses `{"complete":59,"failed":11}`, max primary
+  `0.338522s`, repeat p95 `0.295s`, repeat max `0.316s`, prewarm `0.645s`,
+  and manifest OCR contracts `43/43` count-capped positive rows. Common-row
+  comparison against the previous full62 report showed `62` compared rows,
+  `signature_change_count=0`, `expectation_passed_delta=0`, median delta
+  `-0.000340s`, and only the eight new alternate rows missing from the
+  baseline. The hard-gate default was raised from `39` to `43`
+  `min_ocr_count_contract_rows` so future runs protect this added OCR coverage.

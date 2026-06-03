@@ -850,6 +850,51 @@
       }
     },
     {
+      "slug": "zoox-sf-bigger",
+      "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
+      "no_catalog": true,
+      "filename_hint": "upload.webp",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "San Francisco",
+        "min_control_points": 10,
+        "min_ocr_labels": 18,
+        "min_combined_confidence": 0.94,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 17,
+          "selected_box_count": 17,
+          "result_count": 17,
+          "label_count": 17,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "zoox-sf-bigger-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
+      "no_catalog": false,
+      "filename_hint": "upload.webp",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "San Francisco",
+        "catalog_slug_equals": "san-francisco-zoox",
+        "min_combined_confidence": 0.94,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-122.4410255, 37.7479064, -122.3876889, 37.8056186],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "zoox-sf-service-area-current",
       "image": "/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG",
       "no_catalog": true,
@@ -1185,6 +1230,50 @@
       }
     },
     {
+      "slug": "bay-area-waymo-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "min_control_points": 14,
+        "min_ocr_labels": 30,
+        "min_combined_confidence": 0.86,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 21,
+          "selected_box_count": 19,
+          "result_count": 19,
+          "label_count": 19,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-122.5053058, 37.3057357, -121.8559714, 37.8082677],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "bay-area-waymo-service-area-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Bay Area",
+        "catalog_slug_equals": "bay-area-waymo",
+        "min_combined_confidence": 0.87,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "bay-area-waymo-jpeg-small",
       "image": "/Users/ethanmckanna/Downloads/input.jpg",
       "no_catalog": true,
@@ -1236,6 +1325,51 @@
           "label_confidence_lt_90_count": 0
         },
         "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "los-angeles-waymo-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Los Angeles",
+        "min_control_points": 18,
+        "min_ocr_labels": 36,
+        "min_combined_confidence": 0.87,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 50,
+          "selected_box_count": 30,
+          "result_count": 29,
+          "label_count": 29,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "los-angeles-waymo-service-area-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Los Angeles",
+        "catalog_slug_equals": "los-angeles-waymo",
+        "min_combined_confidence": 0.85,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-118.5235017, 33.9320907, -118.2221488, 34.1183233],
         "max_bbox_error_m": 1000
       }
     },
@@ -1309,6 +1443,51 @@
           "label_confidence_lt_90_count": 0
         },
         "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "orlando-waymo-service-area",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
+      "no_catalog": true,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "ocr-georeference:nominatim-label-fit",
+        "city_equals": "Orlando",
+        "min_control_points": 5,
+        "min_ocr_labels": 20,
+        "min_combined_confidence": 0.85,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+          "raw_box_count": 16,
+          "selected_box_count": 16,
+          "result_count": 16,
+          "label_count": 16,
+          "label_confidence_lt_50_count": 0,
+          "label_confidence_lt_70_count": 0,
+          "label_confidence_lt_80_count": 0,
+          "label_confidence_lt_90_count": 0
+        },
+        "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "orlando-waymo-service-area-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Orlando",
+        "catalog_slug_equals": "orlando-waymo",
+        "min_combined_confidence": 0.97,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-81.5075254, 28.3614576, -81.3638449, 28.5537667],
         "max_bbox_error_m": 1000
       }
     },
