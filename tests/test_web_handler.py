@@ -58,6 +58,49 @@ class LocalWebHandlerTests(unittest.TestCase):
         self.assertEqual(options.filename_hint, "Waymo Bay Area.png")
         self.assertTrue(options.source_was_svg)
 
+    def test_background_run_treats_auto_city_as_no_hint(self) -> None:
+        request = web.BoundaryWebHandler.__new__(web.BoundaryWebHandler)
+        request.parse_upload_request = lambda: (
+            {"city": "Auto", "include_overlay": "0"},
+            {"image": ("Waymo Dallas.png", b"image-bytes")},
+        )
+        captured_response: dict[str, object] = {}
+        captured_threads: list[object] = []
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus = HTTPStatus.OK) -> None:
+            captured_response["payload"] = payload
+            captured_response["status"] = status
+
+        class FakeThread:
+            def __init__(self, *, target: object, args: tuple[object, ...], daemon: bool) -> None:
+                self.args = args
+                captured_threads.append(self)
+
+            def start(self) -> None:
+                return None
+
+        request.send_json = send_json
+        with TemporaryDirectory() as temp_dir:
+            with (
+                patch.dict(os.environ, {"MAP_BOUNDARY_WEB_OUT": temp_dir}),
+                patch("map_boundary_builder.web.secrets.token_hex", return_value="run-id"),
+                patch("map_boundary_builder.web.threading.Thread", FakeThread),
+            ):
+                request.handle_create_run()
+
+        self.assertEqual(captured_response["status"], HTTPStatus.CREATED)
+        self.assertEqual(captured_response["payload"], {"id": "run-id", "status_url": "/api/runs/run-id"})
+        state, _options = captured_threads[0].args
+        self.assertIsNone(state.city)
+
+    def test_city_hint_for_request_normalizes_auto_placeholders(self) -> None:
+        self.assertIsNone(web.city_hint_for_request({}))
+        self.assertIsNone(web.city_hint_for_request({"city": ""}))
+        self.assertIsNone(web.city_hint_for_request({"city": "Auto"}))
+        self.assertIsNone(web.city_hint_for_request({"city": "Auto-detect"}))
+        self.assertIsNone(web.city_hint_for_request({"city": "automatic"}))
+        self.assertEqual(web.city_hint_for_request({"city": " Dallas "}), "Dallas")
+
     def test_background_failure_records_terminal_failed_event(self) -> None:
         with TemporaryDirectory() as temp_dir:
             state = web.RunState(

@@ -16552,3 +16552,11 @@ with zero failures in 0.531s.
   `http://127.0.0.1:8876` confirming served HTML/JS includes the current
   pipeline/runtime health and new cache normalizer. No screenshot hard gate was
   rerun because this only changes pre-upload browser cache admission/keying.
+- Mirrored the API's `Auto`/`automatic` city-placeholder normalization in the
+  local `map-boundary-web` handler. The local background-run path had still
+  passed raw `city=Auto` into `build_boundary`, which could reproduce the same
+  literal-city failure class already fixed in the Vercel API. Validation passed
+  with `git diff --check`, focused local-web/API request tests (`90 passed in
+  0.71s`), and the full suite (`666 passed, 31 subtests passed in 6.18s`). No
+  screenshot hard gate was rerun because this only changes local request parsing
+  before the existing extraction/georeference path.
