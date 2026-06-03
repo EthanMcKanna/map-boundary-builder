@@ -742,6 +742,24 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "selected_box_count": {"p95_count": 20.0, "max_count": 22.0},
                 },
             },
+            "cases": {
+                "dallas": {
+                    "median_total_elapsed_s": 0.45,
+                    "p95_total_elapsed_s": 0.5,
+                    "max_total_elapsed_s": 0.52,
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {"p95_duration_s": 0.25, "max_duration_s": 0.3},
+                    },
+                },
+                "houston": {
+                    "median_total_elapsed_s": 0.6,
+                    "p95_total_elapsed_s": 0.68,
+                    "max_total_elapsed_s": 0.7,
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {"p95_duration_s": 0.31, "max_duration_s": 0.38},
+                    },
+                },
+            },
         },
     }
     candidate = {
@@ -816,6 +834,24 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                     "selected_box_count": {"p95_count": 22.0, "max_count": 24.0},
                 },
             },
+            "cases": {
+                "dallas": {
+                    "median_total_elapsed_s": 0.42,
+                    "p95_total_elapsed_s": 0.46,
+                    "max_total_elapsed_s": 0.5,
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {"p95_duration_s": 0.22, "max_duration_s": 0.28},
+                    },
+                },
+                "houston": {
+                    "median_total_elapsed_s": 0.64,
+                    "p95_total_elapsed_s": 0.74,
+                    "max_total_elapsed_s": 0.76,
+                    "ocr_engine_stage_duration_s": {
+                        "total_s": {"p95_duration_s": 0.36, "max_duration_s": 0.42},
+                    },
+                },
+            },
         },
     }
 
@@ -881,6 +917,19 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
     assert repeat_delta["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.02
     assert repeat_delta["ocr_engine_count_metric"]["selected_box_count"]["p95_count"]["delta_count"] == 2.0
+    case_deltas = comparison["repeat_profile_case_deltas"]
+    assert [delta["slug"] for delta in case_deltas] == ["dallas", "houston"]
+    assert case_deltas[0]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == -0.04
+    assert case_deltas[1]["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.06
+    assert case_deltas[1]["ocr_engine_stage_duration_s"]["total_s"]["p95_duration_s"]["delta_s"] == 0.05
+    assert comparison["largest_repeat_profile_case_p95_regressions"][0]["slug"] == "houston"
+    assert (
+        comparison["largest_repeat_profile_case_p95_regressions"][0]["duration_s"][
+            "p95_total_elapsed_s"
+        ]["delta_s"]
+        == 0.06
+    )
+    assert comparison["largest_repeat_profile_case_p95_improvements"][0]["slug"] == "dallas"
     regression_budget = comparison["regression_budget"]
     assert regression_budget["passed"] is False
     assert regression_budget["max_total_elapsed_regression_s"] == 0.1
@@ -891,6 +940,7 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
         "primary_total_regression_exceeded",
         "primary_ocr_total_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
+        "repeat_profile_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
     ]
     assert regression_budget["violations"][0]["slug"] == "houston"
@@ -900,7 +950,11 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert regression_budget["violations"][1]["baseline_ocr_engine_total_s"] == 0.45
     assert regression_budget["violations"][1]["candidate_ocr_engine_total_s"] == 0.6
     assert regression_budget["violations"][2]["delta_s"] == 0.03
-    assert regression_budget["violations"][3]["delta_s"] == 0.02
+    assert regression_budget["violations"][3]["slug"] == "houston"
+    assert regression_budget["violations"][3]["delta_s"] == 0.06
+    assert regression_budget["violations"][3]["baseline_p95_total_elapsed_s"] == 0.68
+    assert regression_budget["violations"][3]["candidate_p95_total_elapsed_s"] == 0.74
+    assert regression_budget["violations"][4]["delta_s"] == 0.02
 
 
 def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None:
@@ -1347,6 +1401,30 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "candidate_scope": {
                 "baseline_rows_outside_candidate_scope_count": 3,
             },
+            "largest_repeat_profile_case_p95_regressions": [
+                {
+                    "slug": "houston",
+                    "duration_s": {
+                        "p95_total_elapsed_s": {
+                            "baseline": 0.68,
+                            "candidate": 0.74,
+                            "delta_s": 0.06,
+                        }
+                    },
+                }
+            ],
+            "largest_repeat_profile_case_p95_improvements": [
+                {
+                    "slug": "dallas",
+                    "duration_s": {
+                        "p95_total_elapsed_s": {
+                            "baseline": 0.5,
+                            "candidate": 0.46,
+                            "delta_s": -0.04,
+                        }
+                    },
+                }
+            ],
             "repeat_profile_delta": {
                 "sample_counts": {
                     "ocr_full_detail_retry_samples": {"delta": 1.0},
@@ -1403,6 +1481,11 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
         "(baseline=0.040s, candidate=0.010s)"
     ) in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
+    assert (
+        "baseline repeat case delta: worst_case=houston +0.060s "
+        "(baseline=0.680s, candidate=0.740s), best_case=dallas -0.040s "
+        "(baseline=0.500s, candidate=0.460s)"
+    ) in output
     assert "full_detail_retries=+1" in output
     assert "hidden_ocr_p95=+0.012s" in output
     assert (
@@ -1451,6 +1534,12 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
                 "max_repeat_p95_regression_s": 0.02,
             },
             {
+                "kind": "repeat_profile_case_p95_regression_exceeded",
+                "slug": "case-slow",
+                "delta_s": 0.08,
+                "max_repeat_p95_regression_s": 0.02,
+            },
+            {
                 "kind": "repeat_ocr_total_p95_regression_exceeded",
                 "delta_s": 0.09,
                 "max_repeat_ocr_engine_total_p95_regression_s": 0.01,
@@ -1458,18 +1547,23 @@ def test_baseline_regression_budget_violation_samples_include_each_kind() -> Non
         ]
     )
 
-    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=5)
+    samples = stress_module.baseline_regression_budget_violation_samples(violations, limit=6)
     sample_kinds = [sample["kind"] for sample in samples]
 
-    assert sample_kinds[:4] == [
+    assert sample_kinds[:5] == [
         "primary_total_regression_exceeded",
         "primary_ocr_total_regression_exceeded",
         "repeat_profile_p95_regression_exceeded",
+        "repeat_profile_case_p95_regression_exceeded",
         "repeat_ocr_total_p95_regression_exceeded",
     ]
-    assert sample_kinds[4] == "primary_total_regression_exceeded"
+    assert sample_kinds[5] == "primary_total_regression_exceeded"
     assert stress_module.baseline_regression_budget_violation_count_text(violations) == (
-        " by_kind=primary:6,primary_ocr:1,repeat_p95:1,repeat_ocr_p95:1"
+        " by_kind=primary:6,primary_ocr:1,repeat_p95:1,repeat_case_p95:1,repeat_ocr_p95:1"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(violations[8])
+        == "repeat case p95 case-slow +0.080s > budget 0.020s"
     )
 
 

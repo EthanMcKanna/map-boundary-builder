@@ -17322,3 +17322,20 @@ with zero failures in 0.531s.
   with fail-closed route/non-map/thematic rows still one-OCR-call and
   subsecond. This is current-state validation for the v7 acceptance harness,
   not a runtime change.
+- Added per-case repeat-profile p95 deltas to baseline comparisons and made the
+  existing baseline repeat-p95 regression budget fail when any compared slug's
+  repeat tail exceeds the budget, even if the aggregate repeat p95 stays within
+  limits. This closes a speed-candidate blind spot where one map screenshot
+  could get noisier while unrelated rows hid the regression. The comparator now
+  stores `repeat_profile_case_deltas`, ranks worst/best repeat-case p95 deltas,
+  and prints `baseline repeat case delta` beside the aggregate repeat delta.
+  Focused stress tests passed (`126 passed in 0.37s`), and a full current
+  hard-gate comparison at `out/repeat-case-budget-current-v7-20260603` passed
+  against `out/current-v7-full49-hard-20260603`: `49/49` expectations,
+  `signature_changes=0`, median primary delta `-0.002s`, aggregate repeat p95
+  delta `-0.021s`, `49` repeat case deltas, worst repeat-case p95 drift
+  `dallas-waymo +0.013937s`, best `zoox-las-vegas-service-area -0.038s`, and
+  the default `0.250s` primary/repeat/OCR regression budget passed. Replaying
+  the older route-detector control/candidate reports produced `8` per-case
+  repeat deltas while preserving the existing `-2` expectation-regression
+  signal; this is benchmark acceptance reliability only.
