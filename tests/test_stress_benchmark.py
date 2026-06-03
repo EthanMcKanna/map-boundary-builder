@@ -150,6 +150,43 @@ def test_row_from_process_records_route_ui_reject_details() -> None:
     assert row["route_metric_labels"] == ["Ride is 16 min away"]
 
 
+def test_row_from_process_records_non_map_ui_reject_details() -> None:
+    row = stress_module.row_from_process(
+        {"slug": "non-map-ui", "image": "settings.png"},
+        command=["in-process"],
+        completed=subprocess.CompletedProcess(["in-process"], 1, stdout="", stderr="non-map error"),
+        wall_s=0.3,
+        summary={
+            "status": "failed",
+            "error": "Could not infer a service-area boundary from non-map app UI.",
+            "event_profile": {
+                "total_elapsed_s": 0.3,
+                "stage_elapsed_s": {"ocr": 0.2},
+                "events": [
+                    {
+                        "stage": "ocr",
+                        "message": "Map labels read",
+                        "details": {"label_count": 20, "top_labels": ["Tesla Sync"]},
+                    },
+                    {
+                        "stage": "georeference",
+                        "message": "Rejecting non-map app UI",
+                        "details": {
+                            "non_map_ui_categories": ["account", "privacy", "sync"],
+                            "non_map_ui_labels": ["Tesla Sync", "Secure&Private"],
+                        },
+                    },
+                ],
+            },
+        },
+        parse_error=None,
+        expected_status="failed",
+    )
+
+    assert row["non_map_ui_categories"] == ["account", "privacy", "sync"]
+    assert row["non_map_ui_labels"] == ["Tesla Sync", "Secure&Private"]
+
+
 def test_repeat_profile_ocr_engine_count_metric_text_includes_confidence_counts() -> None:
     text = stress_module.repeat_profile_ocr_engine_count_metric_text(
         {
@@ -586,6 +623,28 @@ def test_check_expectations_rejects_route_ui_evidence_drift() -> None:
     assert issues == [
         "route_ui_categories missing ['plate']",
         "route_metric_labels count 0 below 1",
+    ]
+
+
+def test_check_expectations_rejects_non_map_ui_evidence_drift() -> None:
+    issues = stress_module.check_expectations(
+        {
+            "observed_status": "failed",
+            "error": "Could not infer a service-area boundary from non-map app UI.",
+            "non_map_ui_categories": ["privacy", "sync"],
+            "non_map_ui_labels": [],
+        },
+        {
+            "status": "failed",
+            "error_contains": "non-map app UI",
+            "non_map_ui_categories_include": ["privacy", "stats", "sync"],
+            "min_non_map_ui_labels": 1,
+        },
+    )
+
+    assert issues == [
+        "non_map_ui_categories missing ['stats']",
+        "non_map_ui_labels count 0 below 1",
     ]
 
 

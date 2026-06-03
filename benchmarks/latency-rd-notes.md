@@ -15914,3 +15914,43 @@ with zero failures in 0.531s.
   flags, and road-match fields; only `robotaxi-austin` georeference confidence
   and control-count varied within the same bbox/hash output
   (`0.99`/`13` controls to `0.978`/`12` controls).
+- Rejected another bright-blue no-catalog text-selection pass after the
+  light-fill route crop shifted the full hard-gate tail back to Waymo
+  screenshots. A matched current-code focused control over the nine no-catalog
+  Waymo rows (`out/bright-blue-minarea-current-focused-20260603`) passed `9/9`
+  with primary max `0.910431s`, stable repeat signatures, repeat p95
+  `0.495469s`, repeat OCR-engine p95 `0.435s`, and Los Angeles still the repeat
+  tail at `40` OCR labels, `50` raw boxes, and `30` selected boxes. Raising
+  `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA` to `3200`
+  (`out/bright-blue-minarea3200-focused-20260603`) also passed `9/9`, but its
+  repeat p95 `0.494972s` merely matched the control and left the dense LA and
+  Houston selected counts effectively unchanged because the wide-text rescue
+  rule still preserved the needed map labels. A lower `2600` probe had no
+  useful repeat-speed advantage either and tripped the primary latency gate on a
+  Dallas detector spike. Tightening the rescue rule itself with
+  `MAP_BOUNDARY_FAST_TEXT_OCR_RESCUE_MIN_AREA=1100`
+  (`out/bright-blue-rescue1100-focused-20260603`) is rejected: it passed only
+  `6/9` expectations, made repeat p95 worse at `0.509322s`, triggered a
+  Nashville full-detail retry, dropped Los Angeles to `17` controls/`35` labels
+  with bbox error `1200.2m`, dropped Houston to `8` controls, and pushed
+  Nashville bbox error to `1148.6m`. Keep the non-SVG bright-blue min-area and
+  rescue defaults at `2300`/`900`; the current tail is real recognizer work, not
+  dead text-box mass.
+- Accepted a stress-harness reliability improvement for non-map app UI
+  failures. The runner already emitted `non_map_ui_categories` and
+  `non_map_ui_labels` when rejecting app screens, but the stress summary only
+  preserved the final `non-map app UI` error and OCR label floors. The harness
+  now records those non-map evidence fields and the expectation schema supports
+  `non_map_ui_categories_include` plus `min_non_map_ui_labels`, mirroring the
+  existing route-UI evidence locks. The manifest now requires
+  `tesla-sync-non-map-ui` to prove `account/import/privacy/stats/sync` evidence
+  and `profile-app-non-map-ui` to prove `followers/following/media` evidence.
+  Focused validation at `out/non-map-ui-evidence-focused-locked-20260603`
+  passed `2/2`, repeat p95 `0.444s`, repeat OCR-engine p95 `0.373s`; the rows
+  exposed concrete labels such as `Sync Tesla Rides` / `Secure&Private` and
+  `Following` / `Followers Following`. The full hard gate at
+  `out/non-map-ui-evidence-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.601954s`, repeat p95 `0.468s`,
+  repeat OCR-engine p95 `0.403s`, prewarm `1.330s`, and stable repeat
+  signatures. This is a reliability-contract change only; no runtime deploy is
+  needed.

@@ -838,6 +838,11 @@ def row_from_process(
         stage="georeference",
         message="Rejecting ride-route UI",
     )
+    non_map_ui_reject_details = latest_message_details(
+        events,
+        stage="georeference",
+        message="Rejecting non-map app UI",
+    )
     raw_ocr_engine_profile = summary.get("ocr_engine_profile")
     ocr_engine_profile = raw_ocr_engine_profile if isinstance(raw_ocr_engine_profile, dict) else None
     row = base_row(case, expected_status=expected_status, observed_status=observed_status)
@@ -893,6 +898,16 @@ def row_from_process(
             "route_metric_labels": (
                 route_ui_reject_details.get("route_metric_labels")
                 if isinstance(route_ui_reject_details.get("route_metric_labels"), list)
+                else None
+            ),
+            "non_map_ui_categories": (
+                non_map_ui_reject_details.get("non_map_ui_categories")
+                if isinstance(non_map_ui_reject_details.get("non_map_ui_categories"), list)
+                else None
+            ),
+            "non_map_ui_labels": (
+                non_map_ui_reject_details.get("non_map_ui_labels")
+                if isinstance(non_map_ui_reject_details.get("non_map_ui_labels"), list)
                 else None
             ),
             "ocr_full_detail_retry": any(
@@ -1177,6 +1192,7 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
             issues.append(f"error did not contain {expected_error!r}")
         append_min_ocr_labels_expectation_issue(row, expect, issues)
         append_route_ui_expectation_issues(row, expect, issues)
+        append_non_map_ui_expectation_issues(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
         append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
         return issues
@@ -1263,6 +1279,29 @@ def append_route_ui_expectation_issues(row: dict[str, Any], expect: dict[str, An
     metric_count = len(metric_labels) if isinstance(metric_labels, list) else None
     if metric_count is None or metric_count < min_route_metric_labels:
         issues.append(f"route_metric_labels count {metric_count!r} below {min_route_metric_labels:g}")
+
+
+def append_non_map_ui_expectation_issues(row: dict[str, Any], expect: dict[str, Any], issues: list[str]) -> None:
+    expected_categories = expect.get("non_map_ui_categories_include")
+    if isinstance(expected_categories, list):
+        categories = row.get("non_map_ui_categories")
+        if not isinstance(categories, list):
+            issues.append("non_map_ui_categories missing")
+        else:
+            missing = [
+                category
+                for category in expected_categories
+                if isinstance(category, str) and category not in categories
+            ]
+            if missing:
+                issues.append(f"non_map_ui_categories missing {missing!r}")
+    min_non_map_ui_labels = parse_nonnegative_count_metric(expect.get("min_non_map_ui_labels"))
+    if min_non_map_ui_labels is None:
+        return
+    labels = row.get("non_map_ui_labels")
+    label_count = len(labels) if isinstance(labels, list) else None
+    if label_count is None or label_count < min_non_map_ui_labels:
+        issues.append(f"non_map_ui_labels count {label_count!r} below {min_non_map_ui_labels:g}")
 
 
 def append_max_ocr_engine_calls_expectation_issue(

@@ -153,6 +153,8 @@
         "status": "failed",
         "error_contains": "non-map app UI",
         "min_ocr_labels": 20,
+        "non_map_ui_categories_include": ["account", "import", "privacy", "stats", "sync"],
+        "min_non_map_ui_labels": 3,
         "max_total_elapsed_s": 1.0
       }
     },
@@ -165,6 +167,8 @@
         "status": "failed",
         "error_contains": "non-map app UI",
         "min_ocr_labels": 20,
+        "non_map_ui_categories_include": ["followers", "following", "media"],
+        "min_non_map_ui_labels": 3,
         "max_total_elapsed_s": 1.0
       }
     },
