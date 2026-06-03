@@ -1129,6 +1129,74 @@ def test_compare_stress_reports_records_repeat_profile_case_coverage_gaps() -> N
     ]
 
 
+def test_compare_stress_reports_records_repeat_profile_case_sample_gaps() -> None:
+    baseline = {
+        "repeat_profile_runs": 3,
+        "repeat_profile_warmups": 1,
+        "rows": [
+            {"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5},
+            {"slug": "houston", "observed_status": "complete", "total_elapsed_s": 0.6},
+        ],
+        "repeat_profile": {
+            "cases": {
+                "dallas": {
+                    "analyzed_samples": 2,
+                    "p95_total_elapsed_s": 0.5,
+                },
+                "houston": {
+                    "analyzed_samples": 1,
+                    "p95_total_elapsed_s": 0.6,
+                },
+            },
+        },
+    }
+    candidate = {
+        "repeat_profile_runs": 3,
+        "repeat_profile_warmups": 1,
+        "rows": [
+            {"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4},
+            {"slug": "houston", "observed_status": "complete", "total_elapsed_s": 0.5},
+        ],
+        "repeat_profile": {
+            "cases": {
+                "dallas": {
+                    "analyzed_samples": 2,
+                    "p95_total_elapsed_s": 0.4,
+                },
+                "houston": {
+                    "p95_total_elapsed_s": 0.5,
+                },
+            },
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["repeat_profile_case_expected_rows"] == 2
+    assert comparison["repeat_profile_case_compared_rows"] == 2
+    assert comparison["repeat_profile_case_missing_in_baseline"] == []
+    assert comparison["repeat_profile_case_missing_in_candidate"] == []
+    assert comparison["repeat_profile_case_underanalyzed_in_baseline"] == [
+        {
+            "slug": "houston",
+            "expected_analyzed_samples": 2,
+            "analyzed_samples": 1,
+        }
+    ]
+    assert comparison["repeat_profile_case_underanalyzed_in_candidate"] == [
+        {
+            "slug": "houston",
+            "expected_analyzed_samples": 2,
+        }
+    ]
+    assert stress_module.baseline_comparison_coverage_gaps(
+        {"baseline_comparison": comparison}
+    ) == [
+        {"kind": "repeat_profile_case_underanalyzed_in_baseline", "slugs": ["houston"]},
+        {"kind": "repeat_profile_case_underanalyzed_in_candidate", "slugs": ["houston"]},
+    ]
+
+
 def test_compare_stress_reports_records_configuration_changes() -> None:
     baseline = {
         "execution": "in-process",
@@ -1342,6 +1410,14 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "repeat_profile_case_compared_rows": 1,
             "repeat_profile_case_missing_in_baseline": [],
             "repeat_profile_case_missing_in_candidate": ["houston"],
+            "repeat_profile_case_underanalyzed_in_baseline": [
+                {
+                    "slug": "dallas",
+                    "expected_analyzed_samples": 2,
+                    "analyzed_samples": 1,
+                }
+            ],
+            "repeat_profile_case_underanalyzed_in_candidate": [],
             "configuration_changes": [
                 {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
                 {"field": "extraction_cache", "baseline": True, "candidate": False},
@@ -1559,7 +1635,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     output = capsys.readouterr().out
     assert "baseline comparison: compared=2, signature_changes=1" in output
     assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
-    assert "repeat_case_compared=1/2, repeat_case_missing_candidate=1" in output
+    assert (
+        "repeat_case_compared=1/2, repeat_case_missing_candidate=1, "
+        "repeat_case_underanalyzed_baseline=1"
+    ) in output
     assert "median_delta=-0.040s" in output
     assert "signature_fields=city:1,control_points:1" in output
     assert (
@@ -4812,7 +4891,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 9,
+            "version": 10,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -4905,7 +4984,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 8,
+            "version": 9,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {

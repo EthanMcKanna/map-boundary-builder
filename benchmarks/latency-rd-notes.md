@@ -17377,3 +17377,21 @@ with zero failures in 0.531s.
   with primary max `0.503267s`, repeat p95 `0.296989s`, and repeat-profile
   case coverage `49/49` with no missing baseline or candidate repeat cases.
   This is benchmark acceptance reliability only.
+- Added repeat-profile per-case analyzed-sample coverage to baseline
+  comparisons. A repeat profile can now have every compared slug present but
+  still fail the existing `--fail-on-baseline-coverage-gap` gate when a
+  per-case summary has fewer analyzed samples than the report's own
+  `runs_per_case - warmup_runs_per_case` contract. The comparison JSON now
+  stores `repeat_profile_case_underanalyzed_in_baseline` and
+  `repeat_profile_case_underanalyzed_in_candidate`, and printed baseline
+  summaries surface the under-analyzed counts when present. Because default
+  comparison semantics changed again, hard/focused preset metadata moved to
+  v10/v9. Focused stress tests passed (`128 passed in 0.37s`) and the full
+  suite passed (`704 passed, 31 subtests passed in 5.65s`). The fresh v10
+  baseline at `out/current-v10-full49-hard-20260603` passed `49/49`
+  expectations with primary max `0.511587s`, repeat cases `49`, analyzed
+  samples `98`, and repeat p95 `0.297385s`. The same-version comparison at
+  `out/repeat-case-samples-current-v10-20260603` passed the regression budget
+  with repeat-profile case coverage `49/49`, no missing repeat cases, and no
+  under-analyzed baseline or candidate repeat cases. This is benchmark
+  acceptance reliability only.

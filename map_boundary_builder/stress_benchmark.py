@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 9
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 10
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 8
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 9
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -1000,6 +1000,12 @@ def compare_stress_reports(
         comparison["repeat_profile_case_missing_in_candidate"] = repeat_case_coverage[
             "missing_in_candidate"
         ]
+        comparison["repeat_profile_case_underanalyzed_in_baseline"] = repeat_case_coverage[
+            "underanalyzed_in_baseline"
+        ]
+        comparison["repeat_profile_case_underanalyzed_in_candidate"] = repeat_case_coverage[
+            "underanalyzed_in_candidate"
+        ]
     repeat_case_deltas = stress_repeat_profile_case_deltas(
         baseline_report,
         candidate_report,
@@ -1426,7 +1432,63 @@ def stress_repeat_profile_case_coverage(
         "compared_rows": len(compared_case_slugs),
         "missing_in_baseline": missing_in_baseline,
         "missing_in_candidate": missing_in_candidate,
+        "underanalyzed_in_baseline": stress_repeat_profile_underanalyzed_cases(
+            baseline_report,
+            baseline_cases,
+            compared_slugs,
+        ),
+        "underanalyzed_in_candidate": stress_repeat_profile_underanalyzed_cases(
+            candidate_report,
+            candidate_cases,
+            compared_slugs,
+        ),
     }
+
+
+def stress_repeat_profile_underanalyzed_cases(
+    report: dict[str, Any],
+    cases: dict[str, dict[str, Any]] | None,
+    compared_slugs: list[str],
+) -> list[dict[str, Any]]:
+    if cases is None:
+        return []
+    expected_analyzed = stress_report_expected_analyzed_repeat_samples_per_case(report)
+    if expected_analyzed is None or expected_analyzed <= 0:
+        return []
+    underanalyzed: list[dict[str, Any]] = []
+    for slug in compared_slugs:
+        case_summary = cases.get(slug)
+        if not isinstance(case_summary, dict):
+            continue
+        analyzed_samples = parse_nonnegative_int(case_summary.get("analyzed_samples"))
+        if analyzed_samples is not None and analyzed_samples >= expected_analyzed:
+            continue
+        gap: dict[str, Any] = {
+            "slug": slug,
+            "expected_analyzed_samples": expected_analyzed,
+        }
+        if analyzed_samples is not None:
+            gap["analyzed_samples"] = analyzed_samples
+        underanalyzed.append(gap)
+    return underanalyzed
+
+
+def stress_report_expected_analyzed_repeat_samples_per_case(report: dict[str, Any]) -> int | None:
+    repeat_profile = report.get("repeat_profile")
+    repeat_profile_runs = None
+    repeat_profile_warmups = None
+    if isinstance(repeat_profile, dict):
+        repeat_profile_runs = parse_nonnegative_int(repeat_profile.get("runs_per_case"))
+        repeat_profile_warmups = parse_nonnegative_int(
+            repeat_profile.get("warmup_runs_per_case")
+        )
+    if repeat_profile_runs is None:
+        repeat_profile_runs = parse_nonnegative_int(report.get("repeat_profile_runs"))
+    if repeat_profile_warmups is None:
+        repeat_profile_warmups = parse_nonnegative_int(report.get("repeat_profile_warmups")) or 0
+    if repeat_profile_runs is None:
+        return None
+    return max(0, repeat_profile_runs - repeat_profile_warmups)
 
 
 def stress_report_repeat_profile_cases(report: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -4007,10 +4069,35 @@ def baseline_comparison_coverage_gaps(report: dict[str, Any]) -> list[dict[str, 
         ]
         if slugs:
             gaps.append({"kind": "repeat_profile_case_missing_in_candidate", "slugs": slugs})
+    repeat_case_underanalyzed_in_baseline = comparison.get(
+        "repeat_profile_case_underanalyzed_in_baseline"
+    )
+    if isinstance(repeat_case_underanalyzed_in_baseline, list):
+        slugs = repeat_profile_case_coverage_gap_slugs(repeat_case_underanalyzed_in_baseline)
+        if slugs:
+            gaps.append({"kind": "repeat_profile_case_underanalyzed_in_baseline", "slugs": slugs})
+    repeat_case_underanalyzed_in_candidate = comparison.get(
+        "repeat_profile_case_underanalyzed_in_candidate"
+    )
+    if isinstance(repeat_case_underanalyzed_in_candidate, list):
+        slugs = repeat_profile_case_coverage_gap_slugs(repeat_case_underanalyzed_in_candidate)
+        if slugs:
+            gaps.append({"kind": "repeat_profile_case_underanalyzed_in_candidate", "slugs": slugs})
     compared_rows = comparison.get("compared_rows")
     if isinstance(compared_rows, int) and compared_rows <= 0:
         gaps.append({"kind": "no_compared_rows"})
     return gaps
+
+
+def repeat_profile_case_coverage_gap_slugs(gaps: list[Any]) -> list[str]:
+    slugs: list[str] = []
+    for gap in gaps:
+        if not isinstance(gap, dict):
+            continue
+        slug = gap.get("slug")
+        if isinstance(slug, (str, int)):
+            slugs.append(str(slug))
+    return slugs
 
 
 def baseline_comparison_regression_budget_failed(report: dict[str, Any]) -> bool:
@@ -5936,6 +6023,12 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
 def baseline_repeat_case_coverage_text(baseline_comparison: dict[str, Any]) -> str:
     missing_baseline = baseline_comparison.get("repeat_profile_case_missing_in_baseline")
     missing_candidate = baseline_comparison.get("repeat_profile_case_missing_in_candidate")
+    underanalyzed_baseline = baseline_comparison.get(
+        "repeat_profile_case_underanalyzed_in_baseline"
+    )
+    underanalyzed_candidate = baseline_comparison.get(
+        "repeat_profile_case_underanalyzed_in_candidate"
+    )
     compared_rows = parse_nonnegative_int(
         baseline_comparison.get("repeat_profile_case_compared_rows")
     )
@@ -5948,9 +6041,17 @@ def baseline_repeat_case_coverage_text(baseline_comparison: dict[str, Any]) -> s
     missing_candidate_count = (
         len(missing_candidate) if isinstance(missing_candidate, list) else 0
     )
+    underanalyzed_baseline_count = (
+        len(underanalyzed_baseline) if isinstance(underanalyzed_baseline, list) else 0
+    )
+    underanalyzed_candidate_count = (
+        len(underanalyzed_candidate) if isinstance(underanalyzed_candidate, list) else 0
+    )
     if (
         not missing_baseline_count
         and not missing_candidate_count
+        and not underanalyzed_baseline_count
+        and not underanalyzed_candidate_count
         and (compared_rows is None or expected_rows is None or compared_rows == expected_rows)
     ):
         return ""
@@ -5961,6 +6062,10 @@ def baseline_repeat_case_coverage_text(baseline_comparison: dict[str, Any]) -> s
         parts.append(f"repeat_case_missing_baseline={missing_baseline_count}")
     if missing_candidate_count:
         parts.append(f"repeat_case_missing_candidate={missing_candidate_count}")
+    if underanalyzed_baseline_count:
+        parts.append(f"repeat_case_underanalyzed_baseline={underanalyzed_baseline_count}")
+    if underanalyzed_candidate_count:
+        parts.append(f"repeat_case_underanalyzed_candidate={underanalyzed_candidate_count}")
     return ", " + ", ".join(parts) if parts else ""
 
 
