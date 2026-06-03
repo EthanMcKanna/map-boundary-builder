@@ -18171,3 +18171,30 @@ with zero failures in 0.531s.
   validated the manifest and catalog JSON, the focused catalog/stress tests
   passed (`286 passed`), `python -m compileall -q api map_boundary_builder`
   passed, and full pytest passed `730 passed, 31 subtests passed`.
+- Added a default-upload Zoox SF catalog shortcut row for the exact
+  `/Users/ethanmckanna/Downloads/zoox-sf.webp` screenshot while preserving the
+  forced no-catalog row as the OCR/georeference coverage proof. A direct CLI
+  probe at `out/zoox-sf-catalog-default-probe-20260603` resolved through
+  `catalog-shape-match` with slug `san-francisco-zoox`, shape IoU `0.999994`,
+  area ratio `1.0`, combined confidence `0.946`, and zero OCR calls. The newer
+  `/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG`
+  default probe matched the broader `bay-area-zoox` catalog instead, so it was
+  not locked as a San Francisco default row in this pass. Focused stress proof
+  at `out/zoox-sf-catalog-default-focused-20260603` passed `2/2`: the forced
+  row stayed on `ocr-georeference:nominatim-label-fit` and the new default row
+  used `catalog-shape-match` in `0.082s` with zero OCR calls. The full hard gate
+  at `out/zoox-sf-catalog-default-full52-hard-20260603` passed `52/52`
+  expected outcomes with statuses `{"complete":41,"failed":11}`, max primary
+  `0.335866s`, repeat p95 `0.274s`, repeat max `0.310s`, and prewarm `0.633s`;
+  common-row comparison against the previous full51 report showed `51` compared
+  rows, `signature_change_count=0`, `expectation_passed_delta=0`, median delta
+  `+0.000136s`, and only `zoox-sf-ui-default` missing from the baseline.
+  Negative probes were rejected before shipping: `PROFILE_APP_UI_OCR_MAX_DIMENSION=700`
+  at `out/profile-ui-ocr700-candidate-20260603` changed the profile-app OCR
+  confidence contract (`label_confidence_lt_90_count 2 above 1`) without a
+  material speed win, and `MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION=800`
+  at `out/route-light-ocr800-candidate-20260603` passed only `1/4` route rows
+  because it dropped required label counts and pickup evidence. Verification:
+  `jq` validated the manifest, the focused catalog/stress tests passed
+  (`286 passed`), `python -m compileall -q api map_boundary_builder` passed,
+  and full pytest passed `730 passed, 31 subtests passed`.

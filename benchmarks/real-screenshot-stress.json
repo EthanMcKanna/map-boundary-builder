@@ -816,6 +816,23 @@
       }
     },
     {
+      "slug": "zoox-sf-ui-default",
+      "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "San Francisco",
+        "catalog_slug_equals": "san-francisco-zoox",
+        "min_combined_confidence": 0.94,
+        "max_total_elapsed_s": 1.0,
+        "max_ocr_engine_calls": 0,
+        "bbox_approx": [-122.4410255, 37.7479064, -122.3876889, 37.8056186],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "zoox-sf-service-area-current",
       "image": "/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG",
       "no_catalog": true,
