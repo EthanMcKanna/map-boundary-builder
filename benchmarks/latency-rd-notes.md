@@ -16581,3 +16581,16 @@ with zero failures in 0.531s.
   focused API/frontend cache tests (`85 passed in 0.74s`), and the full suite
   (`668 passed, 31 subtests passed in 6.07s`). No screenshot hard gate was rerun
   because this only changes browser-local cache admission/keying.
+- Expanded the browser local-history runtime namespace from dependency versions
+  only to the full server run-result runtime config exposed by `/api/health`:
+  `ocr`, `generation_env`, and `runtime_dependencies`. This closes another
+  browser/server cache-key gap: the API run-result cache already invalidates
+  when OCR caps, generation env knobs, or dependency versions change, but local
+  history could previously restore an older result when only OCR/env config
+  drifted under the same pipeline/dependency signature. The browser cache
+  namespace moved to raw `image-to-geojson-v6` / pixel `image-to-geojson-v8`.
+  Validation passed with `git diff --check`,
+  `node --check map_boundary_builder/web_assets/app.js`, focused API/frontend
+  cache tests (`85 passed in 0.61s`), and the full suite (`668 passed, 31
+  subtests passed in 5.78s`). No screenshot hard gate was rerun because this
+  only changes browser-local cache admission/keying.

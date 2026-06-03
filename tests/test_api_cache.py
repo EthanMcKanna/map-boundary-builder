@@ -1912,7 +1912,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
         self.assertIn(b"runCacheKeyMatchesPipelineVersion(key, pipelineVersion)", app_js)
 
-    def test_frontend_keys_local_history_by_runtime_dependency_signature(self) -> None:
+    def test_frontend_keys_local_history_by_runtime_config_signature(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
@@ -1926,29 +1926,37 @@ class ApiRunCacheTests(unittest.TestCase):
         )
         payload_helper = app_js.index(b"function runCacheRuntimeVersionFromHealthPayload(payload) {")
         dependency_read = app_js.index(b"payload?.runtime_dependencies", payload_helper)
-        composite_return = app_js.index(b"return `${pipelineVersion}|deps=${runtimeSignature}`;", dependency_read)
-        signature_helper = app_js.index(b"function runCacheRuntimeSignature(runtimeDependencies) {")
+        ocr_read = app_js.index(b"payload?.ocr", payload_helper)
+        generation_env_read = app_js.index(b"payload?.generation_env", payload_helper)
+        composite_return = app_js.index(b"return `${pipelineVersion}|runtime=${runtimeSignature}`;", dependency_read)
+        signature_helper = app_js.index(b"function runCacheRuntimeSignature(runtimeConfig) {")
+        stable_config = app_js.index(b"const stableConfig = stableRunCacheValue(runtimeConfig);", signature_helper)
+        stable_helper = app_js.index(b"function stableRunCacheValue(value) {", signature_helper)
         sorted_entries = app_js.index(
             b".sort(([leftName], [rightName]) => leftName.localeCompare(rightName));",
-            signature_helper,
+            stable_helper,
         )
-        encoded_entries = app_js.index(b"encodeURIComponent(name)", sorted_entries)
+        encoded_config = app_js.index(b"encodeURIComponent(JSON.stringify(stableConfig))", signature_helper)
 
         self.assertLess(embedded_pipeline, runtime_cache)
         self.assertLess(fetch_helper, health_fetch)
         self.assertLess(health_fetch, health_signature)
         self.assertLess(payload_helper, dependency_read)
+        self.assertLess(payload_helper, ocr_read)
+        self.assertLess(payload_helper, generation_env_read)
         self.assertLess(dependency_read, composite_return)
-        self.assertLess(signature_helper, sorted_entries)
-        self.assertLess(sorted_entries, encoded_entries)
+        self.assertLess(signature_helper, stable_config)
+        self.assertLess(signature_helper, encoded_config)
+        self.assertLess(signature_helper, stable_helper)
+        self.assertLess(stable_helper, sorted_entries)
         self.assertNotIn(b"let cachedRunCachePipelineVersion = embeddedRunCachePipelineVersion();", app_js)
 
     def test_frontend_normalizes_local_run_cache_settings_like_api(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
-        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v5";', app_js)
-        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v7";', app_js)
+        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v6";', app_js)
+        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v8";', app_js)
         self.assertIn(
             b'const RUN_CACHE_AUTO_CITY_TOKENS = new Set(["auto", "automatic", "autodetect", "detect"]);',
             app_js,

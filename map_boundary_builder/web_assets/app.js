@@ -96,8 +96,8 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_RAW_VERSION = "image-to-geojson-v5";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v7";
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v6";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v8";
 const RUN_CACHE_SETTING_FIELDS = [
   "allow_catalog",
   "city",
@@ -1506,29 +1506,49 @@ async function fetchRunCacheRuntimeVersion() {
 
 function runCacheRuntimeVersionFromHealthPayload(payload) {
   const pipelineVersion = payload?.pipeline_version;
-  const runtimeSignature = runCacheRuntimeSignature(payload?.runtime_dependencies);
+  const runtimeSignature = runCacheRuntimeSignature({
+    generation_env: payload?.generation_env,
+    ocr: payload?.ocr,
+    runtime_dependencies: payload?.runtime_dependencies,
+  });
   if (typeof pipelineVersion !== "string" || !pipelineVersion || !runtimeSignature) {
     return null;
   }
-  return `${pipelineVersion}|deps=${runtimeSignature}`;
+  return `${pipelineVersion}|runtime=${runtimeSignature}`;
 }
 
-function runCacheRuntimeSignature(runtimeDependencies) {
-  if (!runtimeDependencies || typeof runtimeDependencies !== "object" || Array.isArray(runtimeDependencies)) {
+function runCacheRuntimeSignature(runtimeConfig) {
+  const stableConfig = stableRunCacheValue(runtimeConfig);
+  if (!stableConfig || Object.keys(stableConfig).length === 0) {
     return null;
   }
-  const entries = Object.entries(runtimeDependencies)
-    .filter(([name, dependencyVersion]) => (
-      typeof name === "string" && name &&
-      typeof dependencyVersion === "string" && dependencyVersion
-    ))
+  return encodeURIComponent(JSON.stringify(stableConfig));
+}
+
+function stableRunCacheValue(value) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const items = [];
+    for (const item of value) {
+      const stableItem = stableRunCacheValue(item);
+      if (stableItem === undefined) return undefined;
+      items.push(stableItem);
+    }
+    return items;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const entries = Object.entries(value)
+    .filter(([name]) => typeof name === "string" && name)
     .sort(([leftName], [rightName]) => leftName.localeCompare(rightName));
-  if (!entries.length) return null;
-  return entries
-    .map(([name, dependencyVersion]) => (
-      `${encodeURIComponent(name)}=${encodeURIComponent(dependencyVersion)}`
-    ))
-    .join(",");
+  const stableObject = {};
+  for (const [name, nestedValue] of entries) {
+    const stableNestedValue = stableRunCacheValue(nestedValue);
+    if (stableNestedValue === undefined) return undefined;
+    stableObject[name] = stableNestedValue;
+  }
+  return stableObject;
 }
 
 async function sha256Hex(bytes) {
