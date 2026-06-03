@@ -18413,3 +18413,21 @@ with zero failures in 0.531s.
   skipped_primary_ocr_zero_call=28`, no violations, and the
   `bay-3-svg-ui-default` row at `0.325236s -> 0.093431s` with OCR calls
   `1 -> 0`. Targeted stress benchmark tests passed `4 passed`.
+- Rejected lower-resolution SVG label-layer OCR as a default for no-catalog
+  SVG georeference. The real `bay-3-svg` path already uses the SVG label layer
+  rather than full raster OCR (`SVG label layer read`, `42` labels, `17`
+  controls at the current 1600px / min-area 300 profile), so the remaining
+  cost is OCR over the label-layer raster. Probes that kept service-path
+  extraction at 1600px but lowered only SVG bright-blue OCR were mixed:
+  `1200/300` cut OCR but dropped to `15` controls; `1400/300` and `1500/300`
+  kept controls but raised raw/selected/result/label OCR counts to `21`, above
+  the manifest cap; `1400/500` reduced selected labels to the cap but still
+  raised raw boxes to `21`; and `1350/500` dropped to `14` controls and `35`
+  OCR labels. The only manifest-clean candidate, `1300/500` at
+  `out/svg-label-layer-ocr1300-area500-bay3-20260603`, passed `1/1` with
+  repeat OCR p95 `0.146s` versus the current roughly `0.173s`, but the default
+  code probe at `out/svg-label-layer-default1300-bay3-focused-20260603`
+  changed the output signature: controls `17 -> 16`, confidence
+  `0.866 -> 0.862`, OCR labels `42 -> 41`, and the bbox shifted by up to about
+  `584m`. Since this trades accuracy/stability for a narrow SVG speed win, no
+  runtime default changed.
