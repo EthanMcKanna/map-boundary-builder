@@ -1346,6 +1346,96 @@ def test_baseline_primary_ocr_hidden_budget_flags_growth_without_latency_regress
     )
 
 
+def test_baseline_repeat_ocr_hidden_total_budget_flags_masked_growth() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "hidden-repeat",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.50,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.50,
+                "max_total_elapsed_s": 0.55,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {
+                        "p95_duration_s": 0.40,
+                        "max_duration_s": 0.42,
+                    }
+                },
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.040,
+                    "max_duration_s": 0.045,
+                    "total_s": 0.120,
+                },
+            }
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "hidden-repeat",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.48,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.49,
+                "max_total_elapsed_s": 0.53,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {
+                        "p95_duration_s": 0.39,
+                        "max_duration_s": 0.41,
+                    }
+                },
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.041,
+                    "max_duration_s": 0.046,
+                    "total_s": 0.181,
+                },
+            }
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_p95_regression_s=0.05,
+        max_repeat_ocr_engine_total_p95_regression_s=0.05,
+        max_repeat_ocr_overlap_hidden_total_regression_s=0.05,
+    )
+
+    repeat_hidden = comparison["repeat_profile_delta"]["ocr_overlap_hidden_s"]
+    assert repeat_hidden["p95_duration_s"]["delta_s"] == 0.001
+    assert repeat_hidden["max_duration_s"]["delta_s"] == 0.001
+    assert repeat_hidden["total_s"]["delta_s"] == 0.061
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "repeat_ocr_overlap_hidden_total_regression_exceeded",
+            "delta_s": 0.061,
+            "max_repeat_ocr_overlap_hidden_total_regression_s": 0.05,
+            "baseline_ocr_overlap_hidden_total_s": 0.12,
+            "candidate_ocr_overlap_hidden_total_s": 0.181,
+        }
+    ]
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: failed repeat_p95<=0.050s "
+        "repeat_ocr_p95<=0.050s repeat_ocr_hidden_total<=0.050s violations=1 "
+        "by_kind=repeat_ocr_hidden_total:1"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "repeat ocr hidden total +0.061s > budget 0.050s"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_regression() -> None:
     baseline = {
         "rows": [
@@ -6131,6 +6221,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.012
         assert kwargs["max_baseline_repeat_ocr_count_p95_regression"] == 2.5
         assert kwargs["max_baseline_repeat_ocr_count_max_regression"] == 3.5
+        assert kwargs["max_baseline_repeat_ocr_overlap_hidden_total_regression_s"] == 0.045
         return {
             "summary": {
                 "total": 1,
@@ -6159,6 +6250,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "max_repeat_ocr_engine_total_max_regression_s": 0.012,
                     "max_repeat_ocr_engine_count_p95_regression": 2.5,
                     "max_repeat_ocr_engine_count_max_regression": 3.5,
+                    "max_repeat_ocr_overlap_hidden_total_regression_s": 0.045,
                     "violations": [
                         {
                             "kind": "primary_total_regression_exceeded",
@@ -6205,6 +6297,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "2.5",
             "--max-baseline-repeat-ocr-count-max-regression",
             "3.5",
+            "--max-baseline-repeat-ocr-overlap-hidden-total-regression-s",
+            "0.045",
         ]
     )
 
@@ -6309,7 +6403,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 11,
+            "version": 12,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -6405,7 +6499,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 10,
+            "version": 11,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {
@@ -6600,6 +6694,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_count_p95_regression"] == 2.0
         assert kwargs["max_baseline_repeat_ocr_count_max_regression"] == 2.0
+        assert kwargs["max_baseline_repeat_ocr_overlap_hidden_total_regression_s"] == 0.10
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
             "manifest_contract_budget": {
@@ -6648,6 +6743,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,
                     "max_repeat_ocr_engine_count_p95_regression": 2.0,
                     "max_repeat_ocr_engine_count_max_regression": 2.0,
+                    "max_repeat_ocr_overlap_hidden_total_regression_s": 0.10,
                     "violations": [
                         {
                             "kind": "primary_total_regression_exceeded",
@@ -6844,6 +6940,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
         assert kwargs["max_baseline_repeat_ocr_total_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_ocr_count_p95_regression"] == 2.0
         assert kwargs["max_baseline_repeat_ocr_count_max_regression"] == 2.0
+        assert kwargs["max_baseline_repeat_ocr_overlap_hidden_total_regression_s"] == 0.10
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
             "manifest_contract_budget": {
@@ -6895,6 +6992,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
                     "max_repeat_ocr_engine_total_max_regression_s": 0.25,
                     "max_repeat_ocr_engine_count_p95_regression": 2.0,
                     "max_repeat_ocr_engine_count_max_regression": 2.0,
+                    "max_repeat_ocr_overlap_hidden_total_regression_s": 0.10,
                     "violations": [],
                 },
             },

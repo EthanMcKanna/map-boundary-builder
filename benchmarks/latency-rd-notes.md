@@ -17734,3 +17734,21 @@ with zero failures in 0.531s.
   total delta stayed at `+0.025404s`, while the new hidden-overlap gate failed
   `dallas-waymo` at `+0.057s`. Benchmark acceptance reliability only; no
   runtime default changed.
+- Added an aggregate repeat OCR hidden-overlap total regression budget for
+  baseline comparisons. This is the repeat-profile counterpart to the primary
+  hidden-overlap guard: a candidate can keep primary row totals, repeat p95,
+  repeat max, and repeat OCR duration budgets green while distributing more
+  hidden OCR overlap across repeated samples. The CLI/API now accept
+  `--max-baseline-repeat-ocr-overlap-hidden-total-regression-s`, and the real
+  screenshot hard gates default it to `0.100s` while bumping the full/focused
+  preset versions to v12/v11. Focused stress tests passed (`143 passed in
+  0.53s`). A saved proof in
+  `out/repeat-ocr-hidden-total-budget-proof-20260603/comparison.json` compared
+  `out/current-leaders-full49-hard-20260603` against
+  `out/warm-sample-900-primary-tail-control-20260603` with primary, primary
+  OCR, repeat p95, repeat OCR p95, and repeat OCR max regression budgets all at
+  `0.100s`; largest primary total delta stayed at `+0.029072s`, largest primary
+  OCR delta stayed at `+0.025404s`, repeat p95 improved by `-0.014003s`, repeat
+  OCR p95 improved by `-0.020080s`, and repeat OCR max improved by `-0.021793s`,
+  while the new repeat hidden-total gate failed at `+0.121908s`. Benchmark
+  acceptance reliability only; no runtime default changed.
