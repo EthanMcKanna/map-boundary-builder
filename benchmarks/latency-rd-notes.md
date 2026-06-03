@@ -15863,3 +15863,23 @@ with zero failures in 0.531s.
   `out/expanded-current-catalog-full49-hard-20260603` showed zero behavior drift
   for status, source, city, bbox, geometry hash, coordinate count, confidence,
   catalog metadata, OCR label summaries, retry flags, and road-match fields.
+- Accepted a narrow profile-app UI OCR crop for the dedicated non-map rejection
+  path. The earlier lower-resolution profile cap was rejected because it made
+  text smaller and recognition slower; this version keeps the `1000px` OCR cap
+  but crops to the extracted profile UI geometry with a small pad, so the labels
+  stay larger while irrelevant screen chrome is removed. A direct probe on
+  `/Users/ethanmckanna/Downloads/Simulator Screenshot - iPhone 16 - 2026-03-24 at 01.43.34.png`
+  kept the same `followers`/`following`/`media` rejection categories while
+  reducing OCR total from about `0.79s` on the full screen to about `0.33s` on
+  the cropped image. The accepted focused stress gate at
+  `out/profile-app-crop-focused-20260603` passed `1/1`, preserved the
+  `non-map app UI` failure, kept repeat signatures stable, and cut repeat p95
+  to `0.463s` with repeat OCR-engine p95 `0.354s`. The full hard gate at
+  `out/profile-app-crop-full49-hard-20260603` passed `49/49`, statuses
+  `{"complete":38,"failed":11}`, primary max `0.594343s`, repeat p95 `0.469s`,
+  repeat OCR-engine p95 `0.425s`, and prewarm `1.308s`; the profile row itself
+  dropped from `0.594596s` in
+  `out/hardened-current-catalog-full49-hard-20260603` to `0.421383s` with the
+  same expected error. Comparing against the hardened full49 baseline showed
+  zero drift for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, catalog metadata, retry flags, and road-match fields.

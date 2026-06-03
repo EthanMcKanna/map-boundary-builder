@@ -169,6 +169,8 @@ PROFILE_APP_UI_MAX_COVERAGE_RATIO = 0.12
 PROFILE_APP_UI_MIN_CONTOURS = 2
 PROFILE_APP_UI_MIN_LABELS = 8
 PROFILE_APP_UI_MIN_CATEGORIES = 3
+PROFILE_APP_UI_CROP_PAD_RATIO = 0.08
+PROFILE_APP_UI_CROP_MIN_PAD_PX = 40.0
 PROFILE_APP_UI_CATEGORY_PATTERNS = {
     "followers": ("followers",),
     "following": ("following",),
@@ -2450,9 +2452,23 @@ def extract_profile_app_ui_labels_from_rgb(
     *,
     extraction,
 ) -> list[Any]:
+    crop, offset_x, offset_y = profile_app_ui_ocr_crop(rgb, extraction.pixel_geometry.bounds)
     ocr_kwargs = ocr_kwargs_for_style(extraction.style, cache=runner_ocr_cache_enabled())
     ocr_kwargs["rapidocr_max_dimension"] = PROFILE_APP_UI_OCR_MAX_DIMENSION
-    return extract_ocr_labels_from_rgb(str(image_path), rgb, **ocr_kwargs)
+    labels = extract_ocr_labels_from_rgb(str(image_path), crop, **ocr_kwargs)
+    if offset_x == 0 and offset_y == 0:
+        return labels
+    return [
+        OcrLabel(
+            text=label.text,
+            x=label.x + offset_x,
+            y=label.y + offset_y,
+            width=label.width,
+            height=label.height,
+            confidence=label.confidence,
+        )
+        for label in labels
+    ]
 
 
 def extract_focus_georef_labels_from_rgb(
@@ -2641,6 +2657,24 @@ def provider_ui_focus_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
 def provider_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
     height, width = rgb.shape[:2]
     left, top, right, bottom = provider_ui_ocr_crop_box(width, height, bounds)
+    if right <= left or bottom <= top:
+        return rgb, 0.0, 0.0
+    return rgb[top:bottom, left:right], float(left), float(top)
+
+
+def profile_app_ui_ocr_crop(rgb, bounds: tuple[float, float, float, float]):
+    height, width = rgb.shape[:2]
+    min_x, min_y, max_x, max_y = bounds
+    if max_x <= min_x or max_y <= min_y:
+        return rgb, 0.0, 0.0
+    polygon_width = max(1.0, max_x - min_x)
+    polygon_height = max(1.0, max_y - min_y)
+    pad_x = max(PROFILE_APP_UI_CROP_MIN_PAD_PX, polygon_width * PROFILE_APP_UI_CROP_PAD_RATIO)
+    pad_y = max(PROFILE_APP_UI_CROP_MIN_PAD_PX, polygon_height * PROFILE_APP_UI_CROP_PAD_RATIO)
+    left = max(0, int(min_x - pad_x))
+    top = max(0, int(min_y - pad_y))
+    right = min(width, int(max_x + pad_x + 0.999))
+    bottom = min(height, int(max_y + pad_y + 0.999))
     if right <= left or bottom <= top:
         return rgb, 0.0, 0.0
     return rgb[top:bottom, left:right], float(left), float(top)

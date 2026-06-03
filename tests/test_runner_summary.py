@@ -1222,6 +1222,45 @@ def test_profile_app_ui_fails_before_georeference(tmp_path, monkeypatch) -> None
     assert events[-1]["details"]["non_map_ui_categories"] == ["followers", "following", "media"]
 
 
+def test_profile_app_ui_ocr_crop_uses_extraction_bounds_padding() -> None:
+    rgb = np.zeros((2000, 1000, 3), dtype=np.uint8)
+
+    crop, offset_x, offset_y = runner.profile_app_ui_ocr_crop(rgb, (100.0, 200.0, 700.0, 1200.0))
+
+    assert crop.shape[:2] == (1160, 696)
+    assert offset_x == 52.0
+    assert offset_y == 120.0
+
+
+def test_profile_app_ui_label_extraction_offsets_cropped_labels(monkeypatch) -> None:
+    rgb = np.zeros((2000, 1000, 3), dtype=np.uint8)
+    extraction = SimpleNamespace(
+        style="dark-teal",
+        pixel_geometry=Polygon([(100, 200), (700, 200), (700, 1200), (100, 1200)]),
+    )
+    calls: list[dict] = []
+
+    def fake_extract_ocr_labels_from_rgb(_path, prepared_rgb, **kwargs):
+        calls.append({"shape": prepared_rgb.shape[:2], "kwargs": kwargs})
+        return [OcrLabel("Following", x=10, y=20, width=100, height=24, confidence=98)]
+
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+
+    labels = runner.extract_profile_app_ui_labels_from_rgb("profile.png", rgb, extraction=extraction)
+
+    assert calls == [
+        {
+            "shape": (1160, 696),
+            "kwargs": {
+                "cache": True,
+                "rapidocr_rec_batch_num": 16,
+                "rapidocr_max_dimension": runner.PROFILE_APP_UI_OCR_MAX_DIMENSION,
+            },
+        }
+    ]
+    assert labels == [OcrLabel("Following", x=62.0, y=140.0, width=100, height=24, confidence=98)]
+
+
 def test_thematic_map_fails_before_georeference_and_full_detail_retry(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "thematic.png"
     output_path = tmp_path / "boundary.geojson"
