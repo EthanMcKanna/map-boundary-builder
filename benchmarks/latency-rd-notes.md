@@ -16010,3 +16010,23 @@ with zero failures in 0.531s.
   `0.447s`, repeat max `0.524s`, repeat OCR-engine p95 `0.403s`, prewarm
   `1.413s`, stable repeat signatures, and `ocr_full_detail_retry_count=0`.
   This is another manifest reliability contract; no runtime deploy is needed.
+- Rejected global RapidOCR recognition batch-size tuning for the current OCR
+  tail. A focused six-row slow-OCR probe at
+  `out/recbatch-default-focused-20260603` established the current default as
+  `6/6` expected, repeat p95 `0.500s`, and repeat OCR-engine p95 `0.448s`.
+  `MAP_BOUNDARY_RAPIDOCR_REC_BATCH_NUM=16` failed the same gate at
+  `out/recbatch16-focused-20260603`, with route receipt primary `1.122s`,
+  repeat p95 `0.871s`, and repeat OCR-engine p95 `0.825s`. Batch `24` passed
+  at `out/recbatch24-focused-20260603` but regressed repeat p95 to `0.741s`
+  and repeat OCR-engine p95 to `0.675s`; smaller batches `8` and `6` both
+  failed with repeat p95 above `1.0s`. Keep the default recognition batch at
+  `12`; the recognizer tail is not improved by simple batch-size changes.
+- Rejected a more aggressive light-fill route-UI crop. Raising the lower-panel
+  crop from `0.28` to `0.34` preserved route category/metric evidence when the
+  two active-route generic label floors were relaxed, but the controlled
+  focused compare was slower: `out/route-ui-crop034-focused-20260603` passed
+  `6/6` with repeat p95 `0.522s` and repeat OCR-engine p95 `0.485s`, while the
+  old crop via `MAP_BOUNDARY_ROUTE_UI_OCR_CROP_TOP_FRACTION=0.28` at
+  `out/route-ui-crop028-compare-20260603` passed `6/6` with repeat p95
+  `0.435s` and repeat OCR-engine p95 `0.399s`. Keep the route-UI crop at
+  `0.28`.
