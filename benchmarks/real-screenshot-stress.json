@@ -362,6 +362,81 @@
       }
     },
     {
+      "slug": "dallas-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Dallas",
+        "min_combined_confidence": 0.98,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-96.8754673, 32.7332127, -96.7276669, 32.8672603],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "san-antonio-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "San Antonio",
+        "min_combined_confidence": 0.98,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-98.5580707, 29.3902521, -98.3921385, 29.5374699],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "bay-area-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Bay Area",
+        "min_combined_confidence": 0.85,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "los-angeles-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/LA.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Los Angeles",
+        "min_combined_confidence": 0.84,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-118.5235017, 33.9320907, -118.2221488, 34.1183233],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
+      "slug": "orlando-waymo-current-catalog",
+      "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
+      "no_catalog": false,
+      "filename_hint": "upload.png",
+      "expect": {
+        "status": "complete",
+        "source_equals": "catalog-shape-match",
+        "city_equals": "Orlando",
+        "min_combined_confidence": 0.95,
+        "max_total_elapsed_s": 1.0,
+        "bbox_approx": [-81.5075254, 28.3614576, -81.3638449, 28.5537667],
+        "max_bbox_error_m": 1000
+      }
+    },
+    {
       "slug": "robotaxi-austin",
       "image": "/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg",
       "no_catalog": true,

@@ -15828,3 +15828,23 @@ with zero failures in 0.531s.
   OCR-engine total `0.351314s -> 0.195537s`. Focused runner tests passed
   `102/102`, stress benchmark tests passed `66/66`, and the full suite passed
   `620` tests plus `31` subtests.
+- Added production-shaped current-catalog guard rows for five slow Waymo
+  screenshots whose no-catalog rows intentionally preserve the harder
+  image-only georeference path: Dallas, San Antonio, Bay Area, Los Angeles, and
+  Orlando. A temporary allow-catalog probe at
+  `out/allow-catalog-slow-waymo-probe-20260603` showed that production can
+  complete the matched slow slice with zero OCR in `0.069-0.192s`, but the
+  manifest only enforced the no-catalog `ocr-georeference:nominatim-label-fit`
+  path. The accepted focused guard at
+  `out/expanded-current-catalog-focused-20260603` passed `5/5`, zero OCR calls,
+  primary max `0.172685s`, repeat p95 `0.180s`, and prewarm `1.400s`. The
+  expanded full hard gate at `out/expanded-current-catalog-full49-hard-20260603`
+  passed `49/49`, statuses `{"complete":38,"failed":11}`, primary max
+  `0.578700s`, repeat p95 `0.509s`, repeat OCR-engine p95 `0.491s`, and
+  prewarm `1.216s`. The new rows stayed on the intended `catalog-shape-match`
+  path with zero OCR and low primary totals: Dallas `0.099s`, San Antonio
+  `0.086s`, Bay Area `0.161s`, Los Angeles `0.060s`, and Orlando `0.080s`.
+  Comparing the original 44 rows against
+  `out/bright-provider-crop-full44-hard-20260603` showed zero behavior drift for
+  status, source, city, bbox, geometry hash, coordinate count, confidence,
+  catalog metadata, and road-match fields.
