@@ -36,6 +36,12 @@ REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 2
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 1
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
+BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
+    ("input_s", "input_p95"),
+    ("det_elapsed_s", "det_p95"),
+    ("rec_elapsed_s", "rec_p95"),
+    ("total_s", "total_p95"),
+)
 OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS = (
     ("input", "input_s"),
     ("det", "det_elapsed_s"),
@@ -4360,6 +4366,11 @@ def print_stress_table(report: dict[str, Any]) -> None:
         )
         if repeat_delta_text:
             print(f"baseline repeat delta: {repeat_delta_text}")
+        repeat_ocr_stage_delta_text = baseline_repeat_ocr_stage_delta_text(
+            repeat_delta if isinstance(repeat_delta, dict) else None
+        )
+        if repeat_ocr_stage_delta_text:
+            print(f"baseline repeat OCR stage delta: {repeat_ocr_stage_delta_text}")
         regression_budget = baseline_comparison.get("regression_budget")
         if isinstance(regression_budget, dict):
             print(baseline_regression_budget_text(regression_budget))
@@ -5103,6 +5114,21 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
         value = repeat_delta_metric_value(repeat_delta, path, value_key)
         if value is not None:
             parts.append(f"{label}={formatter.format(value)}")
+    return ", ".join(parts)
+
+
+def baseline_repeat_ocr_stage_delta_text(repeat_delta: dict[str, Any] | None) -> str:
+    if not repeat_delta:
+        return ""
+    parts: list[str] = []
+    for key, label in BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY:
+        value = repeat_delta_metric_value(
+            repeat_delta,
+            ("ocr_engine_stage_duration_s", key, "p95_duration_s"),
+            "delta_s",
+        )
+        if value is not None:
+            parts.append(f"{label}={value:+.3f}s")
     return ", ".join(parts)
 
 

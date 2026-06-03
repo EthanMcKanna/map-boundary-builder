@@ -17079,3 +17079,14 @@ with zero failures in 0.531s.
   `+0.047s`, and repeat OCR p95 `+0.029s`. Keep the non-SVG bright-blue detector
   limit at `256/max`; the untested interval between `240` and `256` did not
   produce a repeat-profile win.
+- Added baseline repeat OCR stage deltas to the benchmark comparison printer so
+  future A/B runs show whether input resizing, detection, recognition, or total
+  OCR moved without manually opening nested JSON. Replaying
+  `out/brightblue-det248-candidate-slow8-20260603/stress-summary.json` now prints
+  `baseline repeat OCR stage delta: input_p95=-0.001s, det_p95=+0.014s,
+  rec_p95=+0.018s, total_p95=+0.029s`, which explains the rejected `248/max`
+  candidate as both detector and recognizer drift instead of an input-resize
+  cost. Focused stress benchmark tests passed `109 passed in 0.21s`, the full
+  suite passed `685 passed, 31 subtests passed in 6.30s`, and `git diff --check`
+  was clean. This is benchmark feedback-loop reliability only; no runtime deploy
+  is needed.

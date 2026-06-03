@@ -1052,6 +1052,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
                     "max_total_elapsed_s": {"delta_s": 0.04},
                 },
                 "ocr_engine_stage_duration_s": {
+                    "input_s": {"p95_duration_s": {"delta_s": 0.005}},
+                    "det_elapsed_s": {"p95_duration_s": {"delta_s": -0.01}},
+                    "rec_elapsed_s": {"p95_duration_s": {"delta_s": 0.04}},
                     "total_s": {"p95_duration_s": {"delta_s": 0.02}},
                 },
                 "ocr_engine_count_metric": {
@@ -1081,6 +1084,10 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "primary ocr houston +0.150s > budget 0.100s" in output
     assert "repeat p95 +0.030s > budget 0.020s" in output
     assert "repeat ocr p95 +0.020s > budget 0.010s" in output
+    assert (
+        "baseline repeat OCR stage delta: input_p95=+0.005s, det_p95=-0.010s, "
+        "rec_p95=+0.040s, total_p95=+0.020s"
+    ) in output
     assert "ocr_total_p95=+0.020s" in output
     assert "selected_box_p95=+2.0" in output
     assert "signature drift: houston fields=city,control_points" in output
