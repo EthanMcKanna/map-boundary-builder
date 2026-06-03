@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from functools import lru_cache
 import gzip
 import importlib
 from io import BytesIO
@@ -179,6 +181,11 @@ def rasterize_svg_with_resvg(
 
 
 def svg_rasterizer_diagnostics() -> dict[str, Any]:
+    return deepcopy(_svg_rasterizer_diagnostics_cached())
+
+
+@lru_cache(maxsize=1)
+def _svg_rasterizer_diagnostics_cached() -> dict[str, Any]:
     diagnostics = {
         "ok": False,
         "preferred": None,
@@ -192,6 +199,11 @@ def svg_rasterizer_diagnostics() -> dict[str, Any]:
         diagnostics["ok"] = True
         diagnostics["preferred"] = "cairosvg"
     return diagnostics
+
+
+svg_rasterizer_diagnostics.cache_clear = (  # type: ignore[attr-defined]
+    _svg_rasterizer_diagnostics_cached.cache_clear
+)
 
 
 def probe_svg_rasterizer(name: str, rasterizer: Callable[..., None]) -> dict[str, Any]:

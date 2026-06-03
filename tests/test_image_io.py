@@ -198,6 +198,8 @@ class SvgImageIoTests(unittest.TestCase):
 
     def test_svg_rasterizer_diagnostics_prefers_resvg_when_cairo_fails(self) -> None:
         png_bytes = png_fixture_bytes((4, 3), rect=(1, 1, 3, 2))
+        svg_rasterizer_diagnostics.cache_clear()
+        self.addCleanup(svg_rasterizer_diagnostics.cache_clear)
 
         def fake_import_module(name: str):
             if name == "cairosvg":
@@ -214,6 +216,34 @@ class SvgImageIoTests(unittest.TestCase):
         self.assertFalse(diagnostics["cairosvg"]["ok"])
         self.assertIn("libcairo missing", diagnostics["cairosvg"]["error"])
         self.assertTrue(diagnostics["resvg_py"]["ok"])
+
+    def test_svg_rasterizer_diagnostics_caches_defensive_copy(self) -> None:
+        png_bytes = png_fixture_bytes((4, 3), rect=(1, 1, 3, 2))
+        calls: list[str] = []
+        svg_rasterizer_diagnostics.cache_clear()
+        self.addCleanup(svg_rasterizer_diagnostics.cache_clear)
+
+        def fake_import_module(name: str):
+            calls.append(name)
+            if name == "cairosvg":
+                return SimpleNamespace(
+                    svg2png=lambda **kwargs: kwargs["write_to"].write(png_bytes)
+                )
+            if name == "resvg_py":
+                return SimpleNamespace(svg_to_bytes=lambda **_kwargs: png_bytes)
+            raise AssertionError(name)
+
+        with patch("map_boundary_builder.image_io.importlib.import_module", side_effect=fake_import_module):
+            first = svg_rasterizer_diagnostics()
+            first["preferred"] = "mutated"
+            first["resvg_py"]["ok"] = False
+            second = svg_rasterizer_diagnostics()
+
+        self.assertEqual(calls, ["cairosvg", "resvg_py"])
+        self.assertEqual(second["preferred"], "resvg-py")
+        self.assertTrue(second["resvg_py"]["ok"])
+        self.assertIsNot(first, second)
+        self.assertIsNot(first["resvg_py"], second["resvg_py"])
 
     def test_transparent_png_is_composited_before_processing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

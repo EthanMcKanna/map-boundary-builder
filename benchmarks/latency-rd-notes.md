@@ -16364,3 +16364,10 @@ with zero failures in 0.531s.
   (`49` call-contract rows, `38` count-contract rows, and `0` positive
   call-only rows). This keeps future artifacts distinguishable from version `1`
   runs that allowed the older `12` count-contract / `26` call-only coverage.
+- Cached SVG rasterizer health diagnostics in-process while returning defensive
+  deep copies to callers. This removes repeat `cairosvg`/`resvg-py` probe work
+  from Vercel health checks without changing the payload shape. Focused
+  validation passed with `git diff --check` and `104` image/API tests. A real
+  two-call smoke showed the first diagnostic call at `0.094830s` and the cached
+  second call at `0.000004s`, with the same `ok=true` / `preferred=resvg-py`
+  result. This is a small production health-path latency/reliability change.
