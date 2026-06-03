@@ -17395,3 +17395,21 @@ with zero failures in 0.531s.
   with repeat-profile case coverage `49/49`, no missing repeat cases, and no
   under-analyzed baseline or candidate repeat cases. This is benchmark
   acceptance reliability only.
+- Made baseline comparisons rebuild repeat-profile case summaries from raw
+  `repeat_profile.samples` when those samples are present, instead of trusting
+  potentially stale nested `repeat_profile.cases` snippets. This keeps per-case
+  repeat p95 deltas and analyzed-sample coverage tied to the authoritative raw
+  repeat timings in saved reports. Because comparison semantics changed,
+  hard/focused preset metadata moved to v11/v10. Focused stress tests passed
+  (`129 passed in 0.47s`) and the full suite passed (`705 passed, 31 subtests
+  passed in 6.35s`). The first v11 baseline attempt at
+  `out/current-v11-full49-hard-20260603` is rejected as acceptance evidence:
+  it preserved repeat health but hit an Ann Arbor georeference outlier
+  (`1.044788s`, georeference `0.783s`) and failed the primary latency budget.
+  A fresh v11 rerun at `out/current-v11-full49-hard-rerun-20260603` passed
+  `49/49` expectations with primary max `0.490220s`, repeat cases `49`,
+  analyzed samples `98`, and repeat p95 `0.304781s`. The same-version
+  comparison at `out/repeat-raw-sample-current-v11-20260603` passed the
+  regression budget with `49` compared rows, repeat-profile case coverage
+  `49/49`, no missing repeat cases, and no under-analyzed baseline or candidate
+  repeat cases. This is benchmark acceptance reliability only.

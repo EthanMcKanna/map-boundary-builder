@@ -32,9 +32,9 @@ DEFAULT_MANIFEST = Path("benchmarks/real-screenshot-stress.json")
 DEFAULT_OUT_DIR = Path("out/real-screenshot-stress")
 GENERIC_FILENAME_HINT = "upload.png"
 REAL_SCREENSHOT_HARD_GATE_PRESET_NAME = "real-screenshot-hard-gate"
-REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 10
+REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 11
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
-FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 9
+FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 10
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
 BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("input_s", "input_p95"),
@@ -1495,6 +1495,25 @@ def stress_report_repeat_profile_cases(report: dict[str, Any]) -> dict[str, dict
     repeat_profile = report.get("repeat_profile")
     if not isinstance(repeat_profile, dict):
         return None
+    samples = repeat_profile.get("samples")
+    if isinstance(samples, list):
+        sample_dicts = [sample for sample in samples if isinstance(sample, dict)]
+        if sample_dicts:
+            rebuilt = summarize_repeat_profile_samples(
+                sample_dicts,
+                runs_per_case=parse_nonnegative_int(repeat_profile.get("runs_per_case")) or 0,
+                warmup_runs_per_case=parse_nonnegative_int(
+                    repeat_profile.get("warmup_runs_per_case")
+                )
+                or 0,
+            )
+            rebuilt_cases = rebuilt.get("cases")
+            if isinstance(rebuilt_cases, dict) and rebuilt_cases:
+                return {
+                    slug: summary
+                    for slug, summary in rebuilt_cases.items()
+                    if isinstance(slug, str) and slug and isinstance(summary, dict)
+                }
     cases = repeat_profile.get("cases")
     if not isinstance(cases, dict):
         return None

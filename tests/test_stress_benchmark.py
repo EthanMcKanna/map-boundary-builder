@@ -1197,6 +1197,100 @@ def test_compare_stress_reports_records_repeat_profile_case_sample_gaps() -> Non
     ]
 
 
+def test_compare_stress_reports_rebuilds_repeat_profile_cases_from_samples() -> None:
+    baseline = {
+        "rows": [
+            {"slug": "houston", "observed_status": "complete", "total_elapsed_s": 0.6},
+        ],
+        "repeat_profile": {
+            "runs_per_case": 3,
+            "warmup_runs_per_case": 1,
+            "cases": {
+                "houston": {
+                    "analyzed_samples": 2,
+                    "p95_total_elapsed_s": 9.0,
+                },
+            },
+            "samples": [
+                {
+                    "slug": "houston",
+                    "repeat_index": 1,
+                    "warmup": True,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.1,
+                },
+                {
+                    "slug": "houston",
+                    "repeat_index": 2,
+                    "warmup": False,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.6,
+                },
+            ],
+        },
+    }
+    candidate = {
+        "rows": [
+            {"slug": "houston", "observed_status": "complete", "total_elapsed_s": 0.5},
+        ],
+        "repeat_profile": {
+            "runs_per_case": 3,
+            "warmup_runs_per_case": 1,
+            "cases": {
+                "houston": {
+                    "analyzed_samples": 2,
+                    "p95_total_elapsed_s": 8.0,
+                },
+            },
+            "samples": [
+                {
+                    "slug": "houston",
+                    "repeat_index": 1,
+                    "warmup": True,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.1,
+                },
+                {
+                    "slug": "houston",
+                    "repeat_index": 2,
+                    "warmup": False,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.4,
+                },
+                {
+                    "slug": "houston",
+                    "repeat_index": 3,
+                    "warmup": False,
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.5,
+                },
+            ],
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["repeat_profile_case_underanalyzed_in_baseline"] == [
+        {
+            "slug": "houston",
+            "expected_analyzed_samples": 2,
+            "analyzed_samples": 1,
+        }
+    ]
+    assert comparison["repeat_profile_case_underanalyzed_in_candidate"] == []
+    case_delta = comparison["repeat_profile_case_deltas"][0]
+    assert case_delta["duration_s"]["p95_total_elapsed_s"] == {
+        "baseline": 0.6,
+        "candidate": 0.495,
+        "delta_s": -0.105,
+    }
+
+
 def test_compare_stress_reports_records_configuration_changes() -> None:
     baseline = {
         "execution": "in-process",
@@ -4891,7 +4985,7 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "real-screenshot-hard-gate",
-            "version": 10,
+            "version": 11,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},
@@ -4984,7 +5078,7 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         assert kwargs["fail_on_invalid_ocr_count_contracts"] is True
         assert kwargs["preset"] == {
             "name": "focused-real-screenshot-gate",
-            "version": 9,
+            "version": 10,
             "only": ["dallas-waymo", "los-angeles-waymo"],
         }
         return {
