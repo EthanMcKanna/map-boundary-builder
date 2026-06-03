@@ -16804,3 +16804,21 @@ with zero failures in 0.531s.
   `ocr_max=0.340s`, `rec_p95=0.248s`, `det_p95=0.077s`, and
   `selected_p95=29.0`. This is benchmark feedback-loop reliability only; no
   runtime deploy is needed.
+- Rejected a narrower route-UI OCR crop after focused real-screenshot A/B
+  checks. Monkey-patching `ROUTE_UI_OCR_CROP_TOP_FRACTION` from `0.28` to
+  `0.35` reduced some receipt OCR totals, but only `3/5` route/profile
+  expectations passed because `tesla-austin-route-active` and
+  `tesla-austin-route-active-later` dropped below OCR-label-count contracts.
+  Fractions `0.42` and `0.50` were worse: active-route rows retried full-detail
+  OCR, repeat p95 rose to about `0.55-0.61s`, and selected-box/label-count
+  budgets failed. Added repeat-profile full-detail retry summaries instead, so
+  future OCR shortcuts print the retry blast radius directly. Focused stress
+  benchmark tests passed `103 passed in 0.33s`, the full suite passed
+  `679 passed in 5.93s`, and `git diff --check` was clean. A deliberate reject
+  smoke at `out/repeat-full-detail-retry-visibility-reject-20260603` printed
+  repeat full-detail retry cases for `tesla-austin-route-active` at `2/2`
+  with `unexpected=2`, and `tesla-austin-route-active-later` at `2/2` with
+  `unexpected=2`; the accepted
+  default smoke at `out/repeat-full-detail-retry-visibility-default-20260603`
+  passed `5/5`, repeat p95 `0.323s`, and stayed quiet on repeat retries. This
+  is benchmark feedback-loop reliability only; no runtime deploy is needed.

@@ -2633,9 +2633,11 @@ def summarize_repeat_profile_samples(
             "unexpected_samples": len(analyzed_samples)
             - count_repeat_expectation_passed_samples(analyzed_samples),
             "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+            "ocr_full_detail_retry_samples": count_repeat_full_detail_retry_samples(analyzed_samples),
             "subsecond_case_min_total_count": subsecond_case_count,
             "stable_signature_cases": len(case_summaries) - len(unstable_signature_cases),
             "unstable_signature_cases": unstable_signature_cases,
+            "ocr_full_detail_retry_cases": repeat_profile_ocr_full_detail_retry_cases(case_summaries),
             **repeat_profile_total_elapsed_stats(analyzed_samples),
             "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
             "slowest_samples": repeat_profile_slowest_samples(analyzed_samples),
@@ -2660,6 +2662,7 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "unexpected_samples": len(analyzed_samples)
         - count_repeat_expectation_passed_samples(analyzed_samples),
         "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+        "ocr_full_detail_retry_samples": count_repeat_full_detail_retry_samples(analyzed_samples),
         "signature_stability": repeat_profile_signature_stability(analyzed_samples),
         **repeat_profile_total_elapsed_stats(analyzed_samples),
         "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
@@ -2672,6 +2675,10 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
 
 def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [sample for sample in samples if not sample.get("warmup")]
+
+
+def count_repeat_full_detail_retry_samples(samples: list[dict[str, Any]]) -> int:
+    return sum(1 for sample in samples if sample.get("ocr_full_detail_retry") is True)
 
 
 def repeat_profile_signature_stability(samples: list[dict[str, Any]]) -> dict[str, Any]:
@@ -2816,6 +2823,44 @@ def repeat_profile_slowest_case_summary(
         "max_total_elapsed_s": round(max_total, 6),
     }
     for key in ("samples", "analyzed_samples", "expectation_passed_samples", "unexpected_samples"):
+        value = summary.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            result[key] = value
+    return result
+
+
+def repeat_profile_ocr_full_detail_retry_cases(
+    case_summaries: dict[str, dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[int, int, str, dict[str, Any]]] = []
+    for slug, summary in case_summaries.items():
+        if not isinstance(summary, dict):
+            continue
+        retry_samples = summary.get("ocr_full_detail_retry_samples")
+        if not isinstance(retry_samples, int) or isinstance(retry_samples, bool) or retry_samples <= 0:
+            continue
+        analyzed_samples = summary.get("analyzed_samples")
+        analyzed_count = analyzed_samples if isinstance(analyzed_samples, int) else 0
+        ranked.append((retry_samples, analyzed_count, slug, summary))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    return [
+        repeat_profile_ocr_full_detail_retry_case_summary(slug, summary, retry_samples)
+        for retry_samples, _analyzed_count, slug, summary in ranked[: max(0, limit)]
+    ]
+
+
+def repeat_profile_ocr_full_detail_retry_case_summary(
+    slug: str,
+    summary: dict[str, Any],
+    retry_samples: int,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "slug": slug,
+        "ocr_full_detail_retry_samples": retry_samples,
+    }
+    for key in ("analyzed_samples", "unexpected_samples"):
         value = summary.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             result[key] = value
@@ -4232,6 +4277,20 @@ def print_stress_table(report: dict[str, Any]) -> None:
                 )
                 if slow_text:
                     print(f"repeat slowest: {slow_text}")
+            retry_cases = repeat_summary.get("ocr_full_detail_retry_cases")
+            if (
+                isinstance(retry_cases, list)
+                and retry_cases
+                and repeat_summary.get("ocr_full_detail_retry_samples")
+            ):
+                retry_text = ", ".join(
+                    repeat_profile_full_detail_retry_case_text(case)
+                    for case in retry_cases[:5]
+                    if isinstance(case, dict)
+                )
+                if retry_text:
+                    retry_count = int(repeat_summary.get("ocr_full_detail_retry_samples") or 0)
+                    print(f"repeat full-detail retries: {retry_count} sample(s): {retry_text}")
             slowest_cases = repeat_summary.get("slowest_cases")
             if isinstance(slowest_cases, list) and slowest_cases:
                 slow_case_text = ", ".join(
@@ -4346,6 +4405,22 @@ def repeat_profile_slow_case_text(case: dict[str, Any]) -> str:
     if max_total is not None:
         parts.append(f"max={max_total:.3f}s")
     unexpected = case.get("unexpected_samples")
+    if isinstance(unexpected, int) and unexpected:
+        parts.append(f"unexpected={unexpected}")
+    return " ".join(parts)
+
+
+def repeat_profile_full_detail_retry_case_text(case: dict[str, Any]) -> str:
+    slug = case.get("slug") or "-"
+    retries = case.get("ocr_full_detail_retry_samples")
+    analyzed = case.get("analyzed_samples")
+    unexpected = case.get("unexpected_samples")
+    parts = [str(slug)]
+    if isinstance(retries, int) and not isinstance(retries, bool):
+        if isinstance(analyzed, int) and not isinstance(analyzed, bool) and analyzed > 0:
+            parts.append(f"{retries}/{analyzed}")
+        else:
+            parts.append(str(retries))
     if isinstance(unexpected, int) and unexpected:
         parts.append(f"unexpected={unexpected}")
     return " ".join(parts)

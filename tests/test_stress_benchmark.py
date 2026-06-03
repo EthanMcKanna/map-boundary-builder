@@ -267,6 +267,15 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
                 "median_total_elapsed_s": 0.5,
                 "p95_total_elapsed_s": 0.5,
                 "max_total_elapsed_s": 0.5,
+                "ocr_full_detail_retry_samples": 1,
+                "ocr_full_detail_retry_cases": [
+                    {
+                        "slug": "kept",
+                        "ocr_full_detail_retry_samples": 1,
+                        "analyzed_samples": 1,
+                        "unexpected_samples": 0,
+                    }
+                ],
                 "slowest_samples": [
                     {
                         "slug": "kept",
@@ -329,6 +338,7 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     assert "manifest OCR contracts: calls=2/2, count-capped=1/1 positive-call rows" in output
     assert "manifest contract budget: passed" in output
     assert "repeat slowest: kept#2=0.500s rec=0.120s ocr_total=0.300s conf_p50=88.2 conf_lt80=1" in output
+    assert "repeat full-detail retries: 1 sample(s): kept 1/1" in output
     assert "repeat slowest cases: kept p95=0.500s max=0.500s" in output
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
@@ -2196,6 +2206,8 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
     assert repeat_profile["summary"]["expectation_passed_samples"] == 1
     assert repeat_profile["summary"]["unexpected_samples"] == 0
     assert repeat_profile["summary"]["subsecond_samples"] == 1
+    assert repeat_profile["summary"]["ocr_full_detail_retry_samples"] == 0
+    assert repeat_profile["summary"]["ocr_full_detail_retry_cases"] == []
     assert repeat_profile["summary"]["subsecond_case_min_total_count"] == 1
     assert repeat_profile["summary"]["stable_signature_cases"] == 1
     assert repeat_profile["summary"]["unstable_signature_cases"] == []
@@ -2695,6 +2707,21 @@ def test_repeat_profile_flags_output_signature_drift() -> None:
 
     assert repeat_profile["summary"]["stable_signature_cases"] == 0
     assert repeat_profile["summary"]["unstable_signature_cases"] == ["drifty"]
+    assert repeat_profile["summary"]["ocr_full_detail_retry_samples"] == 1
+    assert repeat_profile["summary"]["ocr_full_detail_retry_cases"] == [
+        {
+            "slug": "drifty",
+            "ocr_full_detail_retry_samples": 1,
+            "analyzed_samples": 2,
+            "unexpected_samples": 0,
+        }
+    ]
+    assert (
+        stress_module.repeat_profile_full_detail_retry_case_text(
+            repeat_profile["summary"]["ocr_full_detail_retry_cases"][0]
+        )
+        == "drifty 1/2"
+    )
     stability = repeat_profile["cases"]["drifty"]["signature_stability"]
     assert stability["stable"] is False
     assert stability["unique_signatures"] == 2
