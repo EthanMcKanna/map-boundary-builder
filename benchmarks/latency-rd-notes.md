@@ -16920,3 +16920,21 @@ with zero failures in 0.531s.
   benchmark tests passed `105 passed in 0.44s`, the full suite passed
   `681 passed, 31 subtests passed in 6.16s`, and `git diff --check` was clean.
   This is benchmark feedback-loop reliability only; no runtime deploy is needed.
+- Rejected lowering the non-SVG bright-blue synthetic warm sample below the
+  current `1000px` default. A same-session five-row primary-tail control
+  (`out/warm-sample-900-primary-tail-control-20260603`) passed `5/5` with
+  prewarm `0.727s`, primary max `0.435s`, repeat p95 `0.364s`, and repeat OCR
+  p95 `0.318s`. The `900px` candidate
+  (`out/warm-sample-900-primary-tail-candidate-20260603`) cut prewarm to
+  `0.576s` and primary max to `0.404s`, but widened repeat p95 to `0.406s`,
+  repeat max to `0.445s`, and repeat OCR p95 to `0.365s`, so it is rejected.
+  The less aggressive `950px` candidate
+  (`out/warm-sample-950-primary-tail-candidate-20260603`) looked cleaner on
+  the five-row slice (`5/5`, prewarm `0.605s`, primary max `0.395s`, repeat
+  p95 `0.361s`, repeat OCR p95 `0.313s`), but the full hard gate
+  (`out/warm-sample-950-full49-hard-candidate-20260603`) did not prove a
+  durable improvement versus the current full baseline: it preserved `49/49`
+  behavior and stable signatures, but prewarm rose slightly (`0.717s` vs
+  `0.706s`), primary max rose (`0.493s` vs `0.476s`), repeat p95 rose
+  (`0.356s` vs `0.350s`), and repeat OCR p95 rose (`0.313s` vs `0.293s`).
+  Keep `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION=1000`.
