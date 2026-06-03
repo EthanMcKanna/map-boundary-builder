@@ -36,6 +36,16 @@ REAL_SCREENSHOT_HARD_GATE_PRESET_VERSION = 2
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_NAME = "focused-real-screenshot-gate"
 FOCUSED_REAL_SCREENSHOT_GATE_PRESET_VERSION = 1
 OCR_ENGINE_STAGE_MAX_KEYS = ("input_s", "det_elapsed_s", "rec_elapsed_s", "total_s")
+OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS = (
+    ("input", "input_s"),
+    ("det", "det_elapsed_s"),
+    ("rec", "rec_elapsed_s"),
+)
+OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS = (
+    ("input", "p95_input_s"),
+    ("det", "p95_det_elapsed_s"),
+    ("rec", "p95_rec_elapsed_s"),
+)
 OCR_ENGINE_DETAIL_CONTEXT_KEYS = (
     "input_kind",
     "input_shape",
@@ -2679,6 +2689,10 @@ def primary_ocr_engine_slowest_case_summary(
         elapsed_s = parse_nonnegative_float(ocr_engine_profile.get(key))
         if elapsed_s is not None:
             result[key] = round(elapsed_s, 6)
+    add_ocr_engine_dominant_stage_summary(
+        result,
+        OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS,
+    )
     calls = ocr_engine_profile.get("calls")
     if isinstance(calls, int) and not isinstance(calls, bool):
         result["calls"] = calls
@@ -3071,6 +3085,11 @@ def repeat_profile_ocr_engine_slowest_case_summary(
         det_p95 = parse_nonnegative_float(det_stats.get("p95_duration_s"))
         if det_p95 is not None:
             result["p95_det_elapsed_s"] = round(det_p95, 6)
+    add_ocr_engine_dominant_stage_summary(
+        result,
+        OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS,
+        prefix="p95_",
+    )
     count_stats = repeat_profile_case_ocr_engine_count_metric(summary, "selected_box_count")
     if count_stats is not None:
         selected_p95 = parse_nonnegative_float(count_stats.get("p95_count"))
@@ -3124,6 +3143,34 @@ def repeat_profile_case_ocr_engine_count_metric(summary: dict[str, Any], metric:
         return None
     metric_stats = count_stats.get(metric)
     return metric_stats if isinstance(metric_stats, dict) else None
+
+
+def add_ocr_engine_dominant_stage_summary(
+    result: dict[str, Any],
+    fields: tuple[tuple[str, str], ...],
+    *,
+    prefix: str = "",
+) -> None:
+    dominant = ocr_engine_dominant_stage(result, fields)
+    if dominant is None:
+        return
+    stage, elapsed_s = dominant
+    result[f"{prefix}dominant_stage"] = stage
+    result[f"{prefix}dominant_stage_s"] = round(elapsed_s, 6)
+
+
+def ocr_engine_dominant_stage(
+    values: dict[str, Any],
+    fields: tuple[tuple[str, str], ...],
+) -> tuple[str, float] | None:
+    candidates: list[tuple[str, float]] = []
+    for label, key in fields:
+        elapsed_s = parse_nonnegative_float(values.get(key))
+        if elapsed_s is not None and elapsed_s > 0.0:
+            candidates.append((label, elapsed_s))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[1])
 
 
 def repeat_profile_slowest_sample_summary(
@@ -4793,6 +4840,15 @@ def ocr_engine_input_shape_text(shape: Any) -> str | None:
     return f"{width}x{height}"
 
 
+def ocr_engine_dominant_stage_text(stage: Any, elapsed_s: Any, *, label: str = "dom") -> str | None:
+    if not isinstance(stage, str) or not stage:
+        return None
+    elapsed = parse_nonnegative_float(elapsed_s)
+    if elapsed is None:
+        return None
+    return f"{label}={stage}:{elapsed:.3f}s"
+
+
 def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
     slug = case.get("slug") or "-"
     total_s = parse_nonnegative_float(case.get("total_s"))
@@ -4808,6 +4864,14 @@ def primary_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"rec={rec_s:.3f}s")
     if det_s is not None:
         parts.append(f"det={det_s:.3f}s")
+    dominant_text = ocr_engine_dominant_stage_text(case.get("dominant_stage"), case.get("dominant_stage_s"))
+    if dominant_text is None:
+        dominant = ocr_engine_dominant_stage(case, OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS)
+        if dominant is not None:
+            stage, elapsed_s = dominant
+            dominant_text = f"dom={stage}:{elapsed_s:.3f}s"
+    if dominant_text:
+        parts.append(dominant_text)
     shape_text = ocr_engine_input_shape_text(case.get("input_shape"))
     if shape_text:
         parts.append(f"shape={shape_text}")
@@ -4872,6 +4936,13 @@ def primary_slow_case_text_from_summary(case: dict[str, Any]) -> str:
             parts.append(f"rec={rec_s:.3f}s")
         if det_s is not None:
             parts.append(f"det={det_s:.3f}s")
+        dominant = ocr_engine_dominant_stage(
+            ocr_engine,
+            OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS,
+        )
+        if dominant is not None:
+            stage, elapsed_s = dominant
+            parts.append(f"dom={stage}:{elapsed_s:.3f}s")
         input_kind = ocr_engine.get("input_kind")
         if isinstance(input_kind, str) and input_kind:
             parts.append(f"kind={input_kind}")
@@ -4938,6 +5009,18 @@ def repeat_profile_ocr_engine_slow_case_text(case: dict[str, Any]) -> str:
         parts.append(f"rec_p95={p95_rec:.3f}s")
     if p95_det is not None:
         parts.append(f"det_p95={p95_det:.3f}s")
+    dominant_text = ocr_engine_dominant_stage_text(
+        case.get("p95_dominant_stage"),
+        case.get("p95_dominant_stage_s"),
+        label="dom_p95",
+    )
+    if dominant_text is None:
+        dominant = ocr_engine_dominant_stage(case, OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS)
+        if dominant is not None:
+            stage, elapsed_s = dominant
+            dominant_text = f"dom_p95={stage}:{elapsed_s:.3f}s"
+    if dominant_text:
+        parts.append(dominant_text)
     shape_text = ocr_engine_input_shape_text(case.get("input_shape"))
     if shape_text:
         parts.append(f"shape={shape_text}")

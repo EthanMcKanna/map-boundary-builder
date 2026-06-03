@@ -416,19 +416,21 @@ def test_print_stress_table_reports_confidence_count_metrics(capsys) -> None:
     ) in output
     assert (
         "primary slowest cases: kept=0.500s ocr=0.400s ocr_total=0.300s "
-        "input=0.020s rec=0.120s det=0.070s kind=array selected=12 sel_lt1300=5 conf_p50=88.2"
+        "input=0.020s rec=0.120s det=0.070s dom=rec:0.120s "
+        "kind=array selected=12 sel_lt1300=5 conf_p50=88.2"
     ) in output
     assert (
         "primary ocr slowest cases: kept ocr=0.300s input=0.020s rec=0.120s det=0.070s "
-        "shape=607x1000 kind=array det_limit=608/default rec_profile=default min_area=500 "
-        "selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
+        "dom=rec:0.120s shape=607x1000 kind=array det_limit=608/default "
+        "rec_profile=default min_area=500 selected=12 raw=14 labels=12 sel_lt1300=5 conf_lt90=1"
     ) in output
     assert "repeat full-detail retries: 1 sample(s): kept 1/1" in output
     assert "repeat slowest cases: kept p95=0.500s max=0.500s" in output
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
         "input_p95=0.020s rec_p95=0.120s det_p95=0.070s "
-        "shape=607x1000 kind=array det_limit=608/default rec_profile=default rec_batch=12 min_area=500 "
+        "dom_p95=rec:0.120s shape=607x1000 kind=array det_limit=608/default "
+        "rec_profile=default rec_batch=12 min_area=500 "
         "selected_p95=12.0 sel_lt1300_p95=5.0"
     ) in output
     assert "repeat ocr engine: input=p95 0.020s max 0.020s" in output
@@ -583,7 +585,8 @@ def test_print_stress_table_enriches_old_ocr_summary_context_from_rows(capsys) -
     assert (
         "repeat ocr slowest cases: kept ocr_p95=0.300s ocr_max=0.300s "
         "input_p95=0.020s rec_p95=0.120s det_p95=0.070s "
-        "shape=607x1000 kind=array det_limit=608/default rec_profile=default rec_batch=12 min_area=500"
+        "dom_p95=rec:0.120s shape=607x1000 kind=array "
+        "det_limit=608/default rec_profile=default rec_batch=12 min_area=500"
     ) in output
 
 
@@ -1292,6 +1295,8 @@ def test_stress_benchmark_can_profile_ocr_engine(tmp_path, monkeypatch) -> None:
             "input_s": 0.05,
             "rec_elapsed_s": 0.3,
             "det_elapsed_s": 0.2,
+            "dominant_stage": "rec",
+            "dominant_stage_s": 0.3,
             "calls": 1,
             "raw_box_count": 4,
             "selected_box_count": 3,
@@ -2737,6 +2742,8 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
             "p95_input_s": 0.02,
             "p95_rec_elapsed_s": 0.16,
             "p95_det_elapsed_s": 0.08,
+            "p95_dominant_stage": "rec",
+            "p95_dominant_stage_s": 0.16,
             "p95_selected_box_count": 3,
             "max_selected_box_count": 3,
             "input_kind": "array",
@@ -5124,6 +5131,8 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
             "p95_input_s": 0.04,
             "p95_rec_elapsed_s": 0.43,
             "p95_det_elapsed_s": 0.12,
+            "p95_dominant_stage": "rec",
+            "p95_dominant_stage_s": 0.43,
             "input_kind": "array",
             "input_shape": [900, 1200],
             "detector_limit": 608,
@@ -5145,8 +5154,8 @@ def test_repeat_profile_slowest_cases_rank_per_slug_tail_metrics() -> None:
     assert (
         stress_module.repeat_profile_ocr_engine_slow_case_text(ocr_cases[0])
         == "slow ocr_p95=0.620s ocr_max=0.720s input_p95=0.040s "
-        "rec_p95=0.430s det_p95=0.120s shape=1200x900 kind=array "
-        "det_limit=608/default rec_profile=default rec_batch=8 min_area=1500 "
+        "rec_p95=0.430s det_p95=0.120s dom_p95=rec:0.430s "
+        "shape=1200x900 kind=array det_limit=608/default rec_profile=default rec_batch=8 min_area=1500 "
         "selected_p95=37.0 sel_lt1300_p95=21.0"
     )
 
@@ -5211,6 +5220,8 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
             "input_s": 0.04,
             "rec_elapsed_s": 0.35,
             "det_elapsed_s": 0.18,
+            "dominant_stage": "rec",
+            "dominant_stage_s": 0.35,
             "calls": 2,
             "input_shape": [1400, 1400],
             "input_kind": "array",
@@ -5227,9 +5238,9 @@ def test_primary_ocr_engine_slowest_cases_preserve_detail_context() -> None:
     ]
     assert (
         stress_module.primary_ocr_engine_slow_case_text(cases[0])
-        == "slow ocr=0.620s input=0.040s rec=0.350s det=0.180s shape=1400x1400 "
-        "kind=array det_limit=256/max rec_profile=en-ppocrv5 min_area=2300 selected=37 raw=44 "
-        "labels=31 sel_lt1300=5 conf_lt90=4"
+        == "slow ocr=0.620s input=0.040s rec=0.350s det=0.180s dom=rec:0.350s "
+        "shape=1400x1400 kind=array det_limit=256/max rec_profile=en-ppocrv5 min_area=2300 "
+        "selected=37 raw=44 labels=31 sel_lt1300=5 conf_lt90=4"
     )
 
 
@@ -5286,7 +5297,7 @@ def test_primary_slowest_cases_rank_total_and_include_ocr_context() -> None:
     assert (
         stress_module.primary_slow_case_text_from_summary(cases[0])
         == "slow=0.620s ocr=0.400s ocr_total=0.360s input=0.020s rec=0.150s "
-        "det=0.170s kind=array selected=18 sel_lt1300=3 conf_p50=98.2"
+        "det=0.170s dom=det:0.170s kind=array selected=18 sel_lt1300=3 conf_p50=98.2"
     )
 
 

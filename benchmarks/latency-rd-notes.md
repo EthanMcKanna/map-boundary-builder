@@ -17035,3 +17035,19 @@ with zero failures in 0.531s.
   passed `685 passed, 31 subtests passed in 6.72s`, and `git diff --check`
   was clean. This is benchmark feedback-loop reliability only; no runtime
   deploy is needed.
+- Added dominant OCR-stage labels to primary and repeat OCR slow-case reporting.
+  The runtime knob trail remains closed for this pass: lower bright-blue input
+  caps, lower detector caps, broad text-area caps, route-UI crops, and route-UI
+  batch changes have already failed stricter support/bbox or latency gates. The
+  accepted harness change makes that evidence easier to act on: replaying
+  `out/ocr-context-full49-hard-20260603/stress-summary.json` now prints
+  `dom=det:0.308s` for primary `dallas-waymo`, `dom=det:0.152s` for primary
+  `los-angeles-waymo`, and `dom=rec:0.200s` for primary
+  `tesla-austin-route-receipt-long`. The repeat line similarly marks
+  `los-angeles-waymo`, `houston-waymo`, `miami-waymo`, and `bay-area-waymo` as
+  detector-dominant bright-blue `256/max en-ppocrv5` tails, while the Tesla route
+  receipt is recognizer-dominant at `dom_p95=rec:0.207s`. Focused stress
+  benchmark tests passed `109 passed in 0.20s`, the full suite passed
+  `685 passed, 31 subtests passed in 6.03s`, the saved-report smoke showed the
+  expected dominant-stage labels, and `git diff --check` was clean. This is
+  benchmark feedback-loop reliability only; no runtime deploy is needed.
