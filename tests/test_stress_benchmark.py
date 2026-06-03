@@ -680,7 +680,12 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_top_labels": ["Dallas"],
                 "total_elapsed_s": 0.5,
                 "stages": {"ocr": 0.3},
-                "ocr_engine_profile": {"total_s": 0.28},
+                "ocr_engine_profile": {
+                    "input_s": 0.02,
+                    "det_elapsed_s": 0.10,
+                    "rec_elapsed_s": 0.16,
+                    "total_s": 0.28,
+                },
             },
             {
                 "slug": "houston",
@@ -698,7 +703,12 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_top_labels": ["Houston"],
                 "total_elapsed_s": 0.8,
                 "stages": {"ocr": 0.5},
-                "ocr_engine_profile": {"total_s": 0.45},
+                "ocr_engine_profile": {
+                    "input_s": 0.03,
+                    "det_elapsed_s": 0.18,
+                    "rec_elapsed_s": 0.24,
+                    "total_s": 0.45,
+                },
             },
             {"slug": "baseline-only", "observed_status": "failed"},
         ],
@@ -739,7 +749,12 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_top_labels": ["Dallas"],
                 "total_elapsed_s": 0.4,
                 "stages": {"ocr": 0.25},
-                "ocr_engine_profile": {"total_s": 0.2},
+                "ocr_engine_profile": {
+                    "input_s": 0.02,
+                    "det_elapsed_s": 0.08,
+                    "rec_elapsed_s": 0.10,
+                    "total_s": 0.2,
+                },
             },
             {
                 "slug": "houston",
@@ -757,7 +772,12 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
                 "ocr_top_labels": ["Houston"],
                 "total_elapsed_s": 1.0,
                 "stages": {"ocr": 0.65},
-                "ocr_engine_profile": {"total_s": 0.6},
+                "ocr_engine_profile": {
+                    "input_s": 0.04,
+                    "det_elapsed_s": 0.25,
+                    "rec_elapsed_s": 0.31,
+                    "total_s": 0.6,
+                },
             },
             {"slug": "candidate-only", "observed_status": "failed"},
         ],
@@ -802,9 +822,21 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert comparison["median_total_elapsed_delta_s"] == 0.05
     assert comparison["largest_total_regressions"][0]["slug"] == "houston"
     assert comparison["largest_total_regressions"][0]["total_elapsed_delta_s"] == 0.2
+    assert comparison["largest_total_regressions"][0]["ocr_engine_stage_delta_s"] == {
+        "det_elapsed_s": 0.07,
+        "input_s": 0.01,
+        "rec_elapsed_s": 0.07,
+        "total_s": 0.15,
+    }
     assert comparison["largest_total_improvements"][0]["slug"] == "dallas"
     assert comparison["largest_total_improvements"][0]["stage_delta_s"] == {"ocr": -0.05}
     assert comparison["largest_total_improvements"][0]["ocr_engine_total_delta_s"] == -0.08
+    assert comparison["largest_total_improvements"][0]["ocr_engine_stage_delta_s"] == {
+        "det_elapsed_s": -0.02,
+        "input_s": 0.0,
+        "rec_elapsed_s": -0.06,
+        "total_s": -0.08,
+    }
     repeat_delta = comparison["repeat_profile_delta"]
     assert repeat_delta["sample_counts"]["ocr_full_detail_retry_samples"]["delta"] == 1.0
     assert repeat_delta["duration_s"]["p95_total_elapsed_s"]["delta_s"] == 0.03
@@ -1004,10 +1036,30 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "signature_changes": [{"slug": "houston", "changed_fields": ["city", "control_points"]}],
             "median_total_elapsed_delta_s": -0.04,
             "largest_total_regressions": [
-                {"slug": "houston", "total_elapsed_delta_s": 0.2},
+                {
+                    "slug": "houston",
+                    "total_elapsed_delta_s": 0.2,
+                    "ocr_engine_total_delta_s": 0.15,
+                    "ocr_engine_stage_delta_s": {
+                        "input_s": 0.01,
+                        "det_elapsed_s": 0.07,
+                        "rec_elapsed_s": 0.07,
+                        "total_s": 0.15,
+                    },
+                },
             ],
             "largest_total_improvements": [
-                {"slug": "dallas", "total_elapsed_delta_s": -0.1},
+                {
+                    "slug": "dallas",
+                    "total_elapsed_delta_s": -0.1,
+                    "ocr_engine_total_delta_s": -0.08,
+                    "ocr_engine_stage_delta_s": {
+                        "input_s": 0.0,
+                        "det_elapsed_s": -0.02,
+                        "rec_elapsed_s": -0.06,
+                        "total_s": -0.08,
+                    },
+                },
             ],
             "regression_budget": {
                 "passed": False,
@@ -1072,7 +1124,12 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "missing_baseline=1, missing_candidate=0, baseline_out_of_scope=3" in output
     assert "median_delta=-0.040s" in output
     assert "signature_fields=city:1,control_points:1" in output
-    assert "baseline primary delta: worst_total=houston +0.200s, best_total=dallas -0.100s" in output
+    assert (
+        "baseline primary delta: worst_total=houston +0.200s "
+        "(ocr_total=+0.150s, input=+0.010s, det=+0.070s, rec=+0.070s), "
+        "best_total=dallas -0.100s "
+        "(ocr_total=-0.080s, input=+0.000s, det=-0.020s, rec=-0.060s)"
+    ) in output
     assert "baseline repeat delta: p95_total=+0.030s" in output
     assert "full_detail_retries=+1" in output
     assert (

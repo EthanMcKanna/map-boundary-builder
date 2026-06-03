@@ -17090,3 +17090,16 @@ with zero failures in 0.531s.
   suite passed `685 passed, 31 subtests passed in 6.30s`, and `git diff --check`
   was clean. This is benchmark feedback-loop reliability only; no runtime deploy
   is needed.
+- Preserved primary-row OCR stage deltas in baseline comparisons and surfaced
+  them in the primary regression headline. This fills the gap left by repeat-only
+  stage deltas: rebuilding the saved `248/max` comparison from
+  `out/brightblue-det248-control-slow8-20260603/stress-summary.json` and
+  `out/brightblue-det248-candidate-slow8-20260603/stress-summary.json` now prints
+  `worst_total=los-angeles-waymo +0.134s (ocr_total=+0.120s, input=+0.024s,
+  det=+0.021s, rec=+0.074s)` and
+  `best_total=dallas-waymo -0.092s (ocr_total=-0.082s, input=-0.000s,
+  det=-0.110s, rec=+0.031s)`, so one-off primary regressions can be attributed
+  without reopening row-level profiler JSON. Focused stress benchmark tests
+  passed `109 passed in 0.21s`, the full suite passed
+  `685 passed, 31 subtests passed in 5.92s`, and `git diff --check` was clean.
+  This is benchmark feedback-loop reliability only; no runtime deploy is needed.

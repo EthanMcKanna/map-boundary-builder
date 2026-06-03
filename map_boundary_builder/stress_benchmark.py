@@ -42,6 +42,11 @@ BASELINE_REPEAT_OCR_STAGE_DELTA_DISPLAY = (
     ("rec_elapsed_s", "rec_p95"),
     ("total_s", "total_p95"),
 )
+BASELINE_PRIMARY_OCR_STAGE_DELTA_DISPLAY = (
+    ("input_s", "input"),
+    ("det_elapsed_s", "det"),
+    ("rec_elapsed_s", "rec"),
+)
 OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS = (
     ("input", "input_s"),
     ("det", "det_elapsed_s"),
@@ -1292,6 +1297,9 @@ def stress_row_latency_delta(
         delta["baseline_ocr_engine_total_s"] = round(baseline_ocr_total, 6)
         delta["candidate_ocr_engine_total_s"] = round(candidate_ocr_total, 6)
         delta["ocr_engine_total_delta_s"] = round(candidate_ocr_total - baseline_ocr_total, 6)
+    ocr_stage_deltas = stress_row_ocr_engine_stage_deltas(baseline_row, candidate_row)
+    if ocr_stage_deltas:
+        delta["ocr_engine_stage_delta_s"] = ocr_stage_deltas
     return delta
 
 
@@ -1310,6 +1318,18 @@ def stress_row_stage_deltas(
         if baseline_stage is None or candidate_stage is None:
             continue
         deltas[str(stage)] = round(candidate_stage - baseline_stage, 6)
+    return deltas
+
+
+def stress_row_ocr_engine_stage_deltas(
+    baseline_row: dict[str, Any],
+    candidate_row: dict[str, Any],
+) -> dict[str, float]:
+    deltas: dict[str, float] = {}
+    for key in OCR_ENGINE_STAGE_MAX_KEYS:
+        delta = stress_row_ocr_engine_metric_delta(baseline_row, candidate_row, key)
+        if delta is not None:
+            deltas[key] = delta
     return deltas
 
 
@@ -5157,7 +5177,26 @@ def baseline_primary_delta_item_text(items: Any) -> str:
     delta = parse_signed_float(item.get("total_elapsed_delta_s"))
     if not isinstance(slug, str) or not slug or delta is None:
         return ""
-    return f"{slug} {delta:+.3f}s"
+    ocr_delta_text = baseline_primary_ocr_stage_delta_text(item)
+    return f"{slug} {delta:+.3f}s{ocr_delta_text}"
+
+
+def baseline_primary_ocr_stage_delta_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    total_delta = parse_signed_float(item.get("ocr_engine_total_delta_s"))
+    stage_deltas = item.get("ocr_engine_stage_delta_s")
+    if total_delta is None and isinstance(stage_deltas, dict):
+        total_delta = parse_signed_float(stage_deltas.get("total_s"))
+    if total_delta is not None:
+        parts.append(f"ocr_total={total_delta:+.3f}s")
+    if isinstance(stage_deltas, dict):
+        for key, label in BASELINE_PRIMARY_OCR_STAGE_DELTA_DISPLAY:
+            value = parse_signed_float(stage_deltas.get(key))
+            if value is not None:
+                parts.append(f"{label}={value:+.3f}s")
+    if not parts:
+        return ""
+    return f" ({', '.join(parts)})"
 
 
 def baseline_signature_field_counts_text(baseline_comparison: dict[str, Any], *, limit: int = 4) -> str:
