@@ -1188,6 +1188,45 @@ def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -
                 "stages": {"ocr": 10.0},
             },
         ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 4,
+                "p95_total_elapsed_s": 20.85,
+                "stage_duration_s": {
+                    "ocr": {"p95_duration_s": 10.85},
+                },
+            },
+            "samples": [
+                {
+                    "slug": "dallas",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.5,
+                    "stages": {"ocr": 0.2},
+                },
+                {
+                    "slug": "dallas",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.6,
+                    "stages": {"ocr": 0.22},
+                },
+                {
+                    "slug": "baseline-out-of-scope",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 20.0,
+                    "stages": {"ocr": 10.0},
+                },
+                {
+                    "slug": "baseline-out-of-scope",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 21.0,
+                    "stages": {"ocr": 11.0},
+                },
+            ],
+        },
     }
     candidate = {
         "preset": {"name": "focused-real-screenshot-gate", "only": ["dallas"]},
@@ -1200,6 +1239,31 @@ def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -
                 "stages": {"ocr": 0.25},
             }
         ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 2,
+                "p95_total_elapsed_s": 0.645,
+                "stage_duration_s": {
+                    "ocr": {"p95_duration_s": 0.269},
+                },
+            },
+            "samples": [
+                {
+                    "slug": "dallas",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.55,
+                    "stages": {"ocr": 0.25},
+                },
+                {
+                    "slug": "dallas",
+                    "warmup": False,
+                    "expectation_passed": True,
+                    "total_elapsed_s": 0.65,
+                    "stages": {"ocr": 0.27},
+                },
+            ],
+        },
     }
 
     comparison = stress_module.compare_stress_reports(
@@ -1226,6 +1290,22 @@ def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -
             "candidate_stage_total_s": 0.25,
         }
     ]
+    repeat_delta = comparison["repeat_profile_delta"]
+    assert repeat_delta["sample_counts"]["analyzed_samples"] == {
+        "baseline": 2.0,
+        "candidate": 2.0,
+        "delta": 0.0,
+    }
+    assert repeat_delta["duration_s"]["p95_total_elapsed_s"] == {
+        "baseline": 0.595,
+        "candidate": 0.645,
+        "delta_s": 0.05,
+    }
+    assert repeat_delta["stage_duration_s"]["ocr"]["p95_duration_s"] == {
+        "baseline": 0.219,
+        "candidate": 0.269,
+        "delta_s": 0.05,
+    }
 
 
 def test_compare_stress_reports_records_repeat_profile_case_coverage_gaps() -> None:

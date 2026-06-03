@@ -1019,7 +1019,11 @@ def compare_stress_reports(
     )
     if stage_duration_delta:
         comparison["stage_duration_delta_s"] = stage_duration_delta
-    repeat_delta = stress_repeat_profile_delta(baseline_report, candidate_report)
+    repeat_delta = stress_repeat_profile_delta(
+        baseline_report,
+        candidate_report,
+        slugs=compared_slugs if candidate_scope_slugs is not None else None,
+    )
     if repeat_delta is not None:
         comparison["repeat_profile_delta"] = repeat_delta
     repeat_case_coverage = stress_repeat_profile_case_coverage(
@@ -1375,9 +1379,21 @@ def baseline_regression_budget(
 def stress_repeat_profile_delta(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    baseline_summary = stress_report_repeat_profile_summary(baseline_report)
-    candidate_summary = stress_report_repeat_profile_summary(candidate_report)
+    if slugs is not None:
+        baseline_summary = stress_report_repeat_profile_summary_for_slugs(
+            baseline_report,
+            slugs,
+        )
+        candidate_summary = stress_report_repeat_profile_summary_for_slugs(
+            candidate_report,
+            slugs,
+        )
+    else:
+        baseline_summary = stress_report_repeat_profile_summary(baseline_report)
+        candidate_summary = stress_report_repeat_profile_summary(candidate_report)
     if baseline_summary is None or candidate_summary is None:
         return None
     delta: dict[str, Any] = {}
@@ -1745,6 +1761,27 @@ def stress_report_repeat_profile_summary(report: dict[str, Any]) -> dict[str, An
                 enriched = dict(summary)
             enriched["ocr_overlap_hidden_s"] = hidden_stats
     return enriched or summary
+
+
+def stress_report_repeat_profile_summary_for_slugs(
+    report: dict[str, Any],
+    slugs: list[str],
+) -> dict[str, Any] | None:
+    repeat_profile = report.get("repeat_profile")
+    if not isinstance(repeat_profile, dict):
+        return None
+    samples = repeat_profile.get("samples")
+    if not isinstance(samples, list):
+        return None
+    slug_set = set(slugs)
+    scoped_samples = [
+        sample
+        for sample in samples
+        if isinstance(sample, dict) and sample.get("slug") in slug_set
+    ]
+    if not scoped_samples:
+        return None
+    return summarize_repeat_profile_sample_group(scoped_samples)
 
 
 def stress_report_candidate_scope_slugs(report: dict[str, Any]) -> list[str] | None:

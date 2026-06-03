@@ -17548,3 +17548,18 @@ with zero failures in 0.531s.
   This keeps focused speed candidates from getting misleading aggregate-stage
   acceptance signals. Benchmark acceptance reliability only; no runtime default
   changed.
+- Scoped aggregate repeat-profile deltas to the compared row set for focused
+  baseline comparisons. This fixes the repeat counterpart to the previous
+  primary-stage issue: a focused candidate should not compare its repeat p95
+  and repeat-stage p95 against the full 49-row baseline summary. Focused stress
+  tests passed (`134 passed in 0.30s`) and the full suite passed (`710 passed,
+  31 subtests passed in 4.86s`). A saved focused proof compared
+  `out/waymo-tail-current-control-20260603` against
+  `out/current-v11-full49-hard-rerun-20260603`; it reported `compared_rows=8`,
+  `baseline_rows_outside_candidate_scope_count=41`, scoped repeat p95
+  `0.341160s->0.341639s` (`+0.000479s`), scoped repeat max
+  `0.341411s->0.352294s` (`+0.010883s`), and repeat stage p95 deltas including
+  `extract=-0.004610s`, `ocr=-0.005550s`, and
+  `georeference=-0.000286s`. This keeps focused speed candidates from getting
+  misleading repeat-profile acceptance signals. Benchmark acceptance reliability
+  only; no runtime default changed.
