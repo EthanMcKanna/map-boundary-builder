@@ -16697,3 +16697,17 @@ with zero failures in 0.531s.
   `zoox-sf` against the full dark-rec8 hard-gate baseline, passed `2/2`, printed
   `missing_candidate=0, baseline_out_of_scope=47`, kept `signature_changes=0`,
   and saved the same scoped comparison plus repeat p95 delta `-0.088s`.
+- Extended the repeat-profile/baseline output signature to include route UI,
+  non-map UI, and thematic-map rejection evidence (`route_ui_categories`,
+  `route_metric_labels`, `non_map_ui_categories`, `non_map_ui_labels`, and
+  `thematic_map_labels`). This closes a benchmark reliability gap before future
+  OCR shortcut experiments: a candidate can no longer keep the same top OCR
+  labels while silently changing the route/non-map evidence that the manifest
+  contracts depend on. Focused stress benchmark tests passed
+  `100 passed in 0.29s`, the full suite passed `676 passed in 5.66s`, and
+  `git diff --check` was clean. A direct real-report comparison of
+  `out/route-recbatch12-control-20260603` against the rejected
+  `out/route-recbatch8-candidate-20260603` still found four changed route rows,
+  and now exposes route metric-label drift for the active-later and active-dark
+  rows directly in the baseline/candidate signatures. This is harness
+  reliability only; no runtime deploy is needed.

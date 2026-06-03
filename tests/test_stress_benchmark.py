@@ -470,6 +470,45 @@ def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -
     assert comparison["candidate_scope"]["baseline_rows_outside_candidate_scope"] == ["baseline-out-of-scope"]
 
 
+def test_compare_stress_reports_detects_route_reject_detail_drift() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "route-ui",
+                "observed_status": "failed",
+                "error": "Could not infer a service-area boundary from ride-route UI.",
+                "ocr_top_labels": ["Pickup", "Dropoff", "8 08 mi 32 min"],
+                "route_ui_categories": ["dropoff", "pickup", "plate", "receipt"],
+                "route_metric_labels": ["8 08 mi 32 min License Plate XFY5869"],
+                "total_elapsed_s": 0.4,
+            },
+        ],
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "route-ui",
+                "observed_status": "failed",
+                "error": "Could not infer a service-area boundary from ride-route UI.",
+                "ocr_top_labels": ["Pickup", "Dropoff", "8 08 mi 32 min"],
+                "route_ui_categories": ["dropoff", "pickup", "receipt"],
+                "route_metric_labels": [],
+                "total_elapsed_s": 0.35,
+            },
+        ],
+    }
+
+    comparison = stress_module.compare_stress_reports(baseline, candidate)
+
+    assert comparison["signature_change_count"] == 1
+    change = comparison["signature_changes"][0]
+    assert change["slug"] == "route-ui"
+    assert change["baseline"]["route_ui_categories"] == ["dropoff", "pickup", "plate", "receipt"]
+    assert change["candidate"]["route_ui_categories"] == ["dropoff", "pickup", "receipt"]
+    assert change["baseline"]["route_metric_labels"] == ["8 08 mi 32 min License Plate XFY5869"]
+    assert change["candidate"]["route_metric_labels"] == []
+
+
 def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     report = {
         "summary": {
@@ -2215,6 +2254,11 @@ def test_run_stress_benchmark_repeat_profile_records_samples(tmp_path, monkeypat
                 "ocr_label_event": None,
                 "ocr_full_detail_retry": None,
                 "ocr_top_labels": None,
+                "route_ui_categories": None,
+                "route_metric_labels": None,
+                "non_map_ui_categories": None,
+                "non_map_ui_labels": None,
+                "thematic_map_labels": None,
                 "error": None,
             }
         ],

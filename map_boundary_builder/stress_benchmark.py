@@ -2413,8 +2413,24 @@ def repeat_profile_output_signature(sample: dict[str, Any]) -> dict[str, Any]:
         "ocr_label_event": sample.get("ocr_label_event"),
         "ocr_full_detail_retry": sample.get("ocr_full_detail_retry"),
         "ocr_top_labels": top_labels if isinstance(top_labels, list) else None,
+        "route_ui_categories": repeat_profile_list_signature(sample.get("route_ui_categories")),
+        "route_metric_labels": repeat_profile_list_signature(sample.get("route_metric_labels")),
+        "non_map_ui_categories": repeat_profile_list_signature(sample.get("non_map_ui_categories")),
+        "non_map_ui_labels": repeat_profile_list_signature(sample.get("non_map_ui_labels")),
+        "thematic_map_labels": repeat_profile_list_signature(sample.get("thematic_map_labels")),
         "error": sample.get("error"),
     }
+
+
+def repeat_profile_list_signature(value: Any) -> list[str] | None:
+    if not isinstance(value, list):
+        return None
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        items.append(item)
+    return items
 
 
 def repeat_profile_bbox_signature(value: Any) -> list[float] | None:
