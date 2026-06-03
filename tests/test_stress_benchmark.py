@@ -586,6 +586,91 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert regression_budget["violations"][3]["delta_s"] == 0.02
 
 
+def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "catalog-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.2,
+                "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "catalog-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.21,
+                "ocr_engine_profile": {"calls": 0, "calls_detail": []},
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_engine_total_regression_s=0.01,
+    )
+
+    assert comparison["latency_deltas"] == [
+        {
+            "slug": "catalog-row",
+            "baseline_total_elapsed_s": 0.2,
+            "candidate_total_elapsed_s": 0.21,
+            "total_elapsed_delta_s": 0.01,
+            "baseline_ocr_engine_calls": 0.0,
+            "candidate_ocr_engine_calls": 0.0,
+        }
+    ]
+    assert comparison["regression_budget"] == {
+        "violations": [],
+        "max_ocr_engine_total_regression_s": 0.01,
+        "passed": True,
+    }
+
+
+def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "ocr-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.2,
+                "ocr_engine_profile": {"calls": 1},
+            }
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "ocr-row",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.21,
+                "ocr_engine_profile": {"calls": 1},
+            }
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_ocr_engine_total_regression_s=0.01,
+    )
+
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "primary_ocr_total_delta_missing",
+            "slug": "ocr-row",
+            "max_ocr_engine_total_regression_s": 0.01,
+            "baseline_ocr_engine_calls": 1.0,
+            "candidate_ocr_engine_calls": 1.0,
+        }
+    ]
+
+
 def test_compare_stress_reports_scopes_missing_candidate_for_focused_reports() -> None:
     baseline = {
         "rows": [

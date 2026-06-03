@@ -928,13 +928,24 @@ def baseline_regression_budget(
                     continue
                 ocr_total_delta = parse_signed_float(delta.get("ocr_engine_total_delta_s"))
                 if ocr_total_delta is None:
-                    violations.append(
-                        {
-                            "kind": "primary_ocr_total_delta_missing",
-                            "slug": delta.get("slug"),
-                            "max_ocr_engine_total_regression_s": max_ocr_total,
-                        }
+                    baseline_calls = parse_nonnegative_count_metric(
+                        delta.get("baseline_ocr_engine_calls")
                     )
+                    candidate_calls = parse_nonnegative_count_metric(
+                        delta.get("candidate_ocr_engine_calls")
+                    )
+                    if baseline_calls == 0.0 and candidate_calls == 0.0:
+                        continue
+                    violation = {
+                        "kind": "primary_ocr_total_delta_missing",
+                        "slug": delta.get("slug"),
+                        "max_ocr_engine_total_regression_s": max_ocr_total,
+                    }
+                    if baseline_calls is not None:
+                        violation["baseline_ocr_engine_calls"] = round(baseline_calls, 6)
+                    if candidate_calls is not None:
+                        violation["candidate_ocr_engine_calls"] = round(candidate_calls, 6)
+                    violations.append(violation)
                     continue
                 if ocr_total_delta <= max_ocr_engine_total_regression_s:
                     continue
@@ -1233,6 +1244,12 @@ def stress_row_latency_delta(
     stage_deltas = stress_row_stage_deltas(baseline_row, candidate_row)
     if stage_deltas:
         delta["stage_delta_s"] = stage_deltas
+    baseline_ocr_calls = stress_row_ocr_engine_calls(baseline_row)
+    candidate_ocr_calls = stress_row_ocr_engine_calls(candidate_row)
+    if baseline_ocr_calls is not None:
+        delta["baseline_ocr_engine_calls"] = round(baseline_ocr_calls, 6)
+    if candidate_ocr_calls is not None:
+        delta["candidate_ocr_engine_calls"] = round(candidate_ocr_calls, 6)
     ocr_total_values = stress_row_ocr_engine_metric_values(baseline_row, candidate_row, "total_s")
     if ocr_total_values is not None:
         baseline_ocr_total, candidate_ocr_total = ocr_total_values
@@ -1258,6 +1275,13 @@ def stress_row_stage_deltas(
             continue
         deltas[str(stage)] = round(candidate_stage - baseline_stage, 6)
     return deltas
+
+
+def stress_row_ocr_engine_calls(row: dict[str, Any]) -> float | None:
+    profile = row.get("ocr_engine_profile")
+    if not isinstance(profile, dict):
+        return None
+    return parse_nonnegative_count_metric(profile.get("calls"))
 
 
 def stress_row_ocr_engine_metric_delta(

@@ -16938,3 +16938,18 @@ with zero failures in 0.531s.
   `0.706s`), primary max rose (`0.493s` vs `0.476s`), repeat p95 rose
   (`0.356s` vs `0.350s`), and repeat OCR p95 rose (`0.313s` vs `0.293s`).
   Keep `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION=1000`.
+- Fixed a baseline-comparison false positive exposed by the rejected `950px`
+  full hard gate. Primary OCR regression budgets now carry baseline/candidate
+  OCR call counts in row deltas and skip `primary_ocr_total_delta_missing`
+  violations when both rows explicitly recorded `ocr_engine_profile.calls=0`.
+  Rows that record OCR calls but omit `total_s` still fail the OCR regression
+  budget, so missing profiling evidence remains strict where OCR actually ran.
+  Replaying the saved comparison between
+  `out/current-leaders-full49-hard-20260603/stress-summary.json` and
+  `out/warm-sample-950-full49-hard-candidate-20260603/stress-summary.json`
+  now reports `baseline regression budget: passed` with `49` compared rows,
+  `0` signature changes, and no violations, instead of failing on `11`
+  no-OCR catalog rows. Focused stress benchmark tests passed
+  `107 passed in 0.34s`, the full suite passed
+  `683 passed, 31 subtests passed in 5.74s`, and `git diff --check` was clean.
+  This is benchmark acceptance reliability only; no runtime deploy is needed.
