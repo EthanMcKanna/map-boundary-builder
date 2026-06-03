@@ -17065,3 +17065,17 @@ with zero failures in 0.531s.
   around non-route focused OCR preload, so no runtime/test changes were kept.
   Keep georeference preloading as-is unless new evidence shows actual preload
   contention rather than OCR recognizer/detector variance.
+- Rejected the remaining `248/max` bright-blue detector-limit interpolation.
+  Prior notes already rejected `240`, `224`, `208`, and `192` against the
+  current `256/max` default, but `248` was still unclosed. A same-session
+  focused control over the eight no-catalog Waymo OCR rows at
+  `out/brightblue-det248-control-slow8-20260603` passed `8/8`, with primary max
+  `0.522s`, repeat p95/max `0.437s`/`0.445s`, and repeat OCR-engine p95/max
+  `0.393s`/`0.398s`. The `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN=248`
+  candidate at `out/brightblue-det248-candidate-slow8-20260603` also passed
+  `8/8` with zero signature drift and intact OCR count contracts, but the
+  baseline comparator rejected it: median primary delta `+0.057s`,
+  `los-angeles-waymo` primary `+0.134s`, repeat p95 `+0.029s`, repeat max
+  `+0.047s`, and repeat OCR p95 `+0.029s`. Keep the non-SVG bright-blue detector
+  limit at `256/max`; the untested interval between `240` and `256` did not
+  produce a repeat-profile win.
