@@ -18151,3 +18151,23 @@ with zero failures in 0.531s.
   map_boundary_builder/stress_benchmark.py` passed, the full stress benchmark
   module passed (`146 passed`), and full pytest passed `730 passed,
   31 subtests passed`.
+- Added an active Grand Rapids May Mobility catalog entry from the verified
+  OCR/georeference output for `/Users/ethanmckanna/Downloads/mm gr.jpg`, while
+  keeping the no-catalog row to preserve arbitrary inference coverage. A default
+  CLI upload probe with `--filename-hint upload.png` now resolves through
+  `catalog-shape-match` with slug `grand-rapids-may-mobility`, shape IoU
+  `0.999994`, area ratio `0.999999`, and combined confidence `0.781`. Focused
+  stress proof at `out/grand-rapids-catalog-entry-focused-20260603` passed
+  `2/2`: the no-catalog row stayed on
+  `ocr-georeference:nominatim-label-fit` in `0.292s` with one OCR call, while
+  the UI-default row used the catalog shortcut in `0.063s` with zero OCR calls;
+  repeat p95 was `0.230s`. The full hard gate at
+  `out/grand-rapids-catalog-entry-full51-hard-20260603` passed `51/51` expected
+  outcomes with statuses `{"complete":40,"failed":11}`, max primary
+  `0.358365s`, repeat p95 `0.280s`, repeat max `0.307s`, and prewarm `0.633s`.
+  Common-row comparison against the previous full50 report showed
+  `signature_changes=0`, expectation delta `0`, median delta `+0.000748s`, and
+  only the new UI-default row missing from the baseline. Verification: `jq`
+  validated the manifest and catalog JSON, the focused catalog/stress tests
+  passed (`286 passed`), `python -m compileall -q api map_boundary_builder`
+  passed, and full pytest passed `730 passed, 31 subtests passed`.

@@ -1,0 +1,157 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "May Mobility Grand Rapids",
+        "provider": "May Mobility",
+        "area": "Grand Rapids",
+        "catalog_source": "current-verified-ocr-output",
+        "catalog_status": "active",
+        "catalog_min_shape_iou": 0.985,
+        "catalog_refresh_evidence": "Added from the June 3, 2026 OCR/georeference output for /Users/ethanmckanna/Downloads/mm gr.jpg so matching Grand Rapids May Mobility screenshots can use the current catalog while preserving the verified visible-map geometry.",
+        "georeference_confidence": 0.781,
+        "source_georeference_source": "ocr-georeference:nominatim-label-fit",
+        "source_control_points": 5,
+        "source_geodesic_bbox_lonlat": [
+          -85.6950388,
+          42.96273,
+          -85.6671371,
+          42.97809
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -85.6875154,
+              42.9779216
+            ],
+            [
+              -85.6870604,
+              42.9776687
+            ],
+            [
+              -85.6872485,
+              42.9734071
+            ],
+            [
+              -85.6869306,
+              42.9728572
+            ],
+            [
+              -85.6770059,
+              42.97234
+            ],
+            [
+              -85.6764473,
+              42.9718679
+            ],
+            [
+              -85.6764666,
+              42.9706613
+            ],
+            [
+              -85.6758408,
+              42.9703162
+            ],
+            [
+              -85.6681054,
+              42.9701122
+            ],
+            [
+              -85.6675567,
+              42.9699422
+            ],
+            [
+              -85.6673004,
+              42.9693513
+            ],
+            [
+              -85.6671371,
+              42.9646026
+            ],
+            [
+              -85.6671396,
+              42.9632013
+            ],
+            [
+              -85.6674237,
+              42.9629093
+            ],
+            [
+              -85.6678478,
+              42.96273
+            ],
+            [
+              -85.6700847,
+              42.9627646
+            ],
+            [
+              -85.6737256,
+              42.9629558
+            ],
+            [
+              -85.673951,
+              42.9631145
+            ],
+            [
+              -85.6805427,
+              42.9632357
+            ],
+            [
+              -85.6814513,
+              42.9637631
+            ],
+            [
+              -85.6814642,
+              42.9649278
+            ],
+            [
+              -85.6844223,
+              42.9665613
+            ],
+            [
+              -85.692502,
+              42.9669066
+            ],
+            [
+              -85.6947573,
+              42.9675671
+            ],
+            [
+              -85.6950388,
+              42.9682236
+            ],
+            [
+              -85.6947153,
+              42.9745718
+            ],
+            [
+              -85.694462,
+              42.9748433
+            ],
+            [
+              -85.693471,
+              42.9751322
+            ],
+            [
+              -85.6932993,
+              42.9777776
+            ],
+            [
+              -85.6929844,
+              42.97809
+            ],
+            [
+              -85.6875154,
+              42.9779216
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
