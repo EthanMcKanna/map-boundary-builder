@@ -2785,6 +2785,16 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
         "prewarm_runtime": True,
         "repeat_profile_runs": 3,
         "repeat_profile_warmups": 0,
+        "runtime_config": {
+            "generation_env": {
+                "MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1600",
+                "MAP_BOUNDARY_GEOCODE_WORKERS": "6",
+            },
+            "ocr": {
+                "rapidocr_bright_blue_max_dimension": 1400,
+                "rapidocr_max_dimension": 1600,
+            },
+        },
         "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.5}],
     }
     candidate = {
@@ -2795,6 +2805,16 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
         "prewarm_runtime": True,
         "repeat_profile_runs": 3,
         "repeat_profile_warmups": 1,
+        "runtime_config": {
+            "generation_env": {
+                "MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION": "1500",
+                "MAP_BOUNDARY_GEOCODE_WORKERS": "6",
+            },
+            "ocr": {
+                "rapidocr_bright_blue_max_dimension": 1300,
+                "rapidocr_max_dimension": 1600,
+            },
+        },
         "preset": {"name": "real-screenshot-hard-gate", "version": 6},
         "rows": [{"slug": "dallas", "observed_status": "complete", "total_elapsed_s": 0.4}],
     }
@@ -2805,6 +2825,16 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
         {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
         {"field": "extraction_cache", "baseline": True, "candidate": False},
         {"field": "repeat_profile_warmups", "baseline": 0, "candidate": 1},
+        {
+            "field": "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION",
+            "baseline": "1600",
+            "candidate": "1500",
+        },
+        {
+            "field": "ocr.rapidocr_bright_blue_max_dimension",
+            "baseline": 1400,
+            "candidate": 1300,
+        },
         {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v6"},
     ]
 
@@ -3163,6 +3193,11 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
             "configuration_changes": [
                 {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
                 {"field": "extraction_cache", "baseline": True, "candidate": False},
+                {
+                    "field": "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION",
+                    "baseline": "1600",
+                    "candidate": "1500",
+                },
                 {"field": "preset", "baseline": None, "candidate": "real-screenshot-hard-gate@v6"},
             ],
             "prewarm_delta_s": {
@@ -3508,7 +3543,9 @@ def test_print_stress_table_reports_baseline_comparison(capsys) -> None:
     assert "signature_fields=city:1,control_points:1" in output
     assert (
         "baseline config changes: runner_ocr_cache=true->false, "
-        "extraction_cache=true->false, preset=none->real-screenshot-hard-gate@v6"
+        "extraction_cache=true->false, "
+        "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION=1600->1500, "
+        "preset=none->real-screenshot-hard-gate@v6"
     ) in output
     assert (
         "baseline prewarm delta: total=+0.070s, rapidocr=+0.080s, "
@@ -7473,9 +7510,9 @@ def test_focused_gate_preset_drift_flag_still_fails_other_config_drift(
                         "candidate": "focused-real-screenshot-gate@v11:only1",
                     },
                     {
-                        "field": "runner_ocr_cache",
-                        "baseline": False,
-                        "candidate": True,
+                        "field": "generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION",
+                        "baseline": "1600",
+                        "candidate": "1500",
                     },
                 ],
                 "signature_changes": [],

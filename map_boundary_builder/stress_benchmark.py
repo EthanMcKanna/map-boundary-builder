@@ -58,6 +58,7 @@ OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS = (
     ("det", "p95_det_elapsed_s"),
     ("rec", "p95_rec_elapsed_s"),
 )
+RUNTIME_CONFIG_CHANGE_SECTIONS = ("generation_env", "ocr")
 PIPELINE_STAGE_DISPLAY_ORDER = ("extract", "ocr", "georeference")
 OCR_ENGINE_DETAIL_CONTEXT_KEYS = (
     "input_kind",
@@ -3069,6 +3070,12 @@ def stress_report_configuration_changes(
                 "candidate": candidate_value,
             }
         )
+    changes.extend(
+        stress_report_runtime_config_changes(
+            baseline_report,
+            candidate_report,
+        )
+    )
     baseline_preset = stress_report_preset_label(baseline_report)
     candidate_preset = stress_report_preset_label(candidate_report)
     if baseline_preset != candidate_preset:
@@ -3080,6 +3087,53 @@ def stress_report_configuration_changes(
             }
         )
     return changes
+
+
+def stress_report_runtime_config_changes(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    baseline_runtime_config = baseline_report.get("runtime_config")
+    candidate_runtime_config = candidate_report.get("runtime_config")
+    changes: list[dict[str, Any]] = []
+    for section in RUNTIME_CONFIG_CHANGE_SECTIONS:
+        baseline_section = stress_report_runtime_config_section(
+            baseline_runtime_config,
+            section,
+        )
+        candidate_section = stress_report_runtime_config_section(
+            candidate_runtime_config,
+            section,
+        )
+        if baseline_section is None and candidate_section is None:
+            continue
+        baseline_values = baseline_section or {}
+        candidate_values = candidate_section or {}
+        for key in sorted(set(baseline_values) | set(candidate_values)):
+            baseline_value = baseline_values.get(key)
+            candidate_value = candidate_values.get(key)
+            if baseline_value == candidate_value:
+                continue
+            changes.append(
+                {
+                    "field": f"{section}.{key}",
+                    "baseline": baseline_value,
+                    "candidate": candidate_value,
+                }
+            )
+    return changes
+
+
+def stress_report_runtime_config_section(
+    runtime_config: Any,
+    section: str,
+) -> dict[str, Any] | None:
+    if not isinstance(runtime_config, dict):
+        return None
+    section_config = runtime_config.get(section)
+    if not isinstance(section_config, dict):
+        return None
+    return section_config
 
 
 def stress_report_preset_label(report: dict[str, Any]) -> str | None:

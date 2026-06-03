@@ -18483,3 +18483,16 @@ with zero failures in 0.531s.
   reported `primary_stage extract +0.926s` plus repeat hidden-OCR total
   `+1.820s`. Since the median primary gain was only `-0.008s` and the
   benchmark telemetry got worse, no runtime code changed.
+- Fixed a benchmark evidence gap exposed by the rejected general extraction-cap
+  probes. `baseline_comparison.configuration_changes` now compares stable
+  nested runtime sections (`generation_env` and `ocr`) in addition to top-level
+  run flags and preset labels, so focused experiments cannot hide extraction or
+  OCR knob drift behind an allowed preset-name difference. Replaying
+  `out/svg-label-id-full73-hard-gate-green-20260603/stress-summary.json`
+  against `out/general-extract1500-waymo-focused-20260603/stress-summary.json`
+  now reports
+  `generation_env.MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION=1600->1500`
+  alongside the focused preset drift. The focused preset-drift allow-list still
+  ignores only the expected preset label change and continues to fail on nested
+  runtime config drift. Full stress benchmark tests passed `151 passed`;
+  compileall and `git diff --check` passed.
