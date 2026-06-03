@@ -18459,3 +18459,27 @@ with zero failures in 0.531s.
   from the baseline `0.093431s` to `0.140271s`. The run still passed manifest
   expectations (`3/3`) and saved extraction-stage time, but total latency and
   signature stability were worse, so no runtime code changed.
+- Rejected lower general extraction caps for the no-catalog Waymo OCR tail.
+  The hypothesis was that `MAP_BOUNDARY_GENERAL_EXTRACT_MAX_DIMENSION` could
+  drop below the current `1600` while leaving the existing bright-blue OCR
+  profile untouched, trimming the 80-110ms service-area extraction stage on
+  rows such as `bay-area-waymo`, `los-angeles-waymo`, and their service-area
+  variants. Focused probes against
+  `out/svg-label-id-full73-hard-gate-green-20260603/stress-summary.json` showed
+  the speed/accuracy tradeoff is not acceptable: `1400` at
+  `out/general-extract1400-waymo-focused-20260603` passed expectations but
+  changed signatures on all `8/8` selected rows; `1500` at
+  `out/general-extract1500-waymo-focused-20260603` also changed signatures on
+  all `8/8`. Both runs had useful median latency deltas (`-0.028s` and
+  `-0.016s` respectively), but the bbox/geometry-hash drift proves the current
+  1600px extraction scale is preserving real output stability.
+- Rejected early ride-route UI rejection before service-area extraction. The
+  hypothesis was that tall light/gray phone-route screenshots could wait for
+  the already-scheduled route OCR and fail closed before extracting a boundary.
+  A code probe preserved the expected failed statuses and had no signature
+  changes, but `out/early-route-ui-reject-focused-20260603` failed the
+  baseline regression budget: `tesla-sync-non-map-ui` slowed by `+0.019s`,
+  primary hidden OCR rose on all seven selected rows, and the stage comparator
+  reported `primary_stage extract +0.926s` plus repeat hidden-OCR total
+  `+1.820s`. Since the median primary gain was only `-0.008s` and the
+  benchmark telemetry got worse, no runtime code changed.
