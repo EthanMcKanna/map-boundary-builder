@@ -17752,3 +17752,19 @@ with zero failures in 0.531s.
   OCR p95 improved by `-0.020080s`, and repeat OCR max improved by `-0.021793s`,
   while the new repeat hidden-total gate failed at `+0.121908s`. Benchmark
   acceptance reliability only; no runtime default changed.
+- Removed the cold live-geocode tail from the arbitrary Ann Arbor May Mobility
+  AVIF path by bundling the missing Nominatim seed for the traced county context
+  query `Washtenaw` (`08767e45ab8f8d44bfdd0505`). The prior full v11 hard gate
+  at `out/current-v11-full49-hard-20260603/stress-summary.json` had one
+  unexpected row: Ann Arbor failed only on primary latency at `1.044788s`, with
+  the georeference stage dominating at `0.782828s` and repeat p95 already fast
+  at `0.311413s`. After adding the seed and a no-network bundled-seed test,
+  `tests/test_geocoder.py` passed (`14 passed, 31 subtests passed in 0.08s`).
+  A fresh-cache/network-blocked focused gate at
+  `out/ann-arbor-seed-block-20260603` passed with Ann Arbor primary `0.330126s`,
+  georeference `0.015710s`, and repeat p95 `0.180597s`. The full
+  fresh-cache/network-blocked v12 hard gate at
+  `out/current-v12-seeded-hard-20260603` passed `49/49` expectations, max
+  primary `0.343631s`, repeat p95 `0.286258s`, repeat max `0.315582s`, and
+  Ann Arbor primary `0.243397s`. Full suite passed (`720 passed, 31 subtests
+  passed in 5.78s`).

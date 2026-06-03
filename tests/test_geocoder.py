@@ -277,6 +277,21 @@ class GeocoderSeedTests(unittest.TestCase):
                         self.assertEqual(results[0].display_name.split(",", 1)[0], expected_name)
                         self.assertIn("Ann Arbor", results[0].display_name)
 
+    def test_bundled_washtenaw_seed_serves_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(geocoder, "CACHE_DIR", Path(tmpdir) / "geocoder"),
+                patch.object(geocoder, "PHOTON_CACHE_DIR", Path(tmpdir) / "photon"),
+                patch.object(geocoder, "_GEOCODER_SEED", None),
+                patch.object(geocoder, "urlopen", side_effect=AssertionError("network should not run")),
+            ):
+                geocoder._geocode_cached.cache_clear()
+                results = geocoder.geocode("Washtenaw", limit=2)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].display_name, "Washtenaw County, Michigan, United States")
+        self.assertEqual(results[0].bbox, (-84.134079, 42.071577, -83.539396, 42.4351845))
+
     def test_bundled_ann_arbor_noise_misses_avoid_network(self) -> None:
         queries = [
             "Whuon",

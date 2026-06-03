@@ -203,6 +203,29 @@
     ],
     "073d3e2a5b8a94fb6e34be35": [],
     "07e1150cf20468edab7d152a": [],
+    "08767e45ab8f8d44bfdd0505": [
+      {
+        "addresstype": "county",
+        "boundingbox": [
+          "42.0715770",
+          "42.4351845",
+          "-84.1340790",
+          "-83.5393960"
+        ],
+        "category": "boundary",
+        "display_name": "Washtenaw County, Michigan, United States",
+        "importance": 0.5506475378818338,
+        "lat": "42.2582044",
+        "licence": "Data \u00a9 OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+        "lon": "-83.8440853",
+        "name": "Washtenaw County",
+        "osm_id": 359766,
+        "osm_type": "relation",
+        "place_id": 369900183,
+        "place_rank": 12,
+        "type": "administrative"
+      }
+    ],
     "08c4b541d2b4ead882bc0235": [],
     "09a31aba084ed405f1d12750": [],
     "0cc7da09e8482df9253376ab": [],
