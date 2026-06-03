@@ -15802,3 +15802,29 @@ with zero failures in 0.531s.
   repeat OCR-engine p95 `0.468s`, and zero output drift against
   `out/patched-roadfallback-full44-hard-20260603`; the full test suite passed
   `616` tests plus `31` subtests.
+- Accepted a narrow provider-label OCR crop for large square bright-blue
+  current-catalog screenshots. The first broad shape-only version was rejected
+  by the unit suite because it would add provider crop OCR to unrelated wide
+  catalog-miss fixtures and interfere with the catalog-probe-miss low-detail
+  label-shape shortcut. The shipped gate only runs with no city input, no
+  catalog-probe-miss shortcut, bright-blue style, a square-ish image
+  (`min_dimension >= 1600`, aspect ratio `<= 1.15`), high extraction
+  confidence, and an active current catalog shape that already satisfies the
+  provider-label IoU/area thresholds. The focused current guard at
+  `out/bright-provider-crop-current-default-20260603` passed `4/4`, primary max
+  `0.393121s`, repeat p95 `0.331s`, repeat OCR-engine p95 `0.180s`, and
+  prewarm `1.476s`. The full hard gate at
+  `out/bright-provider-crop-full44-hard-20260603` passed `44/44`, statuses
+  `{"complete":33,"failed":11}`, primary max `0.602323s`, repeat p95 `0.484s`,
+  repeat OCR-engine p95 `0.452s`, and prewarm `1.313s`. Against
+  `out/road-metadata-full44-hard-20260603`, all 44 behavior signatures were
+  unchanged for status, source, city, bbox, geometry hash, coordinate count,
+  confidence, catalog metadata, and road-match fields. The intended current
+  rows improved without geometry drift: Houston current-catalog switched from
+  full map OCR at input shape `1400x1400` to provider crop OCR at `750x723`,
+  dropping primary total `0.544720s -> 0.323411s` and OCR-engine total
+  `0.460698s -> 0.182106s`; Miami current-catalog switched from `1400x1400`
+  to `750x593`, dropping primary total `0.440233s -> 0.320323s` and
+  OCR-engine total `0.351314s -> 0.195537s`. Focused runner tests passed
+  `102/102`, stress benchmark tests passed `66/66`, and the full suite passed
+  `620` tests plus `31` subtests.

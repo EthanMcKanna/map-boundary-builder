@@ -1741,6 +1741,131 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
     assert any(event["message"] == "Reading provider area labels" for event in events)
 
 
+def test_current_catalog_candidate_uses_provider_crop_before_generic_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "uploaded-map.png"
+    Image.new("RGB", (1800, 1800), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    fake_match = SimpleNamespace(entry=SimpleNamespace(slug="houston-waymo"))
+    provider_ocr_calls: list[dict] = []
+
+    def fake_extract_provider_ui_labels_from_rgb(*args, **kwargs):
+        provider_ocr_calls.append({"args": args, "kwargs": kwargs})
+        return [OcrLabel("Houston", x=20, y=20, width=80, height=20, confidence=99)]
+
+    def unexpected_generic_ocr(*_args, **_kwargs):
+        raise AssertionError("current-catalog provider crop should return before generic OCR")
+
+    def fake_finish_catalog_boundary_result(_extraction, catalog_match, *, output_path, **kwargs):
+        return BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_near_hit_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_avride_light_fill_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "current_catalog_provider_crop_candidate", lambda _extraction, **_kwargs: True)
+    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", fake_extract_provider_ui_labels_from_rgb)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_generic_ocr)
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: fake_match)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(filename_hint="uploaded-map.webp", write_mask_artifact=False),
+    )
+
+    assert result.summary["catalog_slug"] == "houston-waymo"
+    assert result.summary["georeference_source"] == "catalog-shape-match:provider-ui-label"
+    assert len(provider_ocr_calls) == 1
+    assert provider_ocr_calls[0]["kwargs"]["rapidocr_max_dimension"] == runner.PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+    assert provider_ocr_calls[0]["kwargs"]["source_is_svg"] is False
+    assert "focus" not in provider_ocr_calls[0]["kwargs"]
+
+
+def test_current_catalog_non_candidate_skips_provider_crop(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "uploaded-map.png"
+    Image.new("RGB", (100, 80), (245, 245, 245)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((80, 100, 3), 245, dtype=np.uint8)
+    extraction = ExtractionResult(
+        mask=np.ones((40, 40), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(10, 10), (70, 10), (70, 50), (10, 50), (10, 10)]),
+        coverage_ratio=0.3,
+        contour_count=1,
+        confidence=1.0,
+    )
+    georef = GeoreferenceResult(
+        transform=GeoreferenceTransform(
+            city="Houston",
+            lon=-95.36,
+            lat=29.76,
+            origin_x_ratio=0.0,
+            origin_y_ratio=0.0,
+            meters_per_pixel=20.0,
+            rotation_radians=0.0,
+            confidence=0.9,
+            source="ocr-georeference:nominatim-label-fit",
+        ),
+        control_points=[],
+        residual_median_m=0.0,
+        residual_p90_m=0.0,
+    )
+    generic_ocr_calls: list[dict] = []
+
+    def unexpected_provider_ocr(*_args, **_kwargs):
+        raise AssertionError("non-candidate bright-blue maps should not pay provider crop OCR")
+
+    def fake_extract_ocr_labels_from_rgb(*args, **kwargs):
+        generic_ocr_calls.append({"args": args, "kwargs": kwargs})
+        return [OcrLabel("Houston", x=20, y=20, width=80, height=20, confidence=99)]
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", lambda *_args, **_kwargs: extraction)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_shape_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_current_catalog_near_hit_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "filename_hinted_avride_light_fill_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "current_catalog_provider_crop_candidate", lambda _extraction, **_kwargs: False)
+    monkeypatch.setattr(runner, "extract_provider_ui_labels_from_rgb", unexpected_provider_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", fake_extract_ocr_labels_from_rgb)
+    monkeypatch.setattr(runner, "current_catalog_label_shape_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "provider_ui_label_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "post_georeference_catalog_completion_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "fit_georeference", lambda *_args, **_kwargs: georef)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(filename_hint="uploaded-map.webp", write_mask_artifact=False),
+    )
+
+    assert result.summary["georeference_source"] == "ocr-georeference:nominatim-label-fit"
+    assert len(generic_ocr_calls) == 1
+
+
 def test_summary_marks_non_catalog_outputs_with_null_catalog_metadata() -> None:
     data = base_feature_collection({"georeference_source": "ocr-georeference:nominatim-label-fit"})
 
@@ -3100,6 +3225,70 @@ def test_current_catalog_label_shape_match_rejects_weak_shape(monkeypatch) -> No
         )
         is None
     )
+
+
+def test_current_catalog_provider_crop_candidate_accepts_current_shape(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Houston",
+        slug="houston-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+    )
+
+    def fake_score(_pixel_geometry, candidate, *, min_iou):
+        assert candidate is entry
+        assert min_iou == entry.min_iou
+        return 0.62, 1.08, candidate, entry.mercator_geometry, 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    assert runner.current_catalog_provider_crop_candidate(extraction, width=2400, height=2400) is True
+    assert (
+        runner.current_catalog_provider_crop_ocr_max_dimension(extraction, width=2400, height=2400)
+        == runner.PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+    )
+
+
+def test_current_catalog_provider_crop_candidate_rejects_non_current_shape(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Miami",
+        slug="miami-waymo",
+        min_iou=0.965,
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+    )
+
+    def unexpected_score(*_args, **_kwargs):
+        raise AssertionError("non-current entries should not be scored")
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [entry])
+    monkeypatch.setattr(runner, "score_catalog_entry", unexpected_score)
+
+    assert runner.current_catalog_provider_crop_candidate(extraction, width=2400, height=2400) is False
 
 
 def test_area_hinted_current_catalog_match_accepts_high_margin_verified_source(monkeypatch) -> None:

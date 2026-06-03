@@ -267,6 +267,8 @@ CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.85
 CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.15
 CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE = 0.95
 CURRENT_CATALOG_LABEL_SHAPE_CONFIDENCE = 0.84
+CURRENT_CATALOG_PROVIDER_CROP_MIN_DIMENSION = 1600
+CURRENT_CATALOG_PROVIDER_CROP_MAX_ASPECT_RATIO = 1.15
 AREA_HINTED_CURRENT_CATALOG_MIN_IOU = 0.95
 AREA_HINTED_CURRENT_CATALOG_MAX_IOU_RELAXATION = 0.01
 AREA_HINTED_CURRENT_CATALOG_MIN_MARGIN = 0.70
@@ -1296,6 +1298,18 @@ def build_boundary(
                     city_input=city_input,
                     filename_hint=filename_hint,
                 ),
+            )
+
+        if (
+            provider_ui_fast_ocr_max_dimension is None
+            and city_input is None
+            and allow_catalog
+            and not skip_redundant_probe
+        ):
+            provider_ui_fast_ocr_max_dimension = current_catalog_provider_crop_ocr_max_dimension(
+                extraction,
+                width=width,
+                height=height,
             )
 
         if used_catalog_scaled_extraction:
@@ -2996,6 +3010,51 @@ def provider_ui_fast_ocr_max_dimension_for_context(
     if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0:
         return None
     return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+
+
+def current_catalog_provider_crop_ocr_max_dimension(extraction, *, width: int, height: int) -> int | None:
+    if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION <= 0 or RAPIDOCR_MAX_DIMENSION <= 0:
+        return None
+    if PROVIDER_UI_RAPIDOCR_MAX_DIMENSION >= RAPIDOCR_MAX_DIMENSION:
+        return None
+    if not current_catalog_provider_crop_candidate(extraction, width=width, height=height):
+        return None
+    return PROVIDER_UI_RAPIDOCR_MAX_DIMENSION
+
+
+def current_catalog_provider_crop_candidate(extraction, *, width: int, height: int) -> bool:
+    if extraction.style != "bright-blue":
+        return False
+    if width <= 0 or height <= 0:
+        return False
+    min_dimension = min(width, height)
+    if min_dimension < CURRENT_CATALOG_PROVIDER_CROP_MIN_DIMENSION:
+        return False
+    aspect_ratio = max(width, height) / max(float(min_dimension), 1.0)
+    if aspect_ratio > CURRENT_CATALOG_PROVIDER_CROP_MAX_ASPECT_RATIO:
+        return False
+    if extraction.confidence < CURRENT_CATALOG_LABEL_SHAPE_MIN_EXTRACTION_CONFIDENCE:
+        return False
+    if not catalog_style_supported(extraction.style):
+        return False
+    for entry in load_catalog_entries():
+        if not entry.is_active:
+            continue
+        if getattr(entry, "catalog_source", None) not in CURRENT_CATALOG_COMPLETION_SOURCES:
+            continue
+        if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
+            continue
+        iou, area_ratio, _scored_entry, _fitted, _rotation = score_catalog_entry(
+            extraction.pixel_geometry,
+            entry,
+            min_iou=entry.min_iou,
+        )
+        if iou < PROVIDER_UI_LABEL_MIN_IOU:
+            continue
+        if not (PROVIDER_UI_LABEL_MIN_AREA_RATIO <= area_ratio <= PROVIDER_UI_LABEL_MAX_AREA_RATIO):
+            continue
+        return True
+    return False
 
 
 def hinted_catalog_shape_match(pixel_geometry, *, style: str, city_input: str | None):
