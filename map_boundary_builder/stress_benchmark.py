@@ -255,6 +255,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-baseline-repeat-wall-p95-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when aggregate or per-case repeat-profile wall-clock p95 "
+            "is more than this many seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-repeat-wall-max-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when aggregate or per-case repeat-profile wall-clock max "
+            "is more than this many seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
         "--max-baseline-repeat-stage-p95-regression-s",
         type=float,
         default=None,
@@ -569,6 +587,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_baseline_repeat_max_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-repeat-max-regression-s requires --compare-baseline-report")
     if (
+        args.max_baseline_repeat_wall_p95_regression_s is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-repeat-wall-p95-regression-s requires --compare-baseline-report")
+    if (
+        args.max_baseline_repeat_wall_max_regression_s is not None
+        and not args.compare_baseline_report
+    ):
+        parser.error("--max-baseline-repeat-wall-max-regression-s requires --compare-baseline-report")
+    if (
         args.max_baseline_repeat_stage_p95_regression_s is not None
         and not args.compare_baseline_report
     ):
@@ -634,6 +662,16 @@ def main(argv: list[str] | None = None) -> int:
         and args.max_baseline_repeat_max_regression_s < 0.0
     ):
         parser.error("--max-baseline-repeat-max-regression-s must be non-negative")
+    if (
+        args.max_baseline_repeat_wall_p95_regression_s is not None
+        and args.max_baseline_repeat_wall_p95_regression_s < 0.0
+    ):
+        parser.error("--max-baseline-repeat-wall-p95-regression-s must be non-negative")
+    if (
+        args.max_baseline_repeat_wall_max_regression_s is not None
+        and args.max_baseline_repeat_wall_max_regression_s < 0.0
+    ):
+        parser.error("--max-baseline-repeat-wall-max-regression-s must be non-negative")
     if (
         args.max_baseline_repeat_stage_p95_regression_s is not None
         and args.max_baseline_repeat_stage_p95_regression_s < 0.0
@@ -762,6 +800,12 @@ def main(argv: list[str] | None = None) -> int:
         max_baseline_wall_regression_s=args.max_baseline_wall_regression_s,
         max_baseline_repeat_p95_regression_s=args.max_baseline_repeat_p95_regression_s,
         max_baseline_repeat_max_regression_s=args.max_baseline_repeat_max_regression_s,
+        max_baseline_repeat_wall_p95_regression_s=(
+            args.max_baseline_repeat_wall_p95_regression_s
+        ),
+        max_baseline_repeat_wall_max_regression_s=(
+            args.max_baseline_repeat_wall_max_regression_s
+        ),
         max_baseline_repeat_stage_p95_regression_s=args.max_baseline_repeat_stage_p95_regression_s,
         max_baseline_ocr_total_regression_s=args.max_baseline_ocr_total_regression_s,
         max_baseline_ocr_count_regression=args.max_baseline_ocr_count_regression,
@@ -849,6 +893,14 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
             args.max_baseline_repeat_p95_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_max_regression_s is None:
             args.max_baseline_repeat_max_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_repeat_wall_p95_regression_s is None:
+            args.max_baseline_repeat_wall_p95_regression_s = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+            )
+        if args.max_baseline_repeat_wall_max_regression_s is None:
+            args.max_baseline_repeat_wall_max_regression_s = (
+                REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+            )
         if args.max_baseline_repeat_stage_p95_regression_s is None:
             args.max_baseline_repeat_stage_p95_regression_s = (
                 REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
@@ -988,6 +1040,8 @@ def run_stress_benchmark(
     max_baseline_wall_regression_s: float | None = None,
     max_baseline_repeat_p95_regression_s: float | None = None,
     max_baseline_repeat_max_regression_s: float | None = None,
+    max_baseline_repeat_wall_p95_regression_s: float | None = None,
+    max_baseline_repeat_wall_max_regression_s: float | None = None,
     max_baseline_repeat_stage_p95_regression_s: float | None = None,
     max_baseline_ocr_total_regression_s: float | None = None,
     max_baseline_ocr_count_regression: float | None = None,
@@ -1027,6 +1081,16 @@ def run_stress_benchmark(
         raise ValueError("max_baseline_repeat_p95_regression_s must be non-negative")
     if max_baseline_repeat_max_regression_s is not None and max_baseline_repeat_max_regression_s < 0.0:
         raise ValueError("max_baseline_repeat_max_regression_s must be non-negative")
+    if (
+        max_baseline_repeat_wall_p95_regression_s is not None
+        and max_baseline_repeat_wall_p95_regression_s < 0.0
+    ):
+        raise ValueError("max_baseline_repeat_wall_p95_regression_s must be non-negative")
+    if (
+        max_baseline_repeat_wall_max_regression_s is not None
+        and max_baseline_repeat_wall_max_regression_s < 0.0
+    ):
+        raise ValueError("max_baseline_repeat_wall_max_regression_s must be non-negative")
     if (
         max_baseline_repeat_stage_p95_regression_s is not None
         and max_baseline_repeat_stage_p95_regression_s < 0.0
@@ -1205,6 +1269,8 @@ def run_stress_benchmark(
             max_wall_regression_s=max_baseline_wall_regression_s,
             max_repeat_p95_regression_s=max_baseline_repeat_p95_regression_s,
             max_repeat_max_regression_s=max_baseline_repeat_max_regression_s,
+            max_repeat_wall_p95_regression_s=max_baseline_repeat_wall_p95_regression_s,
+            max_repeat_wall_max_regression_s=max_baseline_repeat_wall_max_regression_s,
             max_repeat_stage_p95_regression_s=max_baseline_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_baseline_ocr_total_regression_s,
             max_ocr_engine_count_regression=max_baseline_ocr_count_regression,
@@ -1248,6 +1314,8 @@ def compare_stress_reports(
     max_wall_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
     max_repeat_max_regression_s: float | None = None,
+    max_repeat_wall_p95_regression_s: float | None = None,
+    max_repeat_wall_max_regression_s: float | None = None,
     max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_ocr_engine_count_regression: float | None = None,
@@ -1487,6 +1555,18 @@ def compare_stress_reports(
             repeat_case_deltas,
             reverse=False,
         )
+        comparison["largest_repeat_profile_case_wall_p95_regressions"] = (
+            ranked_repeat_profile_case_wall_deltas(
+                repeat_case_deltas,
+                reverse=True,
+            )
+        )
+        comparison["largest_repeat_profile_case_wall_p95_improvements"] = (
+            ranked_repeat_profile_case_wall_deltas(
+                repeat_case_deltas,
+                reverse=False,
+            )
+        )
         comparison["largest_repeat_profile_case_ocr_p95_regressions"] = (
             ranked_repeat_profile_case_ocr_deltas(
                 repeat_case_deltas,
@@ -1504,6 +1584,8 @@ def compare_stress_reports(
         or max_wall_regression_s is not None
         or max_repeat_p95_regression_s is not None
         or max_repeat_max_regression_s is not None
+        or max_repeat_wall_p95_regression_s is not None
+        or max_repeat_wall_max_regression_s is not None
         or max_repeat_stage_p95_regression_s is not None
         or max_ocr_engine_total_regression_s is not None
         or max_ocr_engine_count_regression is not None
@@ -1521,6 +1603,8 @@ def compare_stress_reports(
             max_wall_regression_s=max_wall_regression_s,
             max_repeat_p95_regression_s=max_repeat_p95_regression_s,
             max_repeat_max_regression_s=max_repeat_max_regression_s,
+            max_repeat_wall_p95_regression_s=max_repeat_wall_p95_regression_s,
+            max_repeat_wall_max_regression_s=max_repeat_wall_max_regression_s,
             max_repeat_stage_p95_regression_s=max_repeat_stage_p95_regression_s,
             max_ocr_engine_total_regression_s=max_ocr_engine_total_regression_s,
             max_ocr_engine_count_regression=max_ocr_engine_count_regression,
@@ -1558,6 +1642,8 @@ def baseline_regression_budget(
     max_wall_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
     max_repeat_max_regression_s: float | None = None,
+    max_repeat_wall_p95_regression_s: float | None = None,
+    max_repeat_wall_max_regression_s: float | None = None,
     max_repeat_stage_p95_regression_s: float | None = None,
     max_ocr_engine_total_regression_s: float | None = None,
     max_ocr_engine_count_regression: float | None = None,
@@ -2055,6 +2141,38 @@ def baseline_regression_budget(
                 if candidate_case_max is not None:
                     violation["candidate_max_total_elapsed_s"] = round(candidate_case_max, 6)
                 violations.append(violation)
+    if max_repeat_wall_p95_regression_s is not None:
+        max_repeat_wall_p95 = round(float(max_repeat_wall_p95_regression_s), 6)
+        budget["max_repeat_wall_p95_regression_s"] = max_repeat_wall_p95
+        violations.extend(
+            repeat_wall_regression_budget_violations(
+                comparison,
+                max_regression=max_repeat_wall_p95_regression_s,
+                rounded_budget=max_repeat_wall_p95,
+                stat="p95_s",
+                stat_label="p95",
+                budget_key="max_repeat_wall_p95_regression_s",
+                missing_kind="repeat_wall_p95_delta_missing",
+                aggregate_kind="repeat_wall_p95_regression_exceeded",
+                case_kind="repeat_wall_case_p95_regression_exceeded",
+            )
+        )
+    if max_repeat_wall_max_regression_s is not None:
+        max_repeat_wall_max = round(float(max_repeat_wall_max_regression_s), 6)
+        budget["max_repeat_wall_max_regression_s"] = max_repeat_wall_max
+        violations.extend(
+            repeat_wall_regression_budget_violations(
+                comparison,
+                max_regression=max_repeat_wall_max_regression_s,
+                rounded_budget=max_repeat_wall_max,
+                stat="max_s",
+                stat_label="max",
+                budget_key="max_repeat_wall_max_regression_s",
+                missing_kind="repeat_wall_max_delta_missing",
+                aggregate_kind="repeat_wall_max_regression_exceeded",
+                case_kind="repeat_wall_case_max_regression_exceeded",
+            )
+        )
     if max_repeat_stage_p95_regression_s is not None:
         max_repeat_stage = round(float(max_repeat_stage_p95_regression_s), 6)
         budget["max_repeat_stage_p95_regression_s"] = max_repeat_stage
@@ -2696,6 +2814,73 @@ def repeat_ocr_count_regression_budget_violations(
     return violations
 
 
+def repeat_wall_regression_budget_violations(
+    comparison: dict[str, Any],
+    *,
+    max_regression: float,
+    rounded_budget: float,
+    stat: str,
+    stat_label: str,
+    budget_key: str,
+    missing_kind: str,
+    aggregate_kind: str,
+    case_kind: str,
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    repeat_delta = comparison.get("repeat_profile_delta")
+    wall_delta = (
+        repeat_delta_metric_value(repeat_delta, ("wall_duration_s", stat), "delta_s")
+        if isinstance(repeat_delta, dict)
+        else None
+    )
+    if wall_delta is None:
+        violations.append({"kind": missing_kind, budget_key: rounded_budget})
+    elif wall_delta > max_regression:
+        violation = {
+            "kind": aggregate_kind,
+            "delta_s": round(wall_delta, 6),
+            budget_key: rounded_budget,
+        }
+        baseline_wall = repeat_delta_metric_value(
+            repeat_delta,
+            ("wall_duration_s", stat),
+            "baseline",
+        )
+        candidate_wall = repeat_delta_metric_value(
+            repeat_delta,
+            ("wall_duration_s", stat),
+            "candidate",
+        )
+        if baseline_wall is not None:
+            violation[f"baseline_wall_{stat_label}_s"] = round(baseline_wall, 6)
+        if candidate_wall is not None:
+            violation[f"candidate_wall_{stat_label}_s"] = round(candidate_wall, 6)
+        violations.append(violation)
+
+    case_deltas = comparison.get("repeat_profile_case_deltas")
+    if isinstance(case_deltas, list):
+        for case_delta in case_deltas:
+            if not isinstance(case_delta, dict):
+                continue
+            case_wall_delta = repeat_case_delta_wall_value(case_delta, stat, "delta_s")
+            if case_wall_delta is None or case_wall_delta <= max_regression:
+                continue
+            violation = {
+                "kind": case_kind,
+                "slug": case_delta.get("slug"),
+                "delta_s": round(case_wall_delta, 6),
+                budget_key: rounded_budget,
+            }
+            baseline_wall = repeat_case_delta_wall_value(case_delta, stat, "baseline")
+            candidate_wall = repeat_case_delta_wall_value(case_delta, stat, "candidate")
+            if baseline_wall is not None:
+                violation[f"baseline_wall_{stat_label}_s"] = round(baseline_wall, 6)
+            if candidate_wall is not None:
+                violation[f"candidate_wall_{stat_label}_s"] = round(candidate_wall, 6)
+            violations.append(violation)
+    return violations
+
+
 def stress_repeat_profile_delta(
     baseline_report: dict[str, Any],
     candidate_report: dict[str, Any],
@@ -2738,6 +2923,16 @@ def stress_repeat_profile_delta(
             duration_fields[key] = metric_delta
     if duration_fields:
         delta["duration_s"] = duration_fields
+
+    wall_duration_delta = stress_metric_group_delta(
+        baseline_summary,
+        candidate_summary,
+        section_key="wall_duration_s",
+        stat_keys=WALL_DURATION_DELTA_KEYS,
+        delta_key="delta_s",
+    )
+    if wall_duration_delta:
+        delta["wall_duration_s"] = wall_duration_delta
 
     stage_fields = stress_stage_duration_deltas(baseline_summary, candidate_summary)
     if stage_fields:
@@ -2808,6 +3003,15 @@ def stress_repeat_profile_case_deltas(
                 duration_fields[key] = metric_delta
         if duration_fields:
             delta["duration_s"] = duration_fields
+        wall_duration_delta = stress_metric_group_delta(
+            baseline_case,
+            candidate_case,
+            section_key="wall_duration_s",
+            stat_keys=WALL_DURATION_DELTA_KEYS,
+            delta_key="delta_s",
+        )
+        if wall_duration_delta:
+            delta["wall_duration_s"] = wall_duration_delta
         stage_fields = stress_stage_duration_deltas(baseline_case, candidate_case)
         if stage_fields:
             delta["stage_duration_s"] = stage_fields
@@ -3015,6 +3219,27 @@ def ranked_repeat_profile_case_ocr_deltas(
     return ranked[: max(0, limit)]
 
 
+def ranked_repeat_profile_case_wall_deltas(
+    case_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in case_deltas
+        if repeat_case_delta_wall_value(delta, "p95_s", "delta_s") is not None
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(repeat_case_delta_wall_value(delta, "p95_s", "delta_s") or 0.0),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
 def repeat_case_delta_metric_value(
     case_delta: dict[str, Any],
     metric: str,
@@ -3024,6 +3249,20 @@ def repeat_case_delta_metric_value(
     if not isinstance(duration_s, dict):
         return None
     metric_delta = duration_s.get(metric)
+    if not isinstance(metric_delta, dict):
+        return None
+    return parse_signed_float(metric_delta.get(value_key))
+
+
+def repeat_case_delta_wall_value(
+    case_delta: dict[str, Any],
+    metric: str,
+    value_key: str,
+) -> float | None:
+    wall_duration = case_delta.get("wall_duration_s")
+    if not isinstance(wall_duration, dict):
+        return None
+    metric_delta = wall_duration.get(metric)
     if not isinstance(metric_delta, dict):
         return None
     return parse_signed_float(metric_delta.get(value_key))
@@ -7735,6 +7974,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         repeat_case_delta_text = baseline_repeat_case_delta_text(baseline_comparison)
         if repeat_case_delta_text:
             print(f"baseline repeat case delta: {repeat_case_delta_text}")
+        repeat_wall_case_delta_text = baseline_repeat_wall_case_delta_text(baseline_comparison)
+        if repeat_wall_case_delta_text:
+            print(f"baseline repeat wall case delta: {repeat_wall_case_delta_text}")
         repeat_ocr_case_delta_text = baseline_repeat_ocr_case_delta_text(baseline_comparison)
         if repeat_ocr_case_delta_text:
             print(f"baseline repeat OCR case delta: {repeat_ocr_case_delta_text}")
@@ -8695,6 +8937,18 @@ def baseline_repeat_delta_text(repeat_delta: dict[str, Any] | None) -> str:
             "{:+.3f}s",
         ),
         (
+            "p95_wall",
+            ("wall_duration_s", "p95_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
+            "max_wall",
+            ("wall_duration_s", "max_s"),
+            "delta_s",
+            "{:+.3f}s",
+        ),
+        (
             "ocr_total_p95",
             ("ocr_engine_stage_duration_s", "total_s", "p95_duration_s"),
             "delta_s",
@@ -8793,6 +9047,23 @@ def baseline_repeat_case_delta_text(baseline_comparison: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def baseline_repeat_wall_case_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    worst = first_repeat_case_delta(
+        baseline_comparison.get("largest_repeat_profile_case_wall_p95_regressions")
+    )
+    best = first_repeat_case_delta(
+        baseline_comparison.get("largest_repeat_profile_case_wall_p95_improvements")
+    )
+    parts = []
+    worst_text = repeat_case_wall_delta_summary_text("worst_wall_case", worst)
+    if worst_text:
+        parts.append(worst_text)
+    best_text = repeat_case_wall_delta_summary_text("best_wall_case", best)
+    if best_text:
+        parts.append(best_text)
+    return ", ".join(parts)
+
+
 def first_repeat_case_delta(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, list) or not value:
         return None
@@ -8815,6 +9086,21 @@ def repeat_case_delta_summary_text(label: str, case_delta: dict[str, Any] | None
     stage_text = repeat_case_delta_top_stage_text(case_delta)
     if stage_text:
         parts.append(stage_text)
+    return " ".join(parts)
+
+
+def repeat_case_wall_delta_summary_text(label: str, case_delta: dict[str, Any] | None) -> str:
+    if not case_delta:
+        return ""
+    slug = case_delta.get("slug")
+    delta = repeat_case_delta_wall_value(case_delta, "p95_s", "delta_s")
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    parts = [f"{label}={slug} {delta:+.3f}s"]
+    baseline = repeat_case_delta_wall_value(case_delta, "p95_s", "baseline")
+    candidate = repeat_case_delta_wall_value(case_delta, "p95_s", "candidate")
+    if baseline is not None and candidate is not None:
+        parts.append(f"(baseline={baseline:.3f}s, candidate={candidate:.3f}s)")
     return " ".join(parts)
 
 
@@ -9392,6 +9678,16 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     max_repeat_max = parse_nonnegative_float(regression_budget.get("max_repeat_max_regression_s"))
     if max_repeat_max is not None:
         limits.append(f"repeat_max<={max_repeat_max:.3f}s")
+    max_repeat_wall_p95 = parse_nonnegative_float(
+        regression_budget.get("max_repeat_wall_p95_regression_s")
+    )
+    if max_repeat_wall_p95 is not None:
+        limits.append(f"repeat_wall_p95<={max_repeat_wall_p95:.3f}s")
+    max_repeat_wall_max = parse_nonnegative_float(
+        regression_budget.get("max_repeat_wall_max_regression_s")
+    )
+    if max_repeat_wall_max is not None:
+        limits.append(f"repeat_wall_max<={max_repeat_wall_max:.3f}s")
     max_repeat_stage = parse_nonnegative_float(
         regression_budget.get("max_repeat_stage_p95_regression_s")
     )
@@ -9492,6 +9788,12 @@ def baseline_regression_budget_violation_kind_label(kind: str) -> str:
         "repeat_profile_max_regression_exceeded": "repeat_max",
         "repeat_profile_max_delta_missing": "repeat_max_missing",
         "repeat_profile_case_max_regression_exceeded": "repeat_case_max",
+        "repeat_wall_p95_regression_exceeded": "repeat_wall_p95",
+        "repeat_wall_p95_delta_missing": "repeat_wall_p95_missing",
+        "repeat_wall_case_p95_regression_exceeded": "repeat_wall_case_p95",
+        "repeat_wall_max_regression_exceeded": "repeat_wall_max",
+        "repeat_wall_max_delta_missing": "repeat_wall_max_missing",
+        "repeat_wall_case_max_regression_exceeded": "repeat_wall_case_max",
         "repeat_stage_p95_regression_exceeded": "repeat_stage_p95",
         "repeat_stage_p95_delta_missing": "repeat_stage_p95_missing",
         "repeat_stage_case_p95_regression_exceeded": "repeat_stage_case_p95",
@@ -9689,6 +9991,44 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         if not isinstance(slug, str) or delta is None or budget is None:
             return ""
         return f"repeat case max {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind in {"repeat_wall_p95_regression_exceeded", "repeat_wall_max_regression_exceeded"}:
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget_key = (
+            "max_repeat_wall_p95_regression_s"
+            if kind == "repeat_wall_p95_regression_exceeded"
+            else "max_repeat_wall_max_regression_s"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        if delta is None or budget is None:
+            return ""
+        stat_label = "p95" if "p95" in kind else "max"
+        return f"repeat wall {stat_label} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind in {"repeat_wall_p95_delta_missing", "repeat_wall_max_delta_missing"}:
+        budget_key = (
+            "max_repeat_wall_p95_regression_s"
+            if kind == "repeat_wall_p95_delta_missing"
+            else "max_repeat_wall_max_regression_s"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        stat_label = "p95" if "p95" in kind else "max"
+        budget_text = f" budget {budget:.3f}s" if budget is not None else ""
+        return f"repeat wall {stat_label} delta missing{budget_text}"
+    if kind in {
+        "repeat_wall_case_p95_regression_exceeded",
+        "repeat_wall_case_max_regression_exceeded",
+    }:
+        slug = violation.get("slug")
+        delta = parse_signed_float(violation.get("delta_s"))
+        budget_key = (
+            "max_repeat_wall_p95_regression_s"
+            if kind == "repeat_wall_case_p95_regression_exceeded"
+            else "max_repeat_wall_max_regression_s"
+        )
+        budget = parse_nonnegative_float(violation.get(budget_key))
+        if not isinstance(slug, str) or delta is None or budget is None:
+            return ""
+        stat_label = "p95" if "p95" in kind else "max"
+        return f"repeat wall case {stat_label} {slug} {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "repeat_stage_p95_regression_exceeded":
         stage = violation.get("stage")
         delta = parse_signed_float(violation.get("delta_s"))

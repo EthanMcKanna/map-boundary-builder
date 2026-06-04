@@ -18610,3 +18610,21 @@ with zero failures in 0.531s.
   passed `3 passed`; full stress benchmark tests passed `158 passed`;
   compileall, `git diff --check`, and the focused blocked-network repeat gate
   passed.
+- Extended baseline repeat comparisons to include repeat wall-clock deltas and
+  explicit repeat wall regression budgets. `--compare-baseline-report` now
+  saves `repeat_profile_delta.wall_duration_s`, per-case
+  `repeat_profile_case_deltas[].wall_duration_s`, worst/best repeat wall case
+  rankings, compact `p95_wall`/`max_wall` and repeat wall case console lines,
+  and fail-closed `--max-baseline-repeat-wall-p95-regression-s` /
+  `--max-baseline-repeat-wall-max-regression-s` budgets. A blocked-network
+  focused replay at
+  `out/block-network-repeat-wall-baseline-compare-focused-20260604` compared
+  `dallas-waymo`, `bay-3-svg`, and `nashville-waymo` against
+  `out/block-network-repeat-wall-summary-focused-20260604/stress-summary.json`;
+  it passed `3/3` primary cases, `6/6` analyzed repeat samples, and
+  `repeat_wall_p95<=1.000s repeat_wall_max<=1.000s`. The comparison recorded
+  aggregate repeat wall p95 delta `-0.000840s`, max delta `-0.001516s`, and
+  worst per-case repeat wall p95 delta `+0.002935s` on `nashville-waymo`.
+  Targeted repeat-wall baseline tests passed `5 passed`; full stress benchmark
+  tests passed `159 passed`; compileall, `git diff --check`, and the focused
+  blocked-network repeat-wall baseline replay passed.

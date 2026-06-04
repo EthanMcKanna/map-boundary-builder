@@ -2522,6 +2522,151 @@ def test_baseline_repeat_max_budget_flags_outlier_without_p95_regression() -> No
     )
 
 
+def test_baseline_repeat_wall_budget_flags_wall_outlier_without_total_regression() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.5,
+                "max_total_elapsed_s": 0.55,
+                "wall_duration_s": {
+                    "p95_s": 0.56,
+                    "max_s": 0.57,
+                },
+            },
+            "cases": {
+                "case-only": {
+                    "p95_total_elapsed_s": 0.5,
+                    "max_total_elapsed_s": 0.55,
+                    "wall_duration_s": {
+                        "p95_s": 0.56,
+                        "max_s": 0.57,
+                    },
+                }
+            },
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "case-only",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.49,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "p95_total_elapsed_s": 0.49,
+                "max_total_elapsed_s": 0.54,
+                "wall_duration_s": {
+                    "p95_s": 0.64,
+                    "max_s": 0.68,
+                },
+            },
+            "cases": {
+                "case-only": {
+                    "p95_total_elapsed_s": 0.49,
+                    "max_total_elapsed_s": 0.54,
+                    "wall_duration_s": {
+                        "p95_s": 0.64,
+                        "max_s": 0.68,
+                    },
+                }
+            },
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_wall_p95_regression_s=0.05,
+        max_repeat_wall_max_regression_s=0.05,
+    )
+
+    assert comparison["repeat_profile_delta"]["duration_s"]["p95_total_elapsed_s"][
+        "delta_s"
+    ] == -0.01
+    assert comparison["repeat_profile_delta"]["wall_duration_s"]["p95_s"][
+        "delta_s"
+    ] == 0.08
+    assert comparison["repeat_profile_delta"]["wall_duration_s"]["max_s"][
+        "delta_s"
+    ] == 0.11
+    assert comparison["repeat_profile_case_deltas"][0]["wall_duration_s"][
+        "p95_s"
+    ]["delta_s"] == 0.08
+    assert comparison["largest_repeat_profile_case_wall_p95_regressions"][0][
+        "slug"
+    ] == "case-only"
+    assert comparison["regression_budget"]["passed"] is False
+    assert comparison["regression_budget"]["violations"] == [
+        {
+            "kind": "repeat_wall_p95_regression_exceeded",
+            "delta_s": 0.08,
+            "max_repeat_wall_p95_regression_s": 0.05,
+            "baseline_wall_p95_s": 0.56,
+            "candidate_wall_p95_s": 0.64,
+        },
+        {
+            "kind": "repeat_wall_case_p95_regression_exceeded",
+            "slug": "case-only",
+            "delta_s": 0.08,
+            "max_repeat_wall_p95_regression_s": 0.05,
+            "baseline_wall_p95_s": 0.56,
+            "candidate_wall_p95_s": 0.64,
+        },
+        {
+            "kind": "repeat_wall_max_regression_exceeded",
+            "delta_s": 0.11,
+            "max_repeat_wall_max_regression_s": 0.05,
+            "baseline_wall_max_s": 0.57,
+            "candidate_wall_max_s": 0.68,
+        },
+        {
+            "kind": "repeat_wall_case_max_regression_exceeded",
+            "slug": "case-only",
+            "delta_s": 0.11,
+            "max_repeat_wall_max_regression_s": 0.05,
+            "baseline_wall_max_s": 0.57,
+            "candidate_wall_max_s": 0.68,
+        },
+    ]
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "repeat wall p95 +0.080s > budget 0.050s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][3]
+        )
+        == "repeat wall case max case-only +0.110s > budget 0.050s"
+    )
+    assert (
+        stress_module.baseline_repeat_delta_text(comparison["repeat_profile_delta"])
+        == "p95_total=-0.010s, max_total=-0.010s, p95_wall=+0.080s, max_wall=+0.110s"
+    )
+    assert (
+        stress_module.baseline_repeat_wall_case_delta_text(comparison)
+        == "worst_wall_case=case-only +0.080s (baseline=0.560s, candidate=0.640s), "
+        "best_wall_case=case-only +0.080s (baseline=0.560s, candidate=0.640s)"
+    )
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: failed repeat_wall_p95<=0.050s "
+        "repeat_wall_max<=0.050s violations=4 "
+        "by_kind=repeat_wall_p95:1,repeat_wall_case_p95:1,"
+        "repeat_wall_max:1,repeat_wall_case_max:1"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_missing_total_when_ocr_ran() -> None:
     baseline = {
         "rows": [
@@ -7253,6 +7398,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert kwargs["max_baseline_wall_regression_s"] == 0.035
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.02
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.025
+        assert kwargs["max_baseline_repeat_wall_p95_regression_s"] == 0.026
+        assert kwargs["max_baseline_repeat_wall_max_regression_s"] == 0.027
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.015
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.03
         assert kwargs["max_baseline_ocr_count_regression"] == 2.25
@@ -7283,6 +7430,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                     "max_wall_regression_s": 0.035,
                     "max_repeat_p95_regression_s": 0.02,
                     "max_repeat_max_regression_s": 0.025,
+                    "max_repeat_wall_p95_regression_s": 0.026,
+                    "max_repeat_wall_max_regression_s": 0.027,
                     "max_repeat_stage_p95_regression_s": 0.015,
                     "max_ocr_engine_total_regression_s": 0.03,
                     "max_ocr_engine_count_regression": 2.25,
@@ -7323,6 +7472,10 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "0.02",
             "--max-baseline-repeat-max-regression-s",
             "0.025",
+            "--max-baseline-repeat-wall-p95-regression-s",
+            "0.026",
+            "--max-baseline-repeat-wall-max-regression-s",
+            "0.027",
             "--max-baseline-repeat-stage-p95-regression-s",
             "0.015",
             "--max-baseline-ocr-total-regression-s",
@@ -7885,6 +8038,8 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
         assert kwargs["max_baseline_wall_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_wall_p95_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_wall_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_count_regression"] == 2.0
@@ -7934,6 +8089,8 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
                     "max_total_elapsed_regression_s": 0.25,
                     "max_repeat_p95_regression_s": 0.25,
                     "max_repeat_max_regression_s": 0.25,
+                    "max_repeat_wall_p95_regression_s": 0.25,
+                    "max_repeat_wall_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_ocr_engine_count_regression": 2.0,
@@ -8132,6 +8289,8 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
         assert kwargs["max_baseline_wall_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_wall_p95_regression_s"] == 0.25
+        assert kwargs["max_baseline_repeat_wall_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_total_regression_s"] == 0.25
         assert kwargs["max_baseline_ocr_count_regression"] == 2.0
@@ -8184,6 +8343,8 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
                     "max_total_elapsed_regression_s": 0.25,
                     "max_repeat_p95_regression_s": 0.25,
                     "max_repeat_max_regression_s": 0.25,
+                    "max_repeat_wall_p95_regression_s": 0.25,
+                    "max_repeat_wall_max_regression_s": 0.25,
                     "max_repeat_stage_p95_regression_s": 0.25,
                     "max_ocr_engine_total_regression_s": 0.25,
                     "max_ocr_engine_count_regression": 2.0,
