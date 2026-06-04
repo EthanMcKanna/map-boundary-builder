@@ -264,6 +264,8 @@ CATALOG_PROBE_NEAR_HIT_MIN_IOU = 0.86
 CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO = 0.90
 CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO = 1.12
 CATALOG_PROBE_UNHINTED_NEAR_HIT_MIN_MARGIN = 0.24
+CATALOG_PROBE_NEAR_HIT_EXACT_CONFIDENCE_MIN_IOU = 0.90
+CATALOG_PROBE_NEAR_HIT_EXACT_CONFIDENCE = 0.94
 POST_GEOREF_CATALOG_COMPLETION_MIN_IOU = 0.40
 POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE = 0.84
 POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE = 0.40
@@ -1908,6 +1910,26 @@ def build_boundary(
                         rgb=rgb,
                         progress=progress,
                         georeference_source="catalog-shape-match:low-res-shape",
+                    )
+                catalog_match = catalog_probe_near_hit_match(
+                    extraction,
+                    city_input=city_input,
+                    filename_hint=filename_hint,
+                )
+                if catalog_match is not None:
+                    return finish_catalog_boundary_result(
+                        extraction,
+                        catalog_match,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                        city_input=city_input or "Auto",
+                        output_path=output_path,
+                        debug_path=debug_path,
+                        opts=opts,
+                        rgb=rgb,
+                        progress=progress,
+                        georeference_source="catalog-shape-match",
                     )
                 catalog_match = filename_hinted_avride_light_fill_catalog_match(
                     extraction,
@@ -4243,10 +4265,9 @@ def catalog_probe_near_hit_match(
 
 def catalog_probe_unhinted_near_hit_match(extraction):
     scored = []
+    all_scored = []
     for entry in load_catalog_entries():
         if not entry.is_active:
-            continue
-        if getattr(entry, "catalog_source", None) not in OCR_DERIVED_CATALOG_SOURCES:
             continue
         if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
             continue
@@ -4255,12 +4276,18 @@ def catalog_probe_unhinted_near_hit_match(extraction):
             entry,
             min_iou=entry.min_iou,
         )
-        scored.append((iou, area_ratio, scored_entry, fitted, rotation_degrees))
+        scored_item = (iou, area_ratio, scored_entry, fitted, rotation_degrees)
+        all_scored.append(scored_item)
+        if getattr(entry, "catalog_source", None) in OCR_DERIVED_CATALOG_SOURCES:
+            scored.append(scored_item)
     if not scored:
         return None
+    all_scored.sort(key=lambda item: item[0], reverse=True)
     scored.sort(key=lambda item: item[0], reverse=True)
     best_iou, best_area_ratio, best_entry, best_fitted, best_rotation = scored[0]
-    runner_up_iou = scored[1][0] if len(scored) > 1 else 0.0
+    if all_scored and all_scored[0][2] is not best_entry:
+        return None
+    runner_up_iou = all_scored[1][0] if len(all_scored) > 1 else 0.0
     margin = best_iou - runner_up_iou
     if best_iou < CATALOG_PROBE_NEAR_HIT_MIN_IOU:
         return None
@@ -4268,6 +4295,12 @@ def catalog_probe_unhinted_near_hit_match(extraction):
         return None
     if not (CATALOG_PROBE_NEAR_HIT_MIN_AREA_RATIO <= best_area_ratio <= CATALOG_PROBE_NEAR_HIT_MAX_AREA_RATIO):
         return None
+    confidence_override = None
+    if (
+        getattr(best_entry, "use_exact_geometry", False)
+        and best_iou >= CATALOG_PROBE_NEAR_HIT_EXACT_CONFIDENCE_MIN_IOU
+    ):
+        confidence_override = max(best_iou, CATALOG_PROBE_NEAR_HIT_EXACT_CONFIDENCE)
     return catalog_match_from_score(
         extraction.pixel_geometry,
         best_entry,
@@ -4276,6 +4309,7 @@ def catalog_probe_unhinted_near_hit_match(extraction):
         margin=margin,
         fitted_mercator_geometry=best_fitted,
         rotation_degrees=best_rotation,
+        confidence_override=confidence_override,
     )
 
 

@@ -19083,3 +19083,32 @@ with zero failures in 0.531s.
   is a reliability win for recompressed dark-teal screenshots, not the final
   subsecond fast-path improvement: the next speed target remains extraction
   cleanup that lets q90+ Zoox inputs match the catalog before OCR.
+- Promoted the existing near-hit catalog probe into the refined pre-OCR
+  catalog path, with an extra all-catalog ambiguity guard. The production
+  runner now retries the near-hit matcher after the 1400px refined extraction
+  and before any OCR work, but unhinted near hits are accepted only when the
+  best OCR-derived catalog candidate is also the best active same-style catalog
+  candidate overall and keeps the existing `0.24` IoU margin against the
+  nearest current/external alternative. Exact-geometry near hits above `0.90`
+  IoU get a narrow `0.94` confidence floor capped by the catalog entry's
+  `max_confidence`; lower-quality transforms still return to OCR/failure.
+  This converted the q90 Zoox SF transformed JPEG from the previous
+  OCR/georef exact-completion path into a zero-OCR catalog result. The strict
+  q90 catalog-default JPEG gate at
+  `out/robustness-catalog-default-jpeg-q90-original-size-20260604/refined-near-hit-confidence-run`
+  passed `5/5` expected: the Zoox row returned `catalog-shape-match`,
+  `san-francisco-zoox`, catalog IoU `0.920203`, all-catalog margin
+  `0.312244`, area ratio `1.051686`, confidence `0.94`, bbox
+  `[-122.4410255,37.7479064,-122.3876889,37.8056186]`, hash
+  `d757317ba5670f3a`, zero OCR labels/control points, primary wall
+  `0.065694s`, and repeat max wall `0.064s`.
+  The q85/q70 transformed guards did not widen: q85 stayed on
+  `ocr-georeference:nominatim-label-fit` with no catalog slug, confidence
+  `0.951`, hash `c890ac3b1bc35203`, `27` OCR labels, primary wall
+  `0.571340s`, and repeat max wall `0.340s`; q70 still failed instead of
+  snapping, with `22` OCR labels, primary wall `0.343876s`, and repeat max
+  wall `0.233s`. The full blocked-network hard gate at
+  `out/refined-near-hit-full73-hard-20260604` passed `73/73` expected with
+  statuses `{"complete":62,"failed":11}`, primary max wall `0.387199s`,
+  repeat p95/max wall `0.340s` / `0.371s`, and no repeat signature drift.
+  `tests/test_runner_summary.py` passed with `124 passed in 0.59s`.

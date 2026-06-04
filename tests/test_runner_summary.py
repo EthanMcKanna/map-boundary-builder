@@ -3371,6 +3371,179 @@ def test_catalog_probe_near_hit_accepts_unique_unhinted_verified_source(monkeypa
     assert match.entry.slug == "bay-area-waymo"
 
 
+def test_catalog_probe_near_hit_exact_geometry_confidence_floor(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        min_iou=0.97,
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    las_vegas = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Las Vegas",
+        slug="las-vegas-zoox",
+        min_iou=0.97,
+        catalog_source="current-verified-ocr-output",
+        geometry=Polygon([(0, 0), (8, 0), (8, 8), (0, 8)]),
+        mercator_geometry=Polygon([(0, 0), (8, 0), (8, 8), (0, 8)]),
+        max_confidence=0.97,
+        use_exact_geometry=False,
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        if entry is san_francisco:
+            return 0.920203, 1.051686, entry, san_francisco.mercator_geometry, 0.0
+        return 0.484602, 1.294074, entry, las_vegas.mercator_geometry, 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [san_francisco, las_vegas])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    match = runner.catalog_probe_near_hit_match(
+        extraction,
+        city_input=None,
+        filename_hint="upload.jpg",
+    )
+
+    assert match is not None
+    assert match.entry.slug == "san-francisco-zoox"
+    assert match.iou == pytest.approx(0.920203)
+    assert match.confidence == pytest.approx(runner.CATALOG_PROBE_NEAR_HIT_EXACT_CONFIDENCE)
+
+
+def test_refined_catalog_near_hit_returns_before_ocr(tmp_path, monkeypatch) -> None:
+    image_path = tmp_path / "upload.jpg"
+    Image.new("RGB", (800, 800), (12, 90, 88)).save(image_path)
+    output_path = tmp_path / "boundary.geojson"
+    rgb = np.full((800, 800, 3), (12, 90, 88), dtype=np.uint8)
+    initial = ExtractionResult(
+        mask=np.ones((240, 240), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(20, 20), (220, 20), (220, 220), (20, 220)]),
+        coverage_ratio=0.69,
+        contour_count=1,
+        confidence=1.0,
+    )
+    refined = ExtractionResult(
+        mask=np.ones((800, 800), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(160, 160), (640, 160), (640, 640), (160, 640)]),
+        coverage_ratio=0.36,
+        contour_count=1,
+        confidence=1.0,
+    )
+    entry = SimpleNamespace(slug="san-francisco-zoox")
+    match = SimpleNamespace(entry=entry, iou=0.92, margin=0.43, area_ratio=1.05, confidence=0.92)
+    max_dimensions: list[int] = []
+
+    def fake_extract_service_area(*_args, **kwargs):
+        max_dimensions.append(kwargs["max_dimension"])
+        return initial if len(max_dimensions) == 1 else refined
+
+    def fake_catalog_probe_near_hit_match(extraction, *, city_input, filename_hint):
+        assert extraction is refined
+        assert city_input is None
+        assert filename_hint == "upload.jpg"
+        return match
+
+    def fake_finish_catalog_boundary_result(extraction, catalog_match, *, output_path, **kwargs):
+        assert extraction is refined
+        return runner.BoundaryBuildResult(
+            geojson={},
+            summary={
+                "catalog_slug": catalog_match.entry.slug,
+                "georeference_source": kwargs["georeference_source"],
+            },
+            output_path=output_path,
+        )
+
+    def unexpected_ocr(*_args, **_kwargs):
+        raise AssertionError("refined near-hit catalog matches should return before OCR")
+
+    monkeypatch.setattr(runner, "load_rgb", lambda _path: rgb)
+    monkeypatch.setattr(runner, "extract_service_area", fake_extract_service_area)
+    monkeypatch.setattr(runner, "hinted_catalog_shape_match", lambda *_args, **_kwargs: (None, None))
+    monkeypatch.setattr(runner, "low_resolution_shape_catalog_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "catalog_probe_near_hit_match", fake_catalog_probe_near_hit_match)
+    monkeypatch.setattr(runner, "focus_georef_ocr_enabled", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(runner, "submit_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "submit_with_rapidocr_profile_context", unexpected_ocr)
+    monkeypatch.setattr(runner, "extract_ocr_labels_from_rgb", unexpected_ocr)
+    monkeypatch.setattr(runner, "finish_catalog_boundary_result", fake_finish_catalog_boundary_result)
+
+    result = build_boundary(
+        image_path,
+        None,
+        output_path,
+        options=runner.BoundaryBuildOptions(
+            filename_hint="upload.jpg",
+            write_mask_artifact=False,
+        ),
+    )
+
+    assert result.summary["catalog_slug"] == "san-francisco-zoox"
+    assert result.summary["georeference_source"] == "catalog-shape-match"
+    assert max_dimensions == [runner.CATALOG_EXTRACT_MAX_DIMENSION, runner.CATALOG_MISS_REFINE_MAX_DIMENSION]
+
+
+def test_catalog_probe_near_hit_rejects_unhinted_current_catalog_veto(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="bright-blue",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=1.0,
+    )
+    bay = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Bay Area",
+        slug="bay-area-waymo",
+        min_iou=0.965,
+        catalog_source="current-verified-ocr-output",
+    )
+    external = SimpleNamespace(
+        is_active=True,
+        provider="waymo",
+        area="Bay Area",
+        slug="bay-area-waymo-external",
+        min_iou=0.965,
+        catalog_source="current-external-service-area-reference",
+    )
+
+    def fake_score(_pixel_geometry, entry, *, min_iou):
+        if entry is bay:
+            return 0.881, 1.03, entry, Polygon(), 0.0
+        return 0.84, 1.01, entry, Polygon(), 0.0
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay, external])
+    monkeypatch.setattr(runner, "score_catalog_entry", fake_score)
+
+    assert (
+        runner.catalog_probe_near_hit_match(
+            extraction,
+            city_input=None,
+            filename_hint="uploaded-map.webp",
+        )
+        is None
+    )
+
+
 def test_catalog_probe_near_hit_rejects_unhinted_low_margin(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((20, 20), dtype=bool),
