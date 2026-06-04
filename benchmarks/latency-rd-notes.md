@@ -19364,3 +19364,21 @@ with zero failures in 0.531s.
   rejection rather than a latency rejection. Keep the JPEG multiplier at
   `scale*150`; further lossy-JPEG hardening needs a quality or candidate-rank
   guard, not a wider residual threshold.
+- Rejected a guarded `scale*160` JPEG fit-selection prototype that only exposed
+  the wider threshold after a strong baseline fit. The hypothesis was that a
+  base `scale*150` fit with many inliers could safely consider an expanded
+  candidate, rescuing q70 `los-angeles-waymo`'s one-missing-control failure
+  without allowing low-control Miami/Zoox jumps. An in-process monkeypatch
+  added a `scale*160` robust-fit candidate only when the base JPEG robust fit
+  had at least `12` inliers, then reran the q85/1600 and q70/1200 lossy JPEG
+  gates with blocked network, disabled runner caches, runtime prewarm, and four
+  repeats. The guard did not hold: q85 regressed from the accepted `5/6` to
+  `4/6` because `miami-waymo` switched to a `10`-control, confidence `0.910`
+  fit with `1791.6m` bbox error; q70 dropped from `3/6` to `2/6`, leaving
+  `los-angeles-waymo` at `17` controls while also failing `miami-waymo`
+  (`Inferred map area`, `1705.8m`) and `zoox-sf` (`7` controls). The runs
+  remained subsecond (`q85` repeat wall p95/max `0.290s` / `0.301s`; `q70`
+  `0.258s` / `0.277s`), but the selection signal was backwards in exactly the
+  problematic rows. Do not promote a control-count-gated wider threshold; the
+  viable guard needs an independent consistency signal, likely catalog-shape or
+  road/shape agreement, before accepting extra lossy-JPEG controls.
