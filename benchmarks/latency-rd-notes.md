@@ -18824,3 +18824,19 @@ with zero failures in 0.531s.
   `los-angeles-waymo`; it remained far below the `1.000s` budget. Treat the
   no-profile report as production-like latency telemetry, and the profiled
   hard-gate report as the count/contract source of truth.
+- Cross-checked the same no-profile warm in-process report against the colder
+  subprocess/CLI-shaped full-manifest wall summary at
+  `out/block-network-cold-subprocess-wall-summary-full73-20260604`. The two
+  reports again matched on all `73` slugs for observed status, source, catalog
+  slug, city, GeoJSON geometry hash, coordinate count, OCR label count, OCR
+  label event, road-match score, and road-match sampled-points fields. The cold
+  subprocess report passed `73/73` primary expectations with median/p95/max wall
+  `0.421373s` / `0.597523s` / `0.645094s`; the warm no-profile report kept the
+  same `73/73` outcomes and statuses while recording median/p95/max wall
+  `0.147737s` / `0.349162s` / `0.434161s` plus `73/73` analyzed repeat samples
+  at repeat p95/max wall `0.306023s` / `0.344922s`. The largest warm-minus-cold
+  primary `total_elapsed_s` increase was only `+0.010251s` on
+  `zoox-sf-ui-default`; every comparable primary wall sample was faster in the
+  warm no-profile path. This supports using the warm no-profile report as the
+  production-instance latency reference while retaining the subprocess gate as a
+  cold CLI/import overhead regression guard.
