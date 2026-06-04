@@ -18864,3 +18864,34 @@ with zero failures in 0.531s.
   makes the production-like subsecond reference stronger: fresh cache, disabled
   runner caches, stable outputs, and no primary or repeat wall-budget
   violations.
+- Bracketed upload-format robustness with temporary transformed manifests under
+  `out/robustness-resave-jpeg-*` using six representative rows:
+  `los-angeles-waymo`, `houston-waymo`, `miami-waymo`, `dallas-waymo`, `zoox-sf`,
+  and `tesla-austin-route-active-dark`. All runs used blocked network, fresh
+  cache dirs, warm in-process execution, runtime prewarm, disabled
+  OCR/extraction runner caches, `--skip-ocr-engine-profile-expectations`, four
+  repeats with one warmup per case, repeat signature drift failure, and
+  `wall<=1.000s`. The high-quality JPEG re-save at original dimensions
+  (`out/robustness-resave-jpeg-q90-original-size-20260604`) passed all `6/6`
+  primary expectations and all `18/18` analyzed repeat expectations, with
+  statuses `{"complete":5,"failed":1}`, primary wall p95/max `0.373986s` /
+  `0.408771s`, repeat wall p95/max `0.332095s` / `0.349296s`, runtime prewarm
+  `0.689s`, and no unstable repeat signatures. Comparing the q90-original rows
+  to `out/block-network-full-nonprofile-fresh-cache-repeat1-20260604` showed
+  the same status/source/city/road-match semantics for all six rows; geometry
+  hashes changed on the five complete rows, as expected after raster
+  recompression/resampling, while the Tesla route-UI negative signature stayed
+  identical. More destructive re-saves stayed fast but exposed robustness
+  limits: q70 with long edge capped at `1200px` passed only `2/6` primary
+  expectations and `6/18` analyzed repeats, with failures from
+  `los-angeles-waymo` and `houston-waymo` losing one required control point,
+  `zoox-sf` flipping to failed georeference, and the Tesla route negative still
+  rejecting correctly but dropping below the manifest OCR-label floor. q85 with
+  long edge capped at `1600px` improved to `3/6` primary expectations and
+  `9/18` analyzed repeats, recovering LA and Zoox but leaving Houston below the
+  control-point/bbox budgets, Miami above the bbox budget, and the downsampled
+  Tesla negative below its OCR-label floor. None of the transformed runs
+  violated the `1.000s` wall budget or repeat-signature stability; the current
+  safe envelope is high-quality same-dimension JPEG re-save, and lossy
+  downsampling remains the next reliability-hardening target rather than a
+  speed bottleneck.
