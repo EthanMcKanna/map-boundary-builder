@@ -5079,6 +5079,7 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
             "expectation_passed": True,
             "source": "ocr-georeference:nominatim-label-fit",
             "total_elapsed_s": 0.5,
+            "wall_s": 0.62,
         }
 
     monkeypatch.setattr(stress_module, "run_stress_case", fake_run_case)
@@ -5110,6 +5111,15 @@ def test_run_stress_benchmark_writes_report_and_summarizes(tmp_path, monkeypatch
     ]
     assert saved["summary"]["stage_duration_s"] == {}
     assert saved["summary"]["stage_max_rows"] == {}
+    assert saved["summary"]["wall_duration_s"] == {
+        "samples": 1,
+        "min_s": 0.62,
+        "median_s": 0.62,
+        "average_s": 0.62,
+        "p90_s": 0.62,
+        "p95_s": 0.62,
+        "max_s": 0.62,
+    }
     assert "preset" not in saved
     assert saved["runtime_config"]["pipeline_version"] == "pipeline-test"
     assert saved["runtime_config"]["runtime_dependencies"] == {
@@ -9576,6 +9586,7 @@ def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
                 "expectation_passed": True,
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 1.3,
+                "wall_s": 1.6,
                 "stages": {"ocr": 0.9, "extract": 0.3},
                 "ocr_label_events": [
                     {"message": "Focused map labels read", "label_count": 4},
@@ -9589,6 +9600,7 @@ def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
                 "expectation_passed": True,
                 "source": "ocr-georeference:nominatim-label-fit",
                 "total_elapsed_s": 1.5,
+                "wall_s": 1.2,
                 "stages": {"ocr": 1.1, "extract": 0.2},
                 "ocr_engine_profile": {"total_s": 1.32},
                 "ocr_label_events": [
@@ -9611,6 +9623,15 @@ def test_summarize_rows_records_stage_totals_ocr_events_and_max_cases() -> None:
     assert summary["stage_max_rows"] == {
         "extract": {"slug": "ann-arbor", "elapsed_s": 0.3},
         "ocr": {"slug": "bay-area", "elapsed_s": 1.1},
+    }
+    assert summary["wall_duration_s"] == {
+        "samples": 2,
+        "min_s": 1.2,
+        "median_s": 1.4,
+        "average_s": 1.4,
+        "p90_s": 1.56,
+        "p95_s": 1.58,
+        "max_s": 1.6,
     }
     assert summary["ocr_overlap_hidden_s"] == {
         "rows": 1,

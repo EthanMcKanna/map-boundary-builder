@@ -18565,3 +18565,16 @@ with zero failures in 0.531s.
   average subprocess wall `0.375168s`. Targeted wall-budget tests passed
   `2 passed`; full stress benchmark tests passed `155 passed`; compileall,
   `git diff --check`, and the real full-manifest wall-budget gate passed.
+- Added saved wall-clock distribution telemetry to `summary.wall_duration_s`
+  so subprocess runs expose wall samples, min/median/average/p90/p95/max
+  without a custom `jq` pass over every row. The console stress summary now
+  prints `max_wall_s` and `avg_wall_s` whenever wall samples are present, while
+  leaving generation `max_total_elapsed_s` separate. The full blocked-network
+  subprocess gate at
+  `out/block-network-cold-subprocess-wall-summary-full73-20260604` passed
+  `73/73` with `total<=1.000s` and `wall<=1.000s`, max internal generation
+  `0.488402s`, wall samples `73`, median wall `0.421373s`, p95 wall
+  `0.597523s`, max wall `0.645094s`, and no wall violations. Targeted summary
+  tests passed `2 passed`; full stress benchmark tests passed `155 passed`;
+  compileall, `git diff --check`, and the real full-manifest wall-summary gate
+  passed.

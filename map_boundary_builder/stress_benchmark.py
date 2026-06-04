@@ -5069,7 +5069,7 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for row in rows
         if isinstance(row.get("total_elapsed_s"), (int, float))
     ]
-    return {
+    summary = {
         "total": len(rows),
         "expectation_passed": len(rows) - len(unexpected),
         "unexpected": unexpected,
@@ -5087,6 +5087,29 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "max_total_elapsed_s": round(max(elapsed_values), 6) if elapsed_values else None,
         "stage_duration_s": {stage: round(elapsed_s, 6) for stage, elapsed_s in sorted(stage_totals.items())},
         "stage_max_rows": dict(sorted(stage_max_rows.items())),
+    }
+    wall_duration = summarize_wall_duration(rows)
+    if wall_duration is not None:
+        summary["wall_duration_s"] = wall_duration
+    return summary
+
+
+def summarize_wall_duration(rows: list[dict[str, Any]]) -> dict[str, float | int] | None:
+    durations = [
+        wall_s
+        for wall_s in (parse_nonnegative_float(row.get("wall_s")) for row in rows)
+        if wall_s is not None
+    ]
+    if not durations:
+        return None
+    return {
+        "samples": len(durations),
+        "min_s": round(min(durations), 6),
+        "median_s": round(float(median(durations)), 6),
+        "average_s": round(float(mean(durations)), 6),
+        "p90_s": round(percentile_linear(durations, 90), 6),
+        "p95_s": round(percentile_linear(durations, 95), 6),
+        "max_s": round(max(durations), 6),
     }
 
 
@@ -7375,11 +7398,19 @@ def ocr_engine_workload_groups_include_context(groups: Any) -> bool:
 
 def print_stress_table(report: dict[str, Any]) -> None:
     summary = report["summary"]
+    wall_duration = summary.get("wall_duration_s")
+    wall_text = ""
+    if isinstance(wall_duration, dict):
+        max_wall = wall_duration.get("max_s")
+        average_wall = wall_duration.get("average_s")
+        if isinstance(max_wall, (int, float)) and isinstance(average_wall, (int, float)):
+            wall_text = f", max_wall_s={max_wall}, avg_wall_s={average_wall}"
     print(
         "stress summary: "
         f"{summary['expectation_passed']}/{summary['total']} expected, "
         f"statuses={summary['statuses']}, "
         f"max_total_elapsed_s={summary['max_total_elapsed_s']}"
+        f"{wall_text}"
     )
     manifest_contracts = report.get("manifest_contracts")
     if isinstance(manifest_contracts, dict):
