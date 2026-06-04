@@ -18809,3 +18809,18 @@ with zero failures in 0.531s.
   `san-antonio-waymo` `0.302668s`, all OCR-bound. This gives a clean
   production-like subsecond reference without OCR profiling overhead while the
   profiled gates remain the contract/count validation source.
+- Cross-checked the no-profile full-manifest proof against the latest profiled
+  full hard-gate control to make sure the wall-only mode did not hide output
+  drift. Comparing `out/block-network-full-nonprofile-repeat1-20260604` to
+  `out/block-network-full-hardgate-default-repeat1-20260604` across all `73`
+  slugs found zero differences in observed status, source, catalog slug, city,
+  GeoJSON geometry hash, coordinate count, OCR label count, or OCR label event.
+  Both reports kept `73/73` primary expectations, statuses
+  `{"complete":62,"failed":11}`, and `73/73` analyzed repeat expectations. The
+  no-profile full run had primary p95/max wall `0.349162s` / `0.434161s`
+  compared with profiled `0.347320s` / `0.386680s`, while repeat p95/max wall
+  improved to `0.306023s` / `0.344922s` versus profiled `0.338400s` /
+  `0.390392s`. The largest primary wall delta was `+0.047481s` on
+  `los-angeles-waymo`; it remained far below the `1.000s` budget. Treat the
+  no-profile report as production-like latency telemetry, and the profiled
+  hard-gate report as the count/contract source of truth.
