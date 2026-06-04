@@ -18733,3 +18733,20 @@ with zero failures in 0.531s.
   worsened to `0.399437s`. Keep the current default
   `onnxruntime_enable_cpu_mem_arena=false` and
   `onnxruntime_allow_spinning=false`.
+- Re-validated the locked non-map/thematic rejection rows after the full
+  repeat-wall and ORT-flag work, because they are intentionally failed outputs
+  that must stay fast without losing evidence. The focused blocked-network gate
+  at `out/block-network-nonmap-thematic-repeat-stability-20260604` used the
+  production focused hard-gate preset, disabled OCR/extraction caches, ran
+  `8` repeats with `2` warmups per case, and passed `3/3` primary expectations
+  plus `18/18` analyzed repeat samples under `wall<=1.000s`. Primary max wall
+  was `0.320901s`; repeat wall p95/max were `0.289391s` / `0.291406s`; repeat
+  OCR engine total p95/max were both `0.231s`. The locked evidence remained
+  stable: `tesla-sync-non-map-ui` rejected as non-map app UI with
+  `account/import/privacy/stats/sync` categories in `0.331304s`,
+  `profile-app-non-map-ui` rejected with `followers/following/media` categories
+  in `0.298306s`, and `climate-vulnerability-thematic-map` rejected as a
+  thematic map with `nge Vulnerability Index` evidence in `0.067311s`. The
+  slowest analyzed repeat stayed `profile-app-non-map-ui` at p95/max
+  `0.290816s` / `0.291408s`. No runtime shortcut changed; prior cap/batch
+  probes still make pre-OCR or lower-cap profile rejection too risky.
