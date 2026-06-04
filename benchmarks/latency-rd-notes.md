@@ -19220,3 +19220,23 @@ with zero failures in 0.531s.
   `1.337219` area ratio). Keep requiring direct area text or a reliable
   georeference before label-driven catalog completion; neighborhood labels
   alone are useful evidence for georeference, not a safe catalog shortcut.
+- Rejected a general pre-OCR shortcut for the remaining OCR-backed catalog
+  rows in the full hard gate. The duplicate-manifest review showed most
+  `ui-default` screenshot pairs are already catalog fast paths; the only
+  meaningful duplicated OCR case is Ann Arbor May Mobility, where `ui-default`
+  uses `catalog-shape-match:label-shape`. A blocked-network score probe showed
+  its dark-teal extracted shape reaches only `0.784651` IoU with
+  `ann-arbor-may-mobility` at the runner's 1400px extraction size (`0.789866`
+  at 400px and `0.789306` full-size), below the `0.86` near-hit threshold, so
+  the OCR label remains necessary. For provider/UI-label rows, Houston Waymo is
+  the clearest safety failure: the bright-blue pre-OCR shape would rank
+  `dallas-waymo` first (`0.718877` IoU, area ratio `1.127305`) and
+  `atlanta-waymo` second (`0.704636`) while the true Houston candidate scores
+  only `0.573456`. Miami Waymo is also too weak for a shape-only shortcut
+  (`0.609024` IoU, area ratio `0.722535` for `miami-waymo`, with Austin close
+  behind at `0.577237`). Tesla Bay Area current-catalog is the lone tempting
+  gray-fill row (`bay-area-tesla` IoU `0.900435`, area ratio `0.981115`), but
+  as a single current-external/provider-label case it is not enough evidence
+  for a general provider/UI bypass. Keep the OCR-backed catalog rows on their
+  existing label/georeference paths until a targeted guard has broader positive
+  evidence and no city-confusion counterexamples.
