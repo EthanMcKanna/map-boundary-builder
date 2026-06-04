@@ -19052,3 +19052,34 @@ with zero failures in 0.531s.
   targeted unit tests for ambiguous Bay Area/San Francisco aliases, the q90/q85
   catalog-default JPEG gates, the current broader Zoox SF service-area fixture,
   and a full blocked-network stress gate before any code commit.
+- Shipped the guarded ranked post-georeference completion prototype after it
+  improved exact-output reliability without widening the known bad alias path.
+  The runner now lets dark-teal OCR/georef outputs consider
+  `verified-screenshot-ocr-output` catalog entries, ranks all provider/style
+  and hint-compatible candidates by mercator overlap, requires a clear
+  `0.08` IoU margin between passing aliases, and rejects a lower-ranked
+  passing alias when a materially better-overlap candidate fails a safety
+  threshold. Exact-geometry completions with IoU at least `0.80` inherit the
+  catalog confidence cap instead of being flattened to the loose contained
+  fallback confidence. Unit coverage now includes the intended San Francisco
+  verified-screenshot rescue, the broader current Bay Area alias, near-tie
+  ambiguity rejection, and the q85-shaped lower-ranked-pass rejection; the full
+  `tests/test_runner_summary.py` suite passed with `121 passed in 0.58s`.
+  The q90 catalog-default JPEG gate improved the Zoox SF transformed fixture to
+  exact `san-francisco-zoox` geometry after OCR/georef, with source
+  `catalog-shape-match:georef-contained`, confidence `0.946`, catalog IoU
+  `0.900864`, margin `0.916593`, area ratio `1.070604`, bbox
+  `[-122.4410255,37.7479064,-122.3876889,37.8056186]`, hash
+  `d757317ba5670f3a`, primary max wall `0.457080s`, and repeat max wall
+  `0.316848s`; the only remaining expectation mismatch is source naming
+  because it is still an OCR fallback rather than the zero-OCR catalog path.
+  The q85 catalog-default JPEG gate stayed protected: Zoox SF remained
+  `ocr-georeference:nominatim-label-fit` with no `bay-area-zoox` catalog snap,
+  primary max wall `0.437436s`, repeat max wall `0.340955s`, and no repeat
+  drift. The full blocked-network stress gate over
+  `benchmarks/real-screenshot-stress.json` passed `73/73` expected with
+  statuses `{"complete":62,"failed":11}`, primary max wall `0.446098s`,
+  repeat p95/max wall `0.321607s` / `0.370398s`, and no signature drift. This
+  is a reliability win for recompressed dark-teal screenshots, not the final
+  subsecond fast-path improvement: the next speed target remains extraction
+  cleanup that lets q90+ Zoox inputs match the catalog before OCR.

@@ -3495,6 +3495,210 @@ def test_post_georeference_catalog_completion_rejects_tiny_subset(monkeypatch) -
     )
 
 
+def test_post_georeference_catalog_completion_ranks_verified_screenshot_alias(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    bay_area = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Bay Area",
+        slug="bay-area-zoox",
+        catalog_source="current-external-service-area-reference",
+        geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        mercator_geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        max_confidence=0.99,
+        use_exact_geometry=True,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    georef_output = Polygon([(-0.2, -0.2), (10.2, -0.2), (10.2, 10.2), (-0.2, 10.2)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay_area, san_francisco])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    match = runner.post_georeference_catalog_completion_match(
+        extraction,
+        [OcrLabel("Mission Bay", 10, 10, 80, 20, 96.0)],
+        georef_output,
+        city_input=None,
+        inferred_city="San Francisco",
+        filename_hint="upload.jpg",
+        georef_confidence=0.955,
+    )
+
+    assert match is not None
+    assert match.entry.slug == "san-francisco-zoox"
+    assert match.iou == pytest.approx(100 / 108.16)
+    assert match.iou - (108.16 / (256 + 108.16 - 108.16)) > runner.POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN
+    assert match.confidence == pytest.approx(0.946)
+
+
+def test_post_georeference_catalog_completion_keeps_broader_current_alias(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    bay_area = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Bay Area",
+        slug="bay-area-zoox",
+        catalog_source="current-external-service-area-reference",
+        geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        mercator_geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        max_confidence=0.99,
+        use_exact_geometry=True,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    georef_output = Polygon([(0, 0), (16, 0), (16, 16), (0, 16)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [bay_area, san_francisco])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    match = runner.post_georeference_catalog_completion_match(
+        extraction,
+        [OcrLabel("Mission Bay", 10, 10, 80, 20, 96.0)],
+        georef_output,
+        city_input=None,
+        inferred_city="San Francisco",
+        filename_hint="upload.jpg",
+        georef_confidence=0.955,
+    )
+
+    assert match is not None
+    assert match.entry.slug == "bay-area-zoox"
+    assert match.iou == pytest.approx(1.0)
+
+
+def test_post_georeference_catalog_completion_rejects_ambiguous_alias_margin(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    first = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    second = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Bay Area",
+        slug="bay-area-zoox",
+        catalog_source="current-external-service-area-reference",
+        geometry=Polygon([(0.3, 0.3), (10.3, 0.3), (10.3, 10.3), (0.3, 10.3)]),
+        mercator_geometry=Polygon([(0.3, 0.3), (10.3, 0.3), (10.3, 10.3), (0.3, 10.3)]),
+        max_confidence=0.99,
+        use_exact_geometry=True,
+    )
+    georef_output = Polygon([(0.15, 0.15), (10.15, 0.15), (10.15, 10.15), (0.15, 10.15)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [first, second])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    assert (
+        runner.post_georeference_catalog_completion_match(
+            extraction,
+            [OcrLabel("Mission Bay", 10, 10, 80, 20, 96.0)],
+            georef_output,
+            city_input=None,
+            inferred_city="San Francisco",
+            filename_hint="upload.jpg",
+            georef_confidence=0.955,
+        )
+        is None
+    )
+
+
+def test_post_georeference_catalog_completion_rejects_lower_ranked_passing_alias(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    bay_area = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Bay Area",
+        slug="bay-area-zoox",
+        catalog_source="current-external-service-area-reference",
+        geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        mercator_geometry=Polygon([(0, 0), (16, 0), (16, 16), (0, 16)]),
+        max_confidence=0.99,
+        use_exact_geometry=True,
+    )
+    overgrown_output = Polygon([(-1, -1), (11.5, -1), (11.5, 11.5), (-1, 11.5)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [san_francisco, bay_area])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    assert (
+        runner.post_georeference_catalog_completion_match(
+            extraction,
+            [OcrLabel("Mission Bay", 10, 10, 80, 20, 96.0)],
+            overgrown_output,
+            city_input=None,
+            inferred_city="San Francisco",
+            filename_hint="upload.jpg",
+            georef_confidence=0.955,
+        )
+        is None
+    )
+
+
 def test_current_catalog_label_shape_match_accepts_current_area_label(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((20, 20), dtype=bool),

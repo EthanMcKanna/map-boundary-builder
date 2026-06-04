@@ -279,6 +279,11 @@ CURRENT_CATALOG_COMPLETION_SOURCES = {
     "current-external-service-area-reference",
     "current-verified-ocr-output",
 }
+POST_GEOREF_CATALOG_COMPLETION_EXTRA_SOURCES = {
+    "verified-screenshot-ocr-output",
+}
+POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN = 0.08
+POST_GEOREF_CATALOG_COMPLETION_EXACT_CONFIDENCE_MIN_IOU = 0.80
 CURRENT_CATALOG_LABEL_SHAPE_MIN_IOU = 0.70
 CURRENT_CATALOG_LABEL_SHAPE_MIN_AREA_RATIO = 0.85
 CURRENT_CATALOG_LABEL_SHAPE_MAX_AREA_RATIO = 1.15
@@ -2615,6 +2620,7 @@ def build_boundary(
             labels,
             geom,
             city_input=city_input,
+            inferred_city=properties.get("city"),
             filename_hint=filename_hint,
             georef_confidence=geo_transform.confidence,
         )
@@ -4301,6 +4307,7 @@ def post_georeference_catalog_completion_match(
     lonlat_geometry,
     *,
     city_input: str | None,
+    inferred_city: str | None = None,
     filename_hint: str | None,
     georef_confidence: float,
 ) -> ServiceAreaCatalogMatch | None:
@@ -4311,7 +4318,7 @@ def post_georeference_catalog_completion_match(
 
     hint_texts = [
         text
-        for text in [city_input, filename_hint, *high_confidence_label_texts(labels)]
+        for text in [city_input, inferred_city, filename_hint, *high_confidence_label_texts(labels)]
         if text and text.strip()
     ]
     if not hint_texts:
@@ -4321,7 +4328,11 @@ def post_georeference_catalog_completion_match(
     for entry in load_catalog_entries():
         if not entry.is_active:
             continue
-        if getattr(entry, "catalog_source", None) not in CURRENT_CATALOG_COMPLETION_SOURCES:
+        catalog_source = getattr(entry, "catalog_source", None)
+        if catalog_source not in CURRENT_CATALOG_COMPLETION_SOURCES and not (
+            extraction.style == "dark-teal"
+            and catalog_source in POST_GEOREF_CATALOG_COMPLETION_EXTRA_SOURCES
+        ):
             continue
         if extraction.style not in PROVIDER_STYLES.get(entry.provider, set()):
             continue
@@ -4329,45 +4340,72 @@ def post_georeference_catalog_completion_match(
             continue
         if any(catalog_area_matches_text(entry.area, text) for text in hint_texts):
             candidates.append(entry)
-    if len(candidates) != 1:
-        return None
-
-    entry = candidates[0]
     output_mercator = transform(lambda x, y, z=None: lonlat_to_mercator(x, y), lonlat_geometry).buffer(0)
-    catalog_mercator = entry.mercator_geometry.buffer(0)
     output_area = output_mercator.area
-    catalog_area = catalog_mercator.area
-    if output_area <= 0.0 or catalog_area <= 0.0:
+    if output_area <= 0.0:
         return None
-    intersection_area = output_mercator.intersection(catalog_mercator).area
-    union_area = output_mercator.union(catalog_mercator).area
-    if union_area <= 0.0:
+    all_scored_candidates = []
+    scored_candidates = []
+    for entry in candidates:
+        catalog_mercator = entry.mercator_geometry.buffer(0)
+        catalog_area = catalog_mercator.area
+        if catalog_area <= 0.0:
+            continue
+        intersection_area = output_mercator.intersection(catalog_mercator).area
+        union_area = output_mercator.union(catalog_mercator).area
+        if union_area <= 0.0:
+            continue
+        iou = intersection_area / union_area
+        output_coverage = intersection_area / output_area
+        catalog_coverage = intersection_area / catalog_area
+        area_ratio = output_area / catalog_area
+        scored = (iou, output_coverage, catalog_coverage, area_ratio, entry)
+        all_scored_candidates.append(scored)
+        passes_thresholds = (
+            iou >= POST_GEOREF_CATALOG_COMPLETION_MIN_IOU
+            and output_coverage >= POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE
+            and catalog_coverage >= POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE
+            and (
+                POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO
+                <= area_ratio
+                <= POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO
+            )
+        )
+        if not passes_thresholds:
+            continue
+        scored_candidates.append(scored)
+    if not scored_candidates:
         return None
-    iou = intersection_area / union_area
-    output_coverage = intersection_area / output_area
-    catalog_coverage = intersection_area / catalog_area
-    area_ratio = output_area / catalog_area
-    if iou < POST_GEOREF_CATALOG_COMPLETION_MIN_IOU:
-        return None
-    if output_coverage < POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE:
-        return None
-    if catalog_coverage < POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE:
-        return None
-    if not (
-        POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO
-        <= area_ratio
-        <= POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO
+    all_scored_candidates.sort(key=lambda item: (item[0], item[2], item[1]), reverse=True)
+    scored_candidates.sort(key=lambda item: (item[0], item[2], item[1]), reverse=True)
+    best_iou, output_coverage, _catalog_coverage, area_ratio, entry = scored_candidates[0]
+    highest_iou, _highest_output_coverage, _highest_catalog_coverage, _highest_area_ratio, highest_entry = (
+        all_scored_candidates[0]
+    )
+    if (
+        highest_entry is not entry
+        and highest_iou - best_iou >= POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN
     ):
         return None
+    runner_up_iou = scored_candidates[1][0] if len(scored_candidates) > 1 else 0.0
+    if len(scored_candidates) > 1 and best_iou - runner_up_iou < POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN:
+        return None
+    confidence_override = min(POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE, georef_confidence)
+    if getattr(entry, "use_exact_geometry", False) and best_iou >= POST_GEOREF_CATALOG_COMPLETION_EXACT_CONFIDENCE_MIN_IOU:
+        max_confidence = getattr(entry, "max_confidence", None)
+        confidence_override = min(
+            georef_confidence,
+            max_confidence if max_confidence is not None else georef_confidence,
+        )
     return catalog_match_from_score(
         extraction.pixel_geometry,
         entry,
-        iou=iou,
+        iou=best_iou,
         area_ratio=area_ratio,
         margin=output_coverage,
         fitted_mercator_geometry=output_mercator,
         rotation_degrees=0.0,
-        confidence_override=min(POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE, georef_confidence),
+        confidence_override=confidence_override,
     )
 
 
