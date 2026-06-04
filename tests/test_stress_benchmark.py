@@ -6220,6 +6220,69 @@ def test_latency_budget_skips_repeat_ocr_engine_p95_for_zero_call_profiles() -> 
     assert report["repeat_ocr_engine_count_max_violations"] == []
 
 
+def test_repeat_profile_records_analyzed_wall_duration_distribution() -> None:
+    samples = [
+        {
+            "slug": "dallas",
+            "repeat_index": 1,
+            "warmup": True,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.2,
+            "wall_s": 5.0,
+        },
+        {
+            "slug": "dallas",
+            "repeat_index": 2,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.4,
+            "wall_s": 0.6,
+        },
+        {
+            "slug": "dallas",
+            "repeat_index": 3,
+            "warmup": False,
+            "expectation_passed": True,
+            "observed_status": "complete",
+            "total_elapsed_s": 0.5,
+            "wall_s": 0.8,
+        },
+    ]
+
+    repeat_profile = stress_module.summarize_repeat_profile_samples(
+        samples,
+        runs_per_case=3,
+        warmup_runs_per_case=1,
+    )
+
+    assert repeat_profile["summary"]["wall_duration_s"] == {
+        "samples": 2,
+        "min_s": 0.6,
+        "median_s": 0.7,
+        "average_s": 0.7,
+        "p90_s": 0.78,
+        "p95_s": 0.79,
+        "max_s": 0.8,
+    }
+    assert repeat_profile["cases"]["dallas"]["wall_duration_s"] == {
+        "samples": 2,
+        "min_s": 0.6,
+        "median_s": 0.7,
+        "average_s": 0.7,
+        "p90_s": 0.78,
+        "p95_s": 0.79,
+        "max_s": 0.8,
+    }
+    assert (
+        stress_module.repeat_profile_wall_duration_text(
+            repeat_profile["summary"]["wall_duration_s"]
+        )
+        == ", p95_wall=0.790s, max_wall=0.800s"
+    )
+
+
 def test_repeat_profile_flags_output_signature_drift() -> None:
     samples = [
         {

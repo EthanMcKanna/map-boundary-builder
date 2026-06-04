@@ -5773,34 +5773,38 @@ def summarize_repeat_profile_samples(
         if parse_nonnegative_float(case_summary.get("min_total_elapsed_s")) is not None
         and float(case_summary["min_total_elapsed_s"]) < 1.0
     )
+    summary: dict[str, Any] = {
+        "cases": len(case_summaries),
+        "samples": len(samples),
+        "analyzed_samples": len(analyzed_samples),
+        "expectation_passed_samples": count_repeat_expectation_passed_samples(analyzed_samples),
+        "unexpected_samples": len(analyzed_samples)
+        - count_repeat_expectation_passed_samples(analyzed_samples),
+        "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
+        "ocr_full_detail_retry_samples": count_repeat_full_detail_retry_samples(analyzed_samples),
+        "subsecond_case_min_total_count": subsecond_case_count,
+        "stable_signature_cases": len(case_summaries) - len(unstable_signature_cases),
+        "unstable_signature_cases": unstable_signature_cases,
+        "ocr_full_detail_retry_cases": repeat_profile_ocr_full_detail_retry_cases(case_summaries),
+        **repeat_profile_total_elapsed_stats(analyzed_samples),
+        "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
+        "slowest_samples": repeat_profile_slowest_samples(analyzed_samples),
+        "slowest_cases": repeat_profile_slowest_cases(case_summaries),
+        "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
+        "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
+        "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
+        "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
+        "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
+        "ocr_engine_workload_groups": primary_ocr_engine_workload_groups(analyzed_samples),
+        "ocr_engine_slowest_cases": repeat_profile_ocr_engine_slowest_cases(case_summaries),
+    }
+    wall_duration = summarize_wall_duration(analyzed_samples)
+    if wall_duration is not None:
+        summary["wall_duration_s"] = wall_duration
     return {
         "runs_per_case": runs_per_case,
         "warmup_runs_per_case": warmup_runs_per_case,
-        "summary": {
-            "cases": len(case_summaries),
-            "samples": len(samples),
-            "analyzed_samples": len(analyzed_samples),
-            "expectation_passed_samples": count_repeat_expectation_passed_samples(analyzed_samples),
-            "unexpected_samples": len(analyzed_samples)
-            - count_repeat_expectation_passed_samples(analyzed_samples),
-            "subsecond_samples": count_repeat_subsecond_samples(analyzed_samples),
-            "ocr_full_detail_retry_samples": count_repeat_full_detail_retry_samples(analyzed_samples),
-            "subsecond_case_min_total_count": subsecond_case_count,
-            "stable_signature_cases": len(case_summaries) - len(unstable_signature_cases),
-            "unstable_signature_cases": unstable_signature_cases,
-            "ocr_full_detail_retry_cases": repeat_profile_ocr_full_detail_retry_cases(case_summaries),
-            **repeat_profile_total_elapsed_stats(analyzed_samples),
-            "stage_duration_s": repeat_profile_stage_duration_stats(analyzed_samples),
-            "slowest_samples": repeat_profile_slowest_samples(analyzed_samples),
-            "slowest_cases": repeat_profile_slowest_cases(case_summaries),
-            "ocr_engine_profile": summarize_repeat_profile_ocr_engine(analyzed_samples),
-            "ocr_engine_stage_duration_s": repeat_profile_ocr_engine_stage_duration_stats(analyzed_samples),
-            "ocr_engine_count_metric": repeat_profile_ocr_engine_count_stats(analyzed_samples),
-            "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
-            "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
-            "ocr_engine_workload_groups": primary_ocr_engine_workload_groups(analyzed_samples),
-            "ocr_engine_slowest_cases": repeat_profile_ocr_engine_slowest_cases(case_summaries),
-        },
+        "summary": summary,
         "cases": case_summaries,
         "samples": samples,
     }
@@ -5808,7 +5812,7 @@ def summarize_repeat_profile_samples(
 
 def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict[str, Any]:
     analyzed_samples = repeat_profile_analyzed_samples(samples)
-    return {
+    summary: dict[str, Any] = {
         "samples": len(samples),
         "analyzed_samples": len(analyzed_samples),
         "expectation_passed_samples": count_repeat_expectation_passed_samples(analyzed_samples),
@@ -5825,6 +5829,10 @@ def summarize_repeat_profile_sample_group(samples: list[dict[str, Any]]) -> dict
         "ocr_overlap_hidden_s": repeat_profile_ocr_overlap_hidden_stats(analyzed_samples),
         "ocr_engine_stage_max_rows": ocr_engine_stage_max_rows(analyzed_samples),
     }
+    wall_duration = summarize_wall_duration(analyzed_samples)
+    if wall_duration is not None:
+        summary["wall_duration_s"] = wall_duration
+    return summary
 
 
 def repeat_profile_analyzed_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -7214,6 +7222,19 @@ def count_repeat_subsecond_samples(samples: list[dict[str, Any]]) -> int:
     )
 
 
+def repeat_profile_wall_duration_text(wall_duration: dict[str, Any] | None) -> str:
+    if not isinstance(wall_duration, dict):
+        return ""
+    p95_wall = parse_nonnegative_float(wall_duration.get("p95_s"))
+    max_wall = parse_nonnegative_float(wall_duration.get("max_s"))
+    parts: list[str] = []
+    if p95_wall is not None:
+        parts.append(f"p95_wall={p95_wall:.3f}s")
+    if max_wall is not None:
+        parts.append(f"max_wall={max_wall:.3f}s")
+    return f", {', '.join(parts)}" if parts else ""
+
+
 def repeat_profile_total_elapsed_stats(samples: list[dict[str, Any]]) -> dict[str, float | None]:
     durations = [
         elapsed_s
@@ -8103,12 +8124,17 @@ def print_stress_table(report: dict[str, Any]) -> None:
             median_text = f"{median_total:.3f}s" if isinstance(median_total, (int, float)) else "-"
             p95_text = f"{p95_total:.3f}s" if isinstance(p95_total, (int, float)) else "-"
             max_text = f"{max_total:.3f}s" if isinstance(max_total, (int, float)) else "-"
+            wall_duration = repeat_summary.get("wall_duration_s")
+            wall_text = repeat_profile_wall_duration_text(
+                wall_duration if isinstance(wall_duration, dict) else None
+            )
             print(
                 "repeat profile: "
                 f"analyzed={repeat_summary.get('analyzed_samples', 0)}, "
                 f"expected={repeat_summary.get('expectation_passed_samples', 0)}, "
                 f"subsecond={repeat_summary.get('subsecond_samples', 0)}, "
                 f"median_total={median_text}, p95_total={p95_text}, max_total={max_text}"
+                f"{wall_text}"
             )
             slowest_samples = repeat_summary.get("slowest_samples")
             repeat_samples = repeat_profile.get("samples")

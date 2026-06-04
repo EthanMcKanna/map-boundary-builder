@@ -18596,3 +18596,17 @@ with zero failures in 0.531s.
   `grand-rapids-may-mobility`. Targeted wall-baseline tests passed
   `5 passed`; full stress benchmark tests passed `157 passed`; compileall,
   `git diff --check`, and the real full-manifest wall-baseline gate passed.
+- Added repeat-profile wall-clock distributions so repeat samples now preserve
+  analyzed `wall_duration_s` at both aggregate and per-case levels, while
+  excluding warmup samples like the existing repeat latency stats. The repeat
+  console line now prints `p95_wall` and `max_wall` when wall telemetry exists.
+  A blocked-network focused real-screenshot gate at
+  `out/block-network-repeat-wall-summary-focused-20260604` passed `3/3`
+  primary cases and `6/6` analyzed repeat samples with `total<=1.000s` and
+  `wall<=1.000s`; saved repeat wall samples were `6`, median wall
+  `0.240531s`, average wall `0.224252s`, p95 wall `0.288827s`, and max wall
+  `0.289921s`. The slowest repeat wall case was `bay-3-svg` with per-case
+  p95 wall `0.289702s` and max wall `0.289921s`. Targeted repeat-wall tests
+  passed `3 passed`; full stress benchmark tests passed `158 passed`;
+  compileall, `git diff --check`, and the focused blocked-network repeat gate
+  passed.
