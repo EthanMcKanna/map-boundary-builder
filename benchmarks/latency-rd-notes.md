@@ -18792,3 +18792,20 @@ with zero failures in 0.531s.
   p95/max `0.331944s` / `0.333365s`, and repeat OCR engine total p95/max
   `0.282853s` / `0.285835s`. Full stress-benchmark tests passed `160 passed`,
   proving the new flag does not weaken default hard-gate/profile validation.
+- Promoted that wall-only telemetry from tail smoke to a full-manifest
+  production-shaped proof. The blocked-network run at
+  `out/block-network-full-nonprofile-repeat1-20260604` used warm in-process
+  execution, OCR profiling disabled, OCR/extraction caches disabled, the same
+  full-suite cache dir, `--skip-ocr-engine-profile-expectations`, manifest OCR
+  contract budgets (`73/73` call contracts, `45/45` count-capped positive-call
+  rows, `0` positive call-only rows), and one analyzed repeat per case. It
+  passed `73/73` primary expectations with statuses `{"complete":62,"failed":11}`
+  and `73/73` analyzed repeat samples under the `1.000s` wall budget. Primary
+  wall samples had median/average/p95/max `0.147737s` / `0.156913s` /
+  `0.349162s` / `0.434161s`; repeat wall p95/max were `0.306023s` /
+  `0.344922s`. The slowest repeat cases were `los-angeles-waymo-service-area`
+  p95/max `0.344925s`, `los-angeles-waymo` `0.333544s`, `bay-3-svg`
+  `0.328445s`, `orlando-waymo-service-area` `0.311064s`, and
+  `san-antonio-waymo` `0.302668s`, all OCR-bound. This gives a clean
+  production-like subsecond reference without OCR profiling overhead while the
+  profiled gates remain the contract/count validation source.
