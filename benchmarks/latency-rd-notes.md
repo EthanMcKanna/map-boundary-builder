@@ -18923,3 +18923,28 @@ with zero failures in 0.531s.
   direction is a smarter low-quality georeference rescue or candidate-selection
   check, not simply higher OCR caps, relaxed text filtering, or blanket
   upscaling.
+- Inspected the q85/1600 low-quality georeference misses at candidate level
+  instead of changing OCR again. A non-invasive fit introspection with blocked
+  network and fresh cache found exactly one inferred city context for each
+  failing row: `houston-waymo` used `Houston` with `13` available controls and
+  the production fit selected `9` controls at confidence `0.895`, residual
+  median/p90 `418.868m` / `1230.176m`, and bbox corner error `1088.4m`;
+  `miami-waymo` used `Miami` with `9` available controls and selected `7`
+  controls at confidence `0.793`, residual median/p90 `1481.635m` /
+  `2163.906m`, and bbox corner error `3317.6m`. Brute-forcing local
+  similarity candidates against the same cached controls showed lower-bbox-error
+  candidates exist in fixture space (`houston-waymo` best observed `287.8m`,
+  `miami-waymo` best observed `927.3m`), but their fit scores are lower and the
+  production pipeline has no access to the fixture bbox oracle. A local
+  final-inlier-refit prototype for robust similarity scoring was therefore
+  tested and rejected: `out/robustness-resave-jpeg-q85-1600-20260604/final-refit-run`
+  still passed only `3/6` primary expectations and `9/18` analyzed repeats.
+  Houston improved geometrically but remained below the `10` control-point
+  floor (`9` controls), Miami improved from a `3317.6m` bbox miss to `1983.8m`
+  but still failed, and the downsampled Tesla route negative still lacked enough
+  OCR labels. The prototype remained subsecond and repeat-stable with primary
+  wall p95/max `0.534686s` / `0.576085s` and repeat wall p95/max `0.321502s` /
+  `0.328134s`, but it did not clear the robustness gate. Reverted the local
+  code change; the next viable direction needs an oracle-free quality signal,
+  such as road/shape consistency or low-quality ambiguity detection, rather
+  than a blanket robust-fit refit.
