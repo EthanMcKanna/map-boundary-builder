@@ -3772,6 +3772,49 @@ def test_post_georeference_catalog_completion_keeps_broader_current_alias(monkey
     assert match.iou == pytest.approx(1.0)
 
 
+def test_post_georeference_catalog_completion_accepts_exact_overgrown_alias(monkeypatch) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    overgrown_output = Polygon([(-0.5, -0.5), (10.5, -0.5), (10.5, 10.5), (-0.5, 10.5)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [san_francisco])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    match = runner.post_georeference_catalog_completion_match(
+        extraction,
+        [OcrLabel("Mission Bay", 10, 10, 80, 20, 96.0)],
+        overgrown_output,
+        city_input=None,
+        inferred_city="San Francisco",
+        filename_hint="upload.jpg",
+        georef_confidence=0.955,
+    )
+
+    assert match is not None
+    assert match.entry.slug == "san-francisco-zoox"
+    assert match.iou == pytest.approx(100 / 121)
+    assert match.margin == pytest.approx(100 / 121)
+    assert match.area_ratio == pytest.approx(1.21)
+    assert match.confidence == pytest.approx(0.946)
+
+
 def test_post_georeference_catalog_completion_rejects_ambiguous_alias_margin(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((20, 20), dtype=bool),

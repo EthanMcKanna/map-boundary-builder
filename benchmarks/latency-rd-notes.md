@@ -19112,3 +19112,28 @@ with zero failures in 0.531s.
   statuses `{"complete":62,"failed":11}`, primary max wall `0.387199s`,
   repeat p95/max wall `0.340s` / `0.371s`, and no repeat signature drift.
   `tests/test_runner_summary.py` passed with `124 passed in 0.59s`.
+- Accepted an exact-geometry-only post-georef relaxation for the weaker q85
+  Zoox SF JPEG transform. A live threshold probe showed that lowering the
+  general output-coverage threshold would be too broad, so the code now keeps
+  the old contained thresholds for generic/current completions and adds a
+  separate exact path requiring `use_exact_geometry`, IoU at least `0.80`,
+  output coverage at least `0.80`, catalog coverage at least `0.96`, and area
+  ratio no higher than `1.23`. The q85 catalog-default JPEG gate at
+  `out/robustness-catalog-default-jpeg-q85-1600-20260604/exact-postgeo-relax-run`
+  still reports `4/5` against the strict zero-OCR transformed manifest because
+  the source is transparently `catalog-shape-match:georef-contained`, but the
+  Zoox row now returns exact `san-francisco-zoox` geometry instead of a noisy
+  OCR polygon: catalog IoU `0.801117`, output-coverage margin `0.809824`, area
+  ratio `1.218483`, confidence `0.946`, bbox
+  `[-122.4410255,37.7479064,-122.3876889,37.8056186]`, hash
+  `d757317ba5670f3a`, `27` OCR labels, primary wall `0.495039s`, and repeat
+  max wall `0.297s`. The q70 transformed guard at
+  `out/robustness-catalog-default-jpeg-q70-1200-20260604/exact-postgeo-relax-guard-run`
+  stayed rejected rather than snapping, with primary wall `0.262002s` and
+  repeat max wall `0.175s`. The q90 fast path stayed strict-green at
+  `out/robustness-catalog-default-jpeg-q90-original-size-20260604/exact-postgeo-relax-guard-run`,
+  passing `5/5` with the Zoox row still `catalog-shape-match` in `0.068066s`
+  primary wall and `0.067s` repeat max wall. The full hard gate at
+  `out/exact-postgeo-relax-full73-hard-20260604` passed `73/73` expected with
+  statuses `{"complete":62,"failed":11}`, primary max wall `0.380100s`,
+  repeat p95/max wall `0.288s` / `0.320s`, and no repeat signature drift.

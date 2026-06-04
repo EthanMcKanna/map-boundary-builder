@@ -273,6 +273,9 @@ POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO = 0.40
 POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO = 1.25
 POST_GEOREF_CATALOG_COMPLETION_MIN_GEOREF_CONFIDENCE = 0.80
 POST_GEOREF_CATALOG_COMPLETION_CONFIDENCE = 0.84
+POST_GEOREF_CATALOG_COMPLETION_EXACT_MIN_OUTPUT_COVERAGE = 0.80
+POST_GEOREF_CATALOG_COMPLETION_EXACT_MIN_CATALOG_COVERAGE = 0.96
+POST_GEOREF_CATALOG_COMPLETION_EXACT_MAX_AREA_RATIO = 1.23
 OCR_DERIVED_CATALOG_SOURCES = {
     "current-verified-ocr-output",
     "verified-screenshot-ocr-output",
@@ -4395,7 +4398,7 @@ def post_georeference_catalog_completion_match(
         area_ratio = output_area / catalog_area
         scored = (iou, output_coverage, catalog_coverage, area_ratio, entry)
         all_scored_candidates.append(scored)
-        passes_thresholds = (
+        passes_general_thresholds = (
             iou >= POST_GEOREF_CATALOG_COMPLETION_MIN_IOU
             and output_coverage >= POST_GEOREF_CATALOG_COMPLETION_MIN_OUTPUT_COVERAGE
             and catalog_coverage >= POST_GEOREF_CATALOG_COMPLETION_MIN_CATALOG_COVERAGE
@@ -4405,7 +4408,18 @@ def post_georeference_catalog_completion_match(
                 <= POST_GEOREF_CATALOG_COMPLETION_MAX_AREA_RATIO
             )
         )
-        if not passes_thresholds:
+        passes_exact_thresholds = (
+            getattr(entry, "use_exact_geometry", False)
+            and iou >= POST_GEOREF_CATALOG_COMPLETION_EXACT_CONFIDENCE_MIN_IOU
+            and output_coverage >= POST_GEOREF_CATALOG_COMPLETION_EXACT_MIN_OUTPUT_COVERAGE
+            and catalog_coverage >= POST_GEOREF_CATALOG_COMPLETION_EXACT_MIN_CATALOG_COVERAGE
+            and (
+                POST_GEOREF_CATALOG_COMPLETION_MIN_AREA_RATIO
+                <= area_ratio
+                <= POST_GEOREF_CATALOG_COMPLETION_EXACT_MAX_AREA_RATIO
+            )
+        )
+        if not (passes_general_thresholds or passes_exact_thresholds):
             continue
         scored_candidates.append(scored)
     if not scored_candidates:
