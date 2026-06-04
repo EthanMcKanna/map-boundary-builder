@@ -19456,3 +19456,15 @@ with zero failures in 0.531s.
   checkout. The local Vercel CLI used for inspection is still `54.3.0` while
   the remote build used `54.9.0`; upgrade the local CLI before any manual
   production deploy.
+  A live production multipart upload then exercised the real extension-lost
+  path: q85 Houston JPEG bytes were sent to `/api/runs` as `filename=upload.png`
+  with `no_catalog=1`, so the worker saved `/tmp/.../input.png` while the bytes
+  still began with JPEG magic. Production pipeline `pipeline-406e11de671090a9`
+  returned `complete` for run `1780614643-1bf4aeef`, city `Houston`, source
+  `ocr-georeference:nominatim-label-fit`, `12` controls, confidence `0.893`,
+  bbox `[-95.4349293,29.6654883,-95.2886969,29.8187749]`, residual median/p90
+  `671.9m` / `2062.2m`, and top labels including `Houston`, `Midtown`,
+  `Kashmere Gardens`, and `Upper Kirby`. The response profile was
+  `build_boundary_s: 2.076486` / `total_before_send_s: 2.090853`, so this is
+  live correctness evidence for the byte-header JPEG fallback, not a fresh
+  subsecond production latency proof.
