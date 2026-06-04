@@ -19401,3 +19401,22 @@ with zero failures in 0.531s.
   distinguish the `17`-control base fit from the `18`-control wider fit. These
   signals may still be useful for catalog-enabled completion, but they are not
   safe standalone guards for no-catalog lossy-JPEG georeference selection.
+- Revalidated the intentionally fail-closed rows after the JPEG-only
+  georeference threshold change and follow-on rejection probes. The focused
+  blocked-network gate at
+  `out/post-jpeg-failclosed-repeat-stability-20260604` selected all `11`
+  expected-failure fixtures, disabled OCR/extraction caches, used the production
+  focused hard-gate preset, and ran `10` repeats with `2` warmups per case. It
+  passed `11/11` primary expectations and `88/88` analyzed repeat samples under
+  `total<=1.000s` and `wall<=1.000s`; statuses remained `{"failed":11}`,
+  primary max wall was `0.270568s`, repeat wall p95/max were `0.260s` /
+  `0.302s`, repeat OCR-engine p95/max were `0.233s` / `0.277s`, and repeat
+  signatures stayed stable. The manifest OCR contracts also stayed locked:
+  `11/11` rows capped at one OCR call and `11/11` rows retained OCR-count
+  ceilings. The slowest repeat was
+  `tesla-austin-route-receipt-long#8` at `0.302s`, and the locked evidence rows
+  still rejected for the intended reasons: sparse Las Vegas Zoox labels,
+  Tesla route/receipt UI, non-map app UI, and the thematic vulnerability map.
+  This keeps the negative controls useful after the JPEG reliability work and
+  argues against promoting sparse/mobile or non-service screenshots without a
+  new independent signal.
