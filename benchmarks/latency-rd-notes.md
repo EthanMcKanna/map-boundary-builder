@@ -18948,3 +18948,57 @@ with zero failures in 0.531s.
   code change; the next viable direction needs an oracle-free quality signal,
   such as road/shape consistency or low-quality ambiguity detection, rather
   than a blanket robust-fit refit.
+- Split the lossy-upload bracket into actual catalog-default behavior versus
+  forced OCR/georeference behavior. Built paired temporary catalog-enabled
+  manifests for the five default rows that normally expect zero OCR calls:
+  `los-angeles-waymo-current-catalog`, `houston-waymo-ui-default`,
+  `miami-waymo-ui-default`, `dallas-waymo-current-catalog`, and
+  `zoox-sf-ui-default`. The manifests reused the q90 original-size, q85/1600,
+  and q70/1200 transformed JPEG fixtures with generic `upload.jpg` filename
+  hints, blocked network, fresh cache dirs, warm in-process execution, runtime
+  prewarm, disabled OCR/extraction runner caches,
+  `--skip-ocr-engine-profile-expectations`, four repeats with one warmup,
+  repeat signature drift failure, and `wall<=1.000s`. The Waymo default rows
+  were robust across all three transforms: q90 original-size kept all four on
+  `catalog-shape-match` with primary row walls `0.024229s` to `0.039791s` and
+  catalog IoU/margins from `0.979367/0.366508` to `0.985870/0.302596`;
+  q85/1600 kept all four on `catalog-shape-match` with row walls `0.022854s`
+  to `0.030800s` and IoU/margins from `0.977519/0.364901` to
+  `0.984841/0.306607`; q70/1200 still kept all four on
+  `catalog-shape-match` with row walls `0.010892s` to `0.017164s` and
+  IoU/margins from `0.973817/0.304559` to `0.983748/0.302480`. Each focused
+  run passed the latency budget and had no unstable repeat signatures. The
+  sole default-path weakness was `zoox-sf-ui-default`: q90 original-size
+  completed via `ocr-georeference:nominatim-label-fit` instead of catalog at
+  `0.414877s` wall with `22` labels; q85/1600 also completed via
+  `ocr-georeference:nominatim-label-fit` at `0.476187s` wall with `27` labels;
+  q70/1200 failed georeference at `0.263269s` wall with `22` labels. This
+  narrows the default upload concern: recompressed bright-blue Waymo current
+  catalog screenshots are safely sub-40ms, while recompressed dark-teal Zoox SF
+  needs extraction robustness rather than OCR speed work.
+- Rejected a quick Zoox catalog-threshold or filename-hint hardening after
+  inspecting the catalog path. Runtime catalog entry loading clamps
+  `catalog_min_shape_iou` to at most the global `0.970` threshold, so the
+  `san-francisco-zoox` JSON value of `0.985` is documentary evidence rather
+  than the effective acceptance threshold. Even against `0.970`, the
+  transformed Zoox shapes are not safe near misses. Direct extraction/scoring
+  against `san-francisco-zoox` showed q90 original-size at `0.916347` IoU and
+  `1.017511` area ratio at the 1400px refined size, q85/1600 at only
+  `0.723530` IoU and `1.157481` area ratio at the same refined path, and
+  q70/1200 at `0.719913` IoU and `1.337219` area ratio at full available
+  resolution. A live runner reproduction with the original `/Users/ethanmckanna/Downloads/zoox-sf.webp`
+  and generic `upload.png` hint confirmed the current good path: the first
+  extraction covered `0.180216`, the refined extraction covered `0.123966`, and
+  the runner returned `catalog-shape-match` / `san-francisco-zoox` with
+  catalog IoU `0.999994`, margin `0.417326`, and area ratio `1.000000`. The
+  q90 JPEG with the same generic hint refined to coverage `0.129770` but fell
+  through to OCR/georeference. Giving that same q90 JPEG an explicit
+  `zoox-sf.jpg` filename hint was worse, not better: after OCR/georef it could
+  be completed as `catalog-shape-match:georef-contained` with catalog slug
+  `bay-area-zoox`, confidence `0.840`, catalog IoU `0.550890`, and area ratio
+  `0.611622`. Therefore a looser catalog threshold, provider filename shortcut,
+  or post-georef contained shortcut for this case would risk a wrong fast
+  catalog match. The next safe Zoox direction is dark-teal extraction cleanup
+  that preserves the refined original WebP contour under JPEG recompression,
+  then re-run the three catalog-default transform gates plus the full blocked
+  network stress gate before accepting any production change.
