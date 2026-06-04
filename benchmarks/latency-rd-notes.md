@@ -18643,3 +18643,22 @@ with zero failures in 0.531s.
   wall deltas were p95 `+0.021s`, max `+0.026s`, and worst per-case repeat
   wall p95 `+0.025s` on `bay-3-svg`. This validates the default hard-gate
   repeat wall guardrails on real fixtures without changing generation behavior.
+- Created the first full-manifest blocked-network hard-gate baseline with
+  repeat wall telemetry at
+  `out/block-network-repeat-wall-summary-full73-20260604`. It passed `73/73`
+  expected outcomes with statuses `{"complete":62,"failed":11}`, primary max
+  wall `0.317751s`, primary wall p95 `0.301758s`, and `146/146` analyzed
+  repeat samples subsecond; repeat wall p95 was `0.270346s` and repeat max wall
+  was `0.309048s`. A same-cache full hard-gate comparison at
+  `out/block-network-repeat-wall-default-budget-full73-20260604` is rejected as
+  green proof, not a code regression: it had no signature/config/coverage
+  drift, but one primary `houston-waymo` OCR outlier reached `1.257364s`, and
+  the default relative budget correctly failed primary/wall/OCR deltas plus
+  repeat max wall on `tesla-austin-route-receipt-long` (`+0.269047s` aggregate
+  max, `+0.318456s` case max). A focused rerun of the tail slugs at
+  `out/block-network-repeat-wall-default-budget-focused-tail-20260604` passed
+  absolute latency but still failed the relative primary/wall budget on
+  `los-angeles-waymo-service-area` while repeat wall deltas stayed below the
+  default p95/max limits (`+0.089985s` / `+0.094812s`). Keep the focused default
+  proof as the accepted repeat-wall default validation; use the full baseline
+  as a telemetry reference, not a green default-comparison proof.
