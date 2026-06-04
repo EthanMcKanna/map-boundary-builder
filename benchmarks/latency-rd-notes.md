@@ -19240,3 +19240,28 @@ with zero failures in 0.531s.
   for a general provider/UI bypass. Keep the OCR-backed catalog rows on their
   existing label/georeference paths until a targeted guard has broader positive
   evidence and no city-confusion counterexamples.
+- Reprofiled the current OCR tail on a five-row focused slice and rejected
+  raising the bright-blue fast-text area floor as a default from that evidence.
+  The profiled control at `out/ocr-profile-slow5-20260604` covered
+  `dallas-waymo`, `los-angeles-waymo`, `bay-3-svg`,
+  `grand-rapids-may-mobility`, and `bay-area-waymo`; it passed `5/5` with
+  repeat p95/max wall `0.302s` / `0.303s`. The diagnostic split shows the
+  remaining tails are mixed, not a single easy detector knob: the shared
+  non-SVG Waymo group is `1400x1400 array det=256/max rec=en-ppocrv5 batch=12
+  min_area=2300` with repeat OCR p95 up to `0.272s` on
+  `los-angeles-waymo`, the dark-teal Grand Rapids row is `1280x1012
+  608/default rec_batch=8 min_area=0` with OCR total `0.205s`, and the SVG
+  label-layer row is `1600x857 det=208/max min_area=300` with OCR total
+  `0.172s`. That matches earlier rejected bright-blue cap/detector/SVG probes:
+  the tail is stable and subsecond, but no broad knob has proved safe.
+  A sharper `MAP_BOUNDARY_BRIGHT_BLUE_FAST_TEXT_OCR_MIN_AREA=3200` probe at
+  `out/ocr-profile-slow5-brightblue-area3200-20260604` preserved the five
+  selected signatures and expectations, with repeat OCR p95 `0.260s` versus
+  `0.271s`, but it did not reduce the Waymo selected-box counts
+  (`dallas-waymo` stayed `7`, `bay-area-waymo` `19`, and
+  `los-angeles-waymo` `30`). The focused comparator still reported OCR config
+  drift (`2300 -> 3200`) and exited nonzero under the hard-gate drift policy.
+  Treat the small timing movement as variance or workload-specific detector
+  timing, not a shippable simplification; do not promote the area floor without
+  full-manifest and lossy-transform evidence showing real count reduction and
+  no robustness loss.
