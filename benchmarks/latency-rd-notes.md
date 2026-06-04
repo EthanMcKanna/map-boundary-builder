@@ -19382,3 +19382,22 @@ with zero failures in 0.531s.
   problematic rows. Do not promote a control-count-gated wider threshold; the
   viable guard needs an independent consistency signal, likely catalog-shape or
   road/shape agreement, before accepting extra lossy-JPEG controls.
+- Rejected catalog-overlap and road-alignment scores as simple oracle-free
+  guards for the wider JPEG threshold. A post-run diagnostic reconstructed the
+  q70/q85 generated GeoJSON outputs from the accepted `scale*150`, raw
+  `scale*160`, and guarded-`scale*160` runs, then compared complete rows against
+  their active catalog/reference geometries and local road-seed alignment.
+  Catalog overlap did not separate good from bad: the bbox-failing q85
+  `miami-waymo` `scale*160` output scored catalog IoU `0.957954` and area ratio
+  `1.033690`, higher than the accepted `scale*150` q85 Miami output
+  (`0.841550` / `0.936959`), and the bbox/city-failing q70 `scale*160` Miami
+  output scored `0.905156` / `0.919215`, higher than the accepted q70
+  `scale*150` Miami output (`0.804370` / `0.990299`). Road scoring showed the
+  same problem: q85 Miami rose from `0.532829` to `0.580941`, q70 Miami rose
+  from `0.540324` to `0.553939` (or `0.600663` in the guarded prototype), and
+  the q70 Zoox low-control completion still scored `0.610498`. The one q70 row
+  that a wider threshold wanted to rescue, `los-angeles-waymo`, had no local
+  road-seed points in this offline diagnostic, so road alignment could not help
+  distinguish the `17`-control base fit from the `18`-control wider fit. These
+  signals may still be useful for catalog-enabled completion, but they are not
+  safe standalone guards for no-catalog lossy-JPEG georeference selection.
