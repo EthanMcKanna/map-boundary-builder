@@ -18552,3 +18552,16 @@ with zero failures in 0.531s.
   georeference `0.134s` on `nashville-waymo`. This confirms the current
   CLI-shaped first-run path is also subsecond for the full manifest under
   blocked-network, no-cache conditions; no runtime default changed.
+- Added a first-class wall-clock latency budget to the stress harness so cold
+  subprocess probes can fail on process-level regressions instead of relying on
+  manual `wall_s` inspection. `--max-wall-s` now records
+  `latency_budget.max_wall_s`, `wall_violations`, and
+  `repeat_wall_violations`, includes wall counts in failed console summaries,
+  and leaves the existing production-warm hard-gate defaults unchanged. The
+  full blocked-network subprocess gate at
+  `out/block-network-cold-subprocess-wall-budget-full73-20260604` passed
+  `73/73` with both `total<=1.000s` and `wall<=1.000s`, no wall violations,
+  max internal generation `0.485628s`, max subprocess wall `0.641910s`, and
+  average subprocess wall `0.375168s`. Targeted wall-budget tests passed
+  `2 passed`; full stress benchmark tests passed `155 passed`; compileall,
+  `git diff --check`, and the real full-manifest wall-budget gate passed.

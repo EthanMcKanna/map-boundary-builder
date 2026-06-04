@@ -414,6 +414,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-wall-s",
+        type=float,
+        default=None,
+        help=(
+            "Fail when any primary row or analyzed repeat-profile sample exceeds this subprocess wall-clock budget."
+        ),
+    )
+    parser.add_argument(
         "--max-repeat-profile-p95-duration-s",
         type=float,
         default=None,
@@ -594,6 +602,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.max_total_elapsed_s is not None and args.max_total_elapsed_s <= 0.0:
         parser.error("--max-total-elapsed-s must be positive")
+    if args.max_wall_s is not None and args.max_wall_s <= 0.0:
+        parser.error("--max-wall-s must be positive")
     if args.max_repeat_profile_p95_duration_s is not None and args.max_repeat_profile_p95_duration_s <= 0.0:
         parser.error("--max-repeat-profile-p95-duration-s must be positive")
     if args.max_prewarm_runtime_s is not None and args.max_prewarm_runtime_s <= 0.0:
@@ -719,6 +729,7 @@ def main(argv: list[str] | None = None) -> int:
         repeat_profile_runs=args.repeat_profile_runs,
         repeat_profile_warmups=args.repeat_profile_warmups,
         max_total_elapsed_s=args.max_total_elapsed_s,
+        max_wall_s=args.max_wall_s,
         max_repeat_profile_p95_duration_s=args.max_repeat_profile_p95_duration_s,
         max_prewarm_runtime_s=args.max_prewarm_runtime_s,
         max_prewarm_stage_s=max_prewarm_stage_s,
@@ -941,6 +952,7 @@ def run_stress_benchmark(
     repeat_profile_runs: int = 0,
     repeat_profile_warmups: int = 0,
     max_total_elapsed_s: float | None = None,
+    max_wall_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
     max_prewarm_runtime_s: float | None = None,
     max_prewarm_stage_s: dict[str, float] | None = None,
@@ -977,6 +989,8 @@ def run_stress_benchmark(
         raise ValueError("repeat_profile_warmups must be non-negative")
     if max_total_elapsed_s is not None and max_total_elapsed_s <= 0.0:
         raise ValueError("max_total_elapsed_s must be positive")
+    if max_wall_s is not None and max_wall_s <= 0.0:
+        raise ValueError("max_wall_s must be positive")
     if max_repeat_profile_p95_duration_s is not None and max_repeat_profile_p95_duration_s <= 0.0:
         raise ValueError("max_repeat_profile_p95_duration_s must be positive")
     if max_prewarm_runtime_s is not None and max_prewarm_runtime_s <= 0.0:
@@ -1122,6 +1136,7 @@ def run_stress_benchmark(
         report["repeat_profile"] = repeat_profile
     if (
         max_total_elapsed_s is not None
+        or max_wall_s is not None
         or max_repeat_profile_p95_duration_s is not None
         or max_prewarm_runtime_s is not None
         or prewarm_stage_budgets
@@ -1137,6 +1152,7 @@ def run_stress_benchmark(
             repeat_profile,
             prewarm=prewarm,
             max_total_elapsed_s=max_total_elapsed_s,
+            max_wall_s=max_wall_s,
             max_repeat_profile_p95_duration_s=max_repeat_profile_p95_duration_s,
             max_prewarm_runtime_s=max_prewarm_runtime_s,
             max_prewarm_stage_s=prewarm_stage_budgets,
@@ -6304,6 +6320,7 @@ def build_latency_budget_summary(
     *,
     prewarm: dict[str, Any] | None = None,
     max_total_elapsed_s: float | None = None,
+    max_wall_s: float | None = None,
     max_repeat_profile_p95_duration_s: float | None = None,
     max_prewarm_runtime_s: float | None = None,
     max_prewarm_stage_s: dict[str, float] | None = None,
@@ -6326,6 +6343,11 @@ def build_latency_budget_summary(
     if max_total_elapsed_s is not None:
         primary_violations = latency_budget_violations(rows, max_total_elapsed_s=max_total_elapsed_s)
         repeat_violations = latency_budget_violations(repeat_samples, max_total_elapsed_s=max_total_elapsed_s)
+    wall_violations: list[dict[str, Any]] = []
+    repeat_wall_violations: list[dict[str, Any]] = []
+    if max_wall_s is not None:
+        wall_violations = wall_budget_violations(rows, max_wall_s=max_wall_s)
+        repeat_wall_violations = wall_budget_violations(repeat_samples, max_wall_s=max_wall_s)
     ocr_engine_violations = ocr_engine_duration_budget_violations(
         rows,
         max_ocr_engine_duration_s or {},
@@ -6366,6 +6388,8 @@ def build_latency_budget_summary(
         "passed": (
             not primary_violations
             and not repeat_violations
+            and not wall_violations
+            and not repeat_wall_violations
             and not repeat_p95_violations
             and not prewarm_violations
             and not prewarm_stage_violations
@@ -6381,6 +6405,10 @@ def build_latency_budget_summary(
     }
     if max_total_elapsed_s is not None:
         summary["max_total_elapsed_s"] = round(float(max_total_elapsed_s), 6)
+    if max_wall_s is not None:
+        summary["max_wall_s"] = round(float(max_wall_s), 6)
+        summary["wall_violations"] = wall_violations
+        summary["repeat_wall_violations"] = repeat_wall_violations
     if max_repeat_profile_p95_duration_s is not None:
         summary["max_repeat_profile_p95_duration_s"] = round(float(max_repeat_profile_p95_duration_s), 6)
         summary["repeat_p95_violations"] = repeat_p95_violations
@@ -6962,6 +6990,31 @@ def latency_budget_violations(
             "slug": row.get("slug"),
             "total_elapsed_s": round(total_elapsed_s, 6),
             "over_by_s": round(total_elapsed_s - max_total_elapsed_s, 6),
+        }
+        repeat_index = row.get("repeat_index")
+        if isinstance(repeat_index, int):
+            violation["repeat_index"] = repeat_index
+        observed_status = row.get("observed_status")
+        if observed_status is not None:
+            violation["observed_status"] = observed_status
+        violations.append(violation)
+    return violations
+
+
+def wall_budget_violations(
+    rows: list[dict[str, Any]],
+    *,
+    max_wall_s: float,
+) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for row in rows:
+        wall_s = parse_nonnegative_float(row.get("wall_s"))
+        if wall_s is None or wall_s <= max_wall_s:
+            continue
+        violation: dict[str, Any] = {
+            "slug": row.get("slug"),
+            "wall_s": round(wall_s, 6),
+            "over_by_s": round(wall_s - max_wall_s, 6),
         }
         repeat_index = row.get("repeat_index")
         if isinstance(repeat_index, int):
@@ -7649,10 +7702,23 @@ def print_stress_table(report: dict[str, Any]) -> None:
     if isinstance(latency_budget, dict):
         budget = latency_budget.get("max_total_elapsed_s")
         budget_text = f"{budget:.3f}s" if isinstance(budget, (int, float)) else "-"
+        wall_budget = latency_budget.get("max_wall_s")
+        wall_budget_text = f"{wall_budget:.3f}s" if isinstance(wall_budget, (int, float)) else "-"
+        budget_limits: list[str] = []
+        if isinstance(budget, (int, float)):
+            budget_limits.append(f"total<={budget_text}")
+        if isinstance(wall_budget, (int, float)):
+            budget_limits.append(f"wall<={wall_budget_text}")
+        budget_suffix = f" {' '.join(budget_limits)}" if budget_limits else ""
         if latency_budget.get("passed"):
-            suffix = f" total<={budget_text}" if isinstance(budget, (int, float)) else ""
-            print(f"latency budget: passed{suffix}")
+            print(f"latency budget: passed{budget_suffix}")
         else:
+            wall_violations = latency_budget.get("wall_violations")
+            wall_violation_count = len(wall_violations) if isinstance(wall_violations, list) else 0
+            repeat_wall_violations = latency_budget.get("repeat_wall_violations")
+            repeat_wall_violation_count = (
+                len(repeat_wall_violations) if isinstance(repeat_wall_violations, list) else 0
+            )
             ocr_engine = latency_budget.get("ocr_engine_violations")
             ocr_engine_count = len(ocr_engine) if isinstance(ocr_engine, list) else 0
             ocr_engine_counts = latency_budget.get("ocr_engine_count_violations")
@@ -7681,12 +7747,13 @@ def print_stress_table(report: dict[str, Any]) -> None:
             prewarm_stage_violation_count = (
                 len(prewarm_stage_violations) if isinstance(prewarm_stage_violations, list) else 0
             )
-            total_budget_text = f" total<={budget_text}" if isinstance(budget, (int, float)) else ""
             print(
                 "latency budget: failed"
-                f"{total_budget_text} "
+                f"{budget_suffix} "
                 f"primary={len(latency_budget.get('primary_violations', []))} "
                 f"repeat={len(latency_budget.get('repeat_violations', []))} "
+                f"wall={wall_violation_count} "
+                f"repeat_wall={repeat_wall_violation_count} "
                 f"repeat_p95={repeat_p95_count} "
                 f"prewarm={prewarm_violation_count} "
                 f"prewarm_stage={prewarm_stage_violation_count} "
@@ -7722,6 +7789,30 @@ def print_stress_table(report: dict[str, Any]) -> None:
                         )
                     elif issue.get("kind") == "prewarm_stage_missing":
                         print(f"   - prewarm {metric} metric missing")
+            if isinstance(wall_violations, list):
+                for issue in wall_violations[:3]:
+                    if not isinstance(issue, dict):
+                        continue
+                    slug = issue.get("slug")
+                    print(
+                        "   - "
+                        f"{slug}: wall {float(issue['wall_s']):.3f}s "
+                        f"> budget {float(latency_budget['max_wall_s']):.3f}s"
+                    )
+            if isinstance(repeat_wall_violations, list):
+                for issue in repeat_wall_violations[:3]:
+                    if not isinstance(issue, dict):
+                        continue
+                    slug = issue.get("slug")
+                    repeat_index = issue.get("repeat_index")
+                    repeat_text = (
+                        f" repeat {repeat_index}" if isinstance(repeat_index, int) else " repeat"
+                    )
+                    print(
+                        "   - "
+                        f"{slug}{repeat_text}: wall {float(issue['wall_s']):.3f}s "
+                        f"> budget {float(latency_budget['max_wall_s']):.3f}s"
+                    )
             if isinstance(repeat_p95, list):
                 for issue in repeat_p95[:3]:
                     if not isinstance(issue, dict):

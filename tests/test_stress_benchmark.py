@@ -6984,6 +6984,56 @@ def test_main_fails_when_latency_budget_is_exceeded(tmp_path, monkeypatch) -> No
     assert exit_code == 1
 
 
+def test_main_passes_wall_budget_to_runner(tmp_path, monkeypatch) -> None:
+    def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
+        assert manifest_path == Path("manifest.json")
+        assert out_dir == tmp_path / "out"
+        assert kwargs["max_wall_s"] == 0.7
+        return {
+            "summary": {
+                "total": 1,
+                "expectation_passed": 1,
+                "unexpected": [],
+                "statuses": {"complete": 1},
+                "max_total_elapsed_s": 0.4,
+            },
+            "rows": [
+                {
+                    "slug": "stable-map",
+                    "observed_status": "complete",
+                    "expectation_passed": True,
+                    "source": "ocr-georeference:nominatim-label-fit",
+                    "control_points": 5,
+                    "total_elapsed_s": 0.4,
+                    "wall_s": 0.6,
+                }
+            ],
+            "latency_budget": {
+                "max_wall_s": 0.7,
+                "passed": True,
+                "primary_violations": [],
+                "repeat_violations": [],
+                "wall_violations": [],
+                "repeat_wall_violations": [],
+            },
+        }
+
+    monkeypatch.setattr(stress_module, "run_stress_benchmark", fake_run_stress_benchmark)
+
+    exit_code = stress_module.main(
+        [
+            "--manifest",
+            "manifest.json",
+            "--out-dir",
+            str(tmp_path / "out"),
+            "--max-wall-s",
+            "0.7",
+        ]
+    )
+
+    assert exit_code == 0
+
+
 def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkeypatch) -> None:
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert manifest_path == Path("manifest.json")
@@ -8159,6 +8209,58 @@ def test_latency_budget_flags_repeat_profile_p95_excess_and_missing() -> None:
         {
             "kind": "repeat_profile_p95_missing",
             "max_repeat_profile_p95_duration_s": 0.8,
+        }
+    ]
+
+
+def test_latency_budget_flags_wall_excess_for_primary_and_repeat_rows() -> None:
+    budget = stress_module.build_latency_budget_summary(
+        rows=[
+            {
+                "slug": "slow-primary-wall",
+                "wall_s": 1.21,
+                "total_elapsed_s": 0.3,
+                "observed_status": "complete",
+            }
+        ],
+        repeat_profile={
+            "samples": [
+                {
+                    "slug": "warmup-wall",
+                    "repeat_index": 1,
+                    "warmup": True,
+                    "wall_s": 1.9,
+                    "observed_status": "complete",
+                },
+                {
+                    "slug": "slow-repeat-wall",
+                    "repeat_index": 2,
+                    "warmup": False,
+                    "wall_s": 1.11,
+                    "observed_status": "complete",
+                },
+            ]
+        },
+        max_wall_s=1.0,
+    )
+
+    assert budget["passed"] is False
+    assert budget["max_wall_s"] == 1.0
+    assert budget["wall_violations"] == [
+        {
+            "slug": "slow-primary-wall",
+            "wall_s": 1.21,
+            "over_by_s": 0.21,
+            "observed_status": "complete",
+        }
+    ]
+    assert budget["repeat_wall_violations"] == [
+        {
+            "slug": "slow-repeat-wall",
+            "wall_s": 1.11,
+            "over_by_s": 0.11,
+            "repeat_index": 2,
+            "observed_status": "complete",
         }
     ]
 
