@@ -53,6 +53,7 @@ OCR_ENGINE_PRIMARY_DOMINANT_STAGE_FIELDS = (
     ("det", "det_elapsed_s"),
     ("rec", "rec_elapsed_s"),
 )
+WALL_DURATION_DELTA_KEYS = ("min_s", "median_s", "average_s", "p90_s", "p95_s", "max_s")
 OCR_ENGINE_REPEAT_P95_DOMINANT_STAGE_FIELDS = (
     ("input", "p95_input_s"),
     ("det", "p95_det_elapsed_s"),
@@ -224,6 +225,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Exit non-zero when any compared primary row is more than this many "
             "seconds slower than --compare-baseline-report."
+        ),
+    )
+    parser.add_argument(
+        "--max-baseline-wall-regression-s",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when any compared primary row or wall-clock distribution "
+            "is more than this many seconds slower than --compare-baseline-report."
         ),
     )
     parser.add_argument(
@@ -552,6 +562,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-baseline-expectation-regression requires --compare-baseline-report")
     if args.max_baseline_total_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-total-regression-s requires --compare-baseline-report")
+    if args.max_baseline_wall_regression_s is not None and not args.compare_baseline_report:
+        parser.error("--max-baseline-wall-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_p95_regression_s is not None and not args.compare_baseline_report:
         parser.error("--max-baseline-repeat-p95-regression-s requires --compare-baseline-report")
     if args.max_baseline_repeat_max_regression_s is not None and not args.compare_baseline_report:
@@ -610,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-prewarm-runtime-s must be positive")
     if args.max_baseline_total_regression_s is not None and args.max_baseline_total_regression_s < 0.0:
         parser.error("--max-baseline-total-regression-s must be non-negative")
+    if args.max_baseline_wall_regression_s is not None and args.max_baseline_wall_regression_s < 0.0:
+        parser.error("--max-baseline-wall-regression-s must be non-negative")
     if (
         args.max_baseline_repeat_p95_regression_s is not None
         and args.max_baseline_repeat_p95_regression_s < 0.0
@@ -745,6 +759,7 @@ def main(argv: list[str] | None = None) -> int:
         fail_on_invalid_ocr_count_contracts=args.fail_on_invalid_ocr_count_contracts,
         compare_baseline_report=Path(args.compare_baseline_report) if args.compare_baseline_report else None,
         max_baseline_total_regression_s=args.max_baseline_total_regression_s,
+        max_baseline_wall_regression_s=args.max_baseline_wall_regression_s,
         max_baseline_repeat_p95_regression_s=args.max_baseline_repeat_p95_regression_s,
         max_baseline_repeat_max_regression_s=args.max_baseline_repeat_max_regression_s,
         max_baseline_repeat_stage_p95_regression_s=args.max_baseline_repeat_stage_p95_regression_s,
@@ -828,6 +843,8 @@ def apply_real_screenshot_hard_gate_preset(args: argparse.Namespace, parser: arg
         args.fail_on_baseline_expectation_regression = True
         if args.max_baseline_total_regression_s is None:
             args.max_baseline_total_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
+        if args.max_baseline_wall_regression_s is None:
+            args.max_baseline_wall_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_p95_regression_s is None:
             args.max_baseline_repeat_p95_regression_s = REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S
         if args.max_baseline_repeat_max_regression_s is None:
@@ -968,6 +985,7 @@ def run_stress_benchmark(
     fail_on_invalid_ocr_count_contracts: bool = False,
     compare_baseline_report: Path | None = None,
     max_baseline_total_regression_s: float | None = None,
+    max_baseline_wall_regression_s: float | None = None,
     max_baseline_repeat_p95_regression_s: float | None = None,
     max_baseline_repeat_max_regression_s: float | None = None,
     max_baseline_repeat_stage_p95_regression_s: float | None = None,
@@ -1003,6 +1021,8 @@ def run_stress_benchmark(
         raise ValueError("max_positive_ocr_call_only_rows must be non-negative")
     if max_baseline_total_regression_s is not None and max_baseline_total_regression_s < 0.0:
         raise ValueError("max_baseline_total_regression_s must be non-negative")
+    if max_baseline_wall_regression_s is not None and max_baseline_wall_regression_s < 0.0:
+        raise ValueError("max_baseline_wall_regression_s must be non-negative")
     if max_baseline_repeat_p95_regression_s is not None and max_baseline_repeat_p95_regression_s < 0.0:
         raise ValueError("max_baseline_repeat_p95_regression_s must be non-negative")
     if max_baseline_repeat_max_regression_s is not None and max_baseline_repeat_max_regression_s < 0.0:
@@ -1182,6 +1202,7 @@ def run_stress_benchmark(
             report,
             baseline_report_path=compare_baseline_report,
             max_total_elapsed_regression_s=max_baseline_total_regression_s,
+            max_wall_regression_s=max_baseline_wall_regression_s,
             max_repeat_p95_regression_s=max_baseline_repeat_p95_regression_s,
             max_repeat_max_regression_s=max_baseline_repeat_max_regression_s,
             max_repeat_stage_p95_regression_s=max_baseline_repeat_stage_p95_regression_s,
@@ -1224,6 +1245,7 @@ def compare_stress_reports(
     *,
     baseline_report_path: Path | None = None,
     max_total_elapsed_regression_s: float | None = None,
+    max_wall_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
     max_repeat_max_regression_s: float | None = None,
     max_repeat_stage_p95_regression_s: float | None = None,
@@ -1326,6 +1348,8 @@ def compare_stress_reports(
         "latency_deltas": latency_deltas,
         "largest_total_regressions": ranked_latency_deltas(latency_deltas, reverse=True),
         "largest_total_improvements": ranked_latency_deltas(latency_deltas, reverse=False),
+        "largest_wall_regressions": ranked_wall_deltas(latency_deltas, reverse=True),
+        "largest_wall_improvements": ranked_wall_deltas(latency_deltas, reverse=False),
         "largest_ocr_engine_total_regressions": ranked_ocr_engine_total_deltas(
             latency_deltas, reverse=True
         ),
@@ -1355,10 +1379,17 @@ def compare_stress_reports(
                 "min_total_elapsed_delta_s": round(min(total_deltas), 6),
             }
         )
+    scoped_compared_slugs = compared_slugs if candidate_scope_slugs is not None else None
+    wall_duration_delta = stress_wall_duration_delta(
+        baseline_report,
+        candidate_report,
+        slugs=scoped_compared_slugs,
+    )
+    if wall_duration_delta:
+        comparison["wall_duration_delta_s"] = wall_duration_delta
     prewarm_delta = stress_prewarm_delta(baseline_report, candidate_report)
     if prewarm_delta:
         comparison["prewarm_delta_s"] = prewarm_delta
-    scoped_compared_slugs = compared_slugs if candidate_scope_slugs is not None else None
     stage_duration_delta = stress_stage_duration_total_deltas(
         baseline_report,
         candidate_report,
@@ -1470,6 +1501,7 @@ def compare_stress_reports(
         )
     if (
         max_total_elapsed_regression_s is not None
+        or max_wall_regression_s is not None
         or max_repeat_p95_regression_s is not None
         or max_repeat_max_regression_s is not None
         or max_repeat_stage_p95_regression_s is not None
@@ -1486,6 +1518,7 @@ def compare_stress_reports(
         comparison["regression_budget"] = baseline_regression_budget(
             comparison,
             max_total_elapsed_regression_s=max_total_elapsed_regression_s,
+            max_wall_regression_s=max_wall_regression_s,
             max_repeat_p95_regression_s=max_repeat_p95_regression_s,
             max_repeat_max_regression_s=max_repeat_max_regression_s,
             max_repeat_stage_p95_regression_s=max_repeat_stage_p95_regression_s,
@@ -1522,6 +1555,7 @@ def baseline_regression_budget(
     comparison: dict[str, Any],
     *,
     max_total_elapsed_regression_s: float | None = None,
+    max_wall_regression_s: float | None = None,
     max_repeat_p95_regression_s: float | None = None,
     max_repeat_max_regression_s: float | None = None,
     max_repeat_stage_p95_regression_s: float | None = None,
@@ -1556,6 +1590,56 @@ def baseline_regression_budget(
                     "max_total_elapsed_regression_s": max_total,
                 }
                 for key in ("baseline_total_elapsed_s", "candidate_total_elapsed_s"):
+                    value = parse_nonnegative_float(delta.get(key))
+                    if value is not None:
+                        violation[key] = round(value, 6)
+                violations.append(violation)
+    if max_wall_regression_s is not None:
+        max_wall = round(float(max_wall_regression_s), 6)
+        budget["max_wall_regression_s"] = max_wall
+        wall_duration_delta = comparison.get("wall_duration_delta_s")
+        max_wall_delta = (
+            parse_signed_float(wall_duration_delta.get("max_s", {}).get("delta_s"))
+            if isinstance(wall_duration_delta, dict)
+            and isinstance(wall_duration_delta.get("max_s"), dict)
+            else None
+        )
+        if max_wall_delta is None:
+            violations.append(
+                {
+                    "kind": "wall_duration_delta_missing",
+                    "max_wall_regression_s": max_wall,
+                }
+            )
+        elif max_wall_delta > max_wall_regression_s:
+            max_delta = wall_duration_delta.get("max_s")
+            violation = {
+                "kind": "wall_duration_max_regression_exceeded",
+                "wall_delta_s": round(max_wall_delta, 6),
+                "max_wall_regression_s": max_wall,
+            }
+            if isinstance(max_delta, dict):
+                baseline_wall = parse_nonnegative_float(max_delta.get("baseline"))
+                candidate_wall = parse_nonnegative_float(max_delta.get("candidate"))
+                if baseline_wall is not None:
+                    violation["baseline_max_wall_s"] = round(baseline_wall, 6)
+                if candidate_wall is not None:
+                    violation["candidate_max_wall_s"] = round(candidate_wall, 6)
+            violations.append(violation)
+        if isinstance(latency_deltas, list):
+            for delta in latency_deltas:
+                if not isinstance(delta, dict):
+                    continue
+                wall_delta = parse_signed_float(delta.get("wall_delta_s"))
+                if wall_delta is None or wall_delta <= max_wall_regression_s:
+                    continue
+                violation = {
+                    "kind": "primary_wall_regression_exceeded",
+                    "slug": delta.get("slug"),
+                    "wall_delta_s": round(wall_delta, 6),
+                    "max_wall_regression_s": max_wall,
+                }
+                for key in ("baseline_wall_s", "candidate_wall_s"):
                     value = parse_nonnegative_float(delta.get(key))
                     if value is not None:
                         violation[key] = round(value, 6)
@@ -3481,6 +3565,12 @@ def stress_row_latency_delta(
         "candidate_total_elapsed_s": round(candidate_total, 6),
         "total_elapsed_delta_s": round(candidate_total - baseline_total, 6),
     }
+    baseline_wall = parse_nonnegative_float(baseline_row.get("wall_s"))
+    candidate_wall = parse_nonnegative_float(candidate_row.get("wall_s"))
+    if baseline_wall is not None and candidate_wall is not None:
+        delta["baseline_wall_s"] = round(baseline_wall, 6)
+        delta["candidate_wall_s"] = round(candidate_wall, 6)
+        delta["wall_delta_s"] = round(candidate_wall - baseline_wall, 6)
     stage_deltas = stress_row_stage_deltas(baseline_row, candidate_row)
     if stage_deltas:
         delta["stage_delta_s"] = stage_deltas
@@ -3746,6 +3836,27 @@ def ranked_latency_deltas(
     ranked.sort(
         key=lambda delta: (
             float(delta["total_elapsed_delta_s"]),
+            str(delta.get("slug") or ""),
+        ),
+        reverse=reverse,
+    )
+    return ranked[: max(0, limit)]
+
+
+def ranked_wall_deltas(
+    latency_deltas: list[dict[str, Any]],
+    *,
+    reverse: bool,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    ranked = [
+        delta
+        for delta in latency_deltas
+        if isinstance(delta.get("wall_delta_s"), (int, float))
+    ]
+    ranked.sort(
+        key=lambda delta: (
+            float(delta["wall_delta_s"]),
             str(delta.get("slug") or ""),
         ),
         reverse=reverse,
@@ -5111,6 +5222,49 @@ def summarize_wall_duration(rows: list[dict[str, Any]]) -> dict[str, float | int
         "p95_s": round(percentile_linear(durations, 95), 6),
         "max_s": round(max(durations), 6),
     }
+
+
+def stress_wall_duration_delta(
+    baseline_report: dict[str, Any],
+    candidate_report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
+) -> dict[str, dict[str, float]]:
+    baseline_summary = stress_report_wall_duration_summary(baseline_report, slugs=slugs)
+    candidate_summary = stress_report_wall_duration_summary(candidate_report, slugs=slugs)
+    if not isinstance(baseline_summary, dict) or not isinstance(candidate_summary, dict):
+        return {}
+    deltas: dict[str, dict[str, float]] = {}
+    for key in WALL_DURATION_DELTA_KEYS:
+        baseline_value = parse_nonnegative_float(baseline_summary.get(key))
+        candidate_value = parse_nonnegative_float(candidate_summary.get(key))
+        if baseline_value is None or candidate_value is None:
+            continue
+        deltas[key] = {
+            "baseline": round(baseline_value, 6),
+            "candidate": round(candidate_value, 6),
+            "delta_s": round(candidate_value - baseline_value, 6),
+        }
+    return deltas
+
+
+def stress_report_wall_duration_summary(
+    report: dict[str, Any],
+    *,
+    slugs: list[str] | None = None,
+) -> dict[str, float | int] | None:
+    if slugs is None:
+        summary = report.get("summary")
+        wall_duration = summary.get("wall_duration_s") if isinstance(summary, dict) else None
+        if isinstance(wall_duration, dict) and any(key in wall_duration for key in WALL_DURATION_DELTA_KEYS):
+            return wall_duration
+        rows = report.get("rows")
+        if not isinstance(rows, list):
+            return None
+        return summarize_wall_duration([row for row in rows if isinstance(row, dict)])
+    rows_by_slug = stress_report_rows_by_slug(report)
+    rows = [rows_by_slug[slug] for slug in slugs if slug in rows_by_slug]
+    return summarize_wall_duration(rows)
 
 
 def summarize_ocr_overlap_hidden(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -7527,6 +7681,9 @@ def print_stress_table(report: dict[str, Any]) -> None:
         primary_delta_text = baseline_primary_delta_text(baseline_comparison)
         if primary_delta_text:
             print(f"baseline primary delta: {primary_delta_text}")
+        wall_delta_text = baseline_wall_delta_text(baseline_comparison)
+        if wall_delta_text:
+            print(f"baseline wall delta: {wall_delta_text}")
         primary_stage_delta_text = baseline_primary_stage_delta_text(baseline_comparison)
         if primary_stage_delta_text:
             print(f"baseline primary stage delta: {primary_stage_delta_text}")
@@ -8911,6 +9068,32 @@ def baseline_primary_delta_text(baseline_comparison: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def baseline_wall_delta_text(baseline_comparison: dict[str, Any]) -> str:
+    parts: list[str] = []
+    wall_duration = baseline_comparison.get("wall_duration_delta_s")
+    if isinstance(wall_duration, dict):
+        for key, label in (("max_s", "max"), ("p95_s", "p95"), ("average_s", "avg")):
+            metric = wall_duration.get(key)
+            value = (
+                parse_signed_float(metric.get("delta_s"))
+                if isinstance(metric, dict)
+                else None
+            )
+            if value is not None:
+                parts.append(f"{label}={value:+.3f}s")
+    worst = baseline_wall_delta_item_text(
+        baseline_comparison.get("largest_wall_regressions")
+    )
+    if worst:
+        parts.append(f"worst={worst}")
+    best = baseline_wall_delta_item_text(
+        baseline_comparison.get("largest_wall_improvements")
+    )
+    if best:
+        parts.append(f"best={best}")
+    return ", ".join(parts)
+
+
 def baseline_primary_stage_delta_text(baseline_comparison: dict[str, Any]) -> str:
     stage_duration = baseline_comparison.get("stage_duration_delta_s")
     if not isinstance(stage_duration, dict):
@@ -8998,6 +9181,26 @@ def baseline_primary_delta_item_text(items: Any) -> str:
         return ""
     ocr_delta_text = baseline_primary_ocr_stage_delta_text(item)
     return f"{slug} {delta:+.3f}s{ocr_delta_text}"
+
+
+def baseline_wall_delta_item_text(items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        return ""
+    item = items[0]
+    if not isinstance(item, dict):
+        return ""
+    slug = item.get("slug")
+    delta = parse_signed_float(item.get("wall_delta_s"))
+    if not isinstance(slug, str) or not slug or delta is None:
+        return ""
+    baseline_wall = parse_nonnegative_float(item.get("baseline_wall_s"))
+    candidate_wall = parse_nonnegative_float(item.get("candidate_wall_s"))
+    wall_text = (
+        f" ({baseline_wall:.3f}->{candidate_wall:.3f}s)"
+        if baseline_wall is not None and candidate_wall is not None
+        else ""
+    )
+    return f"{slug} {delta:+.3f}s{wall_text}"
 
 
 def baseline_primary_ocr_delta_item_text(items: Any) -> str:
@@ -9140,6 +9343,9 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
     max_total = parse_nonnegative_float(regression_budget.get("max_total_elapsed_regression_s"))
     if max_total is not None:
         limits.append(f"primary<={max_total:.3f}s")
+    max_wall = parse_nonnegative_float(regression_budget.get("max_wall_regression_s"))
+    if max_wall is not None:
+        limits.append(f"wall<={max_wall:.3f}s")
     max_ocr_total = parse_nonnegative_float(regression_budget.get("max_ocr_engine_total_regression_s"))
     if max_ocr_total is not None:
         limits.append(f"primary_ocr<={max_ocr_total:.3f}s")
@@ -9241,6 +9447,9 @@ def baseline_regression_budget_violation_count_text(violations: list[Any]) -> st
 def baseline_regression_budget_violation_kind_label(kind: str) -> str:
     labels = {
         "primary_total_regression_exceeded": "primary",
+        "wall_duration_delta_missing": "wall_missing",
+        "wall_duration_max_regression_exceeded": "wall_max",
+        "primary_wall_regression_exceeded": "wall_row",
         "primary_ocr_total_regression_exceeded": "primary_ocr",
         "primary_ocr_stage_regression_exceeded": "primary_ocr_stage",
         "primary_ocr_total_delta_missing": "primary_ocr_missing",
@@ -9319,6 +9528,23 @@ def baseline_regression_budget_violation_text(violation: Any) -> str:
         if not isinstance(slug, str) or delta is None or budget is None:
             return ""
         return f"primary {slug} {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "wall_duration_delta_missing":
+        budget = parse_nonnegative_float(violation.get("max_wall_regression_s"))
+        budget_text = f" budget {budget:.3f}s" if budget is not None else ""
+        return f"wall duration delta missing{budget_text}"
+    if kind == "wall_duration_max_regression_exceeded":
+        delta = parse_signed_float(violation.get("wall_delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_wall_regression_s"))
+        if delta is None or budget is None:
+            return ""
+        return f"wall max {delta:+.3f}s > budget {budget:.3f}s"
+    if kind == "primary_wall_regression_exceeded":
+        slug = violation.get("slug")
+        delta = parse_signed_float(violation.get("wall_delta_s"))
+        budget = parse_nonnegative_float(violation.get("max_wall_regression_s"))
+        if not isinstance(slug, str) or delta is None or budget is None:
+            return ""
+        return f"wall {slug} {delta:+.3f}s > budget {budget:.3f}s"
     if kind == "primary_ocr_total_regression_exceeded":
         slug = violation.get("slug")
         delta = parse_signed_float(violation.get("ocr_engine_total_delta_s"))

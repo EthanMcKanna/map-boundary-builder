@@ -18578,3 +18578,21 @@ with zero failures in 0.531s.
   tests passed `2 passed`; full stress benchmark tests passed `155 passed`;
   compileall, `git diff --check`, and the real full-manifest wall-summary gate
   passed.
+- Added wall-clock baseline regression comparison so saved subprocess reports
+  can now fail relative wall slowdowns, not just absolute wall budgets.
+  `--max-baseline-wall-regression-s` records row-level `wall_delta_s`,
+  aggregate `wall_duration_delta_s`, largest wall regressions/improvements,
+  and a fail-closed baseline budget when wall telemetry is missing. The
+  real-screenshot gate also supplies the existing `0.250s` baseline tolerance
+  for wall deltas when a baseline report is compared. A full blocked-network
+  subprocess replay at
+  `out/block-network-wall-baseline-compare-full73-20260604` compared all
+  `73/73` rows against
+  `out/block-network-cold-subprocess-wall-summary-full73-20260604`, passed
+  `total<=1.000s`, `wall<=1.000s`, and `wall_delta<=1.000s`, and recorded wall
+  samples `73`, median wall `0.420010s`, average wall `0.376663s`, p95 wall
+  `0.610736s`, max wall `0.634253s`, aggregate max wall delta `-0.010841s`,
+  p95 wall delta `+0.013213s`, and worst row wall delta `+0.044244s` on
+  `grand-rapids-may-mobility`. Targeted wall-baseline tests passed
+  `5 passed`; full stress benchmark tests passed `157 passed`; compileall,
+  `git diff --check`, and the real full-manifest wall-baseline gate passed.

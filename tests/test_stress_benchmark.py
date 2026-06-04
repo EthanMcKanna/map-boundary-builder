@@ -1288,6 +1288,143 @@ def test_compare_stress_reports_records_signature_and_latency_delta() -> None:
     assert regression_budget["violations"][9]["candidate_ocr_engine_total_p95_duration_s"] == 0.36
 
 
+def test_compare_stress_reports_records_wall_delta_and_budget_from_rows() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.2,
+                "wall_s": 0.3,
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.5,
+                "wall_s": 0.5,
+            },
+        ]
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "dallas",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.21,
+                "wall_s": 0.29,
+            },
+            {
+                "slug": "houston",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.51,
+                "wall_s": 0.56,
+            },
+        ]
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_wall_regression_s=0.04,
+    )
+
+    assert comparison["latency_deltas"][0]["baseline_wall_s"] == 0.3
+    assert comparison["latency_deltas"][0]["candidate_wall_s"] == 0.29
+    assert comparison["latency_deltas"][0]["wall_delta_s"] == -0.01
+    assert comparison["wall_duration_delta_s"]["max_s"] == {
+        "baseline": 0.5,
+        "candidate": 0.56,
+        "delta_s": 0.06,
+    }
+    assert comparison["wall_duration_delta_s"]["average_s"]["delta_s"] == 0.025
+    assert comparison["largest_wall_regressions"][0]["slug"] == "houston"
+    assert comparison["largest_wall_improvements"][0]["slug"] == "dallas"
+    assert (
+        stress_module.baseline_wall_delta_text(comparison)
+        == "max=+0.060s, p95=+0.057s, avg=+0.025s, "
+        "worst=houston +0.060s (0.500->0.560s), best=dallas -0.010s (0.300->0.290s)"
+    )
+    assert comparison["regression_budget"] == {
+        "violations": [
+            {
+                "kind": "wall_duration_max_regression_exceeded",
+                "wall_delta_s": 0.06,
+                "max_wall_regression_s": 0.04,
+                "baseline_max_wall_s": 0.5,
+                "candidate_max_wall_s": 0.56,
+            },
+            {
+                "kind": "primary_wall_regression_exceeded",
+                "slug": "houston",
+                "wall_delta_s": 0.06,
+                "max_wall_regression_s": 0.04,
+                "baseline_wall_s": 0.5,
+                "candidate_wall_s": 0.56,
+            },
+        ],
+        "max_wall_regression_s": 0.04,
+        "passed": False,
+    }
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: failed wall<=0.040s violations=2 "
+        "by_kind=wall_max:1,wall_row:1"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "wall max +0.060s > budget 0.040s"
+    )
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][1]
+        )
+        == "wall houston +0.060s > budget 0.040s"
+    )
+
+
+def test_baseline_wall_regression_budget_fails_closed_when_wall_delta_missing() -> None:
+    comparison = stress_module.compare_stress_reports(
+        {
+            "rows": [
+                {
+                    "slug": "dallas",
+                    "observed_status": "complete",
+                    "total_elapsed_s": 0.2,
+                }
+            ]
+        },
+        {
+            "rows": [
+                {
+                    "slug": "dallas",
+                    "observed_status": "complete",
+                    "total_elapsed_s": 0.21,
+                }
+            ]
+        },
+        max_wall_regression_s=0.04,
+    )
+
+    assert comparison["regression_budget"] == {
+        "violations": [
+            {
+                "kind": "wall_duration_delta_missing",
+                "max_wall_regression_s": 0.04,
+            }
+        ],
+        "max_wall_regression_s": 0.04,
+        "passed": False,
+    }
+    assert (
+        stress_module.baseline_regression_budget_violation_text(
+            comparison["regression_budget"]["violations"][0]
+        )
+        == "wall duration delta missing budget 0.040s"
+    )
+
+
 def test_baseline_ocr_regression_budget_skips_rows_with_zero_ocr_calls() -> None:
     baseline = {
         "rows": [
@@ -7050,6 +7187,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
         assert out_dir == tmp_path / "out"
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.05
+        assert kwargs["max_baseline_wall_regression_s"] == 0.035
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.02
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.025
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.015
@@ -7079,6 +7217,7 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
                 "regression_budget": {
                     "passed": False,
                     "max_total_elapsed_regression_s": 0.05,
+                    "max_wall_regression_s": 0.035,
                     "max_repeat_p95_regression_s": 0.02,
                     "max_repeat_max_regression_s": 0.025,
                     "max_repeat_stage_p95_regression_s": 0.015,
@@ -7115,6 +7254,8 @@ def test_main_fails_when_baseline_regression_budget_is_exceeded(tmp_path, monkey
             "baseline.json",
             "--max-baseline-total-regression-s",
             "0.05",
+            "--max-baseline-wall-regression-s",
+            "0.035",
             "--max-baseline-repeat-p95-regression-s",
             "0.02",
             "--max-baseline-repeat-max-regression-s",
@@ -7678,6 +7819,7 @@ def test_real_screenshot_gate_baseline_comparison_fails_regression_budget_by_def
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.25
+        assert kwargs["max_baseline_wall_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
@@ -7924,6 +8066,7 @@ def test_real_screenshot_gate_baseline_comparison_passes_when_config_matches(
     def fake_run_stress_benchmark(manifest_path, out_dir, **kwargs):
         assert kwargs["compare_baseline_report"] == Path("baseline.json")
         assert kwargs["max_baseline_total_regression_s"] == 0.25
+        assert kwargs["max_baseline_wall_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_p95_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_max_regression_s"] == 0.25
         assert kwargs["max_baseline_repeat_stage_p95_regression_s"] == 0.25
