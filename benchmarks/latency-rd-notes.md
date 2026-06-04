@@ -18676,3 +18676,21 @@ with zero failures in 0.531s.
   `tesla-austin-route-receipt-long` p95 `0.289262s`. This supports treating the
   rejected full same-code comparison as full-suite OCR scheduling/noise rather
   than a deterministic fixture slowdown; no generation defaults changed.
+- Rejected explicit ONNX Runtime thread limiting for the current RapidOCR tail
+  workload. A fresh default control at
+  `out/block-network-tail-repeat-profile-default-thread-control-20260604`
+  passed the same four-case blocked-network profile with primary max wall
+  `0.510861s`, repeat wall p95/max `0.351938s` / `0.379314s`, and repeat OCR
+  engine total p95/max `0.315882s` / `0.342940s`. A process-local
+  `intra_op_num_threads=1` / `inter_op_num_threads=1` prototype at
+  `out/block-network-tail-repeat-profile-onnx-intra1-inter1-20260604` failed
+  the `1.000s` budget: `los-angeles-waymo-service-area` primary wall reached
+  `1.128265s`, `tesla-austin-route-receipt-long` had two repeat wall samples
+  above budget, and repeat wall p95/max rose to `1.006753s` / `1.007683s`.
+  `intra=2, inter=1` passed at
+  `out/block-network-tail-repeat-profile-onnx-intra2-inter1-20260604`, but
+  repeat wall p95/max worsened to `0.570016s` / `0.573885s`; inter-op-only
+  pinning at `out/block-network-tail-repeat-profile-onnx-inter1-20260604` also
+  passed but trailed default with repeat wall p95/max `0.374691s` / `0.398299s`.
+  Keep RapidOCR's auto ONNX thread counts and the existing arena/spinning
+  defaults; no runtime thread-control patch was adopted.
