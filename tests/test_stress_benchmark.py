@@ -2821,6 +2821,15 @@ def test_compare_stress_reports_records_configuration_changes() -> None:
 
     comparison = stress_module.compare_stress_reports(baseline, candidate)
 
+    assert comparison["configuration_change_count"] == 6
+    assert comparison["configuration_changed_section_counts"] == {
+        "extraction_cache": 1,
+        "generation_env": 1,
+        "ocr": 1,
+        "preset": 1,
+        "repeat_profile_warmups": 1,
+        "runner_ocr_cache": 1,
+    }
     assert comparison["configuration_changes"] == [
         {"field": "runner_ocr_cache", "baseline": True, "candidate": False},
         {"field": "extraction_cache", "baseline": True, "candidate": False},

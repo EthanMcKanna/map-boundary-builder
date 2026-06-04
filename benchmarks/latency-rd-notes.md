@@ -18517,3 +18517,13 @@ with zero failures in 0.531s.
   benchmark reliability; no generation defaults changed. Targeted formatter
   tests passed `5 passed`; full stress benchmark tests passed `153 passed`;
   compileall and `git diff --check` passed.
+- Added JSON-level config-drift counts to `baseline_comparison` so saved
+  reports carry the same audit signal without parsing console text. Comparisons
+  now store `configuration_change_count` plus
+  `configuration_changed_section_counts` keyed by top-level field or nested
+  runtime section. Replaying the rejected area-floor probe now records count
+  `6` and sections `{"generation_env":1,"ocr":4,"preset":1}` while preserving
+  the compact console text above. This is benchmark evidence reliability only;
+  no generation defaults changed. Targeted config tests passed `5 passed`;
+  full stress benchmark tests passed `153 passed`; compileall and
+  `git diff --check` passed.

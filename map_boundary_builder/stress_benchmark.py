@@ -1283,15 +1283,20 @@ def compare_stress_reports(
         for delta in latency_deltas
         if isinstance(delta.get("total_elapsed_delta_s"), (int, float))
     ]
+    configuration_changes = stress_report_configuration_changes(
+        baseline_report,
+        candidate_report,
+    )
     comparison: dict[str, Any] = {
         "baseline_report": str(baseline_report_path) if baseline_report_path is not None else None,
         "compared_rows": len(compared_slugs),
         "missing_in_baseline": missing_in_baseline,
         "missing_in_candidate": missing_in_candidate,
-        "configuration_changes": stress_report_configuration_changes(
-            baseline_report,
-            candidate_report,
+        "configuration_change_count": len(configuration_changes),
+        "configuration_changed_section_counts": stress_configuration_change_section_counts(
+            configuration_changes
         ),
+        "configuration_changes": configuration_changes,
         "expectation_compared_rows": expectation_compared_rows,
         "baseline_expectation_passed_rows": baseline_expectation_passed_rows,
         "candidate_expectation_passed_rows": candidate_expectation_passed_rows,
@@ -3087,6 +3092,20 @@ def stress_report_configuration_changes(
             }
         )
     return changes
+
+
+def stress_configuration_change_section_counts(changes: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for change in changes:
+        field = change.get("field")
+        if not isinstance(field, str) or not field:
+            continue
+        counts[stress_configuration_change_section(field)] += 1
+    return {section: counts[section] for section in sorted(counts)}
+
+
+def stress_configuration_change_section(field: str) -> str:
+    return field.split(".", 1)[0]
 
 
 def stress_report_runtime_config_changes(
@@ -8623,7 +8642,7 @@ def config_change_section_counts_text(parts: list[str]) -> str:
     counts: Counter[str] = Counter()
     for part in parts:
         field = part.split("=", 1)[0]
-        section = field.split(".", 1)[0]
+        section = stress_configuration_change_section(field)
         if not section:
             continue
         counts[section] += 1
