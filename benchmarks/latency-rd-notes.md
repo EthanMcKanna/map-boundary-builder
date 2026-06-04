@@ -18539,3 +18539,16 @@ with zero failures in 0.531s.
   that the bundled geocoder/place/road/catalog seeds cover the current full
   stress surface under no-network production-warm conditions; no runtime
   default changed.
+- Proved the same accepted stress surface is still subsecond without the
+  production prewarm path or in-process runner. The full subprocess pass at
+  `out/block-network-cold-subprocess-full73-20260604` used
+  `MAP_BOUNDARY_BLOCK_NETWORK=1`, an isolated `MAP_BOUNDARY_CACHE_DIR`,
+  disabled OCR/extraction caches, and no prewarm. It passed `73/73` expected
+  with statuses `{"complete":62,"failed":11}`, latency budget
+  `total<=1.000s`, max internal generation `0.489455s`, max subprocess wall
+  `0.644578s`, and average subprocess wall `0.370888s`. The slowest internal
+  row was `los-angeles-waymo-service-area`; stage maxima were extract
+  `0.173s` on `san-antonio-waymo`, OCR `0.332s` on `bay-3-svg`, and
+  georeference `0.134s` on `nashville-waymo`. This confirms the current
+  CLI-shaped first-run path is also subsecond for the full manifest under
+  blocked-network, no-cache conditions; no runtime default changed.
