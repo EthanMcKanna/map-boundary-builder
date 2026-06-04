@@ -3815,6 +3815,60 @@ def test_post_georeference_catalog_completion_accepts_exact_overgrown_alias(monk
     assert match.confidence == pytest.approx(0.946)
 
 
+def test_post_georeference_catalog_completion_rejects_broader_alias_when_specific_hint_is_higher(
+    monkeypatch,
+) -> None:
+    extraction = ExtractionResult(
+        mask=np.ones((20, 20), dtype=bool),
+        style="dark-teal",
+        pixel_geometry=Polygon([(0, 0), (20, 0), (20, 20), (0, 20)]),
+        coverage_ratio=1.0,
+        contour_count=1,
+        confidence=0.95,
+    )
+    san_francisco = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="San Francisco",
+        slug="san-francisco-zoox",
+        catalog_source="verified-screenshot-ocr-output",
+        geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (10, 0), (10, 10), (0, 10)]),
+        max_confidence=0.946,
+        use_exact_geometry=True,
+    )
+    bay_area = SimpleNamespace(
+        is_active=True,
+        provider="zoox",
+        area="Bay Area",
+        slug="bay-area-zoox",
+        catalog_source="current-external-service-area-reference",
+        geometry=Polygon([(0, 0), (20, 0), (20, 10), (0, 10)]),
+        mercator_geometry=Polygon([(0, 0), (20, 0), (20, 10), (0, 10)]),
+        max_confidence=0.99,
+        use_exact_geometry=True,
+    )
+    overgrown_output = Polygon([(0, 0), (14, 0), (14, 10), (0, 10)])
+
+    monkeypatch.setattr(runner, "load_catalog_entries", lambda: [san_francisco, bay_area])
+    monkeypatch.setattr(runner, "lonlat_to_mercator", lambda lon, lat: (lon, lat))
+
+    assert runner.catalog_area_strictly_matches_text("San Francisco", "San Francisco")
+    assert not runner.catalog_area_strictly_matches_text("Bay Area", "San Francisco")
+    assert (
+        runner.post_georeference_catalog_completion_match(
+            extraction,
+            [OcrLabel("Japantown", 10, 10, 80, 20, 96.0)],
+            overgrown_output,
+            city_input="San Francisco",
+            inferred_city="San Francisco",
+            filename_hint="upload.jpg",
+            georef_confidence=0.955,
+        )
+        is None
+    )
+
+
 def test_post_georeference_catalog_completion_rejects_ambiguous_alias_margin(monkeypatch) -> None:
     extraction = ExtractionResult(
         mask=np.ones((20, 20), dtype=bool),

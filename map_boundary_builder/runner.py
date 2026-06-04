@@ -4435,6 +4435,13 @@ def post_georeference_catalog_completion_match(
         and highest_iou - best_iou >= POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN
     ):
         return None
+    if (
+        highest_entry is not entry
+        and highest_iou > best_iou
+        and post_georeference_specific_hint_candidate(highest_entry, hint_texts)
+        and not post_georeference_specific_hint_candidate(entry, hint_texts)
+    ):
+        return None
     runner_up_iou = scored_candidates[1][0] if len(scored_candidates) > 1 else 0.0
     if len(scored_candidates) > 1 and best_iou - runner_up_iou < POST_GEOREF_CATALOG_COMPLETION_MIN_IOU_MARGIN:
         return None
@@ -4455,6 +4462,26 @@ def post_georeference_catalog_completion_match(
         rotation_degrees=0.0,
         confidence_override=confidence_override,
     )
+
+
+def post_georeference_specific_hint_candidate(entry, hint_texts: list[str]) -> bool:
+    if not getattr(entry, "use_exact_geometry", False):
+        return False
+    return any(
+        catalog_area_strictly_matches_text(getattr(entry, "area", ""), text)
+        for text in hint_texts
+    )
+
+
+def catalog_area_strictly_matches_text(area: str, text: str) -> bool:
+    area_tokens = normalize_catalog_area_tokens(area)
+    text_tokens = normalize_catalog_area_tokens(text)
+    if not area_tokens or not text_tokens:
+        return False
+    text_token_set = set(text_tokens)
+    if area_tokens == ("san", "francisco") and "sf" in text_token_set:
+        return True
+    return set(area_tokens) <= text_token_set
 
 
 def current_catalog_label_shape_match(extraction, labels: list[Any]) -> ServiceAreaCatalogMatch | None:

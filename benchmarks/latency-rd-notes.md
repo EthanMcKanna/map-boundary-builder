@@ -19137,3 +19137,39 @@ with zero failures in 0.531s.
   `out/exact-postgeo-relax-full73-hard-20260604` passed `73/73` expected with
   statuses `{"complete":62,"failed":11}`, primary max wall `0.380100s`,
   repeat p95/max wall `0.288s` / `0.320s`, and no repeat signature drift.
+- Added a strict specific-hint veto for post-georef catalog completion after a
+  q70 transformed Zoox SF JPEG exposed a broader-alias footgun. Before the
+  guard, the weak q70 image with explicit city input `San Francisco` could
+  snap to `bay-area-zoox` via `catalog-shape-match:georef-contained`, with
+  confidence `0.84`, catalog IoU `0.630983`, output-coverage margin
+  `0.974499`, area ratio `0.658366`, and bbox
+  `[-122.4445213,37.7471075,-122.3829064,37.8110961]`. The pre-catalog OCR
+  georef output showed the exact `san-francisco-zoox` candidate had higher IoU
+  (`0.643275`) but failed the strict exact-geometry coverage thresholds, while
+  the broader Bay Area candidate had lower IoU (`0.630983`) and only passed
+  the loose visible-subset thresholds; the `0.012292` IoU gap was below the
+  existing `0.08` ambiguous-alias margin. The new guard rejects that lower
+  passing alias when a higher-IoU exact candidate strictly matches an explicit
+  or inferred area hint and the passing alias does not. A focused regression
+  freezes this shape, and the full test suite passed with `760 passed in
+  5.63s`.
+  The live q70 probe now keeps `city_input="San Francisco"` on
+  `ocr-georeference:nominatim-label-fit` with no catalog slug, confidence
+  `0.949`, and bbox
+  `[-122.4377198,37.7515843,-122.3886694,37.8053505]`; q70 with no city input
+  and q70 with `Zoox San Francisco` still fail instead of snapping. The strict
+  q90 transformed gate at
+  `out/robustness-catalog-default-jpeg-q90-original-size-20260604/specific-hint-veto-guard-run`
+  passed `5/5` with the Zoox row still zero-OCR `catalog-shape-match`, primary
+  max wall `0.059235s`, and repeat max wall `0.057s`. The q85 transformed gate
+  at
+  `out/robustness-catalog-default-jpeg-q85-1600-20260604/specific-hint-veto-guard-run`
+  preserved the exact `catalog-shape-match:georef-contained` San Francisco
+  completion with primary max wall `0.437708s` and repeat max wall `0.321s`.
+  The q70 transformed gate at
+  `out/robustness-catalog-default-jpeg-q70-1200-20260604/specific-hint-veto-guard-run`
+  stayed rejected rather than snapping, with primary max wall `0.238958s` and
+  repeat max wall `0.174s`. The full hard gate at
+  `out/specific-hint-veto-full73-hard-20260604` passed `73/73` expected with
+  statuses `{"complete":62,"failed":11}`, primary max wall `0.394290s`,
+  repeat p95/max wall `0.281s` / `0.303s`, and no repeat signature drift.
