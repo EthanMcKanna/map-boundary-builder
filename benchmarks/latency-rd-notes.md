@@ -18628,3 +18628,18 @@ with zero failures in 0.531s.
   Targeted repeat-wall baseline tests passed `5 passed`; full stress benchmark
   tests passed `159 passed`; compileall, `git diff --check`, and the focused
   blocked-network repeat-wall baseline replay passed.
+- Replayed the same focused blocked-network slice through the actual
+  `--focused-real-screenshot-gate` preset after the repeat-wall baseline
+  budgets were added to the hard-gate defaults. Using the saved baseline's
+  matching `MAP_BOUNDARY_CACHE_DIR`, the run at
+  `out/block-network-repeat-wall-default-budget-focused-20260604` compared
+  `dallas-waymo`, `bay-3-svg`, and `nashville-waymo` against
+  `out/block-network-repeat-wall-summary-focused-20260604/stress-summary.json`
+  with no config drift, no signature changes, and no coverage gaps. It passed
+  `3/3` primary cases and `6/6` analyzed repeat samples; primary max wall was
+  `0.350779s`, repeat p95 wall was `0.310s`, and repeat max wall was `0.316s`.
+  The default baseline regression budget passed with
+  `repeat_wall_p95<=0.250s` and `repeat_wall_max<=0.250s`; measured repeat
+  wall deltas were p95 `+0.021s`, max `+0.026s`, and worst per-case repeat
+  wall p95 `+0.025s` on `bay-3-svg`. This validates the default hard-gate
+  repeat wall guardrails on real fixtures without changing generation behavior.
