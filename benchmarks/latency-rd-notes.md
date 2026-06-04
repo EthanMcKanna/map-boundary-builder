@@ -18771,3 +18771,24 @@ with zero failures in 0.531s.
   is repeat-stable and subsecond, while the previously tested arena, spinning,
   thread-limit, min-area, and rec-batch changes either failed broader gates or
   did not improve wall-clock reliability.
+- Added an explicit wall-only telemetry escape hatch for production-shaped
+  no-profile timing probes: `--skip-ocr-engine-profile-expectations` skips only
+  fixture expectations that depend on `ocr_engine_profile` counters, leaving
+  status/source/label/geometry/latency checks intact and leaving the
+  `--real-screenshot-hard-gate` / `--focused-real-screenshot-gate` presets
+  unchanged. This matters because disabling OCR profiling is closer to
+  production timing, but the current stress manifest intentionally has OCR
+  engine count contracts that cannot pass without profile data. The focused
+  no-profile Waymo-tail probe at
+  `out/block-network-waymo-tail-nonprofile-repeat-stability-20260604` used the
+  same blocked-network cache dir, disabled OCR/extraction caches, ran `8`
+  repeats with `2` warmups per case, and passed `5/5` primary expectations plus
+  `30/30` analyzed repeat samples under `wall<=1.000s`. Primary max wall was
+  `0.559054s`; repeat wall p95/max were `0.342331s` / `0.347192s`; all repeat
+  signatures were stable. The matching default profiled focused-gate smoke at
+  `out/block-network-waymo-tail-profile-smoke-after-skip-20260604` passed `5/5`
+  primary rows and `5/5` analyzed repeat samples with manifest OCR contracts and
+  profile budgets still active, primary max wall `0.397129s`, repeat wall
+  p95/max `0.331944s` / `0.333365s`, and repeat OCR engine total p95/max
+  `0.282853s` / `0.285835s`. Full stress-benchmark tests passed `160 passed`,
+  proving the new flag does not weaken default hard-gate/profile validation.

@@ -4729,6 +4729,38 @@ def test_check_expectations_rejects_excess_ocr_engine_calls() -> None:
     assert issues == ["ocr_engine_profile.calls 1 above 0"]
 
 
+def test_check_expectations_can_skip_ocr_engine_profile_expectations() -> None:
+    row = {
+        "observed_status": "complete",
+        "source": "ocr-georeference:nominatim-label-fit",
+        "ocr_label_count": 40,
+        "ocr_top_labels": ["Brentwood", "Mid-Wilshire"],
+    }
+    expect = {
+        "status": "complete",
+        "source_prefix": "ocr-georeference:",
+        "min_ocr_labels": 10,
+        "ocr_top_labels_contain": ["Brentwood"],
+        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_counts": {
+            "selected_box_count": 30,
+        },
+    }
+
+    assert stress_module.check_expectations(row, expect) == [
+        "ocr_engine_profile.calls None above 1",
+        "ocr_engine_profile.selected_box_count missing above 30",
+    ]
+
+    issues = stress_module.check_expectations(
+        row,
+        expect,
+        skip_ocr_engine_profile_expectations=True,
+    )
+
+    assert issues == []
+
+
 def test_check_expectations_accepts_ocr_engine_count_budgets() -> None:
     issues = stress_module.check_expectations(
         {

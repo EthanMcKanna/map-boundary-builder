@@ -395,6 +395,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ask the CLI to include RapidOCR detector/recognizer timing details.",
     )
     parser.add_argument(
+        "--skip-ocr-engine-profile-expectations",
+        action="store_true",
+        help=(
+            "Skip fixture expectation checks that require OCR engine profile metrics. "
+            "Use only for production-shaped wall-clock telemetry with profiling disabled."
+        ),
+    )
+    parser.add_argument(
         "--disable-ocr-cache",
         action="store_true",
         help="Disable the runner OCR cache so repeat profiles keep paying fresh OCR cost.",
@@ -774,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         write_debug=args.write_debug,
         profile_ocr_engine=args.profile_ocr_engine,
+        skip_ocr_engine_profile_expectations=args.skip_ocr_engine_profile_expectations,
         runner_ocr_cache=not args.disable_ocr_cache,
         extraction_cache=not args.disable_extraction_cache,
         execution=args.execution,
@@ -1014,6 +1023,7 @@ def run_stress_benchmark(
     timeout_seconds: float = 30.0,
     write_debug: bool = False,
     profile_ocr_engine: bool = False,
+    skip_ocr_engine_profile_expectations: bool = False,
     runner_ocr_cache: bool = True,
     extraction_cache: bool = True,
     execution: str = "subprocess",
@@ -1161,20 +1171,18 @@ def run_stress_benchmark(
         else None
     )
 
-    rows = [
-        run_stress_case(
-            case,
-            out_dir,
-            timeout_seconds=timeout_seconds,
-            write_debug=write_debug,
-            profile_ocr_engine=profile_ocr_engine,
-            runner_ocr_cache=runner_ocr_cache,
-            extraction_cache=extraction_cache,
-            execution=execution,
-            python_executable=python_executable,
-        )
-        for case in cases
-    ]
+    stress_case_kwargs: dict[str, Any] = {
+        "timeout_seconds": timeout_seconds,
+        "write_debug": write_debug,
+        "profile_ocr_engine": profile_ocr_engine,
+        "runner_ocr_cache": runner_ocr_cache,
+        "extraction_cache": extraction_cache,
+        "execution": execution,
+        "python_executable": python_executable,
+    }
+    if skip_ocr_engine_profile_expectations:
+        stress_case_kwargs["skip_ocr_engine_profile_expectations"] = True
+    rows = [run_stress_case(case, out_dir, **stress_case_kwargs) for case in cases]
     repeat_profile = (
         build_repeat_profile(
             cases,
@@ -1184,6 +1192,7 @@ def run_stress_benchmark(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            skip_ocr_engine_profile_expectations=skip_ocr_engine_profile_expectations,
             runner_ocr_cache=runner_ocr_cache,
             extraction_cache=extraction_cache,
             execution=execution,
@@ -1201,6 +1210,7 @@ def run_stress_benchmark(
         "manifest": str(manifest_path),
         "out_dir": str(out_dir),
         "profile_ocr_engine": profile_ocr_engine,
+        "skip_ocr_engine_profile_expectations": skip_ocr_engine_profile_expectations,
         "runner_ocr_cache": runner_ocr_cache,
         "extraction_cache": extraction_cache,
         "execution": execution,
@@ -4333,6 +4343,7 @@ def run_stress_case(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool = False,
+    skip_ocr_engine_profile_expectations: bool = False,
     runner_ocr_cache: bool = True,
     extraction_cache: bool = True,
     execution: str = "subprocess",
@@ -4358,6 +4369,7 @@ def run_stress_case(
             timeout_seconds=timeout_seconds,
             write_debug=write_debug,
             profile_ocr_engine=profile_ocr_engine,
+            skip_ocr_engine_profile_expectations=skip_ocr_engine_profile_expectations,
             runner_ocr_cache=runner_ocr_cache,
             extraction_cache=extraction_cache,
         )
@@ -4402,7 +4414,11 @@ def run_stress_case(
                 "command": command,
             }
         )
-        row["expectation_issues"] = check_expectations(row, expect)
+        row["expectation_issues"] = check_expectations(
+            row,
+            expect,
+            skip_ocr_engine_profile_expectations=skip_ocr_engine_profile_expectations,
+        )
         row["expectation_passed"] = not row["expectation_issues"]
         return row
 
@@ -4420,7 +4436,11 @@ def run_stress_case(
     row["runner_ocr_cache"] = runner_ocr_cache
     row["extraction_cache"] = extraction_cache
     attach_geojson_geometry_summary(row, output_path)
-    row["expectation_issues"] = check_expectations(row, expect)
+    row["expectation_issues"] = check_expectations(
+        row,
+        expect,
+        skip_ocr_engine_profile_expectations=skip_ocr_engine_profile_expectations,
+    )
     row["expectation_passed"] = not row["expectation_issues"]
     return row
 
@@ -4434,6 +4454,7 @@ def run_stress_case_in_process(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool,
+    skip_ocr_engine_profile_expectations: bool = False,
     runner_ocr_cache: bool,
     extraction_cache: bool,
 ) -> dict[str, Any]:
@@ -4528,7 +4549,11 @@ def run_stress_case_in_process(
     row["runner_ocr_cache"] = runner_ocr_cache
     row["extraction_cache"] = extraction_cache
     attach_geojson_geometry_summary(row, output_path)
-    row["expectation_issues"] = check_expectations(row, expect)
+    row["expectation_issues"] = check_expectations(
+        row,
+        expect,
+        skip_ocr_engine_profile_expectations=skip_ocr_engine_profile_expectations,
+    )
     row["expectation_passed"] = not row["expectation_issues"]
     return row
 
@@ -5099,7 +5124,12 @@ def observed_status_from_process(returncode: int, summary: dict[str, Any]) -> st
     return "failed"
 
 
-def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]:
+def check_expectations(
+    row: dict[str, Any],
+    expect: dict[str, Any],
+    *,
+    skip_ocr_engine_profile_expectations: bool = False,
+) -> list[str]:
     issues: list[str] = []
     expected_status = str(expect.get("status", "complete"))
     if row.get("observed_status") != expected_status:
@@ -5117,8 +5147,9 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
         append_non_map_ui_expectation_issues(row, expect, issues)
         append_thematic_map_expectation_issues(row, expect, issues)
         append_total_elapsed_expectation_issue(row, expect, issues)
-        append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
-        append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
+        if not skip_ocr_engine_profile_expectations:
+            append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
+            append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
         return issues
 
     source_equals = expect.get("source_equals")
@@ -5145,8 +5176,9 @@ def check_expectations(row: dict[str, Any], expect: dict[str, Any]) -> list[str]
 
     append_min_ocr_labels_expectation_issue(row, expect, issues)
     append_ocr_top_labels_expectation_issues(row, expect, issues)
-    append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
-    append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
+    if not skip_ocr_engine_profile_expectations:
+        append_max_ocr_engine_calls_expectation_issue(row, expect, issues)
+        append_max_ocr_engine_counts_expectation_issues(row, expect, issues)
 
     append_min_confidence_expectation_issue(
         row,
@@ -5949,6 +5981,7 @@ def build_repeat_profile(
     timeout_seconds: float,
     write_debug: bool,
     profile_ocr_engine: bool,
+    skip_ocr_engine_profile_expectations: bool,
     runner_ocr_cache: bool,
     extraction_cache: bool,
     execution: str,
@@ -5960,17 +5993,18 @@ def build_repeat_profile(
         for repeat_index in range(1, runs_per_case + 1):
             sample_out_dir = repeat_base_dir / f"run-{repeat_index}"
             sample_out_dir.mkdir(parents=True, exist_ok=True)
-            row = run_stress_case(
-                case,
-                sample_out_dir,
-                timeout_seconds=timeout_seconds,
-                write_debug=write_debug,
-                profile_ocr_engine=profile_ocr_engine,
-                runner_ocr_cache=runner_ocr_cache,
-                extraction_cache=extraction_cache,
-                execution=execution,
-                python_executable=python_executable,
-            )
+            stress_case_kwargs: dict[str, Any] = {
+                "timeout_seconds": timeout_seconds,
+                "write_debug": write_debug,
+                "profile_ocr_engine": profile_ocr_engine,
+                "runner_ocr_cache": runner_ocr_cache,
+                "extraction_cache": extraction_cache,
+                "execution": execution,
+                "python_executable": python_executable,
+            }
+            if skip_ocr_engine_profile_expectations:
+                stress_case_kwargs["skip_ocr_engine_profile_expectations"] = True
+            row = run_stress_case(case, sample_out_dir, **stress_case_kwargs)
             samples.append(
                 {
                     "repeat_index": repeat_index,
