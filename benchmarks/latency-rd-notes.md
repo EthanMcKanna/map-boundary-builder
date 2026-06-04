@@ -19334,3 +19334,14 @@ with zero failures in 0.531s.
   asserts that only JPEG suffixes get the relaxed multiplier. This is a
   reliability hardening for recompressed JPEG uploads, not a new zero-OCR
   shortcut.
+  Production verification on 2026-06-04 confirms the GitHub/Vercel deploy picked
+  up commit `0b520c2`: `vercel inspect https://map-boundary-builder.vercel.app
+  --logs` reported a Ready production build from branch `main`, commit
+  `0b520c2`, created at `2026-06-04T18:45:47Z`, with aliases
+  `mapboundary.app` and `map-boundary-builder.vercel.app`. A warm health request
+  to `https://map-boundary-builder.vercel.app/api/health?warm=ocr` returned
+  `ok: true`, runtime `vercel-python`, `warm.status: ok`, `warm.total_s:
+  0.003761`, and `pipeline_version: pipeline-00ee689860c0947a`, matching the
+  local pipeline hash for this checkout. The local Vercel CLI used for
+  inspection is still `54.3.0` while the remote build used `54.9.0` and the CLI
+  advertises `54.9.1`; upgrade before any manual production deploy.
