@@ -19444,3 +19444,15 @@ with zero failures in 0.531s.
   remains too noisy for acceptance because focused OCR-count/profile settings
   currently fail the original `.jpg` control as well. Treat the full hard gate
   and unit coverage as the regression proof for this narrow robustness win.
+  Production verification on 2026-06-04 confirms the GitHub/Vercel deploy
+  picked up commit `ea0612c`: `vercel inspect
+  https://map-boundary-builder.vercel.app --logs` reported a Ready production
+  build from branch `main`, commit `ea0612c`, with build start
+  `2026-06-04T22:15:54Z` and completion `2026-06-04T22:16:24Z`. A warm health
+  request to `https://map-boundary-builder.vercel.app/api/health?warm=ocr`
+  returned `ok: true`, runtime `vercel-python`, `warm.status: ok`,
+  `warm.total_s: 0.003750`, and `pipeline_version:
+  pipeline-406e11de671090a9`, matching the local pipeline hash for this
+  checkout. The local Vercel CLI used for inspection is still `54.3.0` while
+  the remote build used `54.9.0`; upgrade the local CLI before any manual
+  production deploy.
