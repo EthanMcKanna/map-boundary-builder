@@ -19002,3 +19002,53 @@ with zero failures in 0.531s.
   that preserves the refined original WebP contour under JPEG recompression,
   then re-run the three catalog-default transform gates plus the full blocked
   network stress gate before accepting any production change.
+- Probed the dark-teal extraction layer for the Zoox JPEG recompression miss
+  and rejected simple mask-repair and color-threshold fixes. Reproducing the
+  exact runner extraction path showed why the original screenshot is special:
+  `/Users/ethanmckanna/Downloads/zoox-sf.webp` with generic `upload.png` starts
+  with a low-res dark-teal extraction covering `0.180216`, then the 1400px
+  refined extraction covers `0.123966` and matches `san-francisco-zoox` with
+  catalog IoU `0.999994`, area ratio `1.000000`, and rotation `0.064deg`.
+  The q90 same-dimension JPEG follows the same refined path but covers
+  `0.129770`, scores only `0.920203` IoU and area ratio `1.051686` against
+  `san-francisco-zoox`, and falls through to OCR/georeference. A scaled
+  1400px mask diff under `out/zoox-jpeg-extract-diff-20260604` showed q90 adds
+  `0.007409` of the canvas and misses only `0.001607`; visually the extra
+  pixels are small interior/edge fills around gaps and shoreline notches rather
+  than a clean separable false component. The q90 extra pixels are not
+  color-separable from the common mask: raw common HSV medians were
+  `h=90,s=135,v=87`, while raw extra medians were `h=89,s=133,v=85`, with
+  very similar RGB medians. A dark-teal repair-kernel sweep over close/open/fill
+  variants found no setting that kept the original above the catalog threshold
+  while lifting q90 meaningfully; the best valid variants stayed at q90 IoU
+  `0.920203` with original `0.999994`, q85 `0.720753`, and q70 around
+  `0.734826`. This makes a plain dark-teal close/open/fill or HSV threshold
+  tweak too brittle for production.
+- Identified a more credible but still unshipped Zoox reliability direction in
+  post-georeference catalog completion. The q90 generic JPEG OCR/georef output
+  already lands on the visible San Francisco area: compared in mercator space,
+  its output geometry overlaps `san-francisco-zoox` at IoU `0.900864`, output
+  coverage `0.916593`, catalog coverage `0.981308`, and area ratio `1.070604`;
+  against `bay-area-zoox` the same output is only IoU `0.550890`, output
+  coverage `0.935974`, catalog coverage `0.572462`, and area ratio `0.611622`.
+  The q85 generic JPEG is weaker but still suggests a possible exact snap with
+  a stricter ranked policy: `san-francisco-zoox` IoU `0.801117`, output
+  coverage `0.809824`, catalog coverage `0.986757`, area ratio `1.218483`,
+  versus `bay-area-zoox` IoU `0.620919`, catalog coverage `0.649720`, area
+  ratio `0.696104`. The broader current Zoox SF service-area fixture remains
+  separable in the other direction: `zoox-sf-service-area-current` overlaps
+  `bay-area-zoox` at IoU `0.982760`, output coverage `0.999938`, catalog
+  coverage `0.982820`, and area ratio `0.982881`, but only overlaps
+  `san-francisco-zoox` at IoU `0.520240` and output coverage `0.541114`.
+  Current code excludes `verified-screenshot-ocr-output` entries such as
+  `san-francisco-zoox` from post-georef completion, which is why a q90 JPEG
+  with an explicit `zoox-sf.jpg` filename can incorrectly snap to
+  `bay-area-zoox` after OCR/georef. A future safe prototype should add a ranked
+  post-georef completion candidate path that includes verified screenshot
+  catalog entries only when overlap metrics are unambiguous, for example high
+  catalog coverage, area ratio within bounds, and a clear IoU margin over
+  competing aliases. It would improve exact-output reliability for recompressed
+  Zoox screenshots but not the zero-OCR fast path, so acceptance should require
+  targeted unit tests for ambiguous Bay Area/San Francisco aliases, the q90/q85
+  catalog-default JPEG gates, the current broader Zoox SF service-area fixture,
+  and a full blocked-network stress gate before any code commit.
