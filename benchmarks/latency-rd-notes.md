@@ -19291,3 +19291,23 @@ with zero failures in 0.531s.
   radius 1, which would destroy the accepted q90 zero-OCR fast path. Keep the
   current no-erosion extraction and treat q85/q70 as OCR/exact-georef or
   fail-closed cases rather than trying mask shrinkage.
+- Rejected a global robust-similarity inlier-threshold relaxation from
+  `scale*90` to `scale*150`. The offline runner-equivalent q85 probe made the
+  candidate look promising: Houston q85 added plausible controls beyond the
+  current residual cutoff, and the actual focused q85 transformed gate at
+  `out/robustness-resave-jpeg-q85-1600-20260604/threshold150-run` improved
+  from `3/6` to `5/6` expected while staying subsecond (`max_total_elapsed_s`
+  `0.388926`, repeat p95/max wall `0.288s` / `0.295s`). Houston improved from
+  `9` controls plus `1088.4m` bbox error to `12` controls with no expectation
+  issues, and Miami improved from `3317.6m` bbox error to a passing `7`-control
+  output. The q70 transformed guard also improved from `2/6` to `3/6` expected,
+  rescuing Houston and Miami while still leaving Los Angeles, Zoox SF, and the
+  Tesla route negative outside expectations. The full hard gate rejected the
+  global relaxation: `out/threshold150-full73-hard-20260604` passed only
+  `70/73`, with regressions on `miami-waymo` (`3295.5m` bbox error above
+  `1000m`), `bay-3-svg` (`1821.1m` above `1500m`), and
+  `zoox-las-vegas-service-area` (expected complete, got failed), plus repeat
+  unexpected samples on `bay-3-svg`, `miami-waymo`, and
+  `zoox-las-vegas-service-area`. Keep the shipped `scale*90` inlier threshold;
+  the q85 win needs a narrower candidate policy or additional quality signal
+  that does not perturb active full-manifest fits.
