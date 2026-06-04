@@ -18895,3 +18895,31 @@ with zero failures in 0.531s.
   safe envelope is high-quality same-dimension JPEG re-save, and lossy
   downsampling remains the next reliability-hardening target rather than a
   speed bottleneck.
+- Followed up on the lossy-downsample boundary with config-only rescue
+  prototypes against the temporary q85/q70 transformed manifests, keeping
+  blocked network, fresh cache dirs, warm in-process execution, runtime prewarm,
+  disabled OCR/extraction runner caches, one analyzed repeat per case, repeat
+  signature drift checks, and `wall<=1.000s`. Disabling the bright-blue fast
+  text area filter on q85/1600
+  (`out/robustness-resave-jpeg-q85-1600-20260604/no-fast-filter-run`) improved
+  the q85 bracket from `3/6` to `4/6` primary expectations by recovering
+  `houston-waymo` (`10` control points, `26` OCR labels), but it degraded
+  `miami-waymo` to `4` control points and a `4377.0m` bbox miss; the Tesla
+  route negative still rejected correctly but remained below its OCR-label
+  floor. Primary wall p95/max were `0.508548s` / `0.580689s`, repeat wall
+  p95/max were `0.384995s` / `0.413877s`, and repeat signatures stayed stable.
+  Raising the bright-blue OCR cap to `1600` on q85/1600 without relaxing the
+  filter (`out/robustness-resave-jpeg-q85-1600-20260604/cap1600-run`) stayed at
+  only `3/6` primary expectations and made the primary tail slower
+  (`0.609087s` p95, `0.661837s` max, prewarm about `1.000s`), with Houston and
+  Miami still failing bbox budgets. Combining cap `1600` with no fast filter
+  also stayed at `3/6`. Upscaling the already q70/1200 assets to a `1600px`
+  long edge before re-running the same manifest
+  (`out/robustness-resave-jpeg-q70-1200-upscale1600-20260604`) recovered
+  `los-angeles-waymo` and `zoox-sf`, but still passed only `3/6`: Houston and
+  Miami remained outside strict bbox/control budgets, while the Tesla negative
+  still had too few OCR labels. These probes all remained subsecond and
+  repeat-stable, but none is a safe general change. The next credible hardening
+  direction is a smarter low-quality georeference rescue or candidate-selection
+  check, not simply higher OCR caps, relaxed text filtering, or blanket
+  upscaling.
