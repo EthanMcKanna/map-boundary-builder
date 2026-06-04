@@ -18527,3 +18527,15 @@ with zero failures in 0.531s.
   no generation defaults changed. Targeted config tests passed `5 passed`;
   full stress benchmark tests passed `153 passed`; compileall and
   `git diff --check` passed.
+- Proved the current hard gate does not depend on live geocoder/network access
+  for its accepted stress surface. With `MAP_BOUNDARY_BLOCK_NETWORK=1` and an
+  isolated `MAP_BOUNDARY_CACHE_DIR`, the focused no-catalog Waymo geocode-heavy
+  slice at `out/block-network-geocode-focused-20260604` passed `5/5` with max
+  primary `0.454530s`, repeat p95 `0.301s`, and all repeat samples subsecond.
+  The full real-screenshot hard gate at `out/block-network-full73-hard-20260604`
+  passed `73/73` with statuses `{"complete":62,"failed":11}`, max primary
+  `0.333407s`, repeat p95 `0.284s`, repeat max `0.314s`, prewarm `0.627s`,
+  and georeference stage max `0.136s` on `nashville-waymo`. This is evidence
+  that the bundled geocoder/place/road/catalog seeds cover the current full
+  stress surface under no-network production-warm conditions; no runtime
+  default changed.
