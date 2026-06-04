@@ -18750,3 +18750,24 @@ with zero failures in 0.531s.
   slowest analyzed repeat stayed `profile-app-non-map-ui` at p95/max
   `0.290816s` / `0.291408s`. No runtime shortcut changed; prior cap/batch
   probes still make pre-OCR or lower-cap profile rejection too risky.
+- Re-validated the current full-hard-gate Waymo OCR tail directly instead of
+  changing ONNX or OCR defaults. The focused blocked-network gate at
+  `out/block-network-waymo-tail-repeat-stability-20260604` reused the repeat-wall
+  full-suite cache dir, disabled OCR/extraction caches, ran `8` repeats with `2`
+  warmups per case, and covered `los-angeles-waymo`, `bay-area-waymo`,
+  `bay-3-svg`, `bay-area-waymo-service-area`, and `orlando-waymo`, which were the
+  slowest repeats in `out/block-network-full-hardgate-default-repeat1-20260604`.
+  The primary gate passed `5/5` with statuses `{"complete":5}`, manifest OCR
+  contracts passed, primary max wall was `0.587030s`, and the cold-ish primary
+  tail was `bay-area-waymo` at `0.595278s` total / `0.587030s` wall with OCR
+  engine total `0.445171s`. Repeat profiling analyzed `30/30` samples under the
+  `1.000s` wall budget with repeat wall p95/max `0.343827s` / `0.344920s` and
+  repeat OCR engine total p95/max `0.300440s` / `0.308650s`. The slowest repeat
+  cases stayed bounded: `los-angeles-waymo` p95/max `0.343855s` / `0.344920s`,
+  `bay-3-svg` p95/max `0.341365s` / `0.343733s`, `bay-area-waymo` p95/max
+  `0.334841s` / `0.343911s`, `bay-area-waymo-service-area` p95/max `0.329997s`
+  / `0.331197s`, and `orlando-waymo` p95/max `0.315952s` / `0.318541s`. This
+  supports keeping the current RapidOCR/ORT defaults: the current Waymo OCR tail
+  is repeat-stable and subsecond, while the previously tested arena, spinning,
+  thread-limit, min-area, and rec-batch changes either failed broader gates or
+  did not improve wall-clock reliability.
