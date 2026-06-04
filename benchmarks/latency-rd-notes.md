@@ -19173,3 +19173,29 @@ with zero failures in 0.531s.
   `out/specific-hint-veto-full73-hard-20260604` passed `73/73` expected with
   statuses `{"complete":62,"failed":11}`, primary max wall `0.394290s`,
   repeat p95/max wall `0.281s` / `0.303s`, and no repeat signature drift.
+- Rejected a secondary extraction-dimension/interpolation rescue for the
+  remaining q85 Zoox SF pre-OCR catalog miss. A blocked-network local sweep of
+  `extract_service_area` over the original WebP, q90 original-size JPEG, q85
+  1600px JPEG, and q70 1200px JPEG confirmed that the runner's existing
+  1400px `INTER_AREA` refined extraction remains the only clean original-WebP
+  path (`san-francisco-zoox` IoU `0.999994`, area ratio `1.000000`, rotation
+  `0.064deg`). The q90 JPEG still clears the near-hit gate at 1400px
+  (`0.920203` IoU, area ratio `1.051686`), matching the shipped fast path, but
+  q85 does not: its 1400px score is only `0.720753` IoU / `1.139917` area
+  ratio. A finer q85 sweep from 1050px to 1350px found the best pocket at
+  1225px with `0.848676` IoU, area ratio `1.074203`, and margin `0.232764`
+  over the Bay Area Zoox candidate; 1150px was `0.845382` IoU with margin
+  `0.207222`, and 1200px was `0.837255` IoU with area ratio `1.123224`. All
+  remain below the `0.86` near-hit IoU threshold and/or the `0.24` unhinted
+  margin, so an extra extraction retry would add work without a safe catalog
+  acceptance.
+  Resize interpolation variants did not open a safer lane. On q85, the best
+  1400px non-default interpolation was nearest-neighbor at `0.795280` IoU; at
+  1225px the default `INTER_AREA` stayed best (`0.848676`), with linear at
+  `0.829432`; at 1200px `INTER_AREA` was `0.837255` and Lanczos was
+  `0.833866`. q70 still favored the broader Bay Area geometry across tested
+  dimensions/interpolations, reinforcing the current fail-or-OCR policy. Keep
+  the shipped q90 pre-OCR near-hit and q85 post-georef exact completion, and
+  do not add a dimension/interpolation retry unless a future quality signal can
+  prove the specific San Francisco contour without lowering the catalog
+  thresholds.
