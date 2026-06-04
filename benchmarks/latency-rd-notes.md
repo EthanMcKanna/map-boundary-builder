@@ -18840,3 +18840,27 @@ with zero failures in 0.531s.
   warm no-profile path. This supports using the warm no-profile report as the
   production-instance latency reference while retaining the subprocess gate as a
   cold CLI/import overhead regression guard.
+- Re-ran the full-manifest production-shaped no-profile gate with a fresh
+  isolated cache dir to check for hidden dependence on the established
+  full-suite cache. The blocked-network run at
+  `out/block-network-full-nonprofile-fresh-cache-repeat1-20260604` used
+  `MAP_BOUNDARY_CACHE_DIR=/tmp/mbb-full-nonprofile-fresh-cache-HJUoeI`, warm
+  in-process execution, runtime prewarm, OCR/extraction caches disabled,
+  `--skip-ocr-engine-profile-expectations`, manifest OCR contract budgets
+  (`73/73` call contracts, `45/45` count-capped positive-call rows, `0`
+  positive call-only rows), and one analyzed repeat per case. It passed `73/73`
+  primary expectations with statuses `{"complete":62,"failed":11}` and
+  `73/73` analyzed repeat samples under `wall<=1.000s`. Primary wall samples
+  had median/average/p95/max `0.155064s` / `0.163257s` / `0.366170s` /
+  `0.388242s`; repeat wall p95/max were `0.317943s` / `0.350609s`. Runtime
+  prewarm stayed bounded at `0.764s`. The slowest repeat cases were
+  `los-angeles-waymo-service-area` p95/max `0.350613s`, `bay-3-svg`
+  `0.332728s`, `bay-area-waymo` `0.332040s`, `los-angeles-waymo` `0.319049s`,
+  and `houston-waymo` `0.317210s`, all OCR-bound. Comparing this fresh-cache
+  report against `out/block-network-full-nonprofile-repeat1-20260604` found
+  zero differences across all `73` rows for observed status, source, catalog
+  slug, city, GeoJSON geometry hash, coordinate count, OCR label count, OCR
+  label event, road-match score, and road-match sampled-points fields. This
+  makes the production-like subsecond reference stronger: fresh cache, disabled
+  runner caches, stable outputs, and no primary or repeat wall-budget
+  violations.
