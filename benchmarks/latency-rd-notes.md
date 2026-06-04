@@ -18694,3 +18694,23 @@ with zero failures in 0.531s.
   passed but trailed default with repeat wall p95/max `0.374691s` / `0.398299s`.
   Keep RapidOCR's auto ONNX thread counts and the existing arena/spinning
   defaults; no runtime thread-control patch was adopted.
+- Re-checked ONNX Runtime CPU arena and thread-spinning flags on the same
+  four-case OCR tail/control workload after the thread-limit rejection. All
+  variants passed `4/4` primary expectations and `20/20` analyzed repeats under
+  `total<=1.000s` and `wall<=1.000s`, but none beat the current no-arena /
+  no-spinning default across both primary and repeat wall-clock metrics. The
+  default control at
+  `out/block-network-tail-repeat-profile-default-thread-control-20260604`
+  recorded primary max wall `0.510861s`, repeat wall p95/max `0.351938s` /
+  `0.379314s`, and repeat OCR engine total p95/max `0.315882s` / `0.342940s`.
+  Spinning-only at `out/block-network-tail-repeat-profile-ort-spinning-20260604`
+  improved repeat wall p95/max to `0.345995s` / `0.362507s` but nudged primary
+  max wall up to `0.521872s`. CPU-arena-only at
+  `out/block-network-tail-repeat-profile-ort-arena-20260604` improved repeat
+  wall p95 to `0.347391s` but kept repeat max near default at `0.377502s` and
+  worsened primary max wall to `0.536240s`. Arena+spinning at
+  `out/block-network-tail-repeat-profile-ort-arena-spinning-20260604` improved
+  primary max wall to `0.418960s` and repeat max wall to `0.372684s`, but repeat
+  p95 wall regressed slightly to `0.356343s`. Keep the current no-arena /
+  no-spinning defaults unless a broader hard-gate replay proves the mixed
+  arena+spinning signal is stable and worth the variance risk.
