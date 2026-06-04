@@ -19275,3 +19275,19 @@ with zero failures in 0.531s.
   `3200` candidate, so the area-floor probe should stay closed unless a future
   candidate actually lowers detected/selected boxes or fixes a robustness
   failure.
+- Rejected post-repair erosion/area normalization as a dark-teal Zoox JPEG
+  extraction rescue. A score-only probe on the original WebP, q90 same-size
+  JPEG, q85/1600 JPEG, and q70/1200 JPEG applied elliptical erosions with
+  radii 1-7 to the final repaired mask and rescored against
+  `san-francisco-zoox` and `bay-area-zoox` at the 1400px extraction scale.
+  Erosion improved q85/q70 margins but not enough: q85 best stayed around
+  `0.794606` IoU / area `1.069392` / Bay Area margin `0.181472` at radius 4
+  (or `0.784886` / `1.045052` / `0.185634` at radius 6), and q70 best stayed
+  around `0.798187` / `1.160935` / `0.126580` at radius 6. Those remain below
+  the `0.86` near-hit IoU and/or unhinted margin needed for a safe zero-OCR
+  shortcut. Worse, the already-good images degrade immediately: original WebP
+  drops from `0.969290` to `0.868337` at radius 1 and below near-hit by
+  radius 2 (`0.850382`), while q90 drops from `0.902088` to `0.849769` at
+  radius 1, which would destroy the accepted q90 zero-OCR fast path. Keep the
+  current no-erosion extraction and treat q85/q70 as OCR/exact-georef or
+  fail-closed cases rather than trying mask shrinkage.
