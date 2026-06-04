@@ -18714,3 +18714,22 @@ with zero failures in 0.531s.
   p95 wall regressed slightly to `0.356343s`. Keep the current no-arena /
   no-spinning defaults unless a broader hard-gate replay proves the mixed
   arena+spinning signal is stable and worth the variance risk.
+- Broader hard-gate replay rejected adopting the mixed arena+spinning signal.
+  The default no-arena/no-spinning full-manifest control at
+  `out/block-network-full-hardgate-default-repeat1-20260604` used
+  `--real-screenshot-hard-gate`, `--repeat-profile-runs 2`,
+  `--repeat-profile-warmups 1`, `--max-wall-s 1`, blocked network, disabled
+  OCR/extraction caches, and the same cache dir as the repeat-wall baseline. It
+  passed `73/73` expected outcomes with statuses `{"complete":62,"failed":11}`,
+  manifest OCR contract coverage, `73/73` analyzed repeat samples, primary max
+  wall `0.386680s`, primary p95 wall `0.347320s`, repeat wall p95/max
+  `0.338400s` / `0.390392s`, and repeat OCR engine total p95/max `0.296688s`
+  / `0.352299s`. The matching arena+spinning run at
+  `out/block-network-full-hardgate-ort-arena-spinning-repeat1-20260604` also
+  passed all primary/repeat expectations and manifest contracts, and it lowered
+  repeat OCR engine total max to `0.314796s`, but wall-clock did not improve:
+  primary max wall worsened to `0.447459s`, primary p95 wall to `0.371938s`,
+  repeat p95 wall was effectively tied at `0.338448s`, and repeat max wall
+  worsened to `0.399437s`. Keep the current default
+  `onnxruntime_enable_cpu_mem_arena=false` and
+  `onnxruntime_allow_spinning=false`.
