@@ -19345,3 +19345,22 @@ with zero failures in 0.531s.
   local pipeline hash for this checkout. The local Vercel CLI used for
   inspection is still `54.3.0` while the remote build used `54.9.0` and the CLI
   advertises `54.9.1`; upgrade before any manual production deploy.
+- Rejected wider JPEG-only robust-similarity inlier thresholds above the shipped
+  `scale*150` multiplier. A non-invasive monkeypatched sweep with blocked
+  network tested `scale*160` and `scale*175` against the same q85/1600 and
+  q70/1200 transformed JPEG manifests, preserving the focused gate shape,
+  runtime prewarm, disabled OCR/extraction runner caches, four repeats with one
+  warmup, repeat signature checks, and `wall<=1.000s`. Both q85 candidates fell
+  from the accepted `5/6` at `scale*150` to `4/6`: `miami-waymo` stayed
+  `complete` with `10` controls and city `Miami`, but its bbox corner error
+  rose to `1791.6m` above the `1000m` budget. The q70 guard did not improve
+  either: both `scale*160` and `scale*175` stayed at `3/6`, merely trading the
+  prior `los-angeles-waymo` failure for a `miami-waymo` city/bbox failure
+  (`Inferred map area`, `1876.7m`) and a `zoox-sf` low-control completion
+  (`7` controls below `10`). All candidate repeats stayed subsecond
+  (`q85 scale*160` repeat wall p95/max `0.283s` / `0.307s`,
+  `q85 scale*175` `0.289s` / `0.316s`, `q70 scale*160` `0.241s` / `0.248s`,
+  `q70 scale*175` `0.240s` / `0.258s`), so this is an accuracy/robustness
+  rejection rather than a latency rejection. Keep the JPEG multiplier at
+  `scale*150`; further lossy-JPEG hardening needs a quality or candidate-rank
+  guard, not a wider residual threshold.
