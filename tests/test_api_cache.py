@@ -16,6 +16,7 @@ from api.index import (
     CRON_WARM_PATH,
     CRON_WARM_PATHS,
     LEGACY_CRON_WARM_PATH,
+    INLINE_OVERLAY_MAX_DIMENSION,
     INLINE_OVERLAY_OPTIMIZE_BYTES,
     allow_catalog_for_request,
     avif_container_run_result_cache_key,
@@ -1013,6 +1014,70 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(captured["status"], HTTPStatus.CREATED)
         self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-profile")
         self.assertEqual(payload["profile"]["cache_hit"], "raw")
+
+    def test_create_run_uses_overlay_superset_cache_for_geojson_only_hit(self) -> None:
+        image_bytes = b"image-bytes"
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {"include_overlay": "0"},
+            {"image": ("Phoenix.png", image_bytes)},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        request.send_json = send_json
+        cached = {
+            "city": "Phoenix",
+            "summary": {"city": "Phoenix", "combined_confidence": 0.93, "control_points": 14},
+            "artifacts": {
+                "geojson_inline": {"type": "FeatureCollection", "features": []},
+                "overlay_data_url": "data:image/webp;base64,overlay",
+            },
+        }
+        overlay_options = SimpleNamespace(
+            simplify_px=api_index.DEFAULT_SIMPLIFY_PX,
+            min_confidence=0.55,
+            min_control_points=3,
+            include_overlay=True,
+            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
+            overlay_format="webp",
+            write_mask_artifact=False,
+            allow_catalog=True,
+            catalog_probe_only=False,
+            catalog_probe_missed=False,
+            catalog_probe_miss_low_iou=False,
+            filename_hint="Phoenix.png",
+            source_was_svg=False,
+        )
+        no_overlay_options = SimpleNamespace(**{**vars(overlay_options), "include_overlay": False})
+        no_overlay_options.preview_max_dimension = None
+        no_overlay_options.overlay_format = "png"
+
+        with (
+            TemporaryDirectory() as workdir,
+            patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)),
+            patch("api.index.get_pipeline_version", return_value="pipeline-overlay-superset"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=AssertionError("cache miss")),
+        ):
+            write_run_result_cache(raw_run_result_cache_key(image_bytes, None, overlay_options), cached)
+            request.handle_create_run()
+            warmed = read_run_result_cache(raw_run_result_cache_key(image_bytes, None, no_overlay_options))
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["profile"]["cache_hit"], "raw-overlay")
+        self.assertEqual(payload["profile"]["pipeline_version"], "pipeline-overlay-superset")
+        self.assertEqual(payload["artifacts"]["geojson_inline"]["type"], "FeatureCollection")
+        self.assertNotIn("overlay_data_url", payload["artifacts"])
+        self.assertIsNotNone(warmed)
+        assert isinstance(warmed, dict)
+        self.assertNotIn("overlay_data_url", warmed["artifacts"])
 
     def test_create_run_can_include_ocr_engine_profile_on_cache_miss(self) -> None:
         request = api_index.handler.__new__(api_index.handler)

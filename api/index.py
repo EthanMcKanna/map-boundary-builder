@@ -340,26 +340,41 @@ class handler(BaseHTTPRequestHandler):
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
         raw_cache_started = time.perf_counter()
+        raw_image_hash = hashlib.sha256(image_bytes).hexdigest()
         raw_cache_key, raw_success_cache_key = run_result_cache_key_pair_for_hash(
             "image_raw_sha256",
-            hashlib.sha256(image_bytes).hexdigest(),
+            raw_image_hash,
             city,
             options,
         )
-        cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+        cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
             raw_cache_key,
             raw_success_cache_key,
+            image_hash_name="image_raw_sha256",
+            image_hash=raw_image_hash,
+            city=city,
             options=options,
         )
         profile["raw_cache_lookup_s"] = elapsed_seconds(raw_cache_started)
         if cached is not None:
-            if compatible_cache_hit:
+            if compatible_cache_hit or overlay_superset_cache_hit:
                 raw_cache_write_started = time.perf_counter()
                 write_run_result_cache(raw_cache_key, cached)
                 profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "raw-compatible" if compatible_cache_hit else "raw"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "raw",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -379,21 +394,36 @@ class handler(BaseHTTPRequestHandler):
             png_visual_cache_key = None
             png_visual_success_cache_key = None
         if png_visual_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 png_visual_cache_key,
                 png_visual_success_cache_key,
+                image_hash_name="png_visual_sha256",
+                image_hash=png_visual_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["png_visual_cache_lookup_s"] = elapsed_seconds(png_visual_cache_started)
         if png_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "png-visual-compatible" if compatible_cache_hit else "png-visual"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "png-visual",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -413,21 +443,36 @@ class handler(BaseHTTPRequestHandler):
             jpeg_commentless_cache_key = None
             jpeg_commentless_success_cache_key = None
         if jpeg_commentless_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 jpeg_commentless_cache_key,
                 jpeg_commentless_success_cache_key,
+                image_hash_name="jpeg_commentless_sha256",
+                image_hash=jpeg_commentless_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["jpeg_commentless_cache_lookup_s"] = elapsed_seconds(jpeg_commentless_cache_started)
         if jpeg_commentless_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "jpeg-commentless-compatible" if compatible_cache_hit else "jpeg-commentless"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "jpeg-commentless",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -447,21 +492,36 @@ class handler(BaseHTTPRequestHandler):
             jpeg_visual_cache_key = None
             jpeg_visual_success_cache_key = None
         if jpeg_visual_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 jpeg_visual_cache_key,
                 jpeg_visual_success_cache_key,
+                image_hash_name="jpeg_visual_sha256",
+                image_hash=jpeg_visual_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["jpeg_visual_cache_lookup_s"] = elapsed_seconds(jpeg_visual_cache_started)
         if jpeg_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "jpeg-visual-compatible" if compatible_cache_hit else "jpeg-visual"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "jpeg-visual",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -481,21 +541,36 @@ class handler(BaseHTTPRequestHandler):
             webp_visual_cache_key = None
             webp_visual_success_cache_key = None
         if webp_visual_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 webp_visual_cache_key,
                 webp_visual_success_cache_key,
+                image_hash_name="webp_visual_sha256",
+                image_hash=webp_visual_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["webp_visual_cache_lookup_s"] = elapsed_seconds(webp_visual_cache_started)
         if webp_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "webp-visual-compatible" if compatible_cache_hit else "webp-visual"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "webp-visual",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -515,21 +590,36 @@ class handler(BaseHTTPRequestHandler):
             avif_container_cache_key = None
             avif_container_success_cache_key = None
         if avif_container_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 avif_container_cache_key,
                 avif_container_success_cache_key,
+                image_hash_name="avif_container_sha256",
+                image_hash=avif_container_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["avif_container_cache_lookup_s"] = elapsed_seconds(avif_container_cache_started)
         if avif_container_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "avif-container-compatible" if compatible_cache_hit else "avif-container"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "avif-container",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -549,21 +639,36 @@ class handler(BaseHTTPRequestHandler):
             tiff_visual_cache_key = None
             tiff_visual_success_cache_key = None
         if tiff_visual_cache_key is not None:
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 tiff_visual_cache_key,
                 tiff_visual_success_cache_key,
+                image_hash_name="tiff_visual_sha256",
+                image_hash=tiff_visual_hash,
+                city=city,
                 options=options,
             )
         else:
             compatible_cache_hit = False
+            overlay_superset_cache_hit = False
         profile["tiff_visual_cache_lookup_s"] = elapsed_seconds(tiff_visual_cache_started)
         if tiff_visual_cache_key is not None and cached is not None:
             raw_cache_write_started = time.perf_counter()
             write_run_result_cache(raw_cache_key, cached)
             profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-            profile["cache_hit"] = "tiff-visual-compatible" if compatible_cache_hit else "tiff-visual"
+            profile["cache_hit"] = cache_hit_profile_value(
+                "tiff-visual",
+                compatible=compatible_cache_hit,
+                overlay_superset=overlay_superset_cache_hit,
+            )
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+            payload = cached_run_payload(
+                cached,
+                run_id,
+                original_filename,
+                events,
+                profile=profile,
+                include_overlay=options.include_overlay,
+            )
             self.send_json(
                 payload,
                 status=cached_run_response_status(payload),
@@ -573,15 +678,19 @@ class handler(BaseHTTPRequestHandler):
         cache_key: str | None = None
         if normalized_cache_lookup:
             normalized_cache_started = time.perf_counter()
+            normalized_image_hash = normalized_image_sha256(image_bytes)
             cache_key, normalized_success_cache_key = run_result_cache_key_pair_for_hash(
                 "image_pixel_sha256",
-                normalized_image_sha256(image_bytes),
+                normalized_image_hash,
                 city,
                 options,
             )
-            cached, compatible_cache_hit = read_run_result_cache_with_success_fallback(
+            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
                 cache_key,
                 normalized_success_cache_key,
+                image_hash_name="image_pixel_sha256",
+                image_hash=normalized_image_hash,
+                city=city,
                 options=options,
             )
             profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
@@ -589,9 +698,20 @@ class handler(BaseHTTPRequestHandler):
                 raw_cache_write_started = time.perf_counter()
                 write_run_result_cache(raw_cache_key, cached)
                 profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-                profile["cache_hit"] = "normalized-compatible" if compatible_cache_hit else "normalized"
+                profile["cache_hit"] = cache_hit_profile_value(
+                    "normalized",
+                    compatible=compatible_cache_hit,
+                    overlay_superset=overlay_superset_cache_hit,
+                )
                 profile["total_before_send_s"] = elapsed_seconds(request_started)
-                payload = cached_run_payload(cached, run_id, original_filename, events, profile=profile)
+                payload = cached_run_payload(
+                    cached,
+                    run_id,
+                    original_filename,
+                    events,
+                    profile=profile,
+                    include_overlay=options.include_overlay,
+                )
                 self.send_json(
                     payload,
                     status=cached_run_response_status(payload),
@@ -1771,6 +1891,86 @@ def read_run_result_cache_with_success_fallback(
     return cached, True
 
 
+def read_run_result_cache_with_overlay_fallback(
+    cache_key: str,
+    success_cache_key: str | None,
+    *,
+    image_hash_name: str,
+    image_hash: str,
+    city: str | None,
+    options: Any,
+) -> tuple[dict[str, Any] | None, bool, bool]:
+    cached, compatible = read_run_result_cache_with_success_fallback(
+        cache_key,
+        success_cache_key,
+        options=options,
+    )
+    if cached is not None:
+        return cached_payload_for_request_options(cached, options), compatible, False
+
+    overlay_options = overlay_superset_cache_options(options)
+    if overlay_options is None:
+        return None, False, False
+    overlay_cache_key, overlay_success_cache_key = run_result_cache_key_pair_for_hash(
+        image_hash_name,
+        image_hash,
+        city,
+        overlay_options,
+    )
+    cached, compatible = read_run_result_cache_with_success_fallback(
+        overlay_cache_key,
+        overlay_success_cache_key,
+        options=options,
+    )
+    if cached is None:
+        return None, False, False
+    return cached_payload_for_request_options(cached, options), compatible, True
+
+
+def overlay_superset_cache_options(options: Any) -> Any | None:
+    if bool(getattr(options, "include_overlay", True)):
+        return None
+    if bool(getattr(options, "catalog_probe_only", False)):
+        return None
+    try:
+        values = vars(options).copy()
+    except TypeError:
+        values = {
+            "simplify_px": getattr(options, "simplify_px", DEFAULT_SIMPLIFY_PX),
+            "min_confidence": getattr(options, "min_confidence", 0.55),
+            "min_control_points": getattr(options, "min_control_points", 3),
+            "write_mask_artifact": getattr(options, "write_mask_artifact", False),
+            "allow_catalog": getattr(options, "allow_catalog", True),
+            "catalog_probe_only": getattr(options, "catalog_probe_only", False),
+            "catalog_probe_missed": getattr(options, "catalog_probe_missed", False),
+            "catalog_probe_miss_low_iou": getattr(options, "catalog_probe_miss_low_iou", False),
+            "filename_hint": getattr(options, "filename_hint", None),
+            "source_was_svg": getattr(options, "source_was_svg", False),
+        }
+    values["include_overlay"] = True
+    values["preview_max_dimension"] = INLINE_OVERLAY_MAX_DIMENSION
+    values["overlay_format"] = "webp"
+    return SimpleNamespace(**values)
+
+
+def cached_payload_for_request_options(cached: dict[str, Any], options: Any) -> dict[str, Any]:
+    payload = json.loads(json.dumps(cached))
+    if bool(getattr(options, "include_overlay", True)):
+        return payload
+    artifacts = payload.get("artifacts")
+    if isinstance(artifacts, dict):
+        artifacts = dict(artifacts)
+        artifacts.pop("overlay_data_url", None)
+        payload["artifacts"] = artifacts
+    return payload
+
+
+def cache_hit_profile_value(base: str, *, compatible: bool, overlay_superset: bool = False) -> str:
+    if overlay_superset:
+        return f"{base}-overlay-compatible" if compatible else f"{base}-overlay"
+    return f"{base}-compatible" if compatible else base
+
+
 def cached_payload_satisfies_success_options(payload: dict[str, Any], options: Any) -> bool:
     if payload.get("status") in {"failed", "catalog_miss"}:
         return False
@@ -1857,8 +2057,13 @@ def cached_run_payload(
     events: list[dict[str, Any]],
     *,
     profile: dict[str, Any] | None = None,
+    include_overlay: bool | None = None,
 ) -> dict[str, Any]:
     payload = json.loads(json.dumps(cached))
+    if include_overlay is False and isinstance(payload.get("artifacts"), dict):
+        artifacts = dict(payload["artifacts"])
+        artifacts.pop("overlay_data_url", None)
+        payload["artifacts"] = artifacts
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     raw_status = payload.get("status")
     status = raw_status if raw_status in {"catalog_miss", "failed"} else "complete"

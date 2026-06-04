@@ -19468,3 +19468,33 @@ with zero failures in 0.531s.
   `build_boundary_s: 2.076486` / `total_before_send_s: 2.090853`, so this is
   live correctness evidence for the byte-header JPEG fallback, not a fresh
   subsecond production latency proof.
+- Promoted a narrow API cache reuse win for GeoJSON-only callers. Production
+  probing of the same mislabeled q85 Houston JPEG upload showed the server-side
+  run cache is fast but instance-local: a repeat after the earlier proof still
+  missed (`run 1780616538-4b8be7ec`, `cache_hit: miss`, HTTP `2.716625s`,
+  `build_boundary_s: 2.268295`, `total_before_send_s: 2.279517`), while an
+  immediate repeat on the warm instance hit raw cache (`run
+  1780616557-c3a0b190`, HTTP `0.496017s`, `raw_cache_lookup_s: 0.002104`,
+  `total_before_send_s: 0.002365`). A GeoJSON-only request with
+  `include_overlay=0` for the same bytes had a separate no-overlay cache key
+  and therefore missed the run-result cache, but on the already warm instance it
+  avoided overlay output and reused internal OCR/extraction work
+  (`run 1780616606-d55295db`, HTTP `0.837055s`, `build_boundary_s: 0.080498`,
+  `build_artifacts_s: 0.000001`, `total_before_send_s: 0.087179`, artifacts
+  only `geojson_inline`). The API now lets no-overlay requests read an
+  overlay-enabled cache entry as a safe superset, strips `overlay_data_url`
+  before responding, and warms the exact no-overlay raw cache key with the
+  stripped payload for the next repeat. The reuse is one-way only: overlay
+  requests still cannot use no-overlay cache entries.
+  Focused validation stayed clean: `tests/test_api_cache.py` passed `86` tests
+  in `0.60s`, `tests/test_web_handler.py` passed `5` tests in `0.22s`, and a
+  real-fixture in-process API smoke with blocked network and a temp cache built
+  the overlay q85 Houston response once (`cache_hit: miss`, Houston,
+  `total_before_send_s: 0.695320`, artifacts `geojson_inline` +
+  `overlay_data_url`) then served the same bytes with `include_overlay=0` from
+  `raw-overlay` in `0.001200s` before send with only `geojson_inline`. The full
+  blocked-network hard gate at
+  `out/overlay-superset-cache-full73-hard-20260604` still passed `73/73`
+  expected outcomes with statuses `{"complete":62,"failed":11}`, primary max
+  wall `0.368312s`, repeat p95/max wall `0.288s` / `0.315s`, manifest OCR
+  contracts `73/73`, and stable repeat signatures.
