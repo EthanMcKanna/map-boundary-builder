@@ -19265,3 +19265,13 @@ with zero failures in 0.531s.
   timing, not a shippable simplification; do not promote the area floor without
   full-manifest and lossy-transform evidence showing real count reduction and
   no robustness loss.
+  A same-default rerun at `out/ocr-profile-slow5-default-rerun-20260604`
+  confirms that conclusion: with `min_area=2300` unchanged, the five selected
+  rows again passed `5/5` with no signature drift, repeat OCR p95 `0.268s`
+  versus the original `0.271s`, and the same p95 OCR counts (`raw=50`,
+  `selected=30`, `label=29`). The primary `dallas-waymo` outlier also dropped
+  by `0.071s` without any config change, while `los-angeles-waymo` moved
+  `+0.007s`. That default-to-default movement is the same order as the
+  `3200` candidate, so the area-floor probe should stay closed unless a future
+  candidate actually lowers detected/selected boxes or fixes a robustness
+  failure.
