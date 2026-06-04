@@ -19311,3 +19311,26 @@ with zero failures in 0.531s.
   `zoox-las-vegas-service-area`. Keep the shipped `scale*90` inlier threshold;
   the q85 win needs a narrower candidate policy or additional quality signal
   that does not perturb active full-manifest fits.
+- Accepted a JPEG-only robust-similarity inlier-threshold relaxation. The
+  regression split above showed the full-gate failures came from PNG/SVG active
+  fixtures, while the lossy-transform wins were all `.jpg` uploads, so the
+  production path now keeps the conservative `scale*90` residual threshold for
+  PNG/SVG/WebP and uses `scale*150` only for `.jpg`/`.jpeg` georeference fits.
+  The q85 transformed JPEG gate at
+  `out/robustness-resave-jpeg-q85-1600-20260604/jpeg-threshold-run` reproduced
+  the useful recovery: it improved from `3/6` to `5/6` expected,
+  `houston-waymo` rose from `9` to `12` controls with no bbox issue,
+  `miami-waymo` passed its `1000m` bbox gate with `7` controls, and the run
+  stayed subsecond (`max_total_elapsed_s` `0.505366`, repeat p95/max wall
+  `0.292s` / `0.296s`). The q70 guard at
+  `out/robustness-resave-jpeg-q70-1200-20260604/jpeg-threshold-guard-run`
+  improved from `2/6` to `3/6`, rescuing Houston while still rejecting the
+  degraded Los Angeles control-count miss, Zoox SF georef miss, and Tesla
+  low-label negative. Most importantly, the full blocked-network hard gate at
+  `out/jpeg-threshold-full73-hard-20260604` passed `73/73` with statuses
+  `{"complete":62,"failed":11}`, repeat p95/max wall `0.294s` / `0.348s`,
+  no repeat unexpected samples, and zero output-signature changes versus
+  `out/specific-hint-veto-full73-hard-20260604`. Focused unit coverage now
+  asserts that only JPEG suffixes get the relaxed multiplier. This is a
+  reliability hardening for recompressed JPEG uploads, not a new zero-OCR
+  shortcut.

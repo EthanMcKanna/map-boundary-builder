@@ -6,6 +6,7 @@ from functools import lru_cache
 from itertools import combinations
 from math import atan2, cos, exp, log, sin, sqrt
 import os
+from pathlib import Path
 import re
 import time
 
@@ -40,6 +41,8 @@ MAX_ROBUST_SIMILARITY_METERS_PER_PIXEL = 500.0
 MAX_SPARSE_ROBUST_SIMILARITY_METERS_PER_PIXEL = 600.0
 MAX_SPARSE_ROBUST_SIMILARITY_INLIER_RESIDUAL_M = 6500.0
 MAX_TWO_CONTROL_SIMILARITY_METERS_PER_PIXEL = 500.0
+ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER = 90.0
+JPEG_ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER = 150.0
 DIRECT_CONTEXT_QUERY_LIMIT = 6
 DIRECT_CONTEXT_MAX_QUERIES = 10
 DIRECT_CONTEXT_LIVE_QUERY_LIMIT = 3
@@ -3440,6 +3443,7 @@ def choose_similarity_fit(
         max_inlier_residual_m=(
             MAX_SPARSE_ROBUST_SIMILARITY_INLIER_RESIDUAL_M if use_sparse_robust_limits else None
         ),
+        inlier_threshold_pixel_multiplier=robust_similarity_inlier_threshold_multiplier(image_path),
     )
     candidates: list[tuple[str, tuple[float, float, float, float, list[int], list[float]]]] = []
     if robust_fit is not None:
@@ -3511,11 +3515,23 @@ def two_control_similarity_fit(
     return scale, rotation, float(tx), float(ty), [first_index, second_index], residuals
 
 
-def robust_similarity_inlier_threshold(scale: float, max_inlier_residual_m: float | None) -> float:
-    threshold = max(1200.0, scale * 90.0)
+def robust_similarity_inlier_threshold(
+    scale: float,
+    max_inlier_residual_m: float | None,
+    *,
+    pixel_multiplier: float = ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER,
+) -> float:
+    threshold = max(1200.0, scale * max(0.0, float(pixel_multiplier)))
     if max_inlier_residual_m is not None:
         threshold = min(max(0.0, float(max_inlier_residual_m)), threshold)
     return threshold
+
+
+def robust_similarity_inlier_threshold_multiplier(image_path: str | Path) -> float:
+    suffix = Path(image_path).suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return JPEG_ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER
+    return ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER
 
 
 def build_similarity_road_scorer(
@@ -3556,12 +3572,14 @@ def robust_similarity_fit(
     *,
     max_meters_per_pixel: float = MAX_ROBUST_SIMILARITY_METERS_PER_PIXEL,
     max_inlier_residual_m: float | None = None,
+    inlier_threshold_pixel_multiplier: float = ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER,
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
     if len(controls) < 2:
         return None
     key = (
         round(max(0.0, float(max_meters_per_pixel)), 6),
         None if max_inlier_residual_m is None else round(max(0.0, float(max_inlier_residual_m)), 6),
+        round(max(0.0, float(inlier_threshold_pixel_multiplier)), 6),
         tuple(
             (
                 float(control.pixel[0]),
@@ -3577,9 +3595,9 @@ def robust_similarity_fit(
 
 @lru_cache(maxsize=256)
 def _robust_similarity_fit_cached(
-    key: tuple[float, float | None, tuple[tuple[float, float, float, float], ...]],
+    key: tuple[float, float | None, float, tuple[tuple[float, float, float, float], ...]],
 ) -> tuple[float, float, float, float, list[int], list[float]] | None:
-    max_meters_per_pixel, max_inlier_residual_m, control_key = key
+    max_meters_per_pixel, max_inlier_residual_m, inlier_threshold_pixel_multiplier, control_key = key
     if len(control_key) < 2:
         return None
     pixel = np.array([(item[0], item[1]) for item in control_key], dtype=float)
@@ -3604,7 +3622,11 @@ def _robust_similarity_fit_cached(
         transformed = apply_similarity(pixel, scale, rotation, 0.0, 0.0)
         tx, ty = (m1 - transformed[i]).tolist()
         residuals = np.linalg.norm(apply_similarity(pixel, scale, rotation, tx, ty) - merc, axis=1).tolist()
-        threshold = robust_similarity_inlier_threshold(scale, max_inlier_residual_m)
+        threshold = robust_similarity_inlier_threshold(
+            scale,
+            max_inlier_residual_m,
+            pixel_multiplier=inlier_threshold_pixel_multiplier,
+        )
         inliers = [idx for idx, residual in enumerate(residuals) if residual <= threshold]
         if len(inliers) < 2:
             continue
@@ -3615,7 +3637,11 @@ def _robust_similarity_fit_cached(
         if abs(r_rotation) > 0.35:
             continue
         r_residuals = np.linalg.norm(apply_similarity(pixel, r_scale, r_rotation, r_tx, r_ty) - merc, axis=1).tolist()
-        r_threshold = robust_similarity_inlier_threshold(r_scale, max_inlier_residual_m)
+        r_threshold = robust_similarity_inlier_threshold(
+            r_scale,
+            max_inlier_residual_m,
+            pixel_multiplier=inlier_threshold_pixel_multiplier,
+        )
         r_inliers = [idx for idx, residual in enumerate(r_residuals) if residual <= r_threshold]
         if len(r_inliers) < 3:
             continue
@@ -3644,7 +3670,11 @@ def _robust_similarity_fit_cached(
         if abs(r_rotation) > 0.35:
             continue
         r_residuals = np.linalg.norm(apply_similarity(pixel, r_scale, r_rotation, r_tx, r_ty) - merc, axis=1).tolist()
-        r_threshold = robust_similarity_inlier_threshold(r_scale, max_inlier_residual_m)
+        r_threshold = robust_similarity_inlier_threshold(
+            r_scale,
+            max_inlier_residual_m,
+            pixel_multiplier=inlier_threshold_pixel_multiplier,
+        )
         r_inliers = [idx for idx, residual in enumerate(r_residuals) if residual <= r_threshold]
         if len(r_inliers) < 3:
             continue

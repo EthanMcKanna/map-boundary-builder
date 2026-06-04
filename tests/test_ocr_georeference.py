@@ -46,6 +46,7 @@ from map_boundary_builder.georeference import (
     prune_single_noisy_similarity_control,
     rank_city_contexts_for_georeferencing,
     residual_median_p90,
+    robust_similarity_inlier_threshold_multiplier,
     should_try_road_refinement,
     should_prefer_specific_context_over_sparse_region,
     single_tokens_supported_by_fuller_labels,
@@ -178,6 +179,12 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertAlmostEqual(fitted_rotation, rotation)
         self.assertAlmostEqual(fitted_tx, translation[0])
         self.assertAlmostEqual(fitted_ty, translation[1])
+
+    def test_robust_similarity_threshold_relaxes_only_for_jpeg_inputs(self) -> None:
+        self.assertEqual(robust_similarity_inlier_threshold_multiplier("upload.jpg"), 150.0)
+        self.assertEqual(robust_similarity_inlier_threshold_multiplier("upload.JPEG"), 150.0)
+        self.assertEqual(robust_similarity_inlier_threshold_multiplier("upload.png"), 90.0)
+        self.assertEqual(robust_similarity_inlier_threshold_multiplier("coverage.svg"), 90.0)
 
     def test_stacked_labels_require_nearby_rows(self) -> None:
         labels = [
