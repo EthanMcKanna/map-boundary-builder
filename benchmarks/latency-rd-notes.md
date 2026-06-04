@@ -19199,3 +19199,24 @@ with zero failures in 0.531s.
   do not add a dimension/interpolation retry unless a future quality signal can
   prove the specific San Francisco contour without lowering the catalog
   thresholds.
+- Rejected a label-city-only Zoox shortcut for the same transformed JPEG
+  bracket. The hypothesis was that OCR neighborhood labels could infer
+  `San Francisco` early and allow a catalog snap before full georeference, but
+  the candidate margins are not strong enough. With blocked network and fresh
+  OCR/extraction cache, q90 OCR produced `22` labels and inferred
+  `San Francisco` from neighborhood evidence such as `Chinatown`,
+  `Marina District`, and `Pacific Heights`; its refined shape already scores
+  `san-francisco-zoox` at IoU `0.920203`, area ratio `1.051686`, with
+  `bay-area-zoox` at only `0.607959`. This is already handled by the shipped
+  pre-OCR near-hit path, so no label shortcut is needed there. q85 OCR produced
+  `27` labels and also inferred `San Francisco`, but the refined shape scores
+  only `0.720753` IoU / `1.139917` area ratio for `san-francisco-zoox` versus
+  `0.676900` / `0.834137` for `bay-area-zoox`, a margin of only `0.043853`;
+  that is too close for a label-only exact snap and remains safer as the
+  current post-georef exact completion. q70 is the red flag: it produced `22`
+  labels but no inferred city context, and provider-only shape scoring would
+  choose the broader `bay-area-zoox` candidate (`0.762863` IoU,
+  `0.978512` area ratio) over `san-francisco-zoox` (`0.719913` IoU,
+  `1.337219` area ratio). Keep requiring direct area text or a reliable
+  georeference before label-driven catalog completion; neighborhood labels
+  alone are useful evidence for georeference, not a safe catalog shortcut.
