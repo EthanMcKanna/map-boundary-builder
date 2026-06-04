@@ -185,6 +185,14 @@ class OcrGroupingTests(unittest.TestCase):
         self.assertEqual(robust_similarity_inlier_threshold_multiplier("upload.JPEG"), 150.0)
         self.assertEqual(robust_similarity_inlier_threshold_multiplier("upload.png"), 90.0)
         self.assertEqual(robust_similarity_inlier_threshold_multiplier("coverage.svg"), 90.0)
+        with TemporaryDirectory() as workdir:
+            mislabeled_jpeg = Path(workdir) / "upload.png"
+            mislabeled_jpeg.write_bytes(b"\xff\xd8\xff\xe0fake jpeg bytes")
+            self.assertEqual(robust_similarity_inlier_threshold_multiplier(mislabeled_jpeg), 150.0)
+
+            png = Path(workdir) / "coverage.png"
+            png.write_bytes(b"\x89PNG\r\n\x1a\nfake png bytes")
+            self.assertEqual(robust_similarity_inlier_threshold_multiplier(png), 90.0)
 
     def test_stacked_labels_require_nearby_rows(self) -> None:
         labels = [

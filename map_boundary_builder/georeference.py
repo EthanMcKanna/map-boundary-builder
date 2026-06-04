@@ -3528,10 +3528,21 @@ def robust_similarity_inlier_threshold(
 
 
 def robust_similarity_inlier_threshold_multiplier(image_path: str | Path) -> float:
-    suffix = Path(image_path).suffix.lower()
+    path = Path(image_path)
+    suffix = path.suffix.lower()
     if suffix in {".jpg", ".jpeg"}:
         return JPEG_ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER
+    if raster_bytes_look_like_jpeg(path):
+        return JPEG_ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER
     return ROBUST_SIMILARITY_INLIER_PIXEL_MULTIPLIER
+
+
+def raster_bytes_look_like_jpeg(image_path: Path) -> bool:
+    try:
+        with image_path.open("rb") as handle:
+            return handle.read(3) == b"\xff\xd8\xff"
+    except OSError:
+        return False
 
 
 def build_similarity_road_scorer(

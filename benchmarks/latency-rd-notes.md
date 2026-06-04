@@ -19420,3 +19420,27 @@ with zero failures in 0.531s.
   This keeps the negative controls useful after the JPEG reliability work and
   argues against promoting sparse/mobile or non-service screenshots without a
   new independent signal.
+- Accepted a tiny header-based extension fallback for JPEG georeference
+  thresholding. The previous JPEG-only robust-similarity relaxation depended on
+  the saved upload path ending in `.jpg`/`.jpeg`; the web path preserves that
+  suffix for ordinary JPEG filenames, but extension-lost or mislabeled JPEG
+  bytes could still be treated as PNG and miss the relaxed `scale*150`
+  threshold. The helper now reads only the first three bytes when the suffix is
+  not already JPEG and applies the JPEG multiplier for `ff d8 ff` magic bytes,
+  while keeping true PNG/SVG/WebP paths on the conservative `scale*90`
+  threshold. Focused unit coverage proves `upload.png` containing JPEG bytes
+  gets `150.0`, a real PNG header stays at `90.0`, and nonexistent/generic
+  paths remain conservative.
+  Validation stayed clean: `tests/test_ocr_georeference.py` passed `154` tests
+  in `0.25s`, `tests/test_runner_summary.py` passed `126` tests in `0.53s`,
+  and the full blocked-network hard gate at
+  `out/header-jpeg-detect-full73-hard-20260604` passed `73/73` expected
+  outcomes with statuses `{"complete":62,"failed":11}`, `73/73` analyzed
+  repeat samples, primary max wall `0.358062s`, repeat wall p95/max `0.294s`
+  / `0.327s`, manifest OCR contracts `73/73`, and stable repeat signatures.
+  A side-by-side q85 transformed diagnostic using byte-identical JPEG fixtures
+  renamed to `.png` showed the mislabeled files follow the same behavior as the
+  original `.jpg` fixtures under the same current harness; that q85 diagnostic
+  remains too noisy for acceptance because focused OCR-count/profile settings
+  currently fail the original `.jpg` control as well. Treat the full hard gate
+  and unit coverage as the regression proof for this narrow robustness win.
