@@ -18662,3 +18662,17 @@ with zero failures in 0.531s.
   default p95/max limits (`+0.089985s` / `+0.094812s`). Keep the focused default
   proof as the accepted repeat-wall default validation; use the full baseline
   as a telemetry reference, not a green default-comparison proof.
+- Ran an 8-run focused repeat probe on the noisy full-comparison tail set plus
+  `bay-3-svg` as a control at
+  `out/block-network-tail-repeat-profile-control-20260604`. With
+  `MAP_BOUNDARY_BLOCK_NETWORK=1`, the same cache dir as the full repeat-wall
+  baseline, OCR/extraction caches disabled, and two warmups per case, the probe
+  passed `4/4` primary expectations and `24/24` analyzed repeat samples under
+  `total<=1.000s` and `wall<=1.000s`. Primary max wall was `0.574142s`; repeat
+  wall p95/max were `0.350970s` / `0.353871s`; repeat OCR engine total p95/max
+  were `0.308694s` / `0.315146s`. The slowest repeat cases stayed tightly
+  grouped: `bay-3-svg` p95 `0.351330s`, `los-angeles-waymo-service-area` p95
+  `0.350374s`, `houston-waymo` p95 `0.330265s`, and
+  `tesla-austin-route-receipt-long` p95 `0.289262s`. This supports treating the
+  rejected full same-code comparison as full-suite OCR scheduling/noise rather
+  than a deterministic fixture slowdown; no generation defaults changed.
