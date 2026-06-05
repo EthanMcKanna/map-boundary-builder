@@ -19532,3 +19532,16 @@ with zero failures in 0.531s.
   outcomes with statuses `{"complete":62,"failed":11}`, primary max wall
   `0.363807s`, repeat p95/max wall `0.283s` / `0.300s`, manifest OCR contracts
   `73/73`, and stable repeat signatures.
+  Production verification on the deployed `b60e1ac` build confirmed the same
+  behavior with the real q85 Houston JPEG. Health returned `ok: true`,
+  pipeline `pipeline-7c4d126bac70edee`, and warm status `ok` in `3.254680s`.
+  A base overlay upload seeded the cache as run `1780622181-b0577daf`
+  (`cache_hit: miss`, HTTP `2.876378s`, `build_boundary_s: 2.345579`,
+  artifacts `geojson_inline` + `overlay_data_url`). A first valid JPEG-comment
+  no-overlay variant then returned run `1780622184-af2262dd` with
+  `cache_hit: jpeg-commentless-overlay`, HTTP `0.744255s`,
+  `total_before_send_s: 0.005900`, `request_cache_write_s: 0.000277`, and only
+  `geojson_inline`. A second distinct comment variant returned run
+  `1780622185-76ab52df` with `cache_hit: jpeg-commentless`, HTTP `0.496258s`,
+  `total_before_send_s: 0.004481`, and only `geojson_inline`, proving the
+  no-overlay visual cache key was warmed for future metadata variants.
