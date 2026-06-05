@@ -19545,3 +19545,26 @@ with zero failures in 0.531s.
   `1780622185-76ab52df` with `cache_hit: jpeg-commentless`, HTTP `0.496258s`,
   `total_before_send_s: 0.004481`, and only `geojson_inline`, proving the
   no-overlay visual cache key was warmed for future metadata variants.
+- Promoted a narrower success-cache backfill for visual/overlay cache hits.
+  The previous no-overlay visual-key backfill made same-threshold JPEG metadata
+  variants fast, but it did not seed the threshold-compatible no-overlay
+  success key. That meant a later client request with the same visual pixels
+  and stricter `min_confidence` / `min_control_points` could still fall back to
+  an overlay-compatible key or miss if only the exact overlay key existed. The
+  API cache backfill now writes success-compatible raw and visual request keys
+  from successful cached payloads while leaving failed and catalog-miss payloads
+  exact-key only. A synthetic blocked-network API smoke seeded an overlay
+  commentless JPEG cache entry, then submitted three distinct no-overlay JPEG
+  comment variants: the first hit `jpeg-commentless-overlay` in `0.001657s`
+  before send and wrote the request success key, the second hit plain
+  `jpeg-commentless` in `0.000909s` without an extra success-key write, and a
+  stricter-threshold third variant hit `jpeg-commentless-compatible` in
+  `0.001325s` instead of rebuilding. Focused
+  tests stayed clean: `tests/test_api_cache.py` passed `87` tests in `0.48s`
+  and `tests/test_web_handler.py` passed `5` tests in `0.11s`. The full
+  blocked-network hard gate at
+  `out/success-cache-backfill-full73-hard-final-20260605` passed `73/73` expected
+  outcomes with statuses `{"complete":62,"failed":11}`, primary max wall
+  `0.342611s`, repeat p95/max wall `0.290s` / `0.296s`, manifest OCR contracts
+  `73/73`, and stable repeat signatures. The local pipeline hash after this
+  runtime change is `pipeline-b38c34e2c3b552bf`.

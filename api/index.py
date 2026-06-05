@@ -358,9 +358,13 @@ class handler(BaseHTTPRequestHandler):
         profile["raw_cache_lookup_s"] = elapsed_seconds(raw_cache_started)
         if cached is not None:
             if compatible_cache_hit or overlay_superset_cache_hit:
-                raw_cache_write_started = time.perf_counter()
-                write_run_result_cache(raw_cache_key, cached)
-                profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+                backfill_cache_hit_keys(
+                    profile,
+                    cached,
+                    raw_cache_key,
+                    raw_success_cache_key=raw_success_cache_key,
+                    warm_success_cache=True,
+                )
             profile["cache_hit"] = cache_hit_profile_value(
                 "raw",
                 compatible=compatible_cache_hit,
@@ -411,7 +415,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=png_visual_cache_key,
+                request_success_cache_key=png_visual_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -464,7 +471,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=jpeg_commentless_cache_key,
+                request_success_cache_key=jpeg_commentless_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -517,7 +527,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=jpeg_visual_cache_key,
+                request_success_cache_key=jpeg_visual_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -570,7 +583,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=webp_visual_cache_key,
+                request_success_cache_key=webp_visual_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -623,7 +639,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=avif_container_cache_key,
+                request_success_cache_key=avif_container_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -676,7 +695,10 @@ class handler(BaseHTTPRequestHandler):
                 profile,
                 cached,
                 raw_cache_key,
+                raw_success_cache_key=raw_success_cache_key,
                 request_cache_key=tiff_visual_cache_key,
+                request_success_cache_key=tiff_visual_success_cache_key,
+                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
             )
             profile["cache_hit"] = cache_hit_profile_value(
@@ -723,7 +745,10 @@ class handler(BaseHTTPRequestHandler):
                     profile,
                     cached,
                     raw_cache_key,
+                    raw_success_cache_key=raw_success_cache_key,
                     request_cache_key=cache_key,
+                    request_success_cache_key=normalized_success_cache_key,
+                    warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
                     warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
                 )
                 profile["cache_hit"] = cache_hit_profile_value(
@@ -2004,17 +2029,69 @@ def backfill_cache_hit_keys(
     cached: dict[str, Any],
     raw_cache_key: str,
     *,
+    raw_success_cache_key: str | None = None,
     request_cache_key: str | None = None,
+    request_success_cache_key: str | None = None,
+    warm_success_cache: bool = False,
     warm_request_cache: bool = False,
 ) -> None:
+    written_keys: set[str] = set()
     raw_cache_write_started = time.perf_counter()
     write_run_result_cache(raw_cache_key, cached)
+    written_keys.add(raw_cache_key)
     profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+    if warm_success_cache:
+        backfill_success_cache_key(
+            profile,
+            cached,
+            raw_success_cache_key,
+            profile_key="raw_success_cache_write_s",
+            written_keys=written_keys,
+        )
     if not warm_request_cache or request_cache_key is None or request_cache_key == raw_cache_key:
+        if warm_success_cache:
+            backfill_success_cache_key(
+                profile,
+                cached,
+                request_success_cache_key,
+                profile_key="request_success_cache_write_s",
+                written_keys=written_keys,
+            )
         return
     request_cache_write_started = time.perf_counter()
     write_run_result_cache(request_cache_key, cached)
+    written_keys.add(request_cache_key)
     profile["request_cache_write_s"] = elapsed_seconds(request_cache_write_started)
+    if warm_success_cache:
+        backfill_success_cache_key(
+            profile,
+            cached,
+            request_success_cache_key,
+            profile_key="request_success_cache_write_s",
+            written_keys=written_keys,
+        )
+
+
+def backfill_success_cache_key(
+    profile: dict[str, Any],
+    cached: dict[str, Any],
+    cache_key: str | None,
+    *,
+    profile_key: str,
+    written_keys: set[str],
+) -> None:
+    if cache_key is None or cache_key in written_keys or not cached_payload_can_seed_success_cache(cached):
+        return
+    started = time.perf_counter()
+    write_run_result_cache(cache_key, cached)
+    written_keys.add(cache_key)
+    profile[profile_key] = elapsed_seconds(started)
+
+
+def cached_payload_can_seed_success_cache(payload: dict[str, Any]) -> bool:
+    if payload.get("status") in {"failed", "catalog_miss"}:
+        return False
+    return isinstance(payload.get("summary"), dict) and isinstance(payload.get("artifacts"), dict)
 
 
 def cached_payload_satisfies_success_options(payload: dict[str, Any], options: Any) -> bool:

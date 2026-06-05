@@ -1083,16 +1083,20 @@ class ApiRunCacheTests(unittest.TestCase):
         base = jpeg_bytes(Image.new("RGB", (8, 8), (20, 80, 160)), quality=90)
         commented = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof")
         second_comment = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof again")
+        third_comment = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof threshold")
         self.assertNotEqual(base, commented)
         self.assertNotEqual(commented, second_comment)
+        self.assertNotEqual(second_comment, third_comment)
         self.assertNotEqual(
             raw_run_result_cache_key(base, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
             raw_run_result_cache_key(commented, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
         )
         self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(commented))
         self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(second_comment))
+        self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(third_comment))
         self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(commented))
         self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(second_comment))
+        self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(third_comment))
 
         request = api_index.handler.__new__(api_index.handler)
         request.parse_upload_request = lambda: (
@@ -1120,6 +1124,19 @@ class ApiRunCacheTests(unittest.TestCase):
             second_captured["status"] = status
 
         second_request.send_json = send_second_json
+        third_request = api_index.handler.__new__(api_index.handler)
+        third_request.parse_upload_request = lambda: (
+            {"include_overlay": "0", "min_confidence": "0.8", "min_control_points": "4"},
+            {"image": ("upload.jpg", third_comment)},
+            "multipart",
+        )
+        third_captured: dict[str, object] = {}
+
+        def send_third_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            third_captured["payload"] = payload
+            third_captured["status"] = status
+
+        third_request.send_json = send_third_json
         cached = {
             "city": "Synthetic",
             "summary": {"city": "Synthetic", "combined_confidence": 0.9, "control_points": 4},
@@ -1162,15 +1179,19 @@ class ApiRunCacheTests(unittest.TestCase):
             assert visual_cache_key is not None
             visual_warmed = read_run_result_cache(visual_cache_key)
             second_request.handle_create_run()
+            third_request.handle_create_run()
 
         payload = captured["payload"]
         assert isinstance(payload, dict)
         second_payload = second_captured["payload"]
         assert isinstance(second_payload, dict)
+        third_payload = third_captured["payload"]
+        assert isinstance(third_payload, dict)
         self.assertEqual(captured["status"], HTTPStatus.CREATED)
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["profile"]["cache_hit"], "jpeg-commentless-overlay")
         self.assertIn("request_cache_write_s", payload["profile"])
+        self.assertIn("request_success_cache_write_s", payload["profile"])
         self.assertEqual(payload["artifacts"]["geojson_inline"]["type"], "FeatureCollection")
         self.assertNotIn("overlay_data_url", payload["artifacts"])
         self.assertIsNotNone(warmed)
@@ -1183,6 +1204,10 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(second_payload["cached"])
         self.assertEqual(second_payload["profile"]["cache_hit"], "jpeg-commentless")
         self.assertNotIn("overlay_data_url", second_payload["artifacts"])
+        self.assertEqual(third_captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(third_payload["cached"])
+        self.assertEqual(third_payload["profile"]["cache_hit"], "jpeg-commentless-compatible")
+        self.assertNotIn("overlay_data_url", third_payload["artifacts"])
 
     def test_create_run_can_include_ocr_engine_profile_on_cache_miss(self) -> None:
         request = api_index.handler.__new__(api_index.handler)
