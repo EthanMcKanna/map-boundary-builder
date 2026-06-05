@@ -1079,6 +1079,80 @@ class ApiRunCacheTests(unittest.TestCase):
         assert isinstance(warmed, dict)
         self.assertNotIn("overlay_data_url", warmed["artifacts"])
 
+    def test_create_run_uses_overlay_superset_cache_for_jpeg_metadata_variant(self) -> None:
+        base = jpeg_bytes(Image.new("RGB", (8, 8), (20, 80, 160)), quality=90)
+        commented = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof")
+        self.assertNotEqual(base, commented)
+        self.assertNotEqual(
+            raw_run_result_cache_key(base, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
+            raw_run_result_cache_key(commented, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
+        )
+        self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(commented))
+        self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(commented))
+
+        request = api_index.handler.__new__(api_index.handler)
+        request.parse_upload_request = lambda: (
+            {"include_overlay": "0"},
+            {"image": ("upload.jpg", commented)},
+            "multipart",
+        )
+        captured: dict[str, object] = {}
+
+        def send_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            captured["payload"] = payload
+            captured["status"] = status
+
+        request.send_json = send_json
+        cached = {
+            "city": "Synthetic",
+            "summary": {"city": "Synthetic", "combined_confidence": 0.9, "control_points": 4},
+            "artifacts": {
+                "geojson_inline": {"type": "FeatureCollection", "features": []},
+                "overlay_data_url": None,
+            },
+        }
+        overlay_options = SimpleNamespace(
+            simplify_px=api_index.DEFAULT_SIMPLIFY_PX,
+            min_confidence=0.55,
+            min_control_points=3,
+            include_overlay=True,
+            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
+            overlay_format="webp",
+            write_mask_artifact=False,
+            allow_catalog=True,
+            catalog_probe_only=False,
+            catalog_probe_missed=False,
+            catalog_probe_miss_low_iou=False,
+            filename_hint="upload.jpg",
+            source_was_svg=False,
+        )
+        no_overlay_options = SimpleNamespace(**{**vars(overlay_options), "include_overlay": False})
+        no_overlay_options.preview_max_dimension = None
+        no_overlay_options.overlay_format = "png"
+
+        with (
+            TemporaryDirectory() as workdir,
+            patch.object(api_index, "RUN_RESULT_CACHE_DIR", Path(workdir)),
+            patch("api.index.get_pipeline_version", return_value="pipeline-jpeg-overlay-superset"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=AssertionError("cache miss")),
+        ):
+            cache_key = jpeg_commentless_run_result_cache_key(base, None, overlay_options)
+            assert cache_key is not None
+            write_run_result_cache(cache_key, cached)
+            request.handle_create_run()
+            warmed = read_run_result_cache(raw_run_result_cache_key(commented, None, no_overlay_options))
+
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(payload["cached"])
+        self.assertEqual(payload["profile"]["cache_hit"], "jpeg-commentless-overlay")
+        self.assertEqual(payload["artifacts"]["geojson_inline"]["type"], "FeatureCollection")
+        self.assertNotIn("overlay_data_url", payload["artifacts"])
+        self.assertIsNotNone(warmed)
+        assert isinstance(warmed, dict)
+        self.assertNotIn("overlay_data_url", warmed["artifacts"])
+
     def test_create_run_can_include_ocr_engine_profile_on_cache_miss(self) -> None:
         request = api_index.handler.__new__(api_index.handler)
         request.parse_upload_request = lambda: (

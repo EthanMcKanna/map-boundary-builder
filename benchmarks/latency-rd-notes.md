@@ -19498,3 +19498,17 @@ with zero failures in 0.531s.
   expected outcomes with statuses `{"complete":62,"failed":11}`, primary max
   wall `0.368312s`, repeat p95/max wall `0.288s` / `0.315s`, manifest OCR
   contracts `73/73`, and stable repeat signatures.
+  Follow-up production verification on the deployed `3876555` build confirmed
+  the warmed no-overlay raw key works as intended: a subsequent
+  `include_overlay=0` upload of the same mislabeled q85 Houston JPEG returned
+  `cache_hit: raw` for run `1780618235-184f2fe8`, pipeline
+  `pipeline-3386448b457aa23f`, HTTP `0.504394s`, `raw_cache_lookup_s:
+  0.001818`, `total_before_send_s: 0.002099`, and only `geojson_inline`.
+  A synthetic JPEG metadata-variant cache smoke then locked the non-raw path:
+  base JPEG bytes seeded an overlay cache entry, a valid comment-segment variant
+  had a different raw hash but the same commentless/visual JPEG hash, and the
+  no-overlay request returned `jpeg-commentless-overlay` in `0.001126s` before
+  send with only `geojson_inline`; a third repeat for the commented bytes hit
+  direct `raw` in `0.000241s` before send. `tests/test_api_cache.py` now covers
+  that JPEG metadata-variant overlay-superset path and passed `87` tests in
+  `0.66s`.
