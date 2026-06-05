@@ -19568,3 +19568,24 @@ with zero failures in 0.531s.
   `0.342611s`, repeat p95/max wall `0.290s` / `0.296s`, manifest OCR contracts
   `73/73`, and stable repeat signatures. The local pipeline hash after this
   runtime change is `pipeline-b38c34e2c3b552bf`.
+  Production verification on the deployed `0bf8387` build confirmed the same
+  behavior with real Houston Waymo JPEG pixels. `vercel inspect
+  https://map-boundary-builder.vercel.app --logs` reported a Ready production
+  build from branch `main`, commit `0bf8387`, with build start
+  `2026-06-05T01:49:52Z`, completion `2026-06-05T01:50:20Z`, and remote
+  Vercel CLI `54.9.0`; the local CLI used for inspection is still `54.3.0`.
+  A warm health request returned `ok: true`, pipeline
+  `pipeline-b38c34e2c3b552bf`, and warm status `ok` in `3.350207s`. A live
+  multipart smoke converted `/Users/ethanmckanna/Downloads/h-waymo.png` to a
+  q85 JPEG, seeded the overlay cache as run `1780624291-f5c3ad76`
+  (`cache_hit: miss`, Houston, `11` controls, confidence `0.898`,
+  `total_before_send_s: 2.276192`, artifacts `geojson_inline` +
+  `overlay_data_url`), then uploaded two distinct JPEG-comment variants with
+  `include_overlay=0`. The first variant returned run
+  `1780624294-ef6622f2` with `cache_hit: jpeg-commentless-overlay`, HTTP
+  `0.676275s`, `total_before_send_s: 0.009881`,
+  `request_success_cache_write_s: 0.000452`, and only `geojson_inline`; the
+  stricter second variant (`min_confidence=0.8`, `min_control_points=10`)
+  returned run `1780624295-71aa01ca` with
+  `cache_hit: jpeg-commentless-compatible`, HTTP `0.928309s`,
+  `total_before_send_s: 0.008609`, and only `geojson_inline`.
