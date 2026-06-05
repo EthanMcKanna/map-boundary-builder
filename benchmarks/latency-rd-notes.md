@@ -19589,3 +19589,20 @@ with zero failures in 0.531s.
   returned run `1780624295-71aa01ca` with
   `cache_hit: jpeg-commentless-compatible`, HTTP `0.928309s`,
   `total_before_send_s: 0.008609`, and only `geojson_inline`.
+- Follow-up saved-report parity audit compared the previous accepted
+  `out/visual-cache-backfill-full73-hard-20260605/stress-summary.json` gate
+  against the final success-cache gate at
+  `out/success-cache-backfill-full73-hard-final-20260605/stress-summary.json`.
+  All `73` rows were present in both reports with zero status drift, zero
+  geometry-hash drift, and zero expectation drift; statuses stayed
+  `{"complete":62,"failed":11}`. The new run's primary max wall improved from
+  `0.363807s` to `0.342611s`; repeat p95 rose slightly from `0.283075s` to
+  `0.289750s`, while repeat max improved from `0.300164s` to `0.295968s`.
+  Largest positive primary deltas remained modest and OCR-noise shaped
+  (`san-antonio-waymo +0.054060s`, `tesla-austin-route-active +0.034174s`,
+  `tesla-sync-non-map-ui +0.030543s`), and largest repeat p95 deltas were also
+  below the hard-gate regression budgets (`orlando-waymo-service-area
+  +0.041643s`, `houston-waymo +0.026814s`, `houston-waymo-current-catalog
+  +0.025022s`). This locks the success-cache backfill as behavior-preserving
+  relative to the prior 73-fixture cache-backfill proof; no additional runtime
+  tuning was promoted from the audit.
