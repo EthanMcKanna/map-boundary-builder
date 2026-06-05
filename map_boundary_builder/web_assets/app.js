@@ -98,6 +98,7 @@ const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
 const RUN_CACHE_RAW_VERSION = "image-to-geojson-v6";
 const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v8";
+const RUN_CACHE_SUCCESS_THRESHOLD_TOKEN = "success-threshold-compatible";
 const RUN_CACHE_SETTING_FIELDS = [
   "allow_catalog",
   "city",
@@ -1227,28 +1228,48 @@ async function buildRunCacheKeys(file, formData) {
     return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
   }
   try {
-    const settingsSignature = runCacheSettingsSignature(file, formData);
+    const settingsSignatures = runCacheSettingsSignatures(file, formData);
+    const successThresholds = runCacheSuccessThresholds(formData);
     if (!hasCurrentRunCacheHistoryEntries()) {
       return {
         lookupKeys: [],
-        cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),
+        compatibleLookupKeys: [],
+        cacheKeysPromise: lazyRunCacheKeys(file, settingsSignatures),
+        successThresholds,
       };
     }
     const runCacheVersion = await fetchRunCacheRuntimeVersion();
     if (!runCacheVersion) return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
-    const [rawImageHash, settingsHash] = await Promise.all([
+    const [rawImageHash, settingsHash, successSettingsHash] = await Promise.all([
       rawImageContentHash(file),
-      sha256Hex(new TextEncoder().encode(settingsSignature)),
+      sha256Hex(new TextEncoder().encode(settingsSignatures.exact)),
+      sha256Hex(new TextEncoder().encode(settingsSignatures.successThresholdCompatible)),
     ]);
     const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, runCacheVersion, rawImageHash, settingsHash);
+    const compatibleRawKey = runCacheKey(
+      RUN_CACHE_RAW_VERSION,
+      runCacheVersion,
+      rawImageHash,
+      successSettingsHash,
+    );
     if (requiresJsonUpload(file)) {
-      return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
+      return {
+        lookupKeys: [rawKey],
+        compatibleLookupKeys: [compatibleRawKey],
+        cacheKeysPromise: Promise.resolve(normalizedCacheKeys([rawKey, compatibleRawKey])),
+        successThresholds,
+      };
     }
     if (!hasCurrentRunCacheHistoryEntries()) {
-      return { lookupKeys: [rawKey], cacheKeysPromise: Promise.resolve([rawKey]) };
+      return {
+        lookupKeys: [rawKey],
+        compatibleLookupKeys: [compatibleRawKey],
+        cacheKeysPromise: Promise.resolve(normalizedCacheKeys([rawKey, compatibleRawKey])),
+        successThresholds,
+      };
     }
     const pixelHashPromise = pixelImageContentHash(file);
-    const cacheKeysPromise = pixelHashPromise
+    const exactCacheKeysPromise = pixelHashPromise
       .then((pixelImageHash) => cacheKeysForHashes({
         runCacheVersion,
         settingsHash,
@@ -1256,6 +1277,16 @@ async function buildRunCacheKeys(file, formData) {
         pixelImageHash,
       }))
       .catch(() => [rawKey]);
+    const compatibleCacheKeysPromise = pixelHashPromise
+      .then((pixelImageHash) => cacheKeysForHashes({
+        runCacheVersion,
+        settingsHash: successSettingsHash,
+        rawImageHash,
+        pixelImageHash,
+      }))
+      .catch(() => [compatibleRawKey]);
+    const cacheKeysPromise = Promise.all([exactCacheKeysPromise, compatibleCacheKeysPromise])
+      .then(([exactKeys, compatibleKeys]) => normalizedCacheKeys([...exactKeys, ...compatibleKeys]));
     const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);
     const lookupKeys = cacheKeysForHashes({
       runCacheVersion,
@@ -1263,33 +1294,65 @@ async function buildRunCacheKeys(file, formData) {
       rawImageHash,
       pixelImageHash: quickPixelHash,
     });
-    return { lookupKeys, cacheKeysPromise };
+    const compatibleLookupKeys = cacheKeysForHashes({
+      runCacheVersion,
+      settingsHash: successSettingsHash,
+      rawImageHash,
+      pixelImageHash: quickPixelHash,
+    });
+    return {
+      lookupKeys,
+      compatibleLookupKeys,
+      cacheKeysPromise,
+      lookupKeysPromise: exactCacheKeysPromise,
+      compatibleLookupKeysPromise: compatibleCacheKeysPromise,
+      successThresholds,
+    };
   } catch (error) {
     console.warn("Could not build local run cache key", error);
     return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
   }
 }
 
-function runCacheSettingsSignature(file, formData) {
+function runCacheSettingsSignatures(file, formData) {
+  return {
+    exact: runCacheSettingsSignature(file, formData),
+    successThresholdCompatible: runCacheSettingsSignature(file, formData, {
+      successThresholdCompatible: true,
+    }),
+  };
+}
+
+function runCacheSettingsSignature(file, formData, options = {}) {
   return JSON.stringify({
     filename_hint: filenameHintCacheValue(file.name || ""),
     settings: Object.fromEntries(
-      RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData)]),
+      RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData, options)]),
     ),
   });
 }
 
-function normalizedRunCacheSettingValue(field, formData) {
+function normalizedRunCacheSettingValue(field, formData, options = {}) {
   const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
   if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "city") return normalizedRunCacheCity(rawValue);
   if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);
   if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
+  if (options.successThresholdCompatible && (field === "min_confidence" || field === "min_control_points")) {
+    return RUN_CACHE_SUCCESS_THRESHOLD_TOKEN;
+  }
   if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);
   if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);
   if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);
   return rawValue;
+}
+
+function runCacheSuccessThresholds(formData) {
+  return {
+    minConfidence: Number(normalizedRunCacheFloat(formData.get("min_confidence"), 0.55, 0, 1)),
+    minControlPoints: Number(normalizedRunCacheInteger(formData.get("min_control_points"), 3, 0, 12)),
+  };
 }
 
 function normalizedRunCacheCity(value) {
@@ -1321,33 +1384,48 @@ function normalizedRunCacheInteger(value, defaultValue, minimum, maximum) {
   return String(Math.max(minimum, Math.min(maximum, number)));
 }
 
-function lazyRunCacheKeys(file, settingsSignature) {
+function lazyRunCacheKeys(file, settingsSignatures) {
   let cacheKeysPromise = null;
   return () => {
-    cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignature);
+    cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignatures);
     return cacheKeysPromise;
   };
 }
 
-async function runCacheKeysFromImage(file, settingsSignature) {
+async function runCacheKeysFromImage(file, settingsSignatures) {
   const runCacheVersion = await fetchRunCacheRuntimeVersion();
   if (!runCacheVersion) return [];
-  const [rawImageHash, settingsHash] = await Promise.all([
+  const [rawImageHash, settingsHash, successSettingsHash] = await Promise.all([
     rawImageContentHash(file),
-    sha256Hex(new TextEncoder().encode(settingsSignature)),
+    sha256Hex(new TextEncoder().encode(settingsSignatures.exact)),
+    sha256Hex(new TextEncoder().encode(settingsSignatures.successThresholdCompatible)),
   ]);
   const rawKey = runCacheKey(RUN_CACHE_RAW_VERSION, runCacheVersion, rawImageHash, settingsHash);
-  if (requiresJsonUpload(file)) return [rawKey];
+  const compatibleRawKey = runCacheKey(
+    RUN_CACHE_RAW_VERSION,
+    runCacheVersion,
+    rawImageHash,
+    successSettingsHash,
+  );
+  if (requiresJsonUpload(file)) return normalizedCacheKeys([rawKey, compatibleRawKey]);
   try {
     const pixelImageHash = await pixelImageContentHash(file);
-    return cacheKeysForHashes({
-      runCacheVersion,
-      settingsHash,
-      rawImageHash,
-      pixelImageHash,
-    });
+    return normalizedCacheKeys([
+      ...cacheKeysForHashes({
+        runCacheVersion,
+        settingsHash,
+        rawImageHash,
+        pixelImageHash,
+      }),
+      ...cacheKeysForHashes({
+        runCacheVersion,
+        settingsHash: successSettingsHash,
+        rawImageHash,
+        pixelImageHash,
+      }),
+    ]);
   } catch (error) {
-    return [rawKey];
+    return normalizedCacheKeys([rawKey, compatibleRawKey]);
   }
 }
 
@@ -2339,21 +2417,65 @@ async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options =
     const lookup = await cacheLookupPromise;
     const lookupKeys = normalizedCacheKeys(lookup?.lookupKeys || []);
     const cachedEntry = findCachedHistoryEntry(lookupKeys);
-    if (cachedEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries()) {
-      return cachedEntry;
-    }
-    const deferredWaitMs = Math.max(0, Number(options.deferredWaitMs || 0));
-    const deferredKeys = await promiseWithTimeout(
-      cacheKeysFromPromise(lookup?.cacheKeysPromise),
-      deferredWaitMs,
+    if (cachedEntry) return cachedEntry;
+    const compatibleEntry = findCompatibleCachedHistoryEntry(
+      lookup?.compatibleLookupKeys || [],
+      lookup?.successThresholds,
     );
-    return findCachedHistoryEntry([
-      ...lookupKeys,
-      ...(Array.isArray(deferredKeys) ? deferredKeys : []),
+    if (compatibleEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries()) {
+      return compatibleEntry;
+    }
+    const exactDeferredKeysPromise = lookup?.lookupKeysPromise || Promise.resolve([]);
+    const compatibleDeferredKeysPromise = lookup?.compatibleLookupKeysPromise;
+    const [exactDeferredKeys, compatibleDeferredKeys] = await Promise.all([
+      promiseWithTimeout(
+        cacheKeysFromPromise(exactDeferredKeysPromise),
+        Math.max(0, Number(options.deferredWaitMs || 0)),
+      ),
+      promiseWithTimeout(
+        cacheKeysFromPromise(compatibleDeferredKeysPromise),
+        Math.max(0, Number(options.deferredWaitMs || 0)),
+      ),
     ]);
+    const deferredCachedEntry = findCachedHistoryEntry([
+      ...lookupKeys,
+      ...(Array.isArray(exactDeferredKeys) ? exactDeferredKeys : []),
+    ]);
+    if (deferredCachedEntry) {
+      return deferredCachedEntry;
+    }
+    return findCompatibleCachedHistoryEntry([
+      ...(Array.isArray(lookup?.compatibleLookupKeys) ? lookup.compatibleLookupKeys : []),
+      ...(Array.isArray(compatibleDeferredKeys) ? compatibleDeferredKeys : []),
+    ], lookup?.successThresholds);
   } catch (error) {
     return null;
   }
+}
+
+function findCompatibleCachedHistoryEntry(cacheKeys, successThresholds) {
+  const keys = normalizedCacheKeys(Array.isArray(cacheKeys) ? cacheKeys : [cacheKeys]);
+  if (!keys.length) return null;
+  return sortHistoryEntries(historyEntries).find((entry) => (
+    cacheKeysOverlap(keys, entryCacheKeys(entry)) &&
+    entry.geojson &&
+    historyEntrySatisfiesSuccessThresholds(entry, successThresholds)
+  )) || null;
+}
+
+function historyEntrySatisfiesSuccessThresholds(entry, successThresholds) {
+  const minConfidence = Number(successThresholds?.minConfidence);
+  const minControlPoints = Number(successThresholds?.minControlPoints);
+  if (!Number.isFinite(minConfidence) || !Number.isFinite(minControlPoints)) {
+    return false;
+  }
+  const summary = entry?.summary || {};
+  const confidence = Number(summary.combined_confidence);
+  const controlPoints = Number.parseInt(summary.control_points, 10);
+  return Number.isFinite(confidence) &&
+    Number.isFinite(controlPoints) &&
+    confidence >= minConfidence &&
+    controlPoints >= minControlPoints;
 }
 
 function entryCacheKeys(entry) {

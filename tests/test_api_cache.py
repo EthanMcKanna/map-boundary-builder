@@ -2089,22 +2089,33 @@ class ApiRunCacheTests(unittest.TestCase):
             b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options = {}) {"
         )
         quick_hit = app_js.index(b"const cachedEntry = findCachedHistoryEntry(lookupKeys);", helper_start)
+        quick_compatible = app_js.index(
+            b"const compatibleEntry = findCompatibleCachedHistoryEntry(",
+            helper_start,
+        )
         fresh_guard = app_js.index(
-            b"if (cachedEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries())",
+            b"if (compatibleEntry || !options.includeDeferred || !hasCurrentRunCacheHistoryEntries())",
             helper_start,
         )
-        deferred_wait = app_js.index(
-            b"const deferredWaitMs = Math.max(0, Number(options.deferredWaitMs || 0));",
+        exact_deferred = app_js.index(
+            b"const exactDeferredKeysPromise = lookup?.lookupKeysPromise || Promise.resolve([]);",
             helper_start,
         )
-        deferred_keys = app_js.index(b"cacheKeysFromPromise(lookup?.cacheKeysPromise),", helper_start)
-        combined_lookup = app_js.index(b"return findCachedHistoryEntry([\n      ...lookupKeys,", helper_start)
+        deferred_lookup = app_js.index(b"const deferredCachedEntry = findCachedHistoryEntry([", helper_start)
+        compatible_deferred = app_js.index(
+            b"return findCompatibleCachedHistoryEntry([",
+            helper_start,
+        )
 
         self.assertLess(helper_start, quick_hit)
-        self.assertLess(quick_hit, fresh_guard)
-        self.assertLess(fresh_guard, deferred_wait)
-        self.assertLess(deferred_wait, deferred_keys)
-        self.assertLess(deferred_keys, combined_lookup)
+        self.assertLess(quick_hit, quick_compatible)
+        self.assertLess(quick_compatible, fresh_guard)
+        self.assertLess(fresh_guard, exact_deferred)
+        self.assertLess(exact_deferred, deferred_lookup)
+        self.assertLess(deferred_lookup, compatible_deferred)
+        self.assertIn(b"function findCompatibleCachedHistoryEntry(cacheKeys, successThresholds) {", app_js)
+        self.assertIn(b"function historyEntrySatisfiesSuccessThresholds(entry, successThresholds) {", app_js)
+        self.assertNotIn(b"lookup?.lookupKeysPromise || lookup?.cacheKeysPromise", app_js)
         self.assertIn(b"function hasCachedRunHistoryEntries() {", app_js)
         self.assertIn(b"function hasCurrentRunCacheHistoryEntries() {", app_js)
         self.assertIn(b"entry?.geojson && entryCacheKeys(entry).length", app_js)
@@ -2163,18 +2174,21 @@ class ApiRunCacheTests(unittest.TestCase):
             b'const RUN_CACHE_FALSE_BOOLEAN_TOKENS = new Set(["0", "false", "no", "off", ""]);',
             app_js,
         )
+        self.assertIn(b'const RUN_CACHE_SUCCESS_THRESHOLD_TOKEN = "success-threshold-compatible";', app_js)
 
-        settings_signature = app_js.index(b"function runCacheSettingsSignature(file, formData) {")
+        signatures_helper = app_js.index(b"function runCacheSettingsSignatures(file, formData) {")
+        settings_signature = app_js.index(b"function runCacheSettingsSignature(file, formData, options = {}) {")
         normalized_call = app_js.index(
-            b"RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData)])",
+            b"RUN_CACHE_SETTING_FIELDS.map((field) => [field, normalizedRunCacheSettingValue(field, formData, options)])",
             settings_signature,
         )
-        helper_start = app_js.index(b"function normalizedRunCacheSettingValue(field, formData) {")
+        helper_start = app_js.index(b"function normalizedRunCacheSettingValue(field, formData, options = {}) {")
         city_helper = app_js.index(b"function normalizedRunCacheCity(value) {", helper_start)
         bool_helper = app_js.index(b"function normalizedRunCacheBoolean(value, defaultValue) {", city_helper)
         float_helper = app_js.index(b"function normalizedRunCacheFloat(value, defaultValue, minimum, maximum) {", bool_helper)
         int_helper = app_js.index(b"function normalizedRunCacheInteger(value, defaultValue, minimum, maximum) {", float_helper)
 
+        self.assertLess(signatures_helper, settings_signature)
         self.assertLess(settings_signature, normalized_call)
         self.assertLess(normalized_call, helper_start)
         self.assertLess(helper_start, city_helper)
@@ -2187,9 +2201,15 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b'if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);', app_js)
         self.assertIn(b'if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(b'if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);', app_js)
+        self.assertIn(
+            b'if (options.successThresholdCompatible && (field === "min_confidence" || field === "min_control_points"))',
+            app_js,
+        )
+        self.assertIn(b"return RUN_CACHE_SUCCESS_THRESHOLD_TOKEN;", app_js[helper_start:city_helper])
         self.assertIn(b'if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);', app_js)
         self.assertIn(b'if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);', app_js)
         self.assertIn(b'if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);', app_js)
+        self.assertIn(b"function runCacheSuccessThresholds(formData) {", app_js)
         self.assertIn(b'replace(/[^a-z0-9]+/g, "");', app_js[city_helper:bool_helper])
         self.assertIn(
             b"if (value === null || value === undefined) return String(Boolean(defaultValue));",
@@ -2205,16 +2225,22 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         helper_start = app_js.index(b"async function buildRunCacheKeys(file, formData) {")
         settings_signature = app_js.index(
-            b"const settingsSignature = runCacheSettingsSignature(file, formData);",
+            b"const settingsSignatures = runCacheSettingsSignatures(file, formData);",
             helper_start,
         )
+        success_thresholds = app_js.index(b"const successThresholds = runCacheSuccessThresholds(formData);", helper_start)
         no_history_guard = app_js.index(b"if (!hasCurrentRunCacheHistoryEntries()) {", settings_signature)
         lazy_return = app_js.index(
-            b"cacheKeysPromise: lazyRunCacheKeys(file, settingsSignature),",
+            b"cacheKeysPromise: lazyRunCacheKeys(file, settingsSignatures),",
             no_history_guard,
         )
         runtime_fetch = app_js.index(b"const runCacheVersion = await fetchRunCacheRuntimeVersion();", lazy_return)
         raw_hash = app_js.index(b"rawImageContentHash(file),", runtime_fetch)
+        exact_settings_hash = app_js.index(b"sha256Hex(new TextEncoder().encode(settingsSignatures.exact)),", raw_hash)
+        compatible_settings_hash = app_js.index(
+            b"sha256Hex(new TextEncoder().encode(settingsSignatures.successThresholdCompatible)),",
+            exact_settings_hash,
+        )
         pixel_hash = app_js.index(b"const pixelHashPromise = pixelImageContentHash(file);", raw_hash)
         quick_wait = app_js.index(
             b"const quickPixelHash = await promiseWithTimeout(pixelHashPromise, RUN_CACHE_PIXEL_HASH_WAIT_MS);",
@@ -2222,14 +2248,21 @@ class ApiRunCacheTests(unittest.TestCase):
         )
 
         self.assertLess(settings_signature, no_history_guard)
+        self.assertLess(settings_signature, success_thresholds)
+        self.assertLess(success_thresholds, no_history_guard)
         self.assertLess(no_history_guard, lazy_return)
         self.assertLess(lazy_return, runtime_fetch)
         self.assertLess(runtime_fetch, raw_hash)
+        self.assertLess(raw_hash, exact_settings_hash)
+        self.assertLess(exact_settings_hash, compatible_settings_hash)
         self.assertLess(raw_hash, pixel_hash)
         self.assertLess(pixel_hash, quick_wait)
-        self.assertIn(b"function lazyRunCacheKeys(file, settingsSignature) {", app_js)
-        self.assertIn(b"cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignature);", app_js)
-        self.assertIn(b"async function runCacheKeysFromImage(file, settingsSignature) {", app_js)
+        self.assertIn(b"compatibleLookupKeys: [],", app_js)
+        self.assertIn(b"compatibleLookupKeys: [compatibleRawKey],", app_js)
+        self.assertIn(b"compatibleLookupKeysPromise: compatibleCacheKeysPromise,", app_js)
+        self.assertIn(b"function lazyRunCacheKeys(file, settingsSignatures) {", app_js)
+        self.assertIn(b"cacheKeysPromise ||= runCacheKeysFromImage(file, settingsSignatures);", app_js)
+        self.assertIn(b"async function runCacheKeysFromImage(file, settingsSignatures) {", app_js)
         self.assertIn(
             b'const keys = typeof cacheKeysPromise === "function" ? await cacheKeysPromise() : await cacheKeysPromise;',
             app_js,

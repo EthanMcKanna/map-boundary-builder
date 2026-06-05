@@ -19606,3 +19606,18 @@ with zero failures in 0.531s.
   +0.025022s`). This locks the success-cache backfill as behavior-preserving
   relative to the prior 73-fixture cache-backfill proof; no additional runtime
   tuning was promoted from the audit.
+- Promoted the same success-threshold-compatible cache idea into browser local
+  history. Browser cache settings now produce both an exact signature and a
+  `success-threshold-compatible` signature that ignores only
+  `min_confidence` and `min_control_points`; successful local history saves
+  write both key families, while compatible lookup hits are accepted only when
+  the saved entry has GeoJSON plus summary confidence/control-point counts
+  satisfying the current request. This closes the browser-only upload gap where
+  a user could run a screenshot successfully, then rerun the same image with
+  stricter thresholds and miss local history despite the prior result already
+  exceeding those thresholds. Validation stayed focused on the frontend cache
+  contract because the server pipeline and runner were unchanged:
+  `node --check map_boundary_builder/web_assets/app.js` passed,
+  `tests/test_api_cache.py` passed `87` tests in `0.60s`, and
+  `tests/test_web_handler.py tests/test_pipeline_version.py` passed `12` tests
+  in `0.23s`; `git diff --check` was clean.
