@@ -19621,3 +19621,110 @@ with zero failures in 0.531s.
   `tests/test_api_cache.py` passed `87` tests in `0.60s`, and
   `tests/test_web_handler.py tests/test_pipeline_version.py` passed `12` tests
   in `0.23s`; `git diff --check` was clean.
+- Rejected two broad bright-blue OCR tail probes on the five-row slow Waymo
+  slice (`dallas-waymo`, `los-angeles-waymo`, `bay-area-waymo`,
+  `san-antonio-waymo`, `houston-waymo`) after comparing against
+  `out/success-cache-backfill-full73-hard-final-20260605/stress-summary.json`.
+  Lowering `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_DET_LIMIT_SIDE_LEN` from `256`
+  to `224` at `out/brightblue-det224-slow5-20260605` preserved all five
+  signatures and expectations, but it regressed the primary wall budget:
+  `dallas-waymo` rose from `0.343s` to `0.463s`, candidate max wall was
+  `0.463438s`, and the comparator failed with wall and repeat OCR-count /
+  hidden-overlap violations. Raising
+  `MAP_BOUNDARY_RAPIDOCR_BRIGHT_BLUE_WARM_SAMPLE_MAX_DIMENSION` from `1000`
+  to `1400` at `out/brightblue-warm1400-slow5-20260605` also preserved
+  signatures and expectations and improved the Dallas primary from `0.343s` to
+  `0.299s`, but it added `0.108s` to runtime prewarm, slowed
+  `los-angeles-waymo` from `0.330s` to `0.359s`, and still failed the focused
+  comparator on repeat OCR-count / hidden-overlap budgets. Keep the shipped
+  `256/max` detector and `1000px` bright-blue warm sample unless a future
+  candidate is more selective than these broad knobs.
+- Rejected two route-UI negative-case speed probes. Adding `gray-fill` to the
+  route-UI OCR crop set at `out/gray-route-crop-focused-20260605` kept the six
+  route screenshots failed as expected and improved the gray receipt repeat
+  case (`tesla-austin-route-receipt-gray-long` repeat p95 `0.217s -> 0.187s`),
+  but it changed reject evidence for both gray route rows
+  (`ocr_label_count`, `ocr_top_labels`, and `route_metric_labels`) and failed
+  the focused comparator on repeat hidden-OCR drift. Lowering only
+  `MAP_BOUNDARY_GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION` from `900` to `800` at
+  `out/gray-route-cap800-focused-20260605` failed harder: expectations dropped
+  from `2/2` to `0/2`, the gray receipt triggered a full-detail OCR retry and
+  rose from `0.203s` to `0.491s` wall, while the gray active route lost too
+  many OCR labels. Keep gray route UI on the existing uncropped `900px` OCR cap;
+  the current route rejection path is already subsecond and evidence-stable.
+- Rejected lowering the dedicated profile-app UI OCR cap from `1000px` to
+  `900px`. The focused comparator at `out/profile-app-ocr900-focused-20260605`
+  preserved the failed status, but expectation pass dropped from `1/1` to
+  `0/1`: `profile-app-non-map-ui` changed `non_map_ui_labels` and
+  `ocr_top_labels`, exceeded the low-confidence label contract
+  (`label_confidence_lt_90_count 2 above 1`), and primary wall worsened from
+  `0.273s` to `0.356s` even though repeat OCR p95 was slightly lower. Keep the
+  shipped `1000px` cap for profile-app non-map rejection evidence.
+- Re-audited the remaining non-Waymo OCR frontier without changing runtime
+  code: `bay-3-svg`, `nashville-waymo-svg-forced`, `zoox-sf`,
+  `zoox-sf-bigger`, and `grand-rapids-may-mobility`. A first unchanged run at
+  `out/frontier-tail-current-noop-20260605` showed why this slice is noisy:
+  all `5/5` rows passed expectations with zero signature drift, but the strict
+  comparator failed row/stage budgets because the focused defaults used an
+  unblocked network env and `3` repeats against a blocked-network `2`-repeat
+  baseline. Aligning the env/repeats at
+  `out/frontier-tail-current-noop-blocked-20260605` removed row-level wall and
+  OCR failures, leaving only a focused aggregate OCR-stage-total violation on
+  unchanged code (`+0.119s > 0.080s`). The clean row-budget proof at
+  `out/frontier-tail-current-noop-blocked-rowbudgets-20260605` passed: `5/5`
+  expected, statuses `{"complete":5}`, signature changes `0`, max primary wall
+  `0.362596s`, repeat p95/max wall `0.294s`/`0.308s`, and baseline row wall
+  and OCR regression budgets passed. This confirms the current SVG/dark-teal
+  frontier remains behavior-stable and comfortably subsecond; avoid promoting
+  a new OCR knob unless it clears this same row-budget slice plus a full
+  hard-gate replay, and keep aggregate stage-total checks for full-manifest
+  comparisons rather than tiny focused no-op audits.
+- Prototyped but did not promote a light-fill text-first route UI reject. The
+  patch made no-catalog, cityless, non-SVG tall `light-fill` screenshots run
+  the existing route-UI OCR cap before extraction and reject immediately when
+  pickup/dropoff/ride/plate evidence was decisive, while leaving gray-fill
+  route and non-map rows on the existing flow. Targeted tests passed (`15
+  passed, 112 deselected`). The focused real route slice at
+  `out/light-route-text-first-focused-20260605` passed `4/4`, signatures `0`,
+  row wall/OCR budgets green, repeat p95/max wall improved
+  `-0.013s`/`-0.014s`, and all four light route rows stayed expected failures.
+  A full 73 hard-gate replay at
+  `out/light-route-text-first-full73-hard-20260605` preserved behavior
+  (`73/73`, statuses `{"complete":62,"failed":11}`, signature changes `0`) and
+  the four route rows were faster in that run, but the comparator failed on
+  unrelated `nashville-waymo-svg-forced` OCR variance (`+0.131s` wall,
+  `+0.124s` OCR, det `+0.119s`) plus repeat hidden-OCR budget. Because the full
+  promotion gate was not green, the runtime patch/test were reverted and the
+  idea stays unpromoted until it can clear a clean full hard-gate replay.
+- Replayed the full 73-row hard gate on unchanged runtime code to calibrate the
+  promotion gate before reapplying the light-fill route shortcut. The first
+  no-op replay at `out/current-full73-noop-rerun-20260605` preserved behavior
+  (`73/73`, statuses `{"complete":62,"failed":11}`, signature changes `0`,
+  manifest OCR contracts passed, latency budget passed) but used `3` repeat
+  runs against a `2`-repeat baseline and failed aggregate budgets
+  (`primary stage ocr +0.243s`, repeat hidden OCR `+1.072s`). The aligned
+  replay at `out/current-full73-noop-rerun-aligned-20260605` also preserved
+  behavior and stayed subsecond (max wall `0.358957s`, repeat p95/max wall
+  `0.285s`/`0.311s`, median delta `+0.001s`, p95 wall delta `+0.000s`, avg wall
+  delta `+0.001s`), but still failed one strict budget on unchanged code:
+  `zoox-sf` primary OCR stage row `+0.083s` against a `0.080s` budget. Treat
+  this as evidence that the current full hard-gate comparator can reject
+  unchanged runtime due to OCR timing noise; do not promote the light-fill
+  route shortcut until it clears an aligned replay, or until the promotion
+  process gains a separate no-op noise control for the same run window.
+- Added and validated a narrow benchmark-gate reliability patch for one source
+  of false repeat-profile failures: aggregate repeat hidden-OCR totals are now
+  skipped when baseline and candidate analyzed repeat sample counts differ,
+  while p95/max repeat, per-case repeat, wall, OCR, count, signature, and
+  expectation checks still run. The new unit coverage reproduces the false
+  shape where hidden-OCR total rises only because candidate has more analyzed
+  samples, and `tests/test_stress_benchmark.py` passed all `161` tests.
+  Recomputing the two no-op full-gate reports with the patched comparator
+  changed `out/current-full73-noop-rerun-20260605` from two budget violations
+  to one: the hidden-total failure is now audited as
+  `skipped_repeat_ocr_hidden_total_sample_mismatch=73->146`, while the real
+  remaining failure is still `primary_stage_total_regression_exceeded` for OCR
+  stage total `+0.243s`. The aligned no-op replay remains one violation
+  (`zoox-sf` OCR stage row `+0.083s > 0.080s`), confirming this patch fixes
+  only the repeat-count false fail and does not hide same-count stage timing
+  regressions.

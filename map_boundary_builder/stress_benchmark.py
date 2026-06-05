@@ -2695,6 +2695,14 @@ def baseline_regression_budget(
                     ),
                 }
             )
+        elif (
+            hidden_total_sample_mismatch := repeat_profile_analyzed_sample_count_mismatch(
+                comparison
+            )
+        ) is not None:
+            budget["skipped_repeat_ocr_hidden_total_sample_count_mismatch"] = (
+                hidden_total_sample_mismatch
+            )
         elif hidden_total_delta > max_repeat_ocr_overlap_hidden_total_regression_s:
             violation = {
                 "kind": "repeat_ocr_overlap_hidden_total_regression_exceeded",
@@ -2727,6 +2735,36 @@ def baseline_regression_budget(
     budget["violations"] = violations
     budget["passed"] = not violations
     return budget
+
+
+def repeat_profile_analyzed_sample_count_mismatch(
+    comparison: dict[str, Any],
+) -> dict[str, float] | None:
+    repeat_delta = comparison.get("repeat_profile_delta")
+    if not isinstance(repeat_delta, dict):
+        return None
+    baseline_count = repeat_delta_metric_value(
+        repeat_delta,
+        ("sample_counts", "analyzed_samples"),
+        "baseline",
+    )
+    candidate_count = repeat_delta_metric_value(
+        repeat_delta,
+        ("sample_counts", "analyzed_samples"),
+        "candidate",
+    )
+    delta_count = repeat_delta_metric_value(
+        repeat_delta,
+        ("sample_counts", "analyzed_samples"),
+        "delta",
+    )
+    if baseline_count is None or candidate_count is None or delta_count in (None, 0.0):
+        return None
+    return {
+        "baseline_analyzed_samples": round(baseline_count, 6),
+        "candidate_analyzed_samples": round(candidate_count, 6),
+        "delta_samples": round(delta_count, 6),
+    }
 
 
 def repeat_ocr_count_regression_budget_violations(
@@ -9770,19 +9808,36 @@ def baseline_regression_budget_text(regression_budget: dict[str, Any]) -> str:
 
 
 def baseline_regression_budget_skip_text(regression_budget: dict[str, Any]) -> str:
+    skip_parts: list[str] = []
     skipped_count = parse_nonnegative_count_metric(
         regression_budget.get("skipped_primary_ocr_zero_call_row_count")
     )
     if skipped_count is None:
         skipped_rows = regression_budget.get("skipped_primary_ocr_zero_call_rows")
-        if not isinstance(skipped_rows, list):
-            return ""
-        skipped_count = float(
-            sum(1 for slug in skipped_rows if isinstance(slug, str) and slug)
+        if isinstance(skipped_rows, list):
+            skipped_count = float(
+                sum(1 for slug in skipped_rows if isinstance(slug, str) and slug)
+            )
+    if skipped_count is not None and skipped_count > 0.0:
+        skip_parts.append(f"skipped_primary_ocr_zero_call={skipped_count:g}")
+    hidden_sample_mismatch = regression_budget.get(
+        "skipped_repeat_ocr_hidden_total_sample_count_mismatch"
+    )
+    if isinstance(hidden_sample_mismatch, dict):
+        baseline_samples = parse_nonnegative_count_metric(
+            hidden_sample_mismatch.get("baseline_analyzed_samples")
         )
-    if skipped_count <= 0.0:
+        candidate_samples = parse_nonnegative_count_metric(
+            hidden_sample_mismatch.get("candidate_analyzed_samples")
+        )
+        if baseline_samples is not None and candidate_samples is not None:
+            skip_parts.append(
+                "skipped_repeat_ocr_hidden_total_sample_mismatch="
+                f"{baseline_samples:g}->{candidate_samples:g}"
+            )
+    if not skip_parts:
         return ""
-    return f" skipped_primary_ocr_zero_call={skipped_count:g}"
+    return " " + " ".join(skip_parts)
 
 
 def baseline_regression_budget_violation_count_text(violations: list[Any]) -> str:

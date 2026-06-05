@@ -1899,6 +1899,94 @@ def test_baseline_repeat_ocr_hidden_total_budget_flags_masked_growth() -> None:
     )
 
 
+def test_baseline_repeat_ocr_hidden_total_budget_skips_mismatched_sample_counts() -> None:
+    baseline = {
+        "rows": [
+            {
+                "slug": "hidden-repeat",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.50,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 2,
+                "p95_total_elapsed_s": 0.50,
+                "max_total_elapsed_s": 0.55,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {
+                        "p95_duration_s": 0.40,
+                        "max_duration_s": 0.42,
+                    }
+                },
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.040,
+                    "max_duration_s": 0.045,
+                    "total_s": 0.120,
+                },
+            }
+        },
+    }
+    candidate = {
+        "rows": [
+            {
+                "slug": "hidden-repeat",
+                "observed_status": "complete",
+                "total_elapsed_s": 0.48,
+            }
+        ],
+        "repeat_profile": {
+            "summary": {
+                "analyzed_samples": 3,
+                "p95_total_elapsed_s": 0.49,
+                "max_total_elapsed_s": 0.53,
+                "ocr_engine_stage_duration_s": {
+                    "total_s": {
+                        "p95_duration_s": 0.39,
+                        "max_duration_s": 0.41,
+                    }
+                },
+                "ocr_overlap_hidden_s": {
+                    "p95_duration_s": 0.041,
+                    "max_duration_s": 0.046,
+                    "total_s": 0.181,
+                },
+            }
+        },
+    }
+
+    comparison = stress_module.compare_stress_reports(
+        baseline,
+        candidate,
+        max_repeat_p95_regression_s=0.05,
+        max_repeat_ocr_engine_total_p95_regression_s=0.05,
+        max_repeat_ocr_overlap_hidden_total_regression_s=0.05,
+    )
+
+    repeat_hidden = comparison["repeat_profile_delta"]["ocr_overlap_hidden_s"]
+    assert repeat_hidden["total_s"]["delta_s"] == 0.061
+    assert comparison["repeat_profile_delta"]["sample_counts"]["analyzed_samples"] == {
+        "baseline": 2.0,
+        "candidate": 3.0,
+        "delta": 1.0,
+    }
+    assert comparison["regression_budget"]["passed"] is True
+    assert comparison["regression_budget"]["violations"] == []
+    assert comparison["regression_budget"][
+        "skipped_repeat_ocr_hidden_total_sample_count_mismatch"
+    ] == {
+        "baseline_analyzed_samples": 2.0,
+        "candidate_analyzed_samples": 3.0,
+        "delta_samples": 1.0,
+    }
+    assert (
+        stress_module.baseline_regression_budget_text(comparison["regression_budget"])
+        == "baseline regression budget: passed repeat_p95<=0.050s "
+        "repeat_ocr_p95<=0.050s repeat_ocr_hidden_total<=0.050s "
+        "skipped_repeat_ocr_hidden_total_sample_mismatch=2->3"
+    )
+
+
 def test_baseline_ocr_regression_budget_flags_stage_regression_without_total_regression() -> None:
     baseline = {
         "rows": [
