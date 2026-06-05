@@ -19512,3 +19512,23 @@ with zero failures in 0.531s.
   direct `raw` in `0.000241s` before send. `tests/test_api_cache.py` now covers
   that JPEG metadata-variant overlay-superset path and passed `87` tests in
   `0.66s`.
+- Promoted a follow-on backfill for the exact no-overlay visual cache key after
+  visual/normalized compatible or overlay-superset hits. The previous
+  overlay-cache reuse warmed the raw key for the exact request bytes, but a
+  stream of JPEG uploads with different valid comment metadata and identical
+  pixels/commentless hash still used `jpeg-commentless-overlay` for every new
+  raw byte variant. A synthetic blocked-network API smoke seeded an
+  overlay-enabled base JPEG cache entry, then submitted five distinct
+  no-overlay JPEG comment variants. Before the change all five variants hit
+  `jpeg-commentless-overlay` with before-send times around `0.0010s` -
+  `0.0011s`; after backfilling the no-overlay visual key, the first variant
+  still hit `jpeg-commentless-overlay` and wrote `request_cache_write_s:
+  0.000127`, while the next four variants hit plain `jpeg-commentless` with
+  before-send times `0.000823s`, `0.000800s`, `0.000812s`, and `0.000820s`.
+  Focused tests stayed clean: `tests/test_api_cache.py` passed `87` tests in
+  `0.50s`, `tests/test_web_handler.py` passed `5` tests in `0.11s`, and the
+  full blocked-network hard gate at
+  `out/visual-cache-backfill-full73-hard-20260605` passed `73/73` expected
+  outcomes with statuses `{"complete":62,"failed":11}`, primary max wall
+  `0.363807s`, repeat p95/max wall `0.283s` / `0.300s`, manifest OCR contracts
+  `73/73`, and stable repeat signatures.

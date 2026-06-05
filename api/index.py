@@ -407,9 +407,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["png_visual_cache_lookup_s"] = elapsed_seconds(png_visual_cache_started)
         if png_visual_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=png_visual_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "png-visual",
                 compatible=compatible_cache_hit,
@@ -456,9 +460,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["jpeg_commentless_cache_lookup_s"] = elapsed_seconds(jpeg_commentless_cache_started)
         if jpeg_commentless_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=jpeg_commentless_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "jpeg-commentless",
                 compatible=compatible_cache_hit,
@@ -505,9 +513,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["jpeg_visual_cache_lookup_s"] = elapsed_seconds(jpeg_visual_cache_started)
         if jpeg_visual_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=jpeg_visual_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "jpeg-visual",
                 compatible=compatible_cache_hit,
@@ -554,9 +566,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["webp_visual_cache_lookup_s"] = elapsed_seconds(webp_visual_cache_started)
         if webp_visual_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=webp_visual_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "webp-visual",
                 compatible=compatible_cache_hit,
@@ -603,9 +619,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["avif_container_cache_lookup_s"] = elapsed_seconds(avif_container_cache_started)
         if avif_container_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=avif_container_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "avif-container",
                 compatible=compatible_cache_hit,
@@ -652,9 +672,13 @@ class handler(BaseHTTPRequestHandler):
             overlay_superset_cache_hit = False
         profile["tiff_visual_cache_lookup_s"] = elapsed_seconds(tiff_visual_cache_started)
         if tiff_visual_cache_key is not None and cached is not None:
-            raw_cache_write_started = time.perf_counter()
-            write_run_result_cache(raw_cache_key, cached)
-            profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+            backfill_cache_hit_keys(
+                profile,
+                cached,
+                raw_cache_key,
+                request_cache_key=tiff_visual_cache_key,
+                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+            )
             profile["cache_hit"] = cache_hit_profile_value(
                 "tiff-visual",
                 compatible=compatible_cache_hit,
@@ -695,9 +719,13 @@ class handler(BaseHTTPRequestHandler):
             )
             profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
             if cached is not None:
-                raw_cache_write_started = time.perf_counter()
-                write_run_result_cache(raw_cache_key, cached)
-                profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+                backfill_cache_hit_keys(
+                    profile,
+                    cached,
+                    raw_cache_key,
+                    request_cache_key=cache_key,
+                    warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
+                )
                 profile["cache_hit"] = cache_hit_profile_value(
                     "normalized",
                     compatible=compatible_cache_hit,
@@ -1969,6 +1997,24 @@ def cache_hit_profile_value(base: str, *, compatible: bool, overlay_superset: bo
     if overlay_superset:
         return f"{base}-overlay-compatible" if compatible else f"{base}-overlay"
     return f"{base}-compatible" if compatible else base
+
+
+def backfill_cache_hit_keys(
+    profile: dict[str, Any],
+    cached: dict[str, Any],
+    raw_cache_key: str,
+    *,
+    request_cache_key: str | None = None,
+    warm_request_cache: bool = False,
+) -> None:
+    raw_cache_write_started = time.perf_counter()
+    write_run_result_cache(raw_cache_key, cached)
+    profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
+    if not warm_request_cache or request_cache_key is None or request_cache_key == raw_cache_key:
+        return
+    request_cache_write_started = time.perf_counter()
+    write_run_result_cache(request_cache_key, cached)
+    profile["request_cache_write_s"] = elapsed_seconds(request_cache_write_started)
 
 
 def cached_payload_satisfies_success_options(payload: dict[str, Any], options: Any) -> bool:

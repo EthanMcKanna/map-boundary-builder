@@ -1082,13 +1082,17 @@ class ApiRunCacheTests(unittest.TestCase):
     def test_create_run_uses_overlay_superset_cache_for_jpeg_metadata_variant(self) -> None:
         base = jpeg_bytes(Image.new("RGB", (8, 8), (20, 80, 160)), quality=90)
         commented = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof")
+        second_comment = insert_jpeg_segment(base, api_index.JPEG_COMMENT_MARKER, b"cache proof again")
         self.assertNotEqual(base, commented)
+        self.assertNotEqual(commented, second_comment)
         self.assertNotEqual(
             raw_run_result_cache_key(base, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
             raw_run_result_cache_key(commented, None, BoundaryBuildOptions(filename_hint="upload.jpg")),
         )
         self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(commented))
+        self.assertEqual(jpeg_commentless_sha256(base), jpeg_commentless_sha256(second_comment))
         self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(commented))
+        self.assertEqual(jpeg_visual_sha256(base), jpeg_visual_sha256(second_comment))
 
         request = api_index.handler.__new__(api_index.handler)
         request.parse_upload_request = lambda: (
@@ -1103,6 +1107,19 @@ class ApiRunCacheTests(unittest.TestCase):
             captured["status"] = status
 
         request.send_json = send_json
+        second_request = api_index.handler.__new__(api_index.handler)
+        second_request.parse_upload_request = lambda: (
+            {"include_overlay": "0"},
+            {"image": ("upload.jpg", second_comment)},
+            "multipart",
+        )
+        second_captured: dict[str, object] = {}
+
+        def send_second_json(payload: dict[str, object], *, status: HTTPStatus) -> None:
+            second_captured["payload"] = payload
+            second_captured["status"] = status
+
+        second_request.send_json = send_second_json
         cached = {
             "city": "Synthetic",
             "summary": {"city": "Synthetic", "combined_confidence": 0.9, "control_points": 4},
@@ -1141,17 +1158,31 @@ class ApiRunCacheTests(unittest.TestCase):
             write_run_result_cache(cache_key, cached)
             request.handle_create_run()
             warmed = read_run_result_cache(raw_run_result_cache_key(commented, None, no_overlay_options))
+            visual_cache_key = jpeg_commentless_run_result_cache_key(commented, None, no_overlay_options)
+            assert visual_cache_key is not None
+            visual_warmed = read_run_result_cache(visual_cache_key)
+            second_request.handle_create_run()
 
         payload = captured["payload"]
         assert isinstance(payload, dict)
+        second_payload = second_captured["payload"]
+        assert isinstance(second_payload, dict)
         self.assertEqual(captured["status"], HTTPStatus.CREATED)
         self.assertTrue(payload["cached"])
         self.assertEqual(payload["profile"]["cache_hit"], "jpeg-commentless-overlay")
+        self.assertIn("request_cache_write_s", payload["profile"])
         self.assertEqual(payload["artifacts"]["geojson_inline"]["type"], "FeatureCollection")
         self.assertNotIn("overlay_data_url", payload["artifacts"])
         self.assertIsNotNone(warmed)
         assert isinstance(warmed, dict)
         self.assertNotIn("overlay_data_url", warmed["artifacts"])
+        self.assertIsNotNone(visual_warmed)
+        assert isinstance(visual_warmed, dict)
+        self.assertNotIn("overlay_data_url", visual_warmed["artifacts"])
+        self.assertEqual(second_captured["status"], HTTPStatus.CREATED)
+        self.assertTrue(second_payload["cached"])
+        self.assertEqual(second_payload["profile"]["cache_hit"], "jpeg-commentless")
+        self.assertNotIn("overlay_data_url", second_payload["artifacts"])
 
     def test_create_run_can_include_ocr_engine_profile_on_cache_miss(self) -> None:
         request = api_index.handler.__new__(api_index.handler)
