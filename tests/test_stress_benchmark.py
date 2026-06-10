@@ -7707,10 +7707,10 @@ def test_main_applies_real_screenshot_hard_gate_preset(tmp_path, monkeypatch) ->
         }
         expected_count_budget = {
             "label_confidence_lt_90_count": 3.0,
-            "label_count": 29.0,
+            "label_count": 38.0,
             "raw_box_count": 50.0,
-            "result_count": 29.0,
-            "selected_box_count": 30.0,
+            "result_count": 41.0,
+            "selected_box_count": 43.0,
         }
         assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
         assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
@@ -7803,10 +7803,10 @@ def test_main_applies_focused_real_screenshot_gate_preset(tmp_path, monkeypatch)
         }
         expected_count_budget = {
             "label_confidence_lt_90_count": 3.0,
-            "label_count": 29.0,
+            "label_count": 38.0,
             "raw_box_count": 50.0,
-            "result_count": 29.0,
-            "selected_box_count": 30.0,
+            "result_count": 41.0,
+            "selected_box_count": 43.0,
         }
         assert kwargs["max_repeat_ocr_engine_p95_count"] == expected_count_budget
         assert kwargs["max_repeat_ocr_engine_max_count"] == expected_count_budget
@@ -8511,17 +8511,17 @@ def test_real_screenshot_hard_gate_merges_metric_budget_overrides(tmp_path, monk
         }
         assert kwargs["max_repeat_ocr_engine_p95_count"] == {
             "label_confidence_lt_90_count": 3.0,
-            "label_count": 29.0,
+            "label_count": 38.0,
             "raw_box_count": 50.0,
-            "result_count": 29.0,
+            "result_count": 41.0,
             "selected_box_count": 28.0,
         }
         assert kwargs["max_repeat_ocr_engine_max_count"] == {
             "label_confidence_lt_90_count": 3.0,
             "label_count": 28.0,
             "raw_box_count": 50.0,
-            "result_count": 29.0,
-            "selected_box_count": 30.0,
+            "result_count": 41.0,
+            "selected_box_count": 43.0,
         }
         return {
             "prewarm": {"status": "ok", "total_s": 1.0},

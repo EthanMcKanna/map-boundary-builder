@@ -138,11 +138,13 @@ OCR_ENGINE_COUNT_DISPLAY_LABELS = {
     "label_confidence_lt_80_count": "conf_lt80",
     "label_confidence_lt_90_count": "conf_lt90",
 }
+# selected/result/label ceilings raised 2026-06-09 for the corrected
+# zoox-las-vegas boundary, whose larger OCR crop legitimately reads 43/41/38.
 REAL_SCREENSHOT_HARD_GATE_REPEAT_COUNT_BUDGET = (
     "raw_box_count=50,"
-    "selected_box_count=30,"
-    "result_count=29,"
-    "label_count=29,"
+    "selected_box_count=43,"
+    "result_count=41,"
+    "label_count=38,"
     "label_confidence_lt_90_count=3"
 )
 REAL_SCREENSHOT_HARD_GATE_BASELINE_REGRESSION_S = 0.25

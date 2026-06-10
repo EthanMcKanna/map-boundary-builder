@@ -34,13 +34,29 @@ AUTO_FILL_MAX_CLUSTER_COVERAGE = 0.65
 AUTO_FILL_MIN_COMPONENT_SPAN_RATIO = 0.12
 AUTO_FILL_MIN_COMPONENT_DENSITY = 0.45
 AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO = 0.35
+AUTO_FILL_TEXTURE_LAPLACIAN_THRESHOLD = 6
+AUTO_FILL_MIN_INTERIOR_TEXTURE = 0.07
+AUTO_FILL_MIN_SEED_CHROMA = 20.0
+AUTO_FILL_CHROMA_SCORE_SCALE = 24.0
+AUTO_FILL_RING_CLOSE_RATIO = 0.03
+AUTO_FILL_RING_MIN_CHROMA = 20.0
+AUTO_FILL_RING_MEMBER_MIN_CHROMA = 15.0
+AUTO_FILL_RING_HUE_MERGE_DEGREES = 25.0
+AUTO_FILL_RING_MAX_STROKE_COVERAGE = 0.20
+AUTO_FILL_RING_MIN_ENCLOSED_RATIO = 1.2
+AUTO_FILL_RING_DOMINANT_HOLE_RATIO = 0.80
+AUTO_FILL_RING_MAX_BORDER_FRACTION = 0.30
 AUTO_FILL_RESULT_MIN_COVERAGE = 0.01
 AUTO_FILL_RESULT_MAX_COVERAGE = 0.85
-AUTO_FILL_FALLBACK_MIN_COVERAGE = 0.005
+AUTO_FILL_FALLBACK_MIN_COVERAGE = 0.02
 AUTO_FILL_FALLBACK_MAX_COVERAGE = 0.95
 AUTO_FILL_FALLBACK_LIGHT_FILL_MIN_COVERAGE = 0.025
 AUTO_FILL_CONFIDENCE_DISCOUNT = 0.9
 AUTO_FILL_TAKEOVER_MAX_IOU = 0.5
+AUTO_FILL_TAKEOVER_MIN_COVERAGE_RATIO = 0.5
+AUTO_FILL_TAKEOVER_OVERSIZED_STYLED_COVERAGE = 0.6
+AUTO_FILL_FALLBACK_LIGHT_FILL_MAX_COVERAGE = 0.60
+AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE = 0.90
 AUTO_FILL_ASSIGN_CHUNK_PIXELS = 262_144
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 EXTRACTION_CACHE_DIR = _CACHE_ROOT / "extractions"
@@ -271,12 +287,22 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
         # When the suspect styled mask and the generic pick agree on the
         # region, keep the tuned styled result; replace it only when the
         # generic pass found a genuinely different fill.
-        if styled is None or extraction_masks_disagree(styled.mask, generic.mask):
+        if styled is None or auto_fill_should_take_over(styled, generic):
             return generic
         return styled
     if styled is None:
         raise ValueError("No service-area polygon could be extracted from the image.")
     return styled
+
+
+def auto_fill_should_take_over(styled: ExtractionResult, generic: ExtractionResult) -> bool:
+    if not extraction_masks_disagree(styled.mask, generic.mask):
+        return False
+    # A much smaller disagreeing pick is more likely noise than a better
+    # answer — unless the styled mask is itself oversized basemap.
+    if styled.coverage_ratio > AUTO_FILL_TAKEOVER_OVERSIZED_STYLED_COVERAGE:
+        return True
+    return generic.coverage_ratio >= styled.coverage_ratio * AUTO_FILL_TAKEOVER_MIN_COVERAGE_RATIO
 
 
 def extraction_masks_disagree(first: np.ndarray, second: np.ndarray) -> bool:
@@ -327,12 +353,20 @@ def styled_extraction_result(
 def should_attempt_auto_fill_fallback(result: ExtractionResult, rgb: np.ndarray) -> bool:
     if result.style == "light-fill":
         # A light-fill pick below the classification floor means the light mask
-        # fragmented into basemap pockets instead of one dominant fill, and a
-        # pick matching the border color is basemap rather than a service fill.
+        # fragmented into basemap pockets instead of one dominant fill; a pick
+        # far above it is merged basemap, and a pick matching the border color
+        # is basemap rather than a service fill.
         if result.coverage_ratio < AUTO_FILL_FALLBACK_LIGHT_FILL_MIN_COVERAGE:
+            return True
+        if result.coverage_ratio > AUTO_FILL_FALLBACK_LIGHT_FILL_MAX_COVERAGE:
             return True
         if not mask_color_distinct_from_border(rgb, result.mask):
             return True
+    # An Otsu gray-fill that swallows nearly the whole frame segmented the
+    # basemap; a mask far below the smallest plausible fill is usually stroke
+    # dashes or specks rather than a fill.
+    if result.style == "gray-fill" and result.coverage_ratio > AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE:
+        return True
     return (
         result.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE
         or result.coverage_ratio > AUTO_FILL_FALLBACK_MAX_COVERAGE
@@ -433,11 +467,59 @@ def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
         np.bincount(labels.ravel(), minlength=AUTO_FILL_CLUSTER_COUNT),
     )
     group_image = group_of_label[label_image]
-    selected_groups = select_auto_fill_groups(group_image, group_centers, lab)
-    if selected_groups is None:
+    border_fractions, border_color = auto_fill_border_stats(group_image, group_centers.shape[0], lab)
+    texture = analysis_texture_mask(lab)
+    selected_groups = select_auto_fill_groups(
+        group_image,
+        group_centers,
+        border_fractions=border_fractions,
+        border_color=border_color,
+        texture=texture,
+    )
+    if selected_groups is not None:
+        selected_labels = np.flatnonzero(np.isin(group_of_label, sorted(selected_groups)))
+        return nearest_center_membership_mask(rgb, centers, selected_labels)
+    ring_mask = select_auto_fill_ring(
+        group_image,
+        group_centers,
+        border_color=border_color,
+    )
+    if ring_mask is None:
         return None
-    selected_labels = np.flatnonzero(np.isin(group_of_label, sorted(selected_groups)))
-    return nearest_center_membership_mask(rgb, centers, selected_labels)
+    return upscale_bool_mask(ring_mask, rgb.shape[:2])
+
+
+def auto_fill_border_stats(
+    group_image: np.ndarray,
+    group_count: int,
+    lab: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    border_groups = np.concatenate(
+        (group_image[0, :], group_image[-1, :], group_image[:, 0], group_image[:, -1])
+    )
+    border_fractions = np.bincount(border_groups, minlength=group_count).astype(np.float64)
+    border_fractions /= float(border_groups.size)
+    border_lab = np.concatenate(
+        (lab[0, :, :], lab[-1, :, :], lab[:, 0, :], lab[:, -1, :]),
+        axis=0,
+    ).astype(np.float32)
+    return border_fractions, np.median(border_lab, axis=0)
+
+
+def analysis_texture_mask(lab: np.ndarray) -> np.ndarray:
+    """Pixels with meaningful local lightness structure. A translucent service
+    overlay keeps the basemap's street/label texture visible, while water,
+    parkland, and solid UI fills are flat."""
+    laplacian = cv2.Laplacian(lab[:, :, 0], cv2.CV_16S, ksize=3)
+    return np.abs(laplacian) > AUTO_FILL_TEXTURE_LAPLACIAN_THRESHOLD
+
+
+def upscale_bool_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    if mask.shape == tuple(shape):
+        return mask
+    return (
+        cv2.resize(mask.astype(np.uint8), (shape[1], shape[0]), interpolation=cv2.INTER_NEAREST) > 0
+    )
 
 
 def merge_close_cluster_centers(
@@ -476,20 +558,12 @@ def merge_close_cluster_centers(
 def select_auto_fill_groups(
     group_image: np.ndarray,
     group_centers: np.ndarray,
-    lab: np.ndarray,
+    *,
+    border_fractions: np.ndarray,
+    border_color: np.ndarray,
+    texture: np.ndarray,
 ) -> set[int] | None:
     group_count = group_centers.shape[0]
-    border_groups = np.concatenate(
-        (group_image[0, :], group_image[-1, :], group_image[:, 0], group_image[:, -1])
-    )
-    border_fractions = np.bincount(border_groups, minlength=group_count).astype(np.float64)
-    border_fractions /= float(border_groups.size)
-    border_lab = np.concatenate(
-        (lab[0, :, :], lab[-1, :, :], lab[:, 0, :], lab[:, -1, :]),
-        axis=0,
-    ).astype(np.float32)
-    border_color = np.median(border_lab, axis=0)
-
     # A semi-transparent overlay renders as a family of nearby tints (fill over
     # background, fill over roads, fill over parks), so each candidate is the
     # union of one seed group with its color neighbors.
@@ -508,6 +582,7 @@ def select_auto_fill_groups(
             group_centers[seed],
             border_color,
             float(border_fractions[members].sum()),
+            texture=texture,
         )
         if score is not None and score > best_score:
             best_score = score
@@ -522,6 +597,8 @@ def auto_fill_candidate_score(
     seed_center: np.ndarray,
     border_color: np.ndarray,
     border_fraction: float,
+    *,
+    texture: np.ndarray,
 ) -> float | None:
     if border_fraction > AUTO_FILL_MAX_BORDER_FRACTION:
         return None
@@ -555,11 +632,116 @@ def auto_fill_candidate_score(
     filled_area = float(fill_binary_holes(component).sum())
     if float(area) / max(1.0, filled_area) < AUTO_FILL_MIN_COMPONENT_DENSITY:
         return None
-    eroded_area = float(cv2.erode(component.astype(np.uint8), kernel).sum())
+    eroded = cv2.erode(component.astype(np.uint8), kernel) > 0
+    eroded_area = float(eroded.sum())
     if eroded_area / float(area) < AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO:
         return None
+    # A translucent service fill keeps basemap streets/labels visible inside
+    # it; flat regions (water, parkland, solid cards) carry no texture.
+    interior_probe = eroded if eroded.any() else component
+    texture_fraction = float(texture[interior_probe].mean())
+    if texture_fraction < AUTO_FILL_MIN_INTERIOR_TEXTURE:
+        return None
+    # Basemap water and land read as pale (low LAB chroma) even when roads or
+    # labels give them texture; announcement overlays are saturated.
+    seed_chroma = float(np.linalg.norm(seed_center[1:].astype(np.float32) - 128.0))
+    if seed_chroma < AUTO_FILL_MIN_SEED_CHROMA:
+        return None
+    chroma_score = min(1.0, seed_chroma / AUTO_FILL_CHROMA_SCORE_SCALE)
     contiguity = min(1.0, float(area) / max(1.0, float(candidate_mask.sum())))
-    return area_ratio * contiguity * (1.0 - border_fraction) * min(1.0, distinctness / 40.0)
+    return area_ratio * contiguity * (1.0 - border_fraction) * min(1.0, distinctness / 40.0) * chroma_score
+
+
+def select_auto_fill_ring(
+    group_image: np.ndarray,
+    group_centers: np.ndarray,
+    *,
+    border_color: np.ndarray,
+) -> np.ndarray | None:
+    """Outline-only service maps draw a colored boundary stroke with no fill.
+    Find a chromatic, mostly-closed thin ring whose closure encloses one
+    dominant interior region, and return the filled envelope."""
+    h, w = group_image.shape
+    group_count = group_centers.shape[0]
+    ring_close_px = max(5, round(min(h, w) * AUTO_FILL_RING_CLOSE_RATIO)) | 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ring_close_px, ring_close_px))
+    ab_offsets = group_centers[:, 1:].astype(np.float32) - 128.0
+    chromas = np.linalg.norm(ab_offsets, axis=1)
+    hue_angles = np.degrees(np.arctan2(ab_offsets[:, 1], ab_offsets[:, 0]))
+    best_mask: np.ndarray | None = None
+    best_score = 0.0
+    scored_member_sets: set[tuple[int, ...]] = set()
+    for group in range(group_count):
+        center = group_centers[group]
+        chroma = float(chromas[group])
+        if chroma < AUTO_FILL_RING_MIN_CHROMA:
+            continue
+        if chroma_weighted_color_distance(center, border_color) < AUTO_FILL_MIN_BORDER_DISTINCTNESS:
+            continue
+        # Antialiasing splits a thin stroke into several tints along the
+        # background-to-stroke color line; union groups that share the seed's
+        # hue direction so dashed/thin rings stay closed.
+        angle_delta = np.abs((hue_angles - hue_angles[group] + 180.0) % 360.0 - 180.0)
+        members = sorted(
+            np.flatnonzero(
+                (chromas >= AUTO_FILL_RING_MEMBER_MIN_CHROMA)
+                & (angle_delta <= AUTO_FILL_RING_HUE_MERGE_DEGREES)
+            ).tolist()
+        )
+        member_key = tuple(members)
+        if member_key in scored_member_sets:
+            continue
+        scored_member_sets.add(member_key)
+        group_mask = np.isin(group_image, members)
+        stroke_coverage = float(group_mask.mean())
+        if not 0.002 <= stroke_coverage <= AUTO_FILL_RING_MAX_STROKE_COVERAGE:
+            continue
+        # Dilate-fill-erode rather than a plain close: closing reconnects
+        # dashes only transiently (erosion re-cuts the thin necks), while
+        # dilation bridges gaps long enough for hole-filling to capture the
+        # interior, and the final erosion undoes the boundary inflation.
+        dilated = cv2.dilate(group_mask.astype(np.uint8), kernel) > 0
+        labels, count, stats = connected_components(dilated)
+        if count == 0:
+            continue
+        areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
+        largest_label = int(np.argmax(areas) + 1)
+        component = labels == largest_label
+        component_area = float(areas[largest_label - 1])
+        filled = fill_binary_holes(component)
+        enclosed = filled & ~component
+        enclosed_area = float(enclosed.sum())
+        if enclosed_area < component_area * AUTO_FILL_RING_MIN_ENCLOSED_RATIO:
+            continue
+        enclosed_coverage = enclosed_area / float(group_mask.size)
+        if not 0.01 <= enclosed_coverage <= 0.80:
+            continue
+        # One dominant enclosed region separates a boundary ring from a road
+        # lattice, whose closure traps many small cells instead.
+        enclosed_labels, enclosed_count, enclosed_stats = connected_components(enclosed)
+        if enclosed_count == 0:
+            continue
+        enclosed_areas = enclosed_stats[1:, cv2.CC_STAT_AREA].astype(float)
+        if float(enclosed_areas.max()) < enclosed_area * AUTO_FILL_RING_DOMINANT_HOLE_RATIO:
+            continue
+        ys, xs = np.nonzero(filled)
+        if (xs.max() - xs.min() + 1) < w * AUTO_FILL_MIN_COMPONENT_SPAN_RATIO:
+            continue
+        if (ys.max() - ys.min() + 1) < h * AUTO_FILL_MIN_COMPONENT_SPAN_RATIO:
+            continue
+        border_hits = (
+            int(filled[0, :].sum())
+            + int(filled[-1, :].sum())
+            + int(filled[:, 0].sum())
+            + int(filled[:, -1].sum())
+        )
+        if border_hits > (2 * (h + w)) * AUTO_FILL_RING_MAX_BORDER_FRACTION:
+            continue
+        score = enclosed_coverage * min(1.0, chroma / 40.0)
+        if score > best_score:
+            best_score = score
+            best_mask = cv2.erode(filled.astype(np.uint8), kernel) > 0
+    return best_mask
 
 
 def nearest_center_membership_mask(

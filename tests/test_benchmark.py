@@ -28,13 +28,15 @@ from map_boundary_builder.benchmark import (
 )
 
 
+# las-vegas-zoox graduated out of this set on 2026-06-09: the outline-ring
+# extraction path recovers the screenshot's drawn boundary at IoU 0.977
+# against the av-coverage-checker reference, so the pair scores again.
 KNOWN_REFERENCE_MISMATCH_FIXTURES = {
     "bay-area-tesla",
     "bay-area-waymo",
     "bay-area-zoox",
     "houston-tesla",
     "houston-waymo",
-    "las-vegas-zoox",
     "miami-waymo",
 }
 

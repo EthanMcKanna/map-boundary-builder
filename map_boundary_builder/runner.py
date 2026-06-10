@@ -23,6 +23,7 @@ from .catalog_match import (
     catalog_provider_hint,
     catalog_area_matches_text,
     catalog_match_from_score,
+    catalog_entry_supports_style,
     catalog_style_supported,
     catalog_feature_collection,
     has_active_catalog_city_hint,
@@ -800,7 +801,7 @@ def match_svg_label_layer_id_catalog(
 
     provider_hint = catalog_provider_hint(" ".join(hint_texts))
     provider = provider_hint or unique_catalog_provider_for_style(candidate.extraction.style)
-    if provider is not None and candidate.extraction.style not in PROVIDER_STYLES.get(provider, set()):
+    if provider is not None and not catalog_entry_supports_style(provider, candidate.extraction.style):
         return None
 
     entries = [
@@ -809,7 +810,7 @@ def match_svg_label_layer_id_catalog(
         if (
             entry.is_active
             and (provider is None or entry.provider == provider)
-            and candidate.extraction.style in PROVIDER_STYLES.get(entry.provider, set())
+            and catalog_entry_supports_style(entry.provider, candidate.extraction.style)
         )
     ]
     candidates = {}

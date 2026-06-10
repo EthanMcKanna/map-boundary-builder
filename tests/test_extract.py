@@ -551,6 +551,115 @@ class AutoFillExtractionTests(unittest.TestCase):
         self.assertEqual(result.style, "auto-fill")
         self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
 
+    def test_solid_outline_ring_extracts_enclosed_region(self) -> None:
+        rgb = self._basemap((240, 239, 236), (218, 217, 214), size=(420, 420))
+        polygon = self._SERVICE_POLYGON + np.array([[20, 30]], dtype=np.int32)
+        expected = np.zeros(rgb.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(expected, [polygon], 255)
+        cv2.polylines(rgb, [polygon], isClosed=True, color=(217, 48, 37), thickness=5)
+
+        result = extract_service_area("unused-ring-solid.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected > 0), 0.85)
+
+    def test_dashed_outline_ring_extracts_enclosed_region(self) -> None:
+        rgb = self._basemap((240, 239, 236), (218, 217, 214), size=(420, 420))
+        polygon = self._SERVICE_POLYGON + np.array([[20, 30]], dtype=np.int32)
+        expected = np.zeros(rgb.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(expected, [polygon], 255)
+        points = polygon.astype(np.float64)
+        for start, end in zip(points, np.roll(points, -1, axis=0)):
+            length = float(np.hypot(*(end - start)))
+            steps = np.arange(0.0, length, 1.0)
+            on = (steps % 22.0) < 14.0
+            for step, draw in zip(steps, on):
+                if not draw:
+                    continue
+                point = start + (end - start) * (step / length)
+                cv2.circle(rgb, (int(round(point[0])), int(round(point[1]))), 2, (26, 115, 232), -1)
+
+        result = extract_service_area("unused-ring-dashed.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected > 0), 0.85)
+
+    def test_pale_textured_water_corner_fails_closed(self) -> None:
+        # Basemap water with white roads/labels rendered over it has texture,
+        # but reads pale: the chroma floor must keep auto-fill off it.
+        rgb = self._basemap((241, 240, 236), (255, 255, 255), size=(400, 400))
+        water = np.array([[0, 240], [180, 400], [0, 400]], dtype=np.int32)
+        cv2.fillPoly(rgb, [water], (170, 211, 235))
+        for x in range(24, 400, 48):
+            cv2.line(rgb, (x, 0), (x, 399), (255, 255, 255), 3)
+        cv2.rectangle(rgb, (40, 330), (90, 340), (110, 112, 115), -1)
+
+        with self.assertRaises(ValueError):
+            extract_service_area("unused-water-corner.png", rgb=rgb, cache=False)
+
+    def test_overlay_beats_textured_water_corner(self) -> None:
+        rgb = self._basemap((241, 240, 236), (220, 219, 216), size=(400, 400))
+        water = np.array([[0, 240], [180, 400], [0, 400]], dtype=np.int32)
+        cv2.fillPoly(rgb, [water], (170, 211, 235))
+        polygon = np.array(
+            [[150, 40], [360, 60], [375, 200], [290, 300], [160, 280], [130, 150]],
+            dtype=np.int32,
+        )
+        expected = self._blend_overlay(rgb, polygon, (220, 36, 32), 0.5)
+
+        result = extract_service_area("unused-water-overlay.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_tiny_disagreeing_generic_does_not_replace_styled(self) -> None:
+        mask_styled = np.zeros((100, 100), dtype=bool)
+        mask_styled[10:70, 10:70] = True
+        mask_generic = np.zeros((100, 100), dtype=bool)
+        mask_generic[80:90, 80:90] = True
+        styled = extract_module.ExtractionResult(
+            mask=mask_styled,
+            style="light-fill",
+            pixel_geometry=extract_module.Polygon([(10, 10), (70, 10), (70, 70), (10, 70)]),
+            coverage_ratio=float(mask_styled.mean()),
+            contour_count=1,
+            confidence=1.0,
+        )
+        generic = extract_module.ExtractionResult(
+            mask=mask_generic,
+            style="auto-fill",
+            pixel_geometry=extract_module.Polygon([(80, 80), (90, 80), (90, 90), (80, 90)]),
+            coverage_ratio=float(mask_generic.mean()),
+            contour_count=1,
+            confidence=0.9,
+        )
+
+        self.assertFalse(extract_module.auto_fill_should_take_over(styled, generic))
+
+    def test_oversized_styled_mask_yields_to_disagreeing_generic(self) -> None:
+        mask_styled = np.zeros((100, 100), dtype=bool)
+        mask_styled[2:98, 2:98] = True
+        mask_generic = np.zeros((100, 100), dtype=bool)
+        mask_generic[20:60, 20:60] = True
+        styled = extract_module.ExtractionResult(
+            mask=mask_styled,
+            style="gray-fill",
+            pixel_geometry=extract_module.Polygon([(2, 2), (98, 2), (98, 98), (2, 98)]),
+            coverage_ratio=float(mask_styled.mean()),
+            contour_count=1,
+            confidence=1.0,
+        )
+        generic = extract_module.ExtractionResult(
+            mask=mask_generic,
+            style="auto-fill",
+            pixel_geometry=extract_module.Polygon([(20, 20), (60, 20), (60, 60), (20, 60)]),
+            coverage_ratio=float(mask_generic.mean()),
+            contour_count=1,
+            confidence=0.9,
+        )
+
+        self.assertTrue(extract_module.auto_fill_should_take_over(styled, generic))
+
     def test_plain_basemap_without_overlay_fails_closed(self) -> None:
         rgb = self._basemap((226, 226, 226), (204, 204, 204))
 

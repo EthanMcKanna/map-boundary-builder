@@ -8,7 +8,10 @@ It does three things automatically:
 
 1. Detects service-area fills across light, bright-blue, green, and dark map styles,
    with a color-agnostic fallback that clusters the image in LAB space so fills in
-   arbitrary palettes (red, orange, yellow, magenta, ...) extract without a tuned style.
+   arbitrary palettes (red, orange, yellow, magenta, ...) extract without a tuned
+   style. The fallback also recovers outline-only boundaries (solid or dashed
+   colored strokes with no fill) and rejects flat basemap regions like water and
+   parkland via texture and chroma gates instead of guessing.
 2. Repairs text, road shields, highway lines, and small rendering gaps in the mask.
 3. Georeferences the pixel polygon from readable map labels and public map data.
 

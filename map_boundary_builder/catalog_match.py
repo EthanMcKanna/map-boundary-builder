@@ -36,6 +36,15 @@ PROVIDER_STYLES = {
     "waymo": {"bright-blue"},
     "zoox": {"dark-teal", "light-fill"},
 }
+# The color-agnostic fallback carries no provider signal, so it may match any
+# provider's entries; the strict shape-match thresholds remain the gate.
+CATALOG_WILDCARD_STYLES = {"auto-fill"}
+
+
+def catalog_entry_supports_style(provider: str, style: str) -> bool:
+    if style in CATALOG_WILDCARD_STYLES:
+        return True
+    return style in PROVIDER_STYLES.get(provider, set())
 
 
 @dataclass(frozen=True)
@@ -95,7 +104,7 @@ def match_service_area_catalog(
     candidates = [
         entry
         for entry in load_catalog_entries()
-        if entry.is_active and style in PROVIDER_STYLES.get(entry.provider, set())
+        if entry.is_active and catalog_entry_supports_style(entry.provider, style)
     ]
     if not candidates:
         return None
@@ -264,6 +273,8 @@ def has_active_catalog_area_hint(text: str | None) -> bool:
 
 
 def catalog_style_supported(style: str) -> bool:
+    if style in CATALOG_WILDCARD_STYLES:
+        return True
     return any(style in styles for styles in PROVIDER_STYLES.values())
 
 

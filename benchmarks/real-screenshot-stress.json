@@ -13,7 +13,7 @@
         "city_equals": "Ann Arbor",
         "min_control_points": 3,
         "min_ocr_labels": 16,
-        "min_combined_confidence": 0.80,
+        "min_combined_confidence": 0.8,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -26,7 +26,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 3
         },
-        "bbox_approx": [-83.7532039, 42.2599682, -83.7359287, 42.288679],
+        "bbox_approx": [
+          -83.7532039,
+          42.2599682,
+          -83.7359287,
+          42.288679
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -54,7 +59,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 3
         },
-        "bbox_approx": [-83.7511022, 42.2636441, -83.7308241, 42.2879191],
+        "bbox_approx": [
+          -83.7511022,
+          42.2636441,
+          -83.7308241,
+          42.2879191
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -82,7 +92,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-85.6950388, 42.96273, -85.6671371, 42.97809],
+        "bbox_approx": [
+          -85.6950388,
+          42.96273,
+          -85.6671371,
+          42.97809
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -99,7 +114,12 @@
         "min_combined_confidence": 0.78,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-85.6950388, 42.96273, -85.6671371, 42.97809],
+        "bbox_approx": [
+          -85.6950388,
+          42.96273,
+          -85.6671371,
+          42.97809
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -112,7 +132,10 @@
         "status": "failed",
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 3,
-        "ocr_top_labels_contain": ["las vegas", "paradise"],
+        "ocr_top_labels_contain": [
+          "las vegas",
+          "paradise"
+        ],
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
           "raw_box_count": 3,
@@ -136,7 +159,11 @@
         "status": "failed",
         "error_contains": "sparse OCR labels",
         "min_ocr_labels": 12,
-        "ocr_top_labels_contain": ["las vegas", "paradise", "spring mountain"],
+        "ocr_top_labels_contain": [
+          "las vegas",
+          "paradise",
+          "spring mountain"
+        ],
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
           "raw_box_count": 14,
@@ -160,7 +187,11 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 25,
-        "route_ui_categories_include": ["pickup", "plate", "ride"],
+        "route_ui_categories_include": [
+          "pickup",
+          "plate",
+          "ride"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -185,7 +216,12 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
-        "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
+        "route_ui_categories_include": [
+          "pickup",
+          "plate",
+          "ride",
+          "rider"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -210,7 +246,12 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
-        "route_ui_categories_include": ["pickup", "plate", "ride", "rider"],
+        "route_ui_categories_include": [
+          "pickup",
+          "plate",
+          "ride",
+          "rider"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -235,7 +276,11 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
-        "route_ui_categories_include": ["dropoff", "plate", "receipt"],
+        "route_ui_categories_include": [
+          "dropoff",
+          "plate",
+          "receipt"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -260,7 +305,11 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
-        "route_ui_categories_include": ["dropoff", "plate", "receipt"],
+        "route_ui_categories_include": [
+          "dropoff",
+          "plate",
+          "receipt"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -285,7 +334,11 @@
         "status": "failed",
         "error_contains": "ride-route UI",
         "min_ocr_labels": 20,
-        "route_ui_categories_include": ["pickup", "plate", "ride"],
+        "route_ui_categories_include": [
+          "pickup",
+          "plate",
+          "ride"
+        ],
         "min_route_metric_labels": 1,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -310,7 +363,13 @@
         "status": "failed",
         "error_contains": "non-map app UI",
         "min_ocr_labels": 20,
-        "non_map_ui_categories_include": ["account", "import", "privacy", "stats", "sync"],
+        "non_map_ui_categories_include": [
+          "account",
+          "import",
+          "privacy",
+          "stats",
+          "sync"
+        ],
         "min_non_map_ui_labels": 3,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -335,7 +394,11 @@
         "status": "failed",
         "error_contains": "non-map app UI",
         "min_ocr_labels": 20,
-        "non_map_ui_categories_include": ["followers", "following", "media"],
+        "non_map_ui_categories_include": [
+          "followers",
+          "following",
+          "media"
+        ],
         "min_non_map_ui_labels": 3,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -361,7 +424,9 @@
         "error_contains": "thematic map",
         "min_ocr_labels": 2,
         "min_thematic_map_labels": 1,
-        "thematic_map_labels_contain": ["vulnerability index"],
+        "thematic_map_labels_contain": [
+          "vulnerability index"
+        ],
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
           "raw_box_count": 6,
@@ -387,7 +452,7 @@
         "city_equals": "Dallas",
         "min_control_points": 5,
         "min_ocr_labels": 20,
-        "min_combined_confidence": 0.90,
+        "min_combined_confidence": 0.9,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -400,7 +465,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 1
         },
-        "bbox_approx": [-96.8185907, 32.7682169, -96.7555604, 32.8374414],
+        "bbox_approx": [
+          -96.8185907,
+          32.7682169,
+          -96.7555604,
+          32.8374414
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -417,7 +487,12 @@
         "min_combined_confidence": 0.91,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-96.8183506, 32.7681501, -96.7551594, 32.83758],
+        "bbox_approx": [
+          -96.8183506,
+          32.7681501,
+          -96.7551594,
+          32.83758
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -445,7 +520,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 1
         },
-        "bbox_approx": [-96.8173575, 32.7689853, -96.7658767, 32.8249894],
+        "bbox_approx": [
+          -96.8173575,
+          32.7689853,
+          -96.7658767,
+          32.8249894
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -462,7 +542,12 @@
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-97.8914452, 30.1144685, -97.6579857, 30.4108558],
+        "bbox_approx": [
+          -97.8914452,
+          30.1144685,
+          -97.6579857,
+          30.4108558
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -477,7 +562,7 @@
         "source_equals": "catalog-shape-match:provider-ui-label",
         "city_equals": "Miami",
         "min_ocr_labels": 8,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -490,7 +575,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
+        "bbox_approx": [
+          -80.3461737,
+          25.6799742,
+          -80.1149101,
+          25.976257
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -507,7 +597,12 @@
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-97.8914452, 30.1144685, -97.6579857, 30.4108558],
+        "bbox_approx": [
+          -97.8914452,
+          30.1144685,
+          -97.6579857,
+          30.4108558
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -524,7 +619,12 @@
         "min_combined_confidence": 0.87,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-95.4320951, 29.6684949, -95.2874491, 29.8202881],
+        "bbox_approx": [
+          -95.4320951,
+          29.6684949,
+          -95.2874491,
+          29.8202881
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -553,7 +653,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-86.8416146, 36.1049219, -86.676782, 36.246163],
+        "bbox_approx": [
+          -86.8416146,
+          36.1049219,
+          -86.676782,
+          36.246163
+        ],
         "max_bbox_error_m": 1500
       }
     },
@@ -571,7 +676,12 @@
         "min_combined_confidence": 0.97,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
+        "bbox_approx": [
+          -86.8461084,
+          36.1089989,
+          -86.6904545,
+          36.242681
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -587,7 +697,12 @@
         "min_combined_confidence": 0.97,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
+        "bbox_approx": [
+          -86.8461084,
+          36.1089989,
+          -86.6904545,
+          36.242681
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -602,7 +717,7 @@
         "city_equals": "Bay Area",
         "catalog_slug_equals": "bay-area-tesla",
         "min_ocr_labels": 8,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -615,7 +730,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.5974432, 37.1807695, -121.7084889, 37.9208366],
+        "bbox_approx": [
+          -122.5974432,
+          37.1807695,
+          -121.7084889,
+          37.9208366
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -630,7 +750,7 @@
         "city_equals": "Houston",
         "catalog_slug_equals": "houston-waymo",
         "min_ocr_labels": 10,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -643,7 +763,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-95.4320951, 29.6684949, -95.2874491, 29.8202881],
+        "bbox_approx": [
+          -95.4320951,
+          29.6684949,
+          -95.2874491,
+          29.8202881
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -658,7 +783,7 @@
         "city_equals": "Miami",
         "catalog_slug_equals": "miami-waymo",
         "min_ocr_labels": 8,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -671,7 +796,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 3
         },
-        "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
+        "bbox_approx": [
+          -80.3461737,
+          25.6799742,
+          -80.1149101,
+          25.976257
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -688,7 +818,12 @@
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-112.1166355, 33.2312436, -111.8164536, 33.6877976],
+        "bbox_approx": [
+          -112.1166355,
+          33.2312436,
+          -111.8164536,
+          33.6877976
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -705,7 +840,12 @@
         "min_combined_confidence": 0.98,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-96.8754673, 32.7332127, -96.7276669, 32.8672603],
+        "bbox_approx": [
+          -96.8754673,
+          32.7332127,
+          -96.7276669,
+          32.8672603
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -722,7 +862,12 @@
         "min_combined_confidence": 0.98,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-98.5580707, 29.3902521, -98.3921385, 29.5374699],
+        "bbox_approx": [
+          -98.5580707,
+          29.3902521,
+          -98.3921385,
+          29.5374699
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -739,7 +884,12 @@
         "min_combined_confidence": 0.85,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "bbox_approx": [
+          -122.4980521,
+          37.3075553,
+          -121.8590466,
+          37.7981715
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -756,7 +906,12 @@
         "min_combined_confidence": 0.84,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-118.5235017, 33.9320907, -118.2221488, 34.1183233],
+        "bbox_approx": [
+          -118.5235017,
+          33.9320907,
+          -118.2221488,
+          34.1183233
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -773,7 +928,12 @@
         "min_combined_confidence": 0.95,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-81.5075254, 28.3614576, -81.3638449, 28.5537667],
+        "bbox_approx": [
+          -81.5075254,
+          28.3614576,
+          -81.3638449,
+          28.5537667
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -801,7 +961,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-97.8098256, 30.2102538, -97.6775433, 30.2751566],
+        "bbox_approx": [
+          -97.8098256,
+          30.2102538,
+          -97.6775433,
+          30.2751566
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -829,7 +994,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 1
         },
-        "bbox_approx": [-96.8173575, 32.7689853, -96.7658767, 32.8249894],
+        "bbox_approx": [
+          -96.8173575,
+          32.7689853,
+          -96.7658767,
+          32.8249894
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -844,7 +1014,7 @@
         "city_equals": "San Francisco",
         "min_control_points": 10,
         "min_ocr_labels": 18,
-        "min_combined_confidence": 0.90,
+        "min_combined_confidence": 0.9,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -857,7 +1027,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+        "bbox_approx": [
+          -122.4411264,
+          37.7478098,
+          -122.3905477,
+          37.8058554
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -874,7 +1049,12 @@
         "min_combined_confidence": 0.94,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-122.4410255, 37.7479064, -122.3876889, 37.8056186],
+        "bbox_approx": [
+          -122.4410255,
+          37.7479064,
+          -122.3876889,
+          37.8056186
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -902,7 +1082,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.4411264, 37.7478098, -122.3905477, 37.8058554],
+        "bbox_approx": [
+          -122.4411264,
+          37.7478098,
+          -122.3905477,
+          37.8058554
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -919,7 +1104,12 @@
         "min_combined_confidence": 0.94,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-122.4410255, 37.7479064, -122.3876889, 37.8056186],
+        "bbox_approx": [
+          -122.4410255,
+          37.7479064,
+          -122.3876889,
+          37.8056186
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -934,7 +1124,7 @@
         "city_equals": "San Francisco",
         "min_control_points": 3,
         "min_ocr_labels": 24,
-        "min_combined_confidence": 0.80,
+        "min_combined_confidence": 0.8,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -947,7 +1137,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.444478, 37.7473519, -122.3829801, 37.8107792],
+        "bbox_approx": [
+          -122.444478,
+          37.7473519,
+          -122.3829801,
+          37.8107792
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -974,7 +1169,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-96.8609589, 32.7622926, -96.7517738, 32.8735617],
+        "bbox_approx": [
+          -96.8609589,
+          32.7622926,
+          -96.7517738,
+          32.8735617
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -991,7 +1191,12 @@
         "min_combined_confidence": 0.97,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-96.8582001, 32.7624321, -96.7552567, 32.8723526],
+        "bbox_approx": [
+          -96.8582001,
+          32.7624321,
+          -96.7552567,
+          32.8723526
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1006,7 +1211,7 @@
         "city_equals": "Austin",
         "min_control_points": 2,
         "min_ocr_labels": 3,
-        "min_combined_confidence": 0.80,
+        "min_combined_confidence": 0.8,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -1019,7 +1224,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-97.8699676, 30.1433799, -97.5541363, 30.425308],
+        "bbox_approx": [
+          -97.8699676,
+          30.1433799,
+          -97.5541363,
+          30.425308
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1036,7 +1246,12 @@
         "min_combined_confidence": 0.96,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-97.868131, 30.1428589, -97.5545568, 30.4240202],
+        "bbox_approx": [
+          -97.868131,
+          30.1428589,
+          -97.5545568,
+          30.4240202
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1051,7 +1266,7 @@
         "city_equals": "Dallas",
         "min_control_points": 2,
         "min_ocr_labels": 3,
-        "min_combined_confidence": 0.80,
+        "min_combined_confidence": 0.8,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -1064,7 +1279,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-96.8587006, 32.7624432, -96.7552405, 32.8728894],
+        "bbox_approx": [
+          -96.8587006,
+          32.7624432,
+          -96.7552405,
+          32.8728894
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1081,7 +1301,12 @@
         "min_combined_confidence": 0.96,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-96.8582001, 32.7624321, -96.7552567, 32.8723526],
+        "bbox_approx": [
+          -96.8582001,
+          32.7624321,
+          -96.7552567,
+          32.8723526
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1109,7 +1334,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-95.6247125, 29.8572751, -95.5245324, 29.9718015],
+        "bbox_approx": [
+          -95.6247125,
+          29.8572751,
+          -95.5245324,
+          29.9718015
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1126,7 +1356,12 @@
         "min_combined_confidence": 0.96,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-95.624939, 29.8584766, -95.5238266, 29.971941],
+        "bbox_approx": [
+          -95.624939,
+          29.8584766,
+          -95.5238266,
+          29.971941
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1154,7 +1389,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-96.8760366, 32.7327533, -96.729695, 32.8659004],
+        "bbox_approx": [
+          -96.8760366,
+          32.7327533,
+          -96.729695,
+          32.8659004
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1169,7 +1409,7 @@
         "city_equals": "San Antonio",
         "min_control_points": 10,
         "min_ocr_labels": 18,
-        "min_combined_confidence": 0.90,
+        "min_combined_confidence": 0.9,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -1182,7 +1422,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-98.5610934, 29.3896417, -98.3917587, 29.5392142],
+        "bbox_approx": [
+          -98.5610934,
+          29.3896417,
+          -98.3917587,
+          29.5392142
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1199,20 +1444,26 @@
         "min_ocr_labels": 18,
         "min_combined_confidence": 0.74,
         "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
+        "max_ocr_engine_calls": 2,
         "max_ocr_engine_counts": {
-          "raw_box_count": 24,
-          "selected_box_count": 19,
-          "result_count": 18,
-          "label_count": 18,
+          "raw_box_count": 48,
+          "selected_box_count": 43,
+          "result_count": 41,
+          "label_count": 38,
           "label_confidence_lt_50_count": 0,
           "label_confidence_lt_70_count": 0,
           "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
+          "label_confidence_lt_90_count": 3
         },
-        "bbox_approx": [-115.3550119, 36.0353866, -115.1830059, 36.187696],
+        "bbox_approx": [
+          -115.3464668,
+          36.0181013,
+          -115.1353609,
+          36.1584044
+        ],
         "max_bbox_error_m": 1000
-      }
+      },
+      "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
     },
     {
       "slug": "zoox-las-vegas-service-area-ui-default",
@@ -1227,9 +1478,15 @@
         "min_combined_confidence": 0.76,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-115.3550119, 36.0353866, -115.1830059, 36.187696],
+        "bbox_approx": [
+          -115.3464668,
+          36.0181013,
+          -115.1353609,
+          36.1584044
+        ],
         "max_bbox_error_m": 1000
-      }
+      },
+      "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
     },
     {
       "slug": "bay-area-waymo",
@@ -1254,7 +1511,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.5053058, 37.3057357, -121.8559714, 37.8082677],
+        "bbox_approx": [
+          -122.5053058,
+          37.3057357,
+          -121.8559714,
+          37.8082677
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1281,7 +1543,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.5053058, 37.3057357, -121.8559714, 37.8082677],
+        "bbox_approx": [
+          -122.5053058,
+          37.3057357,
+          -121.8559714,
+          37.8082677
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1298,7 +1565,12 @@
         "min_combined_confidence": 0.87,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "bbox_approx": [
+          -122.4980521,
+          37.3075553,
+          -121.8590466,
+          37.7981715
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1326,7 +1598,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.5117405, 37.2400556, -121.8370661, 37.8145499],
+        "bbox_approx": [
+          -122.5117405,
+          37.2400556,
+          -121.8370661,
+          37.8145499
+        ],
         "max_bbox_error_m": 1500
       }
     },
@@ -1343,7 +1620,12 @@
         "min_combined_confidence": 0.72,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-122.4980521, 37.3075553, -121.8590466, 37.7981715],
+        "bbox_approx": [
+          -122.4980521,
+          37.3075553,
+          -121.8590466,
+          37.7981715
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1370,7 +1652,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-122.5000691, 37.311372, -121.8572994, 37.8058701],
+        "bbox_approx": [
+          -122.5000691,
+          37.311372,
+          -121.8572994,
+          37.8058701
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1398,7 +1685,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+        "bbox_approx": [
+          -118.5240391,
+          33.9302354,
+          -118.2193825,
+          34.1184628
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1426,7 +1718,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-118.5240391, 33.9302354, -118.2193825, 34.1184628],
+        "bbox_approx": [
+          -118.5240391,
+          33.9302354,
+          -118.2193825,
+          34.1184628
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1443,7 +1740,12 @@
         "min_combined_confidence": 0.85,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-118.5235017, 33.9320907, -118.2221488, 34.1183233],
+        "bbox_approx": [
+          -118.5235017,
+          33.9320907,
+          -118.2221488,
+          34.1183233
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1472,7 +1774,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-95.4409766, 29.7277367, -95.3465228, 29.8228906],
+        "bbox_approx": [
+          -95.4409766,
+          29.7277367,
+          -95.3465228,
+          29.8228906
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1490,7 +1797,12 @@
         "min_combined_confidence": 0.87,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-95.4320951, 29.6684949, -95.2874491, 29.8202881],
+        "bbox_approx": [
+          -95.4320951,
+          29.6684949,
+          -95.2874491,
+          29.8202881
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1518,7 +1830,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
+        "bbox_approx": [
+          -81.5079188,
+          28.3608344,
+          -81.3623837,
+          28.5556556
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1546,7 +1863,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-81.5079188, 28.3608344, -81.3623837, 28.5556556],
+        "bbox_approx": [
+          -81.5079188,
+          28.3608344,
+          -81.3623837,
+          28.5556556
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1563,7 +1885,12 @@
         "min_combined_confidence": 0.97,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-81.5075254, 28.3614576, -81.3638449, 28.5537667],
+        "bbox_approx": [
+          -81.5075254,
+          28.3614576,
+          -81.3638449,
+          28.5537667
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1578,7 +1905,7 @@
         "city_equals": "Nashville",
         "min_control_points": 3,
         "min_ocr_labels": 14,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -1591,7 +1918,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-86.8475058, 36.1153856, -86.6964806, 36.2435026],
+        "bbox_approx": [
+          -86.8475058,
+          36.1153856,
+          -86.6964806,
+          36.2435026
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1608,7 +1940,12 @@
         "min_combined_confidence": 0.96,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-86.8461084, 36.1089989, -86.6904545, 36.242681],
+        "bbox_approx": [
+          -86.8461084,
+          36.1089989,
+          -86.6904545,
+          36.242681
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1635,7 +1972,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-95.666187, 29.8350303, -95.4797339, 29.9966451],
+        "bbox_approx": [
+          -95.666187,
+          29.8350303,
+          -95.4797339,
+          29.9966451
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1652,7 +1994,12 @@
         "min_combined_confidence": 0.96,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-95.624939, 29.8584766, -95.5238266, 29.971941],
+        "bbox_approx": [
+          -95.624939,
+          29.8584766,
+          -95.5238266,
+          29.971941
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1667,7 +2014,7 @@
         "city_equals": "Miami",
         "min_control_points": 5,
         "min_ocr_labels": 18,
-        "min_combined_confidence": 0.70,
+        "min_combined_confidence": 0.7,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 1,
         "max_ocr_engine_counts": {
@@ -1680,7 +2027,12 @@
           "label_confidence_lt_80_count": 0,
           "label_confidence_lt_90_count": 0
         },
-        "bbox_approx": [-80.3388012, 25.6886035, -80.1116863, 25.9830147],
+        "bbox_approx": [
+          -80.3388012,
+          25.6886035,
+          -80.1116863,
+          25.9830147
+        ],
         "max_bbox_error_m": 1000
       }
     },
@@ -1697,7 +2049,12 @@
         "min_combined_confidence": 0.89,
         "max_total_elapsed_s": 1.0,
         "max_ocr_engine_calls": 0,
-        "bbox_approx": [-80.3461737, 25.6799742, -80.1149101, 25.976257],
+        "bbox_approx": [
+          -80.3461737,
+          25.6799742,
+          -80.1149101,
+          25.976257
+        ],
         "max_bbox_error_m": 1000
       }
     }
