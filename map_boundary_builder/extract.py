@@ -20,6 +20,28 @@ from .pipeline_version import get_pipeline_version, runtime_dependency_signature
 
 DEFAULT_SIMPLIFY_PX = 6.0
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
+AUTO_FILL_STYLE = "auto-fill"
+AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
+AUTO_FILL_CLUSTER_COUNT = 12
+AUTO_FILL_KMEANS_SEED = 7
+AUTO_FILL_CENTER_PREMERGE_DISTANCE = 6.0
+AUTO_FILL_TINT_MERGE_DISTANCE = 22.0
+AUTO_FILL_MIN_BORDER_DISTINCTNESS = 12.0
+AUTO_FILL_LIGHTNESS_DISTINCTNESS_WEIGHT = 0.25
+AUTO_FILL_MAX_BORDER_FRACTION = 0.55
+AUTO_FILL_MIN_CLUSTER_COVERAGE = 0.008
+AUTO_FILL_MAX_CLUSTER_COVERAGE = 0.65
+AUTO_FILL_MIN_COMPONENT_SPAN_RATIO = 0.12
+AUTO_FILL_MIN_COMPONENT_DENSITY = 0.45
+AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO = 0.35
+AUTO_FILL_RESULT_MIN_COVERAGE = 0.01
+AUTO_FILL_RESULT_MAX_COVERAGE = 0.85
+AUTO_FILL_FALLBACK_MIN_COVERAGE = 0.005
+AUTO_FILL_FALLBACK_MAX_COVERAGE = 0.95
+AUTO_FILL_FALLBACK_LIGHT_FILL_MIN_COVERAGE = 0.025
+AUTO_FILL_CONFIDENCE_DISCOUNT = 0.9
+AUTO_FILL_TAKEOVER_MAX_IOU = 0.5
+AUTO_FILL_ASSIGN_CHUNK_PIXELS = 262_144
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 EXTRACTION_CACHE_DIR = _CACHE_ROOT / "extractions"
 EXTRACTION_CACHE_VERSION = "extraction-v1"
@@ -241,6 +263,37 @@ def extraction_cache_enabled() -> bool:
 def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     style = classify_style(rgb, hsv=hsv)
+    styled = styled_extraction_result(rgb, style, hsv=hsv, simplify_px=simplify_px)
+    if styled is not None and not should_attempt_auto_fill_fallback(styled, rgb):
+        return styled
+    generic = auto_fill_extraction_result(rgb, simplify_px=simplify_px)
+    if generic is not None:
+        # When the suspect styled mask and the generic pick agree on the
+        # region, keep the tuned styled result; replace it only when the
+        # generic pass found a genuinely different fill.
+        if styled is None or extraction_masks_disagree(styled.mask, generic.mask):
+            return generic
+        return styled
+    if styled is None:
+        raise ValueError("No service-area polygon could be extracted from the image.")
+    return styled
+
+
+def extraction_masks_disagree(first: np.ndarray, second: np.ndarray) -> bool:
+    union = float(np.logical_or(first, second).sum())
+    if union <= 0.0:
+        return False
+    iou = float(np.logical_and(first, second).sum()) / union
+    return iou < AUTO_FILL_TAKEOVER_MAX_IOU
+
+
+def styled_extraction_result(
+    rgb: np.ndarray,
+    style: str,
+    *,
+    hsv: np.ndarray,
+    simplify_px: float,
+) -> ExtractionResult | None:
     if style == "bright-blue":
         raw_mask = blue_service_mask(rgb, hsv=hsv)
     elif style == "purple-fill":
@@ -255,7 +308,10 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
     if style in {"gray-fill", "light-fill"}:
         mask = keep_main_components(mask, max_components=1)
     mask = remove_dark_teal_chrome(mask, style)
-    geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
+    try:
+        geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
+    except ValueError:
+        return None
     coverage_ratio = float(mask.mean())
     confidence = extraction_confidence(mask, style, contour_count)
     return ExtractionResult(
@@ -266,6 +322,265 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
         contour_count=contour_count,
         confidence=confidence,
     )
+
+
+def should_attempt_auto_fill_fallback(result: ExtractionResult, rgb: np.ndarray) -> bool:
+    if result.style == "light-fill":
+        # A light-fill pick below the classification floor means the light mask
+        # fragmented into basemap pockets instead of one dominant fill, and a
+        # pick matching the border color is basemap rather than a service fill.
+        if result.coverage_ratio < AUTO_FILL_FALLBACK_LIGHT_FILL_MIN_COVERAGE:
+            return True
+        if not mask_color_distinct_from_border(rgb, result.mask):
+            return True
+    return (
+        result.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE
+        or result.coverage_ratio > AUTO_FILL_FALLBACK_MAX_COVERAGE
+    )
+
+
+def mask_color_distinct_from_border(rgb: np.ndarray, mask: np.ndarray) -> bool:
+    height, width = rgb.shape[:2]
+    largest = max(height, width)
+    sample_rgb = rgb
+    sample_mask = mask
+    if largest > AUTO_FILL_ANALYSIS_MAX_DIMENSION:
+        scale = AUTO_FILL_ANALYSIS_MAX_DIMENSION / float(largest)
+        size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        sample_rgb = cv2.resize(rgb, size, interpolation=cv2.INTER_AREA)
+        sample_mask = cv2.resize(mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST) > 0
+    if not sample_mask.any():
+        return True
+    lab = cv2.cvtColor(sample_rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
+    border_lab = np.concatenate(
+        (lab[0, :, :], lab[-1, :, :], lab[:, 0, :], lab[:, -1, :]),
+        axis=0,
+    )
+    border_color = np.median(border_lab, axis=0)
+    mask_color = np.median(lab[sample_mask], axis=0)
+    return chroma_weighted_color_distance(mask_color, border_color) >= AUTO_FILL_MIN_BORDER_DISTINCTNESS
+
+
+def chroma_weighted_color_distance(color: np.ndarray, reference: np.ndarray) -> float:
+    """LAB distance with lightness damped, so a map fill must differ in color
+    rather than in brightness alone — gray basemap blocks and white UI chrome
+    differ from each other only in lightness."""
+    delta = color.astype(np.float32) - reference.astype(np.float32)
+    delta[0] *= AUTO_FILL_LIGHTNESS_DISTINCTNESS_WEIGHT
+    return float(np.linalg.norm(delta))
+
+
+def auto_fill_extraction_result(rgb: np.ndarray, *, simplify_px: float) -> ExtractionResult | None:
+    raw_mask = auto_fill_service_mask(rgb)
+    if raw_mask is None or not raw_mask.any():
+        return None
+    mask = repair_mask(raw_mask, AUTO_FILL_STYLE)
+    mask = keep_main_components(mask, max_components=3)
+    coverage_ratio = float(mask.mean())
+    if not AUTO_FILL_RESULT_MIN_COVERAGE <= coverage_ratio <= AUTO_FILL_RESULT_MAX_COVERAGE:
+        return None
+    try:
+        geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
+    except ValueError:
+        return None
+    return ExtractionResult(
+        mask=mask,
+        style=AUTO_FILL_STYLE,
+        pixel_geometry=geometry,
+        coverage_ratio=coverage_ratio,
+        contour_count=contour_count,
+        confidence=extraction_confidence(mask, AUTO_FILL_STYLE, contour_count),
+    )
+
+
+def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
+    """Color-agnostic fill detection for palettes outside the tuned styles.
+
+    Clusters the image in LAB space and scores each color group as a candidate
+    service-area fill: it must be a mostly contiguous, reasonably large blob
+    that is distinct from the border/basemap color, does not dominate the image
+    border, and is solid rather than a road-like lattice once small gaps close.
+    """
+    height, width = rgb.shape[:2]
+    if min(height, width) < 32:
+        return None
+    analysis = rgb
+    largest = max(height, width)
+    if largest > AUTO_FILL_ANALYSIS_MAX_DIMENSION:
+        scale = AUTO_FILL_ANALYSIS_MAX_DIMENSION / float(largest)
+        analysis = cv2.resize(
+            rgb,
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+    lab = cv2.cvtColor(analysis, cv2.COLOR_RGB2LAB)
+    pixels = lab.reshape(-1, 3).astype(np.float32)
+    if pixels.shape[0] < AUTO_FILL_CLUSTER_COUNT * 4:
+        return None
+    cv2.setRNGSeed(AUTO_FILL_KMEANS_SEED)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 12, 1.0)
+    _compactness, labels, centers = cv2.kmeans(
+        pixels,
+        AUTO_FILL_CLUSTER_COUNT,
+        None,
+        criteria,
+        2,
+        cv2.KMEANS_PP_CENTERS,
+    )
+    label_image = labels.reshape(lab.shape[:2])
+    group_of_label, group_centers = merge_close_cluster_centers(
+        centers,
+        np.bincount(labels.ravel(), minlength=AUTO_FILL_CLUSTER_COUNT),
+    )
+    group_image = group_of_label[label_image]
+    selected_groups = select_auto_fill_groups(group_image, group_centers, lab)
+    if selected_groups is None:
+        return None
+    selected_labels = np.flatnonzero(np.isin(group_of_label, sorted(selected_groups)))
+    return nearest_center_membership_mask(rgb, centers, selected_labels)
+
+
+def merge_close_cluster_centers(
+    centers: np.ndarray,
+    counts: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    count = centers.shape[0]
+    parent = np.arange(count)
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for first in range(count):
+        for second in range(first + 1, count):
+            if float(np.linalg.norm(centers[first] - centers[second])) <= AUTO_FILL_CENTER_PREMERGE_DISTANCE:
+                parent[find(second)] = find(first)
+
+    roots = np.array([find(index) for index in range(count)])
+    unique_roots, group_of_label = np.unique(roots, return_inverse=True)
+    group_centers = np.zeros((len(unique_roots), centers.shape[1]), dtype=np.float64)
+    weights = counts.astype(np.float64)
+    for group in range(len(unique_roots)):
+        members = group_of_label == group
+        member_weights = weights[members]
+        total = float(member_weights.sum())
+        if total > 0.0:
+            group_centers[group] = (centers[members] * member_weights[:, np.newaxis]).sum(axis=0) / total
+        else:
+            group_centers[group] = centers[members].mean(axis=0)
+    return group_of_label, group_centers.astype(np.float32)
+
+
+def select_auto_fill_groups(
+    group_image: np.ndarray,
+    group_centers: np.ndarray,
+    lab: np.ndarray,
+) -> set[int] | None:
+    group_count = group_centers.shape[0]
+    border_groups = np.concatenate(
+        (group_image[0, :], group_image[-1, :], group_image[:, 0], group_image[:, -1])
+    )
+    border_fractions = np.bincount(border_groups, minlength=group_count).astype(np.float64)
+    border_fractions /= float(border_groups.size)
+    border_lab = np.concatenate(
+        (lab[0, :, :], lab[-1, :, :], lab[:, 0, :], lab[:, -1, :]),
+        axis=0,
+    ).astype(np.float32)
+    border_color = np.median(border_lab, axis=0)
+
+    # A semi-transparent overlay renders as a family of nearby tints (fill over
+    # background, fill over roads, fill over parks), so each candidate is the
+    # union of one seed group with its color neighbors.
+    best_members: list[int] | None = None
+    best_score = 0.0
+    scored_member_sets: set[tuple[int, ...]] = set()
+    for seed in range(group_count):
+        distances = np.linalg.norm(group_centers - group_centers[seed], axis=1)
+        members = sorted(np.flatnonzero(distances <= AUTO_FILL_TINT_MERGE_DISTANCE).tolist())
+        member_key = tuple(members)
+        if member_key in scored_member_sets:
+            continue
+        scored_member_sets.add(member_key)
+        score = auto_fill_candidate_score(
+            np.isin(group_image, members),
+            group_centers[seed],
+            border_color,
+            float(border_fractions[members].sum()),
+        )
+        if score is not None and score > best_score:
+            best_score = score
+            best_members = members
+    if best_members is None:
+        return None
+    return set(best_members)
+
+
+def auto_fill_candidate_score(
+    candidate_mask: np.ndarray,
+    seed_center: np.ndarray,
+    border_color: np.ndarray,
+    border_fraction: float,
+) -> float | None:
+    if border_fraction > AUTO_FILL_MAX_BORDER_FRACTION:
+        return None
+    coverage = float(candidate_mask.mean())
+    if not AUTO_FILL_MIN_CLUSTER_COVERAGE <= coverage <= AUTO_FILL_MAX_CLUSTER_COVERAGE:
+        return None
+    distinctness = chroma_weighted_color_distance(seed_center, border_color)
+    if distinctness < AUTO_FILL_MIN_BORDER_DISTINCTNESS:
+        return None
+
+    h, w = candidate_mask.shape
+    close_px = max(3, round(min(h, w) * 0.012)) | 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_px, close_px))
+    closed = cv2.morphologyEx(candidate_mask.astype(np.uint8) * 255, cv2.MORPH_CLOSE, kernel) > 0
+    labels, count, stats = connected_components(closed)
+    if count == 0:
+        return None
+    areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
+    largest_label = int(np.argmax(areas) + 1)
+    _left, _top, component_w, component_h, area = stats[largest_label]
+    if component_w < w * AUTO_FILL_MIN_COMPONENT_SPAN_RATIO:
+        return None
+    if component_h < h * AUTO_FILL_MIN_COMPONENT_SPAN_RATIO:
+        return None
+    area_ratio = float(area) / float(candidate_mask.size)
+    if area_ratio < AUTO_FILL_MIN_CLUSTER_COVERAGE:
+        return None
+    # A road/grid lattice closes into a sparse web while a real fill stays
+    # solid: it keeps most of its hole-filled envelope and survives erosion.
+    component = labels == largest_label
+    filled_area = float(fill_binary_holes(component).sum())
+    if float(area) / max(1.0, filled_area) < AUTO_FILL_MIN_COMPONENT_DENSITY:
+        return None
+    eroded_area = float(cv2.erode(component.astype(np.uint8), kernel).sum())
+    if eroded_area / float(area) < AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO:
+        return None
+    contiguity = min(1.0, float(area) / max(1.0, float(candidate_mask.sum())))
+    return area_ratio * contiguity * (1.0 - border_fraction) * min(1.0, distinctness / 40.0)
+
+
+def nearest_center_membership_mask(
+    rgb: np.ndarray,
+    centers: np.ndarray,
+    selected_labels: np.ndarray,
+) -> np.ndarray:
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
+    flat = lab.reshape(-1, 3)
+    centers32 = np.ascontiguousarray(centers, dtype=np.float32)
+    center_sq = (centers32**2).sum(axis=1)
+    selected = np.zeros(centers32.shape[0], dtype=bool)
+    selected[np.asarray(selected_labels, dtype=np.intp)] = True
+    membership = np.empty(flat.shape[0], dtype=bool)
+    for start in range(0, flat.shape[0], AUTO_FILL_ASSIGN_CHUNK_PIXELS):
+        block = flat[start : start + AUTO_FILL_ASSIGN_CHUNK_PIXELS].astype(np.float32)
+        scores = block @ centers32.T
+        scores *= -2.0
+        scores += center_sq[np.newaxis, :]
+        membership[start : start + AUTO_FILL_ASSIGN_CHUNK_PIXELS] = selected[np.argmin(scores, axis=1)]
+    return membership.reshape(lab.shape[:2])
 
 
 def extraction_scale_factor(rgb: np.ndarray, max_dimension: int) -> float:
@@ -1026,7 +1341,10 @@ def extraction_confidence(mask: np.ndarray, style: str, contour_count: int) -> f
     expected_min, expected_max = (0.03, 0.85) if style == "bright-blue" else (0.015, 0.95)
     coverage_score = 1.0 if expected_min <= coverage <= expected_max else 0.55
     component_score = 1.0 if contour_count <= 3 else max(0.55, 1.0 - (contour_count - 3) * 0.08)
-    return round(0.75 * coverage_score + 0.25 * component_score, 3)
+    confidence = 0.75 * coverage_score + 0.25 * component_score
+    if style == AUTO_FILL_STYLE:
+        confidence *= AUTO_FILL_CONFIDENCE_DISCOUNT
+    return round(confidence, 3)
 
 
 def write_mask_png(mask: np.ndarray, path: str | Path) -> None:

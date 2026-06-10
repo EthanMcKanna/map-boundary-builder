@@ -6,7 +6,9 @@ Vercel app.
 
 It does three things automatically:
 
-1. Detects service-area fills across light, bright-blue, green, and dark map styles.
+1. Detects service-area fills across light, bright-blue, green, and dark map styles,
+   with a color-agnostic fallback that clusters the image in LAB space so fills in
+   arbitrary palettes (red, orange, yellow, magenta, ...) extract without a tuned style.
 2. Repairs text, road shields, highway lines, and small rendering gaps in the mask.
 3. Georeferences the pixel polygon from readable map labels and public map data.
 

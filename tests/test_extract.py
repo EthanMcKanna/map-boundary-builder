@@ -459,5 +459,126 @@ class MaskRepairTests(unittest.TestCase):
         self.assertNotEqual(first, second)
 
 
+class AutoFillExtractionTests(unittest.TestCase):
+    @staticmethod
+    def _basemap(
+        background: tuple[int, int, int],
+        road_color: tuple[int, int, int],
+        size: tuple[int, int] = (360, 360),
+    ) -> np.ndarray:
+        height, width = size
+        rgb = np.full((height, width, 3), background, dtype=np.uint8)
+        for x in range(24, width, 48):
+            cv2.line(rgb, (x, 0), (x, height - 1), road_color, 3)
+        for y in range(24, height, 48):
+            cv2.line(rgb, (0, y), (width - 1, y), road_color, 3)
+        return rgb
+
+    @staticmethod
+    def _blend_overlay(
+        rgb: np.ndarray,
+        polygon: np.ndarray,
+        color: tuple[int, int, int],
+        alpha: float,
+    ) -> np.ndarray:
+        region = np.zeros(rgb.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(region, [polygon], 255)
+        region_mask = region > 0
+        blended = rgb.astype(np.float32)
+        blended[region_mask] = blended[region_mask] * (1.0 - alpha) + np.array(color, dtype=np.float32) * alpha
+        rgb[:] = np.clip(blended, 0, 255).astype(np.uint8)
+        return region_mask
+
+    @staticmethod
+    def _intersection_over_union(mask: np.ndarray, expected: np.ndarray) -> float:
+        union = float(np.logical_or(mask, expected).sum())
+        if union == 0.0:
+            return 0.0
+        return float(np.logical_and(mask, expected).sum()) / union
+
+    _SERVICE_POLYGON = np.array(
+        [[70, 60], [300, 80], [320, 210], [240, 320], [90, 300], [50, 170]],
+        dtype=np.int32,
+    )
+
+    def test_red_overlay_on_light_basemap_uses_auto_fill(self) -> None:
+        rgb = self._basemap((226, 226, 226), (204, 204, 204))
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (220, 36, 32), 0.5)
+
+        result = extract_service_area("unused-red.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_orange_overlay_on_light_basemap_uses_auto_fill(self) -> None:
+        rgb = self._basemap((230, 228, 222), (206, 204, 200))
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (245, 140, 20), 0.5)
+
+        result = extract_service_area("unused-orange.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_yellow_overlay_on_light_basemap_uses_auto_fill(self) -> None:
+        rgb = self._basemap((228, 226, 220), (202, 200, 196))
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (240, 210, 30), 0.55)
+
+        result = extract_service_area("unused-yellow.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_magenta_overlay_on_dark_basemap_uses_auto_fill(self) -> None:
+        rgb = self._basemap((30, 30, 34), (66, 66, 72))
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (208, 44, 164), 0.55)
+
+        result = extract_service_area("unused-magenta.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_app_chrome_frame_does_not_steal_auto_fill_pick(self) -> None:
+        # White UI chrome around a gray basemap: the interior gray region is
+        # "distinct" from the white border in lightness only, so the chroma
+        # gate must keep it from outscoring the actual colored fill.
+        rgb = np.full((400, 400, 3), 255, dtype=np.uint8)
+        rgb[40:360, 20:380] = self._basemap((221, 221, 221), (200, 200, 200), size=(320, 360))
+        polygon = self._SERVICE_POLYGON + np.array([[30, 50]], dtype=np.int32)
+        expected = self._blend_overlay(rgb, polygon, (235, 90, 40), 0.5)
+
+        result = extract_service_area("unused-framed.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
+
+    def test_plain_basemap_without_overlay_fails_closed(self) -> None:
+        rgb = self._basemap((226, 226, 226), (204, 204, 204))
+
+        with self.assertRaises(ValueError):
+            extract_service_area("unused-plain.png", rgb=rgb, cache=False)
+
+    def test_bright_blue_extraction_skips_auto_fill(self) -> None:
+        rgb = np.full((240, 240, 3), 255, dtype=np.uint8)
+        rgb[60:190, 50:180] = (46, 119, 246)
+
+        with patch.object(
+            extract_module,
+            "auto_fill_extraction_result",
+            side_effect=AssertionError("styled extraction should not invoke auto-fill"),
+        ):
+            result = extract_service_area("unused-blue.png", rgb=rgb, cache=False)
+
+        self.assertEqual(result.style, "bright-blue")
+
+    def test_auto_fill_confidence_is_discounted_below_styled(self) -> None:
+        mask = np.zeros((100, 100), dtype=bool)
+        mask[20:80, 20:80] = True
+
+        styled = extract_module.extraction_confidence(mask, "dark-teal", 1)
+        generic = extract_module.extraction_confidence(mask, "auto-fill", 1)
+
+        self.assertLess(generic, styled)
+
+
 if __name__ == "__main__":
     unittest.main()
