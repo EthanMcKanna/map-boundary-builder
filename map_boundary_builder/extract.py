@@ -24,6 +24,7 @@ AUTO_FILL_STYLE = "auto-fill"
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
+AUTO_FILL_KMEANS_FIT_MAX_SAMPLES = 60000
 AUTO_FILL_CENTER_PREMERGE_DISTANCE = 6.0
 AUTO_FILL_TINT_MERGE_DISTANCE = 22.0
 AUTO_FILL_MIN_BORDER_DISTINCTNESS = 12.0
@@ -52,12 +53,12 @@ AUTO_FILL_FALLBACK_MIN_COVERAGE = 0.02
 AUTO_FILL_FALLBACK_MAX_COVERAGE = 0.95
 AUTO_FILL_FALLBACK_LIGHT_FILL_MIN_COVERAGE = 0.025
 AUTO_FILL_CONFIDENCE_DISCOUNT = 0.9
+AUTO_FILL_REPAIR_MAX_DIMENSION = 1024
 AUTO_FILL_TAKEOVER_MAX_IOU = 0.5
 AUTO_FILL_TAKEOVER_MIN_COVERAGE_RATIO = 0.5
 AUTO_FILL_TAKEOVER_OVERSIZED_STYLED_COVERAGE = 0.6
 AUTO_FILL_FALLBACK_LIGHT_FILL_MAX_COVERAGE = 0.60
 AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE = 0.90
-AUTO_FILL_ASSIGN_CHUNK_PIXELS = 262_144
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 EXTRACTION_CACHE_DIR = _CACHE_ROOT / "extractions"
 EXTRACTION_CACHE_VERSION = "extraction-v1"
@@ -408,8 +409,15 @@ def auto_fill_extraction_result(rgb: np.ndarray, *, simplify_px: float) -> Extra
     raw_mask = auto_fill_service_mask(rgb)
     if raw_mask is None or not raw_mask.any():
         return None
-    mask = repair_mask(raw_mask, AUTO_FILL_STYLE)
-    mask = keep_main_components(mask, max_components=3)
+    # The mask is derived from a small analysis frame, so it carries no detail
+    # finer than its upscale step; repair at a capped resolution (cheap
+    # morphology) and upscale the result instead of grinding full-res pixels.
+    full_shape = rgb.shape[:2]
+    repair_shape = capped_repair_shape(full_shape)
+    repair_input = upscale_bool_mask(raw_mask, repair_shape)
+    repaired = repair_mask(repair_input, AUTO_FILL_STYLE)
+    repaired = keep_main_components(repaired, max_components=3)
+    mask = upscale_bool_mask(repaired, full_shape)
     coverage_ratio = float(mask.mean())
     if not AUTO_FILL_RESULT_MIN_COVERAGE <= coverage_ratio <= AUTO_FILL_RESULT_MAX_COVERAGE:
         return None
@@ -453,14 +461,22 @@ def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
         return None
     cv2.setRNGSeed(AUTO_FILL_KMEANS_SEED)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 12, 1.0)
-    _compactness, labels, centers = cv2.kmeans(
-        pixels,
+    # Fitting on a strided subsample finds the same palette (clusters are large,
+    # contiguous color regions) at a fraction of the iteration cost; every
+    # analysis pixel is then assigned to its nearest fitted center.
+    fit_pixels = pixels
+    if pixels.shape[0] > AUTO_FILL_KMEANS_FIT_MAX_SAMPLES:
+        stride = int(np.ceil(pixels.shape[0] / AUTO_FILL_KMEANS_FIT_MAX_SAMPLES))
+        fit_pixels = np.ascontiguousarray(pixels[::stride])
+    _compactness, _fit_labels, centers = cv2.kmeans(
+        fit_pixels,
         AUTO_FILL_CLUSTER_COUNT,
         None,
         criteria,
         2,
         cv2.KMEANS_PP_CENTERS,
     )
+    labels = assign_to_nearest_center(pixels, centers)
     label_image = labels.reshape(lab.shape[:2])
     group_of_label, group_centers = merge_close_cluster_centers(
         centers,
@@ -477,16 +493,30 @@ def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
         texture=texture,
     )
     if selected_groups is not None:
-        selected_labels = np.flatnonzero(np.isin(group_of_label, sorted(selected_groups)))
-        return nearest_center_membership_mask(rgb, centers, selected_labels)
-    ring_mask = select_auto_fill_ring(
+        return np.isin(group_image, sorted(selected_groups))
+    return select_auto_fill_ring(
         group_image,
         group_centers,
         border_color=border_color,
     )
-    if ring_mask is None:
-        return None
-    return upscale_bool_mask(ring_mask, rgb.shape[:2])
+
+
+def assign_to_nearest_center(pixels: np.ndarray, centers: np.ndarray) -> np.ndarray:
+    centers32 = np.ascontiguousarray(centers, dtype=np.float32)
+    center_sq = (centers32**2).sum(axis=1)
+    scores = pixels @ centers32.T
+    scores *= -2.0
+    scores += center_sq[np.newaxis, :]
+    return np.argmin(scores, axis=1).astype(np.int32)
+
+
+def capped_repair_shape(shape: tuple[int, int]) -> tuple[int, int]:
+    height, width = shape
+    largest = max(height, width)
+    if largest <= AUTO_FILL_REPAIR_MAX_DIMENSION:
+        return shape
+    scale = AUTO_FILL_REPAIR_MAX_DIMENSION / float(largest)
+    return max(1, round(height * scale)), max(1, round(width * scale))
 
 
 def auto_fill_border_stats(
@@ -742,27 +772,6 @@ def select_auto_fill_ring(
             best_score = score
             best_mask = cv2.erode(filled.astype(np.uint8), kernel) > 0
     return best_mask
-
-
-def nearest_center_membership_mask(
-    rgb: np.ndarray,
-    centers: np.ndarray,
-    selected_labels: np.ndarray,
-) -> np.ndarray:
-    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    flat = lab.reshape(-1, 3)
-    centers32 = np.ascontiguousarray(centers, dtype=np.float32)
-    center_sq = (centers32**2).sum(axis=1)
-    selected = np.zeros(centers32.shape[0], dtype=bool)
-    selected[np.asarray(selected_labels, dtype=np.intp)] = True
-    membership = np.empty(flat.shape[0], dtype=bool)
-    for start in range(0, flat.shape[0], AUTO_FILL_ASSIGN_CHUNK_PIXELS):
-        block = flat[start : start + AUTO_FILL_ASSIGN_CHUNK_PIXELS].astype(np.float32)
-        scores = block @ centers32.T
-        scores *= -2.0
-        scores += center_sq[np.newaxis, :]
-        membership[start : start + AUTO_FILL_ASSIGN_CHUNK_PIXELS] = selected[np.argmin(scores, axis=1)]
-    return membership.reshape(lab.shape[:2])
 
 
 def extraction_scale_factor(rgb: np.ndarray, max_dimension: int) -> float:
@@ -1321,6 +1330,13 @@ def repair_mask(raw_mask: np.ndarray, style: str) -> np.ndarray:
     h, w = raw_mask.shape
     min_dim = min(h, w)
     mask = raw_mask.astype(bool)
+
+    # A color threshold that matched nothing has no fill to repair; skip the
+    # full-resolution morphology, which otherwise burns time on an empty frame
+    # (common when a tuned style is tried on an off-palette map before the
+    # color-agnostic fallback runs).
+    if not mask.any():
+        return mask
 
     min_object = max(64, int(mask.size * (0.00001 if style == "bright-blue" else 0.00002)))
     mask = remove_small_components(mask, min_area=min_object)
