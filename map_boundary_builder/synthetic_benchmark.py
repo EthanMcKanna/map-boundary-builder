@@ -23,6 +23,7 @@ from .evaluation import (
     recall,
 )
 from .extract import extract_service_area
+from .model_extract import ModelExtractionConfig, extract_service_area_with_model
 from .synthetic import SyntheticDatasetManifest, generate_synthetic_dataset
 
 
@@ -39,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=1, help="Dataset seed for --generate.")
     parser.add_argument("--width", type=int, default=960, help="Generated sample width.")
     parser.add_argument("--height", type=int, default=640, help="Generated sample height.")
+    parser.add_argument("--model-path", type=Path, default=None, help="Optional ONNX mask model to score.")
+    parser.add_argument("--model-input-size", type=int, default=128)
+    parser.add_argument("--model-threshold", type=float, default=0.35)
     parser.add_argument("--min-iou", type=float, default=0.70, help="Hard gate for every scored row.")
     parser.add_argument("--mean-iou", type=float, default=0.85, help="Hard gate for report mean IoU.")
     return parser
@@ -61,7 +65,20 @@ def main(argv: list[str] | None = None) -> int:
         manifest_path = args.manifest or dataset_dir / "manifest.json"
         manifest = SyntheticDatasetManifest.read_json(manifest_path)
 
-    report = score_synthetic_manifest(manifest, dataset_dir)
+    model_config = None
+    if args.model_path is not None:
+        model_config = ModelExtractionConfig(
+            input_width=args.model_input_size,
+            input_height=args.model_input_size,
+            threshold=args.model_threshold,
+            output_activation="logits",
+        )
+    report = score_synthetic_manifest(
+        manifest,
+        dataset_dir,
+        model_path=args.model_path,
+        model_config=model_config,
+    )
     report["thresholds"] = {
         "min_iou": args.min_iou,
         "mean_iou": args.mean_iou,
@@ -78,9 +95,15 @@ def main(argv: list[str] | None = None) -> int:
 def score_synthetic_manifest(
     manifest: SyntheticDatasetManifest,
     dataset_dir: str | Path,
+    *,
+    model_path: str | Path | None = None,
+    model_config: ModelExtractionConfig | None = None,
 ) -> dict[str, Any]:
     root = Path(dataset_dir)
-    rows = [score_synthetic_sample(sample, root) for sample in manifest.samples]
+    rows = [
+        score_synthetic_sample(sample, root, model_path=model_path, model_config=model_config)
+        for sample in manifest.samples
+    ]
     scored_rows = [row for row in rows if row["status"] == "scored"]
     ious = [row["metrics"]["iou"] for row in scored_rows]
     boundary_ious = [row["metrics"]["boundary_iou_2px"] for row in scored_rows]
@@ -101,18 +124,29 @@ def score_synthetic_manifest(
             "version": manifest.version,
             "properties": dict(manifest.properties),
         },
+        "extractor": "model" if model_path is not None else "deterministic",
+        "model_path": str(model_path) if model_path is not None else None,
         "summary": summary,
         "rows": rows,
     }
 
 
-def score_synthetic_sample(sample, dataset_dir: Path) -> dict[str, Any]:
+def score_synthetic_sample(
+    sample,
+    dataset_dir: Path,
+    *,
+    model_path: str | Path | None = None,
+    model_config: ModelExtractionConfig | None = None,
+) -> dict[str, Any]:
     image_path = dataset_dir / sample.artifacts.screenshot
     mask_path = dataset_dir / sample.artifacts.mask
     started = time.perf_counter()
     try:
         expected_mask = _load_mask(mask_path)
-        result = extract_service_area(image_path, cache=False)
+        if model_path is None:
+            result = extract_service_area(image_path, cache=False)
+        else:
+            result = extract_service_area_with_model(image_path, model_path, config=model_config)
         predicted_mask = result.mask.astype(bool, copy=False)
         row = {
             "sample_id": sample.sample_id,

@@ -22,6 +22,12 @@ DEFAULT_SIMPLIFY_PX = 6.0
 DEFAULT_EXTRACTION_PROFILE = "map-overlay"
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
 AUTO_FILL_STYLE = "auto-fill"
+MODEL_EXTRACTOR_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL"
+MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH"
+MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
+MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
+DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 128
+DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.35
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
@@ -272,6 +278,9 @@ def extract_service_area(
     extraction_hints = resolve_extraction_hints(hints)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
+    model_result = maybe_extract_with_model(rgb, simplify_px=simplify_px)
+    if model_result is not None:
+        return model_result
     cache = cache and extraction_cache_enabled()
     canonical_key: str | None = None
     canonical_origin = (0.0, 0.0)
@@ -356,6 +365,53 @@ def extract_service_area(
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
     return result
+
+
+def maybe_extract_with_model(rgb: np.ndarray, *, simplify_px: float) -> ExtractionResult | None:
+    if not model_extractor_enabled():
+        return None
+
+    from .model_extract import ModelExtractionConfig, extract_service_area_from_rgb_with_session, load_onnx_session
+
+    input_size = max(1, int(os.environ.get(MODEL_EXTRACTOR_INPUT_SIZE_ENV, str(DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE))))
+    threshold = float(os.environ.get(MODEL_EXTRACTOR_THRESHOLD_ENV, str(DEFAULT_MODEL_EXTRACTOR_THRESHOLD)))
+    model_path = model_extractor_path()
+    session = load_onnx_session(str(model_path))
+    return extract_service_area_from_rgb_with_session(
+        rgb,
+        session,
+        config=ModelExtractionConfig(
+            input_width=input_size,
+            input_height=input_size,
+            threshold=threshold,
+            simplify_px=simplify_px,
+            style=AUTO_FILL_STYLE,
+            output_activation="logits",
+        ),
+    )
+
+
+def model_extractor_enabled() -> bool:
+    return os.environ.get(MODEL_EXTRACTOR_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+        "model",
+    }
+
+
+def model_extractor_path() -> Path:
+    configured = os.environ.get(MODEL_EXTRACTOR_PATH_ENV)
+    if configured is not None and configured.strip():
+        path = Path(configured)
+    else:
+        path = Path(__file__).with_name("models") / "synthetic_boundary_v1.onnx"
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured extraction model does not exist: {path}")
+    return path
 
 
 def extraction_cache_enabled() -> bool:

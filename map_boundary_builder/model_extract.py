@@ -8,6 +8,7 @@ participate in the existing mask-to-geometry pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -52,6 +53,7 @@ def extract_service_area_with_model(
     return extract_service_area_from_rgb_with_session(rgb, session, config=config)
 
 
+@lru_cache(maxsize=2)
 def load_onnx_session(model_path: str | Path) -> InferenceSessionLike:
     try:
         import onnxruntime as ort
