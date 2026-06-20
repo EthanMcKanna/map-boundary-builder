@@ -24,6 +24,7 @@ from .request_options import (
     allow_catalog_for_request,
     bool_field,
     city_hint_for_request,
+    experimental_classifier_for_request,
     float_field,
     int_field,
 )
@@ -170,6 +171,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
         fast_catalog_handoff = bool_field(fields, "fast_catalog_handoff", default=False)
         allow_catalog = allow_catalog_for_request(fields)
+        experimental_classifier = experimental_classifier_for_request(fields)
         if catalog_probe_only or fast_catalog_handoff:
             events: list[dict[str, Any]] = []
             profile: dict[str, Any] = {
@@ -187,6 +189,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
                 allow_catalog=allow_catalog,
                 catalog_probe_only=catalog_probe_only,
                 catalog_probe_missed=fast_catalog_handoff or bool_field(fields, "catalog_probe_missed", default=False),
+                experimental_classifier=experimental_classifier,
                 write_mask_artifact=False,
                 filename_hint=original_filename,
                 source_was_svg=bool_field(fields, "source_was_svg", default=False),
@@ -261,6 +264,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             allow_catalog=allow_catalog,
             catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
+            experimental_classifier=experimental_classifier,
             filename_hint=original_filename,
             source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )

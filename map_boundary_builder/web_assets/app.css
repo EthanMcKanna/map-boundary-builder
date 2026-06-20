@@ -573,7 +573,8 @@ textarea,
   font-weight: 750;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -583,7 +584,8 @@ textarea,
   outline: none;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--focus-green);
 }
@@ -870,8 +872,12 @@ textarea,
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.settings-grid .field:first-child {
+  grid-column: 1 / -1;
 }
 
 .report-dialog {

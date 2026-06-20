@@ -31,6 +31,7 @@ from map_boundary_builder.request_options import (
     allow_catalog_for_request,
     bool_field,
     city_hint_for_request,
+    experimental_classifier_for_request,
     float_field,
     include_overlay_for_request,
     int_field,
@@ -323,6 +324,7 @@ class handler(BaseHTTPRequestHandler):
         include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
         catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
         allow_catalog = allow_catalog_for_request(fields)
+        experimental_classifier = experimental_classifier_for_request(fields)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -335,6 +337,7 @@ class handler(BaseHTTPRequestHandler):
             catalog_probe_only=catalog_probe_only,
             catalog_probe_missed=catalog_probe_missed,
             catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
+            experimental_classifier=experimental_classifier,
             filename_hint=original_filename,
             source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )
@@ -1488,6 +1491,7 @@ def run_result_cache_key_for_hash(
         "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
         "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),
+        "experimental_classifier": bool(getattr(options, "experimental_classifier", False)),
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
         "source_was_svg": bool(getattr(options, "source_was_svg", False)),
     }
@@ -1997,6 +2001,7 @@ def overlay_superset_cache_options(options: Any) -> Any | None:
             "catalog_probe_only": getattr(options, "catalog_probe_only", False),
             "catalog_probe_missed": getattr(options, "catalog_probe_missed", False),
             "catalog_probe_miss_low_iou": getattr(options, "catalog_probe_miss_low_iou", False),
+            "experimental_classifier": getattr(options, "experimental_classifier", False),
             "filename_hint": getattr(options, "filename_hint", None),
             "source_was_svg": getattr(options, "source_was_svg", False),
         }

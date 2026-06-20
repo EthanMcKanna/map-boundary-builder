@@ -26,8 +26,8 @@ MODEL_EXTRACTOR_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL"
 MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH"
 MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
 MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
-DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 128
-DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.35
+DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 256
+DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.25
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
@@ -271,6 +271,7 @@ def extract_service_area(
     cache: bool = True,
     profile: str | ExtractionProfile | None = None,
     hints: ExtractionHints | dict[str, object] | None = None,
+    use_model: bool | None = None,
 ) -> ExtractionResult:
     if rgb is None:
         rgb = load_rgb(image_path)
@@ -278,7 +279,7 @@ def extract_service_area(
     extraction_hints = resolve_extraction_hints(hints)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
-    model_result = maybe_extract_with_model(rgb, simplify_px=simplify_px)
+    model_result = maybe_extract_with_model(rgb, simplify_px=simplify_px, enabled=use_model)
     if model_result is not None:
         return model_result
     cache = cache and extraction_cache_enabled()
@@ -367,8 +368,15 @@ def extract_service_area(
     return result
 
 
-def maybe_extract_with_model(rgb: np.ndarray, *, simplify_px: float) -> ExtractionResult | None:
-    if not model_extractor_enabled():
+def maybe_extract_with_model(
+    rgb: np.ndarray,
+    *,
+    simplify_px: float,
+    enabled: bool | None = None,
+) -> ExtractionResult | None:
+    if enabled is None:
+        enabled = model_extractor_enabled()
+    if not enabled:
         return None
 
     from .model_extract import ModelExtractionConfig, extract_service_area_from_rgb_with_session, load_onnx_session
@@ -406,7 +414,7 @@ def model_extractor_path() -> Path:
     if configured is not None and configured.strip():
         path = Path(configured)
     else:
-        path = Path(__file__).with_name("models") / "synthetic_boundary_v1.onnx"
+        path = Path(__file__).with_name("models") / "synthetic_boundary_v2.onnx"
     if not path.is_absolute():
         path = Path.cwd() / path
     if not path.exists():

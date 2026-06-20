@@ -102,6 +102,7 @@ const RUN_CACHE_SUCCESS_THRESHOLD_TOKEN = "success-threshold-compatible";
 const RUN_CACHE_SETTING_FIELDS = [
   "allow_catalog",
   "city",
+  "extractor",
   "include_overlay",
   "min_confidence",
   "min_control_points",
@@ -1336,6 +1337,7 @@ function normalizedRunCacheSettingValue(field, formData, options = {}) {
   const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
   if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "city") return normalizedRunCacheCity(rawValue);
+  if (field === "extractor") return normalizedRunCacheExtractor(rawValue);
   if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);
   if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
@@ -1346,6 +1348,14 @@ function normalizedRunCacheSettingValue(field, formData, options = {}) {
   if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);
   if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);
   return rawValue;
+}
+
+function normalizedRunCacheExtractor(value) {
+  const normalized = String(value || "deterministic")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  return normalized === "experimentalclassifier" ? "experimental_classifier" : "deterministic";
 }
 
 function runCacheSuccessThresholds(formData) {
