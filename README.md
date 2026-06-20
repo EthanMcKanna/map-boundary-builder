@@ -211,3 +211,15 @@ reuses the existing OpenCV/Shapely polygonization path. Production defaults stil
 use the deterministic extractor; model-backed extraction should be promoted only
 after it beats the deterministic path on synthetic stress fixtures and the real
 screenshot hard gate.
+
+The packaged synthetic model can be enabled for a deployment with:
+
+```bash
+MAP_BOUNDARY_EXTRACTOR_MODEL=1
+```
+
+Optional overrides are `MAP_BOUNDARY_EXTRACTOR_MODEL_PATH`,
+`MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE`, and
+`MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD`. The shipped model was trained with
+`tools/train_synthetic_model.py` and uses the default `128` input size and `0.35`
+threshold.

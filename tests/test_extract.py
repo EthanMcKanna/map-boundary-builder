@@ -35,6 +35,55 @@ def stamp_blue_fill(arr: np.ndarray, y0: int, y1: int, x0: int, x1: int) -> None
 
 
 class MaskRepairTests(unittest.TestCase):
+    def test_model_extractor_env_routes_through_model_session(self) -> None:
+        rgb = np.full((48, 64, 3), 255, dtype=np.uint8)
+        model_mask = np.zeros((48, 64), dtype=bool)
+        model_mask[12:36, 16:48] = True
+        model_geometry, contour_count = extract_module.mask_to_geometry(model_mask, 1.0)
+
+        with TemporaryDirectory() as workdir:
+            model_path = Path(workdir) / "model.onnx"
+            model_path.write_bytes(b"model")
+
+            def fake_model_extract(model_rgb, session, *, config):
+                self.assertIs(session, fake_session)
+                self.assertEqual(config.threshold, 0.35)
+                self.assertEqual(config.style, "auto-fill")
+                np.testing.assert_array_equal(model_rgb, rgb)
+                return extract_module.ExtractionResult(
+                    mask=model_mask,
+                    style=config.style,
+                    pixel_geometry=model_geometry,
+                    coverage_ratio=float(model_mask.mean()),
+                    contour_count=contour_count,
+                    confidence=0.99,
+                )
+
+            fake_session = object()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "MAP_BOUNDARY_EXTRACTOR_MODEL": "1",
+                        "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH": str(model_path),
+                    },
+                ),
+                patch("map_boundary_builder.model_extract.load_onnx_session", return_value=fake_session),
+                patch(
+                    "map_boundary_builder.model_extract.extract_service_area_from_rgb_with_session",
+                    side_effect=fake_model_extract,
+                ),
+                patch.object(
+                    extract_module,
+                    "extract_service_area_from_rgb",
+                    side_effect=AssertionError("model extractor should bypass deterministic extraction"),
+                ),
+            ):
+                result = extract_service_area("unused.png", rgb=rgb)
+
+        self.assertEqual(result.style, "auto-fill")
+        np.testing.assert_array_equal(result.mask, model_mask)
+
     def test_bright_blue_repair_preserves_exterior_notches(self) -> None:
         raw = np.zeros((240, 240), dtype=bool)
         raw[40:200, 40:200] = True
