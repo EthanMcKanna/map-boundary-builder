@@ -37,6 +37,7 @@ map-boundary-builder = "map_boundary_builder.cli:main"
 map-boundary = "map_boundary_builder.cli:main"
 map-boundary-benchmark = "map_boundary_builder.benchmark:main"
 map-boundary-stress = "map_boundary_builder.stress_benchmark:main"
+map-boundary-synthetic-benchmark = "map_boundary_builder.synthetic_benchmark:main"
 map-boundary-web = "map_boundary_builder.web:main"
 
 [project.urls]

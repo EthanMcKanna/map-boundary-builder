@@ -164,3 +164,50 @@ profiling, cache-disabled repeat samples, signature-drift checks, latency/OCR
 budgets, and the manifest OCR contract coverage gate. It fails closed on
 unexpected status, output-signature drift, latency or OCR work-volume
 regressions, prewarm stalls, or missing row-level OCR contracts.
+
+## Synthetic Boundary Fixtures
+
+The synthetic pipeline creates paired map-like screenshots, exact raster masks,
+GeoJSON sidecars, and metadata manifests. It is designed to replace fragile
+human-guessed screenshot labels with deterministic samples whose pixel truth is
+known before extraction runs.
+
+```bash
+.venv/bin/map-boundary-synthetic-benchmark \
+  --dataset-dir out/synthetic-boundary-smoke \
+  --generate \
+  --count 24
+```
+
+The command exits nonzero when generated samples fail the default quality gate
+(`min_iou=0.70`, `mean_iou=0.85`) or when any sample fails to extract. Lower the
+thresholds only for exploratory report generation.
+
+Each generated sample contains:
+
+- `image.png` or `image.jpg`: the screenshot-style input.
+- `overlay.png`: the rendered target overlay on the procedural basemap.
+- `mask.png`: the exact binary service-area mask.
+- `boundary.geojson`: lon/lat output plus pixel-geometry metadata.
+- `metadata.json`: deterministic sample metadata and artifact paths.
+
+The benchmark scores the current extractor against the exact mask before any
+reference-bounds fitting or georeferencing. Reports include mask IoU, Dice,
+precision, recall, area ratio, centroid distance, boundary IoU at several pixel
+tolerances, extraction diagnostics, and Shapely geometry validity.
+
+This first renderer is intentionally lightweight and uses local procedural maps
+so the data contract, metrics, and CI hooks can mature quickly. The next renderer
+should keep the same artifact contract while swapping the image source to
+MapLibre/Playwright with locally cached map tiles and randomized GeoJSON
+fill/line layers.
+
+## Optional Model Mask Producer
+
+`map_boundary_builder.model_extract` defines the opt-in interface for a trained
+ONNX segmentation model. It preprocesses RGB screenshots, runs a single-channel
+mask model with ONNX Runtime, thresholds and resizes the probability mask, then
+reuses the existing OpenCV/Shapely polygonization path. Production defaults still
+use the deterministic extractor; model-backed extraction should be promoted only
+after it beats the deterministic path on synthetic stress fixtures and the real
+screenshot hard gate.
