@@ -1,0 +1,175 @@
+"""Benchmark extraction against synthetic image/mask artifacts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from statistics import mean
+import time
+from typing import Any
+
+import numpy as np
+from PIL import Image
+
+from .evaluation import (
+    area_ratio,
+    boundary_iou,
+    centroid_distance_px,
+    dice,
+    geometry_validity_summary,
+    iou,
+    precision,
+    recall,
+)
+from .extract import extract_service_area
+from .synthetic import SyntheticDatasetManifest, generate_synthetic_dataset
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="map-boundary-synthetic-benchmark",
+        description="Generate or score synthetic boundary fixtures with exact mask labels.",
+    )
+    parser.add_argument("--dataset-dir", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, default=None)
+    parser.add_argument("--out", type=Path, default=None, help="Output report path.")
+    parser.add_argument("--generate", action="store_true", help="Generate a synthetic dataset before scoring.")
+    parser.add_argument("--count", type=int, default=24, help="Sample count for --generate.")
+    parser.add_argument("--seed", type=int, default=1, help="Dataset seed for --generate.")
+    parser.add_argument("--width", type=int, default=960, help="Generated sample width.")
+    parser.add_argument("--height", type=int, default=640, help="Generated sample height.")
+    parser.add_argument("--min-iou", type=float, default=0.70, help="Hard gate for every scored row.")
+    parser.add_argument("--mean-iou", type=float, default=0.85, help="Hard gate for report mean IoU.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    dataset_dir = args.dataset_dir
+    if args.generate:
+        manifest = generate_synthetic_dataset(
+            dataset_dir,
+            count=args.count,
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+        )
+    else:
+        manifest_path = args.manifest or dataset_dir / "manifest.json"
+        manifest = SyntheticDatasetManifest.read_json(manifest_path)
+
+    report = score_synthetic_manifest(manifest, dataset_dir)
+    report["thresholds"] = {
+        "min_iou": args.min_iou,
+        "mean_iou": args.mean_iou,
+    }
+    report["passed"] = _passes_thresholds(report, min_iou=args.min_iou, mean_iou=args.mean_iou)
+
+    out_path = args.out or dataset_dir / "synthetic-benchmark-report.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps(report["summary"], indent=2, sort_keys=True))
+    return 0 if report["passed"] else 1
+
+
+def score_synthetic_manifest(
+    manifest: SyntheticDatasetManifest,
+    dataset_dir: str | Path,
+) -> dict[str, Any]:
+    root = Path(dataset_dir)
+    rows = [score_synthetic_sample(sample, root) for sample in manifest.samples]
+    scored_rows = [row for row in rows if row["status"] == "scored"]
+    ious = [row["metrics"]["iou"] for row in scored_rows]
+    boundary_ious = [row["metrics"]["boundary_iou_2px"] for row in scored_rows]
+    durations = [row["duration_s"] for row in scored_rows]
+    failures = [row for row in rows if row["status"] != "scored"]
+    summary = {
+        "sample_count": len(rows),
+        "scored_count": len(scored_rows),
+        "failure_count": len(failures),
+        "mean_iou": round(mean(ious), 6) if ious else 0.0,
+        "min_iou": round(min(ious), 6) if ious else 0.0,
+        "mean_boundary_iou_2px": round(mean(boundary_ious), 6) if boundary_ious else 0.0,
+        "mean_duration_s": round(mean(durations), 6) if durations else 0.0,
+    }
+    return {
+        "manifest": {
+            "name": manifest.name,
+            "version": manifest.version,
+            "properties": dict(manifest.properties),
+        },
+        "summary": summary,
+        "rows": rows,
+    }
+
+
+def score_synthetic_sample(sample, dataset_dir: Path) -> dict[str, Any]:
+    image_path = dataset_dir / sample.artifacts.screenshot
+    mask_path = dataset_dir / sample.artifacts.mask
+    started = time.perf_counter()
+    try:
+        expected_mask = _load_mask(mask_path)
+        result = extract_service_area(image_path, cache=False)
+        predicted_mask = result.mask.astype(bool, copy=False)
+        row = {
+            "sample_id": sample.sample_id,
+            "variant": sample.variant,
+            "overlay_style": sample.overlay_style.name,
+            "status": "scored",
+            "duration_s": round(time.perf_counter() - started, 6),
+            "extraction": {
+                "style": result.style,
+                "coverage_ratio": round(result.coverage_ratio, 6),
+                "confidence": round(result.confidence, 6),
+                "contour_count": result.contour_count,
+            },
+            "metrics": _score_masks(predicted_mask, expected_mask),
+            "geometry": geometry_validity_summary(result.pixel_geometry),
+        }
+        return row
+    except Exception as exc:
+        return {
+            "sample_id": sample.sample_id,
+            "variant": sample.variant,
+            "overlay_style": sample.overlay_style.name,
+            "status": "failed",
+            "duration_s": round(time.perf_counter() - started, 6),
+            "error": str(exc),
+        }
+
+
+def _score_masks(predicted_mask: np.ndarray, expected_mask: np.ndarray) -> dict[str, float]:
+    return {
+        "iou": round(iou(predicted_mask, expected_mask), 6),
+        "dice": round(dice(predicted_mask, expected_mask), 6),
+        "precision": round(precision(predicted_mask, expected_mask), 6),
+        "recall": round(recall(predicted_mask, expected_mask), 6),
+        "area_ratio": round(area_ratio(predicted_mask, expected_mask), 6),
+        "centroid_distance_px": round(centroid_distance_px(predicted_mask, expected_mask), 3),
+        "boundary_iou_0px": round(boundary_iou(predicted_mask, expected_mask, tolerance_px=0), 6),
+        "boundary_iou_2px": round(boundary_iou(predicted_mask, expected_mask, tolerance_px=2), 6),
+        "boundary_iou_5px": round(boundary_iou(predicted_mask, expected_mask, tolerance_px=5), 6),
+    }
+
+
+def _load_mask(path: str | Path) -> np.ndarray:
+    with Image.open(path) as image:
+        return np.asarray(image.convert("L")) > 0
+
+
+def _passes_thresholds(report: dict[str, Any], *, min_iou: float, mean_iou: float) -> bool:
+    summary = report["summary"]
+    if summary["failure_count"]:
+        return False
+    if summary["min_iou"] < min_iou:
+        return False
+    if summary["mean_iou"] < mean_iou:
+        return False
+    return True
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
