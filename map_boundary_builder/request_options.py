@@ -4,6 +4,14 @@ import re
 
 AUTO_CITY_TOKENS = {"auto", "automatic", "autodetect", "detect"}
 FALSE_BOOLEAN_TOKENS = {"0", "false", "no", "off", ""}
+EXPERIMENTAL_CLASSIFIER_TOKENS = {
+    "experimental",
+    "experimentalclassifier",
+    "experimentalmodel",
+    "experimentalonnx",
+    "model",
+    "onnx",
+}
 
 
 def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:
@@ -46,3 +54,9 @@ def allow_catalog_for_request(fields: dict[str, str]) -> bool:
     if bool_field(fields, "no_catalog", default=False):
         return False
     return bool_field(fields, "allow_catalog", default=True)
+
+
+def experimental_classifier_for_request(fields: dict[str, str]) -> bool:
+    extractor = fields.get("extractor", "").strip().lower()
+    normalized = re.sub(r"[^a-z0-9]+", "", extractor)
+    return normalized in EXPERIMENTAL_CLASSIFIER_TOKENS

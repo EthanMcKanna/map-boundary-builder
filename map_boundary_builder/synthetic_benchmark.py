@@ -41,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--width", type=int, default=960, help="Generated sample width.")
     parser.add_argument("--height", type=int, default=640, help="Generated sample height.")
     parser.add_argument("--model-path", type=Path, default=None, help="Optional ONNX mask model to score.")
-    parser.add_argument("--model-input-size", type=int, default=128)
-    parser.add_argument("--model-threshold", type=float, default=0.35)
+    parser.add_argument("--model-input-size", type=int, default=256)
+    parser.add_argument("--model-threshold", type=float, default=0.25)
     parser.add_argument("--min-iou", type=float, default=0.70, help="Hard gate for every scored row.")
     parser.add_argument("--mean-iou", type=float, default=0.85, help="Hard gate for report mean IoU.")
     return parser

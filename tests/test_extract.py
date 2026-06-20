@@ -47,7 +47,7 @@ class MaskRepairTests(unittest.TestCase):
 
             def fake_model_extract(model_rgb, session, *, config):
                 self.assertIs(session, fake_session)
-                self.assertEqual(config.threshold, 0.35)
+                self.assertEqual(config.threshold, 0.25)
                 self.assertEqual(config.style, "auto-fill")
                 np.testing.assert_array_equal(model_rgb, rgb)
                 return extract_module.ExtractionResult(
@@ -83,6 +83,24 @@ class MaskRepairTests(unittest.TestCase):
 
         self.assertEqual(result.style, "auto-fill")
         np.testing.assert_array_equal(result.mask, model_mask)
+
+    def test_explicit_model_false_overrides_model_env(self) -> None:
+        rgb = np.full((48, 64, 3), 255, dtype=np.uint8)
+        with (
+            patch.dict(os.environ, {"MAP_BOUNDARY_EXTRACTOR_MODEL": "1"}),
+            patch.object(
+                extract_module,
+                "maybe_extract_with_model",
+                wraps=extract_module.maybe_extract_with_model,
+            ) as maybe_model,
+            patch("map_boundary_builder.model_extract.load_onnx_session") as load_model,
+        ):
+            with self.assertRaises(ValueError):
+                extract_service_area("unused.png", rgb=rgb, cache=False, use_model=False)
+
+        maybe_model.assert_called_once()
+        self.assertFalse(maybe_model.call_args.kwargs["enabled"])
+        load_model.assert_not_called()
 
     def test_bright_blue_repair_preserves_exterior_notches(self) -> None:
         raw = np.zeros((240, 240), dtype=bool)

@@ -8,6 +8,7 @@ def test_api_and_local_web_share_request_option_helpers() -> None:
         "allow_catalog_for_request",
         "bool_field",
         "city_hint_for_request",
+        "experimental_classifier_for_request",
         "float_field",
         "int_field",
     ):
@@ -26,3 +27,7 @@ def test_shared_request_option_parsing_matches_api_contract() -> None:
     assert request_options.int_field({"min_control_points": "1.0"}, "min_control_points", 3, 0, 12) == 3
     assert request_options.allow_catalog_for_request({"no_catalog": "1", "allow_catalog": "1"}) is False
     assert request_options.include_overlay_for_request({}, catalog_probe_only=True) is False
+    assert request_options.experimental_classifier_for_request({}) is False
+    assert request_options.experimental_classifier_for_request({"extractor": "deterministic"}) is False
+    assert request_options.experimental_classifier_for_request({"extractor": "experimental_classifier"}) is True
+    assert request_options.experimental_classifier_for_request({"extractor": "Experimental Classifier"}) is True

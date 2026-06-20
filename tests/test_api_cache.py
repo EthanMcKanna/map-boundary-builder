@@ -292,6 +292,11 @@ class ApiRunCacheTests(unittest.TestCase):
             None,
             BoundaryBuildOptions(source_was_svg=True),
         )
+        changed_experimental_classifier = run_result_cache_key(
+            b"image-a",
+            None,
+            BoundaryBuildOptions(experimental_classifier=True),
+        )
         changed_overlay_mode = run_result_cache_key(
             b"image-a",
             None,
@@ -317,6 +322,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertNotEqual(changed_catalog_probe_missed_options, changed_catalog_probe_miss_low_iou_options)
         self.assertNotEqual(base, changed_allow_catalog)
         self.assertNotEqual(base, changed_svg_source_hint)
+        self.assertNotEqual(base, changed_experimental_classifier)
         self.assertNotEqual(base, changed_overlay_mode)
 
     def test_success_run_cache_key_ignores_acceptance_thresholds(self) -> None:
@@ -2198,6 +2204,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b'const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;', app_js)
         self.assertIn(b'if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);', app_js)
         self.assertIn(b'if (field === "city") return normalizedRunCacheCity(rawValue);', app_js)
+        self.assertIn(b'if (field === "extractor") return normalizedRunCacheExtractor(rawValue);', app_js)
         self.assertIn(b'if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);', app_js)
         self.assertIn(b'if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(b'if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);', app_js)
@@ -2209,6 +2216,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertIn(b'if (field === "min_confidence") return normalizedRunCacheFloat(rawValue, 0.55, 0, 1);', app_js)
         self.assertIn(b'if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);', app_js)
         self.assertIn(b'if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);', app_js)
+        self.assertIn(b"function normalizedRunCacheExtractor(value) {", app_js)
         self.assertIn(b"function runCacheSuccessThresholds(formData) {", app_js)
         self.assertIn(b'replace(/[^a-z0-9]+/g, "");', app_js[city_helper:bool_helper])
         self.assertIn(
@@ -2340,6 +2348,7 @@ class ApiRunCacheTests(unittest.TestCase):
         source_hint = app_js.index(b'formData.set("source_was_svg", "1");', svg_guard)
         cache_lookup = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);", source_hint)
         settings_fields = app_js.index(b'const RUN_CACHE_SETTING_FIELDS = [')
+        extractor_cache_field = app_js.index(b'"extractor"', settings_fields)
         source_cache_field = app_js.index(b'"source_was_svg"', settings_fields)
 
         self.assertLess(image_set, svg_guard)
@@ -2347,6 +2356,7 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(source_hint, cache_lookup)
         self.assertIn(b"const SVG_RASTER_MAX_DIMENSION = 1600;", app_js)
         self.assertIn(b"const maxDimension = SVG_RASTER_MAX_DIMENSION;", app_js)
+        self.assertLess(settings_fields, extractor_cache_field)
         self.assertLess(settings_fields, source_cache_field)
 
     def test_frontend_preserves_failed_run_payload_for_reports(self) -> None:

@@ -228,6 +228,13 @@
           <h3 id="fitSettingsTitle">Fit</h3>
           <div class="settings-grid">
             <label class="field compact">
+              <span>Extractor</span>
+              <select id="extractorInput" form="runForm" name="extractor">
+                <option value="deterministic" selected>Default</option>
+                <option value="experimental_classifier">Experimental classifier</option>
+              </select>
+            </label>
+            <label class="field compact">
               <span>Confidence Floor</span>
               <input id="confidenceInput" form="runForm" name="min_confidence" type="number" min="0" max="1" step="0.01" value="0.55" />
             </label>
