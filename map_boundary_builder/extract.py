@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -28,6 +28,13 @@ MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
 MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
 DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 256
 DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.25
+MODEL_REVIEW_MAX_COVERAGE = 0.08
+MODEL_REVIEW_MAX_CONTOUR_COUNT = 5
+MODEL_FALLBACK_MIN_DETERMINISTIC_CONFIDENCE = 0.9
+MODEL_FALLBACK_MIN_DETERMINISTIC_COVERAGE = 0.02
+MODEL_FALLBACK_MAX_DETERMINISTIC_COVERAGE = 0.85
+MODEL_FALLBACK_MAX_COVERAGE_RATIO = 0.5
+MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO = 0.75
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
@@ -280,7 +287,7 @@ def extract_service_area(
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
     model_result = maybe_extract_with_model(rgb, simplify_px=simplify_px, enabled=use_model)
-    if model_result is not None:
+    if model_result is not None and not model_result_needs_deterministic_review(model_result):
         return model_result
     cache = cache and extraction_cache_enabled()
     canonical_key: str | None = None
@@ -365,7 +372,56 @@ def extract_service_area(
         )
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
+    if model_result is not None and should_fallback_to_deterministic_result(model_result, result):
+        result = replace(
+            result,
+            diagnostics={
+                **(result.diagnostics or {}),
+                "model_fallback": {
+                    "reason": "model_underfilled_confident_deterministic_mask",
+                    "model_style": model_result.style,
+                    "model_coverage_ratio": model_result.coverage_ratio,
+                    "model_contour_count": model_result.contour_count,
+                    "model_confidence": model_result.confidence,
+                },
+            },
+        )
+        return result
+    if model_result is not None:
+        return model_result
     return result
+
+
+def model_result_needs_deterministic_review(result: ExtractionResult) -> bool:
+    return (
+        result.coverage_ratio < MODEL_REVIEW_MAX_COVERAGE
+        or result.contour_count > MODEL_REVIEW_MAX_CONTOUR_COUNT
+    )
+
+
+def should_fallback_to_deterministic_result(
+    model_result: ExtractionResult,
+    deterministic_result: ExtractionResult,
+) -> bool:
+    if deterministic_result.confidence < MODEL_FALLBACK_MIN_DETERMINISTIC_CONFIDENCE:
+        return False
+    if deterministic_result.contour_count > 3:
+        return False
+    if not (
+        MODEL_FALLBACK_MIN_DETERMINISTIC_COVERAGE
+        <= deterministic_result.coverage_ratio
+        <= MODEL_FALLBACK_MAX_DETERMINISTIC_COVERAGE
+    ):
+        return False
+    coverage_ratio = model_result.coverage_ratio / max(deterministic_result.coverage_ratio, 1e-9)
+    if coverage_ratio < MODEL_FALLBACK_MAX_COVERAGE_RATIO:
+        return True
+    if (
+        model_result.contour_count > max(MODEL_REVIEW_MAX_CONTOUR_COUNT, deterministic_result.contour_count * 3)
+        and coverage_ratio < MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO
+    ):
+        return True
+    return False
 
 
 def maybe_extract_with_model(

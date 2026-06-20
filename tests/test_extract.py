@@ -102,6 +102,67 @@ class MaskRepairTests(unittest.TestCase):
         self.assertFalse(maybe_model.call_args.kwargs["enabled"])
         load_model.assert_not_called()
 
+    def test_suspicious_model_underfill_falls_back_to_confident_deterministic_mask(self) -> None:
+        rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[8:28, 10:30] = True
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 20:80] = True
+        model_geometry, model_contours = extract_module.mask_to_geometry(model_mask, 1.0)
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(deterministic_mask, 1.0)
+        model_result = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=model_contours + 8,
+            confidence=0.887,
+        )
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="bright-blue",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=1.0,
+        )
+
+        with (
+            patch.object(extract_module, "maybe_extract_with_model", return_value=model_result),
+            patch.object(extract_module, "extract_service_area_from_rgb", return_value=deterministic_result),
+        ):
+            result = extract_service_area("unused.png", rgb=rgb, cache=False, use_model=True)
+
+        self.assertEqual(result.style, "bright-blue")
+        np.testing.assert_array_equal(result.mask, deterministic_mask)
+        self.assertEqual(result.diagnostics["model_fallback"]["model_coverage_ratio"], model_result.coverage_ratio)
+
+    def test_non_suspicious_model_result_still_bypasses_deterministic_extraction(self) -> None:
+        rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[16:56, 20:70] = True
+        model_geometry, model_contours = extract_module.mask_to_geometry(model_mask, 1.0)
+        model_result = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=model_contours,
+            confidence=0.99,
+        )
+
+        with (
+            patch.object(extract_module, "maybe_extract_with_model", return_value=model_result),
+            patch.object(
+                extract_module,
+                "extract_service_area_from_rgb",
+                side_effect=AssertionError("deterministic extraction should not run for plausible model masks"),
+            ),
+        ):
+            result = extract_service_area("unused.png", rgb=rgb, cache=False, use_model=True)
+
+        self.assertIs(result, model_result)
+
     def test_bright_blue_repair_preserves_exterior_notches(self) -> None:
         raw = np.zeros((240, 240), dtype=bool)
         raw[40:200, 40:200] = True
