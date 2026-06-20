@@ -22,6 +22,18 @@ from map_boundary_builder.extract import (
 )
 
 
+def stamp_blue_fill(arr: np.ndarray, y0: int, y1: int, x0: int, x1: int) -> None:
+    """Fill a rectangle with a bright-blue service fill that keeps interior
+    texture, the way a real translucent overlay lets basemap streets show
+    through. A solid blob would (correctly) read as flat water to the extractor,
+    so mechanical fixtures use this instead of a constant-color rectangle."""
+    arr[y0:y1, x0:x1] = (46, 119, 246)
+    for y in range(y0 + 2, y1 - 1, 5):
+        arr[y, x0:x1] = (28, 92, 210)
+    for x in range(x0 + 2, x1 - 1, 5):
+        arr[y0:y1, x] = (28, 92, 210)
+
+
 class MaskRepairTests(unittest.TestCase):
     def test_bright_blue_repair_preserves_exterior_notches(self) -> None:
         raw = np.zeros((240, 240), dtype=bool)
@@ -143,7 +155,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_downscaled_extraction_returns_original_coordinate_space(self) -> None:
         rgb = np.full((240, 240, 3), 255, dtype=np.uint8)
-        rgb[60:190, 50:180] = (46, 119, 246)
+        stamp_blue_fill(rgb, 60, 190, 50, 180)
 
         result = extract_service_area("unused.png", rgb=rgb, max_dimension=120)
 
@@ -156,7 +168,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_canonical_extraction_cache_shifts_uniform_border_hit(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
         bordered[4:84, 7:107] = base
 
@@ -189,7 +201,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_extraction_cache_does_not_write_disk_by_default(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
 
         with TemporaryDirectory() as workdir:
             cache_dir = Path(workdir)
@@ -207,7 +219,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_cache_false_bypasses_memory_cache(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
 
         with TemporaryDirectory() as workdir:
             with patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)):
@@ -227,7 +239,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_extraction_cache_env_bypasses_memory_cache(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
 
         with TemporaryDirectory() as workdir:
             with patch.object(extract_module, "EXTRACTION_CACHE_DIR", Path(workdir)):
@@ -248,7 +260,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_large_untrimmed_extraction_skips_memory_cache(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         base[0, :2] = (240, 240, 240)
         base[-1, :2] = (240, 240, 240)
         base[:2, 0] = (240, 240, 240)
@@ -277,7 +289,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_scaled_extraction_cache_reuses_large_downscaled_result(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         base[0, :2] = (240, 240, 240)
         base[-1, :2] = (240, 240, 240)
         base[:2, 0] = (240, 240, 240)
@@ -315,7 +327,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_trimmed_extraction_uses_memory_cache_above_untrimmed_limit(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
         bordered[4:84, 7:107] = base
 
@@ -342,7 +354,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_large_trimmed_extraction_skips_memory_cache_above_trimmed_limit(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
         bordered[4:84, 7:107] = base
 
@@ -369,7 +381,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_large_trimmed_downscaled_extraction_uses_scaled_cache(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
         bordered[4:84, 7:107] = base
 
@@ -402,7 +414,7 @@ class MaskRepairTests(unittest.TestCase):
 
     def test_canonical_extraction_disk_cache_can_be_enabled(self) -> None:
         base = np.full((80, 100, 3), 255, dtype=np.uint8)
-        base[24:58, 30:74] = (46, 119, 246)
+        stamp_blue_fill(base, 24, 58, 30, 74)
         bordered = np.full((90, 112, 3), 255, dtype=np.uint8)
         bordered[4:84, 7:107] = base
 
@@ -458,6 +470,34 @@ class MaskRepairTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_extraction_cache_key_tracks_profile_and_hints(self) -> None:
+        rgb = np.full((12, 14, 3), 255, dtype=np.uint8)
+        with (
+            patch.object(extract_module, "get_pipeline_version", return_value="pipeline"),
+            patch.object(extract_module, "extraction_cache_dependency_signature", return_value="deps"),
+        ):
+            default_key = extract_module.extraction_visual_cache_key(
+                rgb,
+                simplify_px=6.0,
+                max_dimension=0,
+            )
+            satellite_key = extract_module.extraction_visual_cache_key(
+                rgb,
+                simplify_px=6.0,
+                max_dimension=0,
+                profile="satellite-overlay",
+            )
+            hinted_key = extract_module.extraction_visual_cache_key(
+                rgb,
+                simplify_px=6.0,
+                max_dimension=0,
+                profile="satellite-overlay",
+                hints={"seed_point": (4.25, 8.75), "target_rgb": (220, 36, 32)},
+            )
+
+        self.assertNotEqual(default_key, satellite_key)
+        self.assertNotEqual(satellite_key, hinted_key)
+
 
 class AutoFillExtractionTests(unittest.TestCase):
     @staticmethod
@@ -495,6 +535,23 @@ class AutoFillExtractionTests(unittest.TestCase):
         if union == 0.0:
             return 0.0
         return float(np.logical_and(mask, expected).sum()) / union
+
+    @staticmethod
+    def _satellite_basemap(size: tuple[int, int] = (360, 360)) -> np.ndarray:
+        height, width = size
+        rng = np.random.default_rng(7)
+        y = np.linspace(0, 1, height)[:, np.newaxis]
+        x = np.linspace(0, 1, width)[np.newaxis, :]
+        base = np.zeros((height, width, 3), dtype=np.float32)
+        base[:, :, 0] = 74 + 44 * x + 18 * y
+        base[:, :, 1] = 94 + 58 * y + 14 * np.sin(x * 10)
+        base[:, :, 2] = 62 + 28 * x + 20 * y
+        rgb = np.clip(base + rng.normal(0, 10, (height, width, 3)), 0, 255).astype(np.uint8)
+        for i in range(16, width, 42):
+            cv2.line(rgb, (i, 0), (i + 80, height - 1), (118, 122, 112), 2)
+        for i in range(25, height, 56):
+            cv2.line(rgb, (0, i), (width - 1, i + 20), (64, 92, 75), 2)
+        return rgb
 
     _SERVICE_POLYGON = np.array(
         [[70, 60], [300, 80], [320, 210], [240, 320], [90, 300], [50, 170]],
@@ -612,6 +669,52 @@ class AutoFillExtractionTests(unittest.TestCase):
         self.assertEqual(result.style, "auto-fill")
         self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.85)
 
+    def test_satellite_overlay_profile_uses_hints_for_annotated_imagery(self) -> None:
+        rgb = self._satellite_basemap()
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (220, 36, 32), 0.55)
+
+        result = extract_service_area(
+            "unused-satellite-overlay.png",
+            rgb=rgb,
+            cache=False,
+            profile="satellite-overlay",
+            hints={"seed_point": (180, 180), "target_rgb": (220, 36, 32)},
+        )
+
+        self.assertEqual(result.style, "auto-fill")
+        self.assertEqual(result.extraction_profile, "satellite-overlay")
+        self.assertEqual(result.diagnostics["auto_fill"]["method"], "cluster-fill")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.95)
+
+    def test_satellite_overlay_hints_scale_with_downsampled_extraction(self) -> None:
+        rgb = self._satellite_basemap()
+        expected = self._blend_overlay(rgb, self._SERVICE_POLYGON, (220, 36, 32), 0.55)
+
+        result = extract_service_area(
+            "unused-satellite-overlay.png",
+            rgb=rgb,
+            cache=False,
+            max_dimension=180,
+            profile="satellite-overlay",
+            hints={"seed_point": (180, 180), "target_rgb": (220, 36, 32)},
+        )
+
+        self.assertEqual(result.mask.shape, rgb.shape[:2])
+        self.assertEqual(result.extraction_profile, "satellite-overlay")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.95)
+
+    def test_satellite_profile_plain_imagery_fails_closed(self) -> None:
+        rgb = self._satellite_basemap()
+
+        with self.assertRaises(ValueError):
+            extract_service_area(
+                "unused-plain-satellite.png",
+                rgb=rgb,
+                cache=False,
+                profile="satellite-overlay",
+                hints={"seed_point": (180, 180)},
+            )
+
     def test_tiny_disagreeing_generic_does_not_replace_styled(self) -> None:
         mask_styled = np.zeros((100, 100), dtype=bool)
         mask_styled[10:70, 10:70] = True
@@ -667,8 +770,12 @@ class AutoFillExtractionTests(unittest.TestCase):
             extract_service_area("unused-plain.png", rgb=rgb, cache=False)
 
     def test_bright_blue_extraction_skips_auto_fill(self) -> None:
-        rgb = np.full((240, 240, 3), 255, dtype=np.uint8)
-        rgb[60:190, 50:180] = (46, 119, 246)
+        # Basemap background (not a uniform margin) so the fill stays a
+        # sub-region, the way a real screenshot frames a service area.
+        rgb = np.full((240, 240, 3), 236, dtype=np.uint8)
+        for x in range(0, 240, 24):
+            cv2.line(rgb, (x, 0), (x, 239), (214, 214, 214), 2)
+        stamp_blue_fill(rgb, 60, 190, 50, 180)
 
         with patch.object(
             extract_module,

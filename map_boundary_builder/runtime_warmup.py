@@ -59,8 +59,17 @@ def warm_extraction_runtime() -> dict[str, Any]:
 
     from .extract import extract_service_area_from_rgb
 
-    rgb = np.full((256, 256, 3), 255, dtype=np.uint8)
-    rgb[64:192, 64:192] = (40, 150, 230)
+    # A textured basemap with a translucent-style blue fill sub-region, so the
+    # warmup exercises the same classification, repair, texture, and gate code a
+    # real screenshot hits (a flat solid block would read as water).
+    rgb = np.full((256, 256, 3), 236, dtype=np.uint8)
+    rgb[::8, :] = (212, 212, 212)
+    rgb[:, ::8] = (212, 212, 212)
+    fill = np.zeros((256, 256), dtype=bool)
+    fill[64:192, 64:192] = True
+    blended = rgb.astype(np.float32)
+    blended[fill] = blended[fill] * 0.45 + np.array([40, 150, 230], dtype=np.float32) * 0.55
+    rgb = np.clip(blended, 0, 255).astype(np.uint8)
     result = extract_service_area_from_rgb(rgb)
     return {
         "style": result.style,

@@ -35,6 +35,33 @@ The output is a GeoJSON `FeatureCollection` with the extracted polygon in
 longitude/latitude coordinates and metadata describing the extraction strategy,
 georeference fit, pixel coverage, and confidence.
 
+## Extractor Generalization Direction
+
+The extractor is intentionally layered so it can become more general without
+making every image pass through one fragile threshold. Today it first tries
+style-specific masks for known service-map looks such as bright-blue, light,
+gray, purple, and dark-teal fills. When those tuned paths are missing or
+suspect, it falls back to a generic `auto-fill` path that clusters colors in LAB
+space, scores candidates by coverage, border behavior, color distinctness,
+texture, and chroma, and can also recover outline-only boundaries.
+
+That makes non-standard map palettes and some textured backgrounds possible,
+but not guaranteed. Satellite imagery, street-level screenshots, product maps,
+and app UI captures are harder because natural textures, shadows, water,
+vegetation, roads, and frame-touching target areas can violate assumptions that
+work well for map overlays. The current contract is conservative: prefer a
+failed extraction or low-confidence result over returning a plausible-looking
+basemap region.
+
+Generalization work should stay benchmark-driven. New image classes should be
+added as synthetic and real stress fixtures before broadening gates, especially
+for satellite-like textured backgrounds, low-contrast translucent overlays,
+outline-only regions, and targets that touch the crop border. The Python
+extractor API includes experimental named profiles and hints for this work, such
+as `profile="satellite-overlay"` with a seed point or expected fill color. The
+CLI, web, and API surfaces still default to automatic map-overlay extraction
+plus the existing filename/city hints used for georeferencing.
+
 ## Requirements
 
 - Python 3.12

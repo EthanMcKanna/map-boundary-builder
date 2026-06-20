@@ -19,6 +19,7 @@ from shapely.ops import unary_union
 from .pipeline_version import get_pipeline_version, runtime_dependency_signature
 
 DEFAULT_SIMPLIFY_PX = 6.0
+DEFAULT_EXTRACTION_PROFILE = "map-overlay"
 EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIMENSION", "0")))
 AUTO_FILL_STYLE = "auto-fill"
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
@@ -28,6 +29,12 @@ AUTO_FILL_KMEANS_FIT_MAX_SAMPLES = 60000
 AUTO_FILL_CENTER_PREMERGE_DISTANCE = 6.0
 AUTO_FILL_TINT_MERGE_DISTANCE = 22.0
 AUTO_FILL_MIN_BORDER_DISTINCTNESS = 12.0
+# A recolored or dark basemap land cluster sits near the basemap border color
+# (the border samples are basemap), clearing the lenient floor only barely
+# (chroma-weighted distance 12-18); a real saturated overlay sits on top of the
+# basemap and is far from it (>=32). The group path uses this stricter floor in
+# the empty gap between them; the ring path and light-fill gate keep the 12.0.
+AUTO_FILL_GROUP_MIN_BORDER_DISTINCTNESS = 24.0
 AUTO_FILL_LIGHTNESS_DISTINCTNESS_WEIGHT = 0.25
 AUTO_FILL_MAX_BORDER_FRACTION = 0.55
 AUTO_FILL_MIN_CLUSTER_COVERAGE = 0.008
@@ -59,6 +66,20 @@ AUTO_FILL_TAKEOVER_MIN_COVERAGE_RATIO = 0.5
 AUTO_FILL_TAKEOVER_OVERSIZED_STYLED_COVERAGE = 0.6
 AUTO_FILL_FALLBACK_LIGHT_FILL_MAX_COVERAGE = 0.60
 AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE = 0.90
+# A gray-fill mask that nearly fills its bounding box across the whole frame and
+# bleeds into the frame border is a dark basemap that Otsu swallowed, not a
+# compact service polygon. A real gray service area is a self-contained brighter
+# blob that does not reach the image edges.
+GRAY_FILL_BASEMAP_GRAB_BBOX_SPAN = 0.85
+GRAY_FILL_BASEMAP_GRAB_BORDER_FRACTION = 0.10
+# A translucent Waymo service fill keeps street/label texture visible inside it;
+# a solid lake or ocean is flat. A non-trivial bright-blue mask whose eroded
+# interior carries little texture is water, not a service area. Real Waymo fills
+# measure interior texture 0.30-0.68; water (even with roads drawn over) <=0.13.
+BORDER_NORMALIZE_MAX_TRIM_FRACTION = 0.12
+BRIGHT_BLUE_WATER_GATE_MIN_COVERAGE = 0.03
+BRIGHT_BLUE_WATER_TEXTURE_ERODE_RATIO = 0.012
+BRIGHT_BLUE_WATER_MIN_INTERIOR_TEXTURE = 0.20
 _CACHE_ROOT = Path(os.environ.get("MAP_BOUNDARY_CACHE_DIR", ".cache/map-boundary-builder"))
 EXTRACTION_CACHE_DIR = _CACHE_ROOT / "extractions"
 EXTRACTION_CACHE_VERSION = "extraction-v1"
@@ -99,6 +120,53 @@ _EXTRACTION_CACHE_DEPENDENCY_SIGNATURE: str | None = None
 
 
 @dataclass(frozen=True)
+class ExtractionProfile:
+    name: str
+    auto_fill_group_min_border_distinctness: float = AUTO_FILL_GROUP_MIN_BORDER_DISTINCTNESS
+    auto_fill_tint_merge_distance: float = AUTO_FILL_TINT_MERGE_DISTANCE
+    auto_fill_max_border_fraction: float = AUTO_FILL_MAX_BORDER_FRACTION
+    auto_fill_min_component_density: float = AUTO_FILL_MIN_COMPONENT_DENSITY
+    auto_fill_min_component_interior_ratio: float = AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO
+    auto_fill_min_interior_texture: float = AUTO_FILL_MIN_INTERIOR_TEXTURE
+    auto_fill_min_seed_chroma: float = AUTO_FILL_MIN_SEED_CHROMA
+    bright_blue_water_min_interior_texture: float = BRIGHT_BLUE_WATER_MIN_INTERIOR_TEXTURE
+
+
+@dataclass(frozen=True)
+class ExtractionHints:
+    seed_point: tuple[float, float] | None = None
+    target_rgb: tuple[int, int, int] | None = None
+
+
+EXTRACTION_PROFILES: dict[str, ExtractionProfile] = {
+    DEFAULT_EXTRACTION_PROFILE: ExtractionProfile(name=DEFAULT_EXTRACTION_PROFILE),
+    # Satellite/aerial screenshots tend to have textured, high-variance base
+    # imagery and subtler semi-transparent annotation fills. Keep this opt-in so
+    # the production map-overlay path does not inherit looser false-positive
+    # gates intended for annotated imagery.
+    "satellite-overlay": ExtractionProfile(
+        name="satellite-overlay",
+        auto_fill_group_min_border_distinctness=16.0,
+        auto_fill_tint_merge_distance=12.0,
+        auto_fill_max_border_fraction=0.70,
+        auto_fill_min_component_density=0.35,
+        auto_fill_min_component_interior_ratio=0.25,
+        auto_fill_min_interior_texture=0.035,
+        auto_fill_min_seed_chroma=10.0,
+        bright_blue_water_min_interior_texture=0.08,
+    ),
+}
+EXTRACTION_PROFILE_ALIASES = {
+    "default": DEFAULT_EXTRACTION_PROFILE,
+    "map": DEFAULT_EXTRACTION_PROFILE,
+    "map-overlay": DEFAULT_EXTRACTION_PROFILE,
+    "satellite": "satellite-overlay",
+    "aerial": "satellite-overlay",
+    "imagery": "satellite-overlay",
+}
+
+
+@dataclass(frozen=True)
 class ExtractionResult:
     mask: np.ndarray
     style: str
@@ -108,6 +176,8 @@ class ExtractionResult:
     confidence: float
     scaled_cache_status: str | None = None
     scaled_cache_shape: tuple[int, int] | None = None
+    extraction_profile: str = DEFAULT_EXTRACTION_PROFILE
+    diagnostics: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -193,9 +263,13 @@ def extract_service_area(
     rgb: np.ndarray | None = None,
     max_dimension: int | None = None,
     cache: bool = True,
+    profile: str | ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
 ) -> ExtractionResult:
     if rgb is None:
         rgb = load_rgb(image_path)
+    extraction_profile = resolve_extraction_profile(profile)
+    extraction_hints = resolve_extraction_hints(hints)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
     cache = cache and extraction_cache_enabled()
@@ -212,6 +286,8 @@ def extract_service_area(
                 canonical_rgb,
                 simplify_px=simplify_px,
                 max_dimension=max_dimension,
+                profile=extraction_profile,
+                hints=extraction_hints,
             )
             if canonical_key is not None:
                 cached = read_extraction_cache(canonical_key, rgb.shape[:2], canonical_origin)
@@ -225,6 +301,8 @@ def extract_service_area(
                 rgb,
                 simplify_px=simplify_px,
                 max_dimension=max_dimension,
+                profile=extraction_profile,
+                hints=extraction_hints,
             )
             if cache
             else None
@@ -242,7 +320,12 @@ def extract_service_area(
             (max(1, round(width * scale)), max(1, round(height * scale))),
             interpolation=cv2.INTER_AREA,
         )
-        scaled = extract_service_area_from_rgb(scaled_rgb, simplify_px=simplify_px * scale)
+        scaled = extract_service_area_from_rgb(
+            scaled_rgb,
+            simplify_px=simplify_px * scale,
+            profile=extraction_profile,
+            hints=scale_extraction_hints(extraction_hints, rgb.shape[:2], scaled_rgb.shape[:2]),
+        )
         scaled_cache_status: str | None = None
         if scaled_cache_key is not None:
             scaled_cache_status = (
@@ -264,7 +347,12 @@ def extract_service_area(
             scaled_cache_shape=scaled.mask.shape if scaled_cache_status is not None else None,
         )
     else:
-        result = extract_service_area_from_rgb(rgb, simplify_px=simplify_px)
+        result = extract_service_area_from_rgb(
+            rgb,
+            simplify_px=simplify_px,
+            profile=extraction_profile,
+            hints=extraction_hints,
+        )
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
     return result
@@ -277,13 +365,159 @@ def extraction_cache_enabled() -> bool:
     return True
 
 
-def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_SIMPLIFY_PX) -> ExtractionResult:
+def resolve_extraction_profile(profile: str | ExtractionProfile | None = None) -> ExtractionProfile:
+    if isinstance(profile, ExtractionProfile):
+        return profile
+    profile_name = DEFAULT_EXTRACTION_PROFILE if profile is None else str(profile).strip().lower()
+    profile_name = EXTRACTION_PROFILE_ALIASES.get(profile_name, profile_name)
+    try:
+        return EXTRACTION_PROFILES[profile_name]
+    except KeyError as exc:
+        supported = ", ".join(sorted(EXTRACTION_PROFILES))
+        raise ValueError(f"Unsupported extraction profile {profile!r}; supported profiles: {supported}") from exc
+
+
+def extraction_profile_cache_key(profile: ExtractionProfile) -> str:
+    return json.dumps(
+        {
+            "name": profile.name,
+            "auto_fill_group_min_border_distinctness": profile.auto_fill_group_min_border_distinctness,
+            "auto_fill_tint_merge_distance": profile.auto_fill_tint_merge_distance,
+            "auto_fill_max_border_fraction": profile.auto_fill_max_border_fraction,
+            "auto_fill_min_component_density": profile.auto_fill_min_component_density,
+            "auto_fill_min_component_interior_ratio": profile.auto_fill_min_component_interior_ratio,
+            "auto_fill_min_interior_texture": profile.auto_fill_min_interior_texture,
+            "auto_fill_min_seed_chroma": profile.auto_fill_min_seed_chroma,
+            "bright_blue_water_min_interior_texture": profile.bright_blue_water_min_interior_texture,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def resolve_extraction_hints(hints: ExtractionHints | dict[str, object] | None = None) -> ExtractionHints:
+    if hints is None:
+        return ExtractionHints()
+    if isinstance(hints, ExtractionHints):
+        return hints
+    seed = hints.get("seed_point")
+    target = hints.get("target_rgb")
+    return ExtractionHints(
+        seed_point=normalize_point_hint(seed),
+        target_rgb=normalize_rgb_hint(target),
+    )
+
+
+def normalize_point_hint(value: object) -> tuple[float, float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError("seed_point hint must be a two-item (x, y) pair")
+    return float(value[0]), float(value[1])
+
+
+def normalize_rgb_hint(value: object) -> tuple[int, int, int] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise ValueError("target_rgb hint must be a three-item (r, g, b) tuple")
+    rgb = tuple(int(round(float(channel))) for channel in value)
+    if any(channel < 0 or channel > 255 for channel in rgb):
+        raise ValueError("target_rgb hint channels must be between 0 and 255")
+    return rgb
+
+
+def extraction_hints_cache_key(hints: ExtractionHints) -> str:
+    return json.dumps(
+        {
+            "seed_point": (
+                [round(hints.seed_point[0], 3), round(hints.seed_point[1], 3)]
+                if hints.seed_point is not None
+                else None
+            ),
+            "target_rgb": list(hints.target_rgb) if hints.target_rgb is not None else None,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def extract_service_area_from_rgb(
+    rgb: np.ndarray,
+    simplify_px: float = DEFAULT_SIMPLIFY_PX,
+    *,
+    profile: str | ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
+) -> ExtractionResult:
+    extraction_profile = resolve_extraction_profile(profile)
+    extraction_hints = resolve_extraction_hints(hints)
+    # Normalize a uniform solid border (e.g. white/black padding or letterbox
+    # bars) before classification. classify_style and the styled masks key off
+    # frame-fraction features (dark-pixel fraction, light-fill ratio,
+    # border-color sample), so a uniform pad shifts those fractions and can flip
+    # the chosen style by padding color alone. Trimming the solid border makes a
+    # uniform pad a true no-op, then we shift the result back into the caller's
+    # frame. Only a modest border is trimmed: a large uniform region (e.g. a map
+    # side panel or white UI column) is content, not padding, and must be kept.
+    canonical_rgb, origin = canonical_extract_rgb(rgb)
+    if (
+        canonical_rgb is not rgb
+        and (canonical_rgb.shape != rgb.shape or origin != (0.0, 0.0))
+        and border_trim_is_modest(rgb.shape[:2], canonical_rgb.shape[:2], origin)
+    ):
+        core = _extract_service_area_core(
+            np.ascontiguousarray(canonical_rgb),
+            simplify_px=simplify_px,
+            profile=extraction_profile,
+            hints=extraction_hints,
+        )
+        shifted = shift_cached_extraction(core, output_shape=rgb.shape[:2], origin=origin)
+        if shifted is not None:
+            return shifted
+    return _extract_service_area_core(
+        rgb,
+        simplify_px=simplify_px,
+        profile=extraction_profile,
+        hints=extraction_hints,
+    )
+
+
+def border_trim_is_modest(
+    full_shape: tuple[int, int],
+    canonical_shape: tuple[int, int],
+    origin: tuple[float, float],
+) -> bool:
+    full_h, full_w = full_shape
+    canon_h, canon_w = canonical_shape
+    left, top = origin
+    right = full_w - canon_w - left
+    bottom = full_h - canon_h - top
+    if min(left, top, right, bottom) < 0:
+        return False
+    return (
+        max(left, right) <= full_w * BORDER_NORMALIZE_MAX_TRIM_FRACTION
+        and max(top, bottom) <= full_h * BORDER_NORMALIZE_MAX_TRIM_FRACTION
+    )
+
+
+def _extract_service_area_core(
+    rgb: np.ndarray,
+    simplify_px: float = DEFAULT_SIMPLIFY_PX,
+    *,
+    profile: ExtractionProfile,
+    hints: ExtractionHints,
+) -> ExtractionResult:
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     style = classify_style(rgb, hsv=hsv)
-    styled = styled_extraction_result(rgb, style, hsv=hsv, simplify_px=simplify_px)
+    styled = styled_extraction_result(rgb, style, hsv=hsv, simplify_px=simplify_px, profile=profile)
     if styled is not None and not should_attempt_auto_fill_fallback(styled, rgb):
         return styled
-    generic = auto_fill_extraction_result(rgb, simplify_px=simplify_px)
+    # A confirmed gray-fill basemap grab (frame-spanning + border-bleeding) is
+    # never a valid answer: drop it so a failed fallback fails closed instead of
+    # returning the basemap as a "service area".
+    if styled is not None and gray_fill_is_basemap_grab(styled):
+        styled = None
+    generic = auto_fill_extraction_result(rgb, simplify_px=simplify_px, profile=profile, hints=hints)
     if generic is not None:
         # When the suspect styled mask and the generic pick agree on the
         # region, keep the tuned styled result; replace it only when the
@@ -293,7 +527,31 @@ def extract_service_area_from_rgb(rgb: np.ndarray, simplify_px: float = DEFAULT_
         return styled
     if styled is None:
         raise ValueError("No service-area polygon could be extracted from the image.")
+    # A styled mask flagged suspect because it collapsed below the smallest
+    # plausible fill is a fragment of recolored basemap, not a service area;
+    # with no generic replacement, fail closed rather than return the sliver.
+    if styled.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE:
+        raise ValueError("No service-area polygon could be extracted from the image.")
     return styled
+
+
+def gray_fill_is_basemap_grab(result: ExtractionResult) -> bool:
+    """True when a gray-fill styled result is a frame-spanning basemap grab
+    rather than a compact service polygon: its bounding box covers most of the
+    frame and it bleeds across the frame border. A real gray service area is a
+    self-contained brighter blob that does not reach the image edges."""
+    if result.style != "gray-fill":
+        return False
+    mask = result.mask
+    if not mask.any():
+        return False
+    height, width = mask.shape
+    ys, xs = np.where(mask)
+    bbox_span = ((ys.max() - ys.min() + 1) / height) * ((xs.max() - xs.min() + 1) / width)
+    if bbox_span < GRAY_FILL_BASEMAP_GRAB_BBOX_SPAN:
+        return False
+    border = np.concatenate([mask[0, :], mask[-1, :], mask[:, 0], mask[:, -1]])
+    return float(border.mean()) >= GRAY_FILL_BASEMAP_GRAB_BORDER_FRACTION
 
 
 def auto_fill_should_take_over(styled: ExtractionResult, generic: ExtractionResult) -> bool:
@@ -320,6 +578,7 @@ def styled_extraction_result(
     *,
     hsv: np.ndarray,
     simplify_px: float,
+    profile: ExtractionProfile,
 ) -> ExtractionResult | None:
     if style == "bright-blue":
         raw_mask = blue_service_mask(rgb, hsv=hsv)
@@ -335,6 +594,8 @@ def styled_extraction_result(
     if style in {"gray-fill", "light-fill"}:
         mask = keep_main_components(mask, max_components=1)
     mask = remove_dark_teal_chrome(mask, style)
+    if style == "bright-blue" and bright_blue_mask_is_flat_water(rgb, mask, profile=profile):
+        return None
     try:
         geometry, contour_count = mask_to_geometry(mask, simplify_px=simplify_px)
     except ValueError:
@@ -348,7 +609,52 @@ def styled_extraction_result(
         coverage_ratio=coverage_ratio,
         contour_count=contour_count,
         confidence=confidence,
+        extraction_profile=profile.name,
     )
+
+
+def bright_blue_interior_texture_fraction(rgb: np.ndarray, mask: np.ndarray) -> float | None:
+    """Fraction of the bright-blue mask's interior carrying local lightness
+    structure, on the same analysis-scaled LAB frame the auto-fill path uses.
+    The mask is eroded first so the textured antialiased rim of a flat blob is
+    not mistaken for interior detail."""
+    if not mask.any():
+        return None
+    height, width = rgb.shape[:2]
+    largest = max(height, width)
+    if largest > AUTO_FILL_ANALYSIS_MAX_DIMENSION:
+        scale = AUTO_FILL_ANALYSIS_MAX_DIMENSION / float(largest)
+        size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        analysis = cv2.resize(rgb, size, interpolation=cv2.INTER_AREA)
+        probe = cv2.resize(mask.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST) > 0
+    else:
+        analysis = rgb
+        probe = mask
+    erode_px = max(1, round(min(probe.shape) * BRIGHT_BLUE_WATER_TEXTURE_ERODE_RATIO)) | 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erode_px, erode_px))
+    eroded = cv2.erode(probe.astype(np.uint8), kernel) > 0
+    interior = eroded if eroded.any() else probe
+    if not interior.any():
+        return None
+    texture = analysis_texture_mask(cv2.cvtColor(analysis, cv2.COLOR_RGB2LAB))
+    return float(texture[interior].mean())
+
+
+def bright_blue_mask_is_flat_water(
+    rgb: np.ndarray,
+    mask: np.ndarray,
+    *,
+    profile: ExtractionProfile,
+) -> bool:
+    """A translucent Waymo service fill keeps street/label texture visible
+    inside it; a solid lake or ocean is flat. A non-trivial bright-blue mask
+    whose interior is flat is water, not a service area."""
+    if float(mask.mean()) < BRIGHT_BLUE_WATER_GATE_MIN_COVERAGE:
+        return False
+    texture_fraction = bright_blue_interior_texture_fraction(rgb, mask)
+    if texture_fraction is None:
+        return False
+    return texture_fraction < profile.bright_blue_water_min_interior_texture
 
 
 def should_attempt_auto_fill_fallback(result: ExtractionResult, rgb: np.ndarray) -> bool:
@@ -365,8 +671,12 @@ def should_attempt_auto_fill_fallback(result: ExtractionResult, rgb: np.ndarray)
             return True
     # An Otsu gray-fill that swallows nearly the whole frame segmented the
     # basemap; a mask far below the smallest plausible fill is usually stroke
-    # dashes or specks rather than a fill.
-    if result.style == "gray-fill" and result.coverage_ratio > AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE:
+    # dashes or specks rather than a fill. A frame-spanning gray-fill that
+    # bleeds into the frame border is a dark basemap grab even below that cap.
+    if result.style == "gray-fill" and (
+        result.coverage_ratio > AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE
+        or gray_fill_is_basemap_grab(result)
+    ):
         return True
     return (
         result.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE
@@ -405,9 +715,20 @@ def chroma_weighted_color_distance(color: np.ndarray, reference: np.ndarray) -> 
     return float(np.linalg.norm(delta))
 
 
-def auto_fill_extraction_result(rgb: np.ndarray, *, simplify_px: float) -> ExtractionResult | None:
-    raw_mask = auto_fill_service_mask(rgb)
-    if raw_mask is None or not raw_mask.any():
+def auto_fill_extraction_result(
+    rgb: np.ndarray,
+    *,
+    simplify_px: float,
+    profile: ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
+) -> ExtractionResult | None:
+    extraction_profile = resolve_extraction_profile(profile)
+    extraction_hints = resolve_extraction_hints(hints)
+    raw = auto_fill_service_mask(rgb, profile=extraction_profile, hints=extraction_hints)
+    if raw is None:
+        return None
+    raw_mask, diagnostics = raw
+    if not raw_mask.any():
         return None
     # The mask is derived from a small analysis frame, so it carries no detail
     # finer than its upscale step; repair at a capped resolution (cheap
@@ -432,10 +753,17 @@ def auto_fill_extraction_result(rgb: np.ndarray, *, simplify_px: float) -> Extra
         coverage_ratio=coverage_ratio,
         contour_count=contour_count,
         confidence=extraction_confidence(mask, AUTO_FILL_STYLE, contour_count),
+        extraction_profile=extraction_profile.name,
+        diagnostics={"auto_fill": diagnostics},
     )
 
 
-def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
+def auto_fill_service_mask(
+    rgb: np.ndarray,
+    *,
+    profile: ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
+) -> tuple[np.ndarray, dict[str, object]] | None:
     """Color-agnostic fill detection for palettes outside the tuned styles.
 
     Clusters the image in LAB space and scores each color group as a candidate
@@ -443,6 +771,8 @@ def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
     that is distinct from the border/basemap color, does not dominate the image
     border, and is solid rather than a road-like lattice once small gaps close.
     """
+    extraction_profile = resolve_extraction_profile(profile)
+    extraction_hints = resolve_extraction_hints(hints)
     height, width = rgb.shape[:2]
     if min(height, width) < 32:
         return None
@@ -485,19 +815,53 @@ def auto_fill_service_mask(rgb: np.ndarray) -> np.ndarray | None:
     group_image = group_of_label[label_image]
     border_fractions, border_color = auto_fill_border_stats(group_image, group_centers.shape[0], lab)
     texture = analysis_texture_mask(lab)
+    analysis_hints = scale_extraction_hints(extraction_hints, rgb.shape[:2], analysis.shape[:2])
     selected_groups = select_auto_fill_groups(
         group_image,
         group_centers,
         border_fractions=border_fractions,
         border_color=border_color,
         texture=texture,
+        profile=extraction_profile,
+        hints=analysis_hints,
     )
     if selected_groups is not None:
-        return np.isin(group_image, sorted(selected_groups))
-    return select_auto_fill_ring(
+        selected = sorted(selected_groups)
+        return np.isin(group_image, selected), {
+            "profile": extraction_profile.name,
+            "method": "cluster-fill",
+            "selected_groups": selected,
+            "seed_point": list(extraction_hints.seed_point) if extraction_hints.seed_point is not None else None,
+            "target_rgb": list(extraction_hints.target_rgb) if extraction_hints.target_rgb is not None else None,
+        }
+    ring = select_auto_fill_ring(
         group_image,
         group_centers,
         border_color=border_color,
+    )
+    if ring is None:
+        return None
+    return ring, {
+        "profile": extraction_profile.name,
+        "method": "outline-ring",
+    }
+
+
+def scale_extraction_hints(
+    hints: ExtractionHints,
+    source_shape: tuple[int, int],
+    analysis_shape: tuple[int, int],
+) -> ExtractionHints:
+    if hints.seed_point is None or source_shape == analysis_shape:
+        return hints
+    source_h, source_w = source_shape
+    analysis_h, analysis_w = analysis_shape
+    if source_h <= 0 or source_w <= 0:
+        return hints
+    x, y = hints.seed_point
+    return ExtractionHints(
+        seed_point=(x * analysis_w / source_w, y * analysis_h / source_h),
+        target_rgb=hints.target_rgb,
     )
 
 
@@ -592,8 +956,15 @@ def select_auto_fill_groups(
     border_fractions: np.ndarray,
     border_color: np.ndarray,
     texture: np.ndarray,
+    profile: ExtractionProfile,
+    hints: ExtractionHints,
 ) -> set[int] | None:
     group_count = group_centers.shape[0]
+    target_lab: np.ndarray | None = None
+    if hints.target_rgb is not None:
+        target_lab = cv2.cvtColor(np.array([[hints.target_rgb]], dtype=np.uint8), cv2.COLOR_RGB2LAB)[0, 0].astype(
+            np.float32
+        )
     # A semi-transparent overlay renders as a family of nearby tints (fill over
     # background, fill over roads, fill over parks), so each candidate is the
     # union of one seed group with its color neighbors.
@@ -602,17 +973,22 @@ def select_auto_fill_groups(
     scored_member_sets: set[tuple[int, ...]] = set()
     for seed in range(group_count):
         distances = np.linalg.norm(group_centers - group_centers[seed], axis=1)
-        members = sorted(np.flatnonzero(distances <= AUTO_FILL_TINT_MERGE_DISTANCE).tolist())
+        members = sorted(np.flatnonzero(distances <= profile.auto_fill_tint_merge_distance).tolist())
         member_key = tuple(members)
         if member_key in scored_member_sets:
             continue
         scored_member_sets.add(member_key)
+        candidate_mask = np.isin(group_image, members)
+        if not candidate_matches_hints(candidate_mask, hints):
+            continue
         score = auto_fill_candidate_score(
-            np.isin(group_image, members),
+            candidate_mask,
             group_centers[seed],
             border_color,
             float(border_fractions[members].sum()),
             texture=texture,
+            profile=profile,
+            target_lab=target_lab,
         )
         if score is not None and score > best_score:
             best_score = score
@@ -629,14 +1005,16 @@ def auto_fill_candidate_score(
     border_fraction: float,
     *,
     texture: np.ndarray,
+    profile: ExtractionProfile,
+    target_lab: np.ndarray | None = None,
 ) -> float | None:
-    if border_fraction > AUTO_FILL_MAX_BORDER_FRACTION:
+    if border_fraction > profile.auto_fill_max_border_fraction:
         return None
     coverage = float(candidate_mask.mean())
     if not AUTO_FILL_MIN_CLUSTER_COVERAGE <= coverage <= AUTO_FILL_MAX_CLUSTER_COVERAGE:
         return None
     distinctness = chroma_weighted_color_distance(seed_center, border_color)
-    if distinctness < AUTO_FILL_MIN_BORDER_DISTINCTNESS:
+    if distinctness < profile.auto_fill_group_min_border_distinctness:
         return None
 
     h, w = candidate_mask.shape
@@ -660,26 +1038,43 @@ def auto_fill_candidate_score(
     # solid: it keeps most of its hole-filled envelope and survives erosion.
     component = labels == largest_label
     filled_area = float(fill_binary_holes(component).sum())
-    if float(area) / max(1.0, filled_area) < AUTO_FILL_MIN_COMPONENT_DENSITY:
+    if float(area) / max(1.0, filled_area) < profile.auto_fill_min_component_density:
         return None
     eroded = cv2.erode(component.astype(np.uint8), kernel) > 0
     eroded_area = float(eroded.sum())
-    if eroded_area / float(area) < AUTO_FILL_MIN_COMPONENT_INTERIOR_RATIO:
+    if eroded_area / float(area) < profile.auto_fill_min_component_interior_ratio:
         return None
     # A translucent service fill keeps basemap streets/labels visible inside
     # it; flat regions (water, parkland, solid cards) carry no texture.
     interior_probe = eroded if eroded.any() else component
     texture_fraction = float(texture[interior_probe].mean())
-    if texture_fraction < AUTO_FILL_MIN_INTERIOR_TEXTURE:
+    if texture_fraction < profile.auto_fill_min_interior_texture:
         return None
     # Basemap water and land read as pale (low LAB chroma) even when roads or
     # labels give them texture; announcement overlays are saturated.
     seed_chroma = float(np.linalg.norm(seed_center[1:].astype(np.float32) - 128.0))
-    if seed_chroma < AUTO_FILL_MIN_SEED_CHROMA:
+    if seed_chroma < profile.auto_fill_min_seed_chroma:
         return None
+    target_score = 1.0
+    if target_lab is not None:
+        target_distance = chroma_weighted_color_distance(seed_center, target_lab)
+        if target_distance > 80.0:
+            return None
+        target_score = max(0.25, 1.0 - (target_distance / 80.0))
     chroma_score = min(1.0, seed_chroma / AUTO_FILL_CHROMA_SCORE_SCALE)
     contiguity = min(1.0, float(area) / max(1.0, float(candidate_mask.sum())))
-    return area_ratio * contiguity * (1.0 - border_fraction) * min(1.0, distinctness / 40.0) * chroma_score
+    return area_ratio * contiguity * (1.0 - border_fraction) * min(1.0, distinctness / 40.0) * chroma_score * target_score
+
+
+def candidate_matches_hints(candidate_mask: np.ndarray, hints: ExtractionHints) -> bool:
+    if hints.seed_point is None:
+        return True
+    x, y = hints.seed_point
+    col = int(round(x))
+    row = int(round(y))
+    if row < 0 or col < 0 or row >= candidate_mask.shape[0] or col >= candidate_mask.shape[1]:
+        return False
+    return bool(candidate_mask[row, col])
 
 
 def select_auto_fill_ring(
@@ -810,6 +1205,8 @@ def rescale_extraction_result(
         confidence=confidence,
         scaled_cache_status=scaled_cache_status or result.scaled_cache_status,
         scaled_cache_shape=scaled_cache_shape or result.scaled_cache_shape,
+        extraction_profile=result.extraction_profile,
+        diagnostics=result.diagnostics,
     )
 
 
@@ -818,9 +1215,13 @@ def extraction_visual_cache_key(
     *,
     simplify_px: float,
     max_dimension: int,
+    profile: str | ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
 ) -> str | None:
     if rgb is None:
         return None
+    extraction_profile = resolve_extraction_profile(profile)
+    extraction_hints = resolve_extraction_hints(hints)
     contiguous = np.ascontiguousarray(rgb)
     digest = hashlib.sha256()
     digest.update(b"rgb-canonical-extraction")
@@ -829,6 +1230,8 @@ def extraction_visual_cache_key(
     payload = (
         f"{EXTRACTION_CACHE_VERSION}:"
         f"pipeline={get_pipeline_version()}:"
+        f"profile={extraction_profile_cache_key(extraction_profile)}:"
+        f"hints={extraction_hints_cache_key(extraction_hints)}:"
         f"simplify={round(float(simplify_px), 4)}:"
         f"max-dimension={int(max_dimension)}:"
         f"deps={extraction_cache_dependency_signature()}:"
@@ -842,6 +1245,8 @@ def scaled_extraction_cache_key(
     *,
     simplify_px: float,
     max_dimension: int,
+    profile: str | ExtractionProfile | None = None,
+    hints: ExtractionHints | dict[str, object] | None = None,
 ) -> str | None:
     if rgb is None or SCALED_EXTRACTION_MEMORY_CACHE_MAX <= 0:
         return None
@@ -849,6 +1254,8 @@ def scaled_extraction_cache_key(
         rgb,
         simplify_px=simplify_px,
         max_dimension=max_dimension,
+        profile=profile,
+        hints=hints,
     )
 
 
@@ -916,6 +1323,16 @@ def read_extraction_cache(
                 geometry_payload = str(data["geometry"].item())
                 geometry = shape(json.loads(geometry_payload))
                 contour_count = int(data["contour_count"].item())
+                extraction_profile = (
+                    str(data["extraction_profile"].item())
+                    if "extraction_profile" in data
+                    else DEFAULT_EXTRACTION_PROFILE
+                )
+                diagnostics = (
+                    json.loads(str(data["diagnostics"].item()))
+                    if "diagnostics" in data and str(data["diagnostics"].item())
+                    else None
+                )
         except Exception:
             return None
         cached = ExtractionResult(
@@ -925,6 +1342,8 @@ def read_extraction_cache(
             coverage_ratio=float(mask.mean()),
             contour_count=contour_count,
             confidence=extraction_confidence(mask, style, contour_count),
+            extraction_profile=extraction_profile,
+            diagnostics=diagnostics,
         )
         remember_extraction_memory_cache(cache_key, cached)
     else:
@@ -954,6 +1373,8 @@ def write_extraction_cache(
         coverage_ratio=float(canonical_mask.mean()),
         contour_count=result.contour_count,
         confidence=extraction_confidence(canonical_mask, result.style, result.contour_count),
+        extraction_profile=result.extraction_profile,
+        diagnostics=result.diagnostics,
     )
     remember_extraction_memory_cache(cache_key, cached)
     if not EXTRACTION_DISK_CACHE_ENABLED:
@@ -973,6 +1394,12 @@ def write_extraction_cache(
                 style=np.array(result.style),
                 geometry=np.array(json.dumps(mapping(canonical_geometry), separators=(",", ":"))),
                 contour_count=np.array(result.contour_count, dtype=np.int32),
+                extraction_profile=np.array(result.extraction_profile),
+                diagnostics=np.array(
+                    json.dumps(result.diagnostics, sort_keys=True, separators=(",", ":"))
+                    if result.diagnostics is not None
+                    else ""
+                ),
             )
         tmp_path.replace(EXTRACTION_CACHE_DIR / f"{cache_key}.npz")
     except OSError:
@@ -1009,6 +1436,8 @@ def shift_cached_extraction(
         coverage_ratio=coverage_ratio,
         contour_count=result.contour_count,
         confidence=confidence,
+        extraction_profile=result.extraction_profile,
+        diagnostics=result.diagnostics,
     )
 
 
