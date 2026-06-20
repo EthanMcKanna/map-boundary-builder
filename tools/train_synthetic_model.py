@@ -18,17 +18,20 @@ import torch.nn.functional as F
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train a synthetic boundary segmentation model.")
     parser.add_argument("--dataset-dir", type=Path, default=Path("out/synthetic-model-train"))
-    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/synthetic_boundary_v2.onnx"))
-    parser.add_argument("--count", type=int, default=1536)
-    parser.add_argument("--validation-count", type=int, default=192)
+    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/synthetic_boundary_v10.onnx"))
+    parser.add_argument("--count", type=int, default=4096)
+    parser.add_argument("--validation-count", type=int, default=384)
     parser.add_argument("--seed", type=int, default=101)
+    parser.add_argument("--render-width", type=int, default=640)
+    parser.add_argument("--render-height", type=int, default=640)
     parser.add_argument("--image-size", type=int, default=256)
-    parser.add_argument("--epochs", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=28)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=0.001)
-    parser.add_argument("--base-channels", type=int, default=32)
+    parser.add_argument("--learning-rate", type=float, default=0.0008)
+    parser.add_argument("--base-channels", type=int, default=40)
     parser.add_argument("--arch", choices=("tiny", "resunet"), default="resunet")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    parser.add_argument("--checkpoint-dir", type=Path, default=None)
     return parser
 
 
@@ -46,8 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         args.dataset_dir,
         count=args.count + args.validation_count,
         seed=args.seed,
-        width=320,
-        height=220,
+        width=args.render_width,
+        height=args.render_height,
     )
     samples = list(manifest.samples)
     validation_samples = samples[: args.validation_count]
@@ -58,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     validation_loader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     model = build_model(args.arch, base_channels=args.base_channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
+    checkpoint_dir = args.checkpoint_dir or args.output.parent / f"{args.output.stem}.checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     print(
         "training",
@@ -76,18 +82,36 @@ def main(argv: list[str] | None = None) -> int:
             images = images.to(device)
             masks = masks.to(device)
             logits = model(images)
-            loss = F.binary_cross_entropy_with_logits(logits, masks) + dice_loss(logits, masks)
+            loss = segmentation_loss(logits, masks)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             losses.append(float(loss.detach()))
         validation_iou = evaluate_iou(model, validation_loader, device=device)
+        scheduler.step()
         print(
             f"epoch={epoch + 1} "
             f"loss={sum(losses) / max(1, len(losses)):.5f} "
-            f"validation_iou={validation_iou:.5f}",
+            f"validation_iou={validation_iou:.5f} "
+            f"lr={scheduler.get_last_lr()[0]:.7f}",
             flush=True,
         )
+        checkpoint_path = checkpoint_dir / f"epoch-{epoch + 1:03d}.pt"
+        torch.save(
+            {
+                "epoch": epoch + 1,
+                "arch": args.arch,
+                "base_channels": args.base_channels,
+                "image_size": args.image_size,
+                "validation_iou": validation_iou,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+            },
+            checkpoint_path,
+        )
+        (checkpoint_dir / "latest.pt").write_bytes(checkpoint_path.read_bytes())
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     model = model.to("cpu").eval()
@@ -276,6 +300,27 @@ def dice_loss(logits, masks):
     intersection = (probs * masks).sum(dim=(1, 2, 3))
     denominator = probs.sum(dim=(1, 2, 3)) + masks.sum(dim=(1, 2, 3))
     return (1.0 - ((2.0 * intersection + 1.0) / (denominator + 1.0))).mean()
+
+
+def segmentation_loss(logits, masks):
+    return (
+        0.55 * F.binary_cross_entropy_with_logits(logits, masks)
+        + 0.35 * dice_loss(logits, masks)
+        + 0.10 * boundary_loss(logits, masks)
+    )
+
+
+def boundary_loss(logits, masks):
+    probs = torch.sigmoid(logits)
+    pred_edges = edge_map(probs)
+    target_edges = edge_map(masks)
+    return F.l1_loss(pred_edges, target_edges)
+
+
+def edge_map(values):
+    pooled_min = -F.max_pool2d(-values, kernel_size=3, stride=1, padding=1)
+    pooled_max = F.max_pool2d(values, kernel_size=3, stride=1, padding=1)
+    return pooled_max - pooled_min
 
 
 @torch.no_grad()
