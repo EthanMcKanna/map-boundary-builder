@@ -27,7 +27,7 @@ MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH"
 MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
 MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
 DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 256
-DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.25
+DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.45
 MODEL_REVIEW_MAX_COVERAGE = 0.08
 MODEL_REVIEW_MAX_CONTOUR_COUNT = 5
 MODEL_FALLBACK_MIN_DETERMINISTIC_CONFIDENCE = 0.9
@@ -470,7 +470,7 @@ def model_extractor_path() -> Path:
     if configured is not None and configured.strip():
         path = Path(configured)
     else:
-        path = Path(__file__).with_name("models") / "synthetic_boundary_v2.onnx"
+        path = Path(__file__).with_name("models") / "synthetic_boundary_v10.onnx"
     if not path.is_absolute():
         path = Path.cwd() / path
     if not path.exists():

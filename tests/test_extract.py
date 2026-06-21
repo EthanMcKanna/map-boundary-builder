@@ -47,7 +47,7 @@ class MaskRepairTests(unittest.TestCase):
 
             def fake_model_extract(model_rgb, session, *, config):
                 self.assertIs(session, fake_session)
-                self.assertEqual(config.threshold, 0.25)
+                self.assertEqual(config.threshold, 0.45)
                 self.assertEqual(config.style, "auto-fill")
                 np.testing.assert_array_equal(model_rgb, rgb)
                 return extract_module.ExtractionResult(
@@ -83,6 +83,13 @@ class MaskRepairTests(unittest.TestCase):
 
         self.assertEqual(result.style, "auto-fill")
         np.testing.assert_array_equal(result.mask, model_mask)
+
+    def test_model_extractor_default_path_points_to_v10_package(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                extract_module.model_extractor_path().name,
+                "synthetic_boundary_v10.onnx",
+            )
 
     def test_explicit_model_false_overrides_model_env(self) -> None:
         rgb = np.full((48, 64, 3), 255, dtype=np.uint8)

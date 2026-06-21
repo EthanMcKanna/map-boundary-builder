@@ -17,3 +17,5 @@ input/
 
 *.log
 .vercel
+
+map_boundary_builder/models/*.checkpoints/

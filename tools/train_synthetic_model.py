@@ -34,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--reuse-dataset", action="store_true")
     parser.add_argument("--resume-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--resume-weights-only",
+        action="store_true",
+        help="Load model weights from --resume-checkpoint but reset optimizer, scheduler, and epoch count.",
+    )
     parser.add_argument("--export-checkpoint", type=Path, default=None)
     return parser
 
@@ -80,10 +85,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.resume_checkpoint is not None:
         checkpoint = torch.load(args.resume_checkpoint, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        start_epoch = int(checkpoint["epoch"])
-        best_validation_iou = float(checkpoint.get("best_validation_iou", checkpoint.get("validation_iou", -1.0)))
+        if args.resume_weights_only:
+            best_validation_iou = -1.0
+        else:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            start_epoch = int(checkpoint["epoch"])
+            best_validation_iou = float(checkpoint.get("best_validation_iou", checkpoint.get("validation_iou", -1.0)))
 
     print(
         "training",
