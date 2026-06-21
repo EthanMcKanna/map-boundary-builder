@@ -25,7 +25,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v1"
+GENERATOR_VERSION = "synthetic-generator-v10-real-style"
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,8 @@ class SyntheticOverlayStyle:
     stroke_width_px: float = 0.0
     dashed: bool = False
     fill_enabled: bool = True
+    labels_on_top: bool = False
+    circular_viewport: bool = False
 
     def metadata(self) -> OverlayStyleMetadata:
         return OverlayStyleMetadata(
@@ -62,6 +64,10 @@ class SyntheticSceneConfig:
     include_ui_chrome: bool = False
     include_hole: bool = False
     jpeg_quality: int | None = None
+    labels_on_top: bool = False
+    circular_viewport: bool = False
+    complex_boundary: bool = False
+    large_service_area: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,6 +79,9 @@ class SyntheticRenderResult:
 
 DEFAULT_OVERLAY_STYLES: tuple[SyntheticOverlayStyle, ...] = (
     SyntheticOverlayStyle("bright-blue-fill", "#2f7df6", 0.38, "#175fe0", 3.0),
+    SyntheticOverlayStyle("waymo-solid-blue", "#0087ff", 0.94, "#0070d8", 1.0, labels_on_top=True, circular_viewport=True),
+    SyntheticOverlayStyle("waymo-solid-blue-no-stroke", "#0087ff", 0.96, None, 0.0, labels_on_top=True),
+    SyntheticOverlayStyle("waymo-cyan-blue", "#0797ff", 0.88, "#0072dd", 2.0, labels_on_top=True, circular_viewport=True),
     SyntheticOverlayStyle("muted-green-fill", "#78b77b", 0.34, "#43864e", 3.0),
     SyntheticOverlayStyle("purple-fill", "#9b65dc", 0.36, "#7347b8", 3.0),
     SyntheticOverlayStyle("orange-fill", "#f28c38", 0.32, "#cf641b", 3.0),
@@ -108,6 +117,10 @@ def generate_synthetic_dataset(
             touch_border=index % 7 == 3,
             include_ui_chrome=index % 5 == 2,
             include_hole=index % 6 == 4,
+            labels_on_top=style.labels_on_top or index % 9 == 5,
+            circular_viewport=style.circular_viewport or index % 11 == 6,
+            complex_boundary=style.labels_on_top or index % 4 == 0,
+            large_service_area=style.labels_on_top or index % 10 == 8,
             jpeg_quality=82 if index % 4 == 1 else None,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
@@ -142,11 +155,25 @@ def generate_synthetic_sample(
 
     rng = random.Random(config.seed)
     style = config.overlay_style or DEFAULT_OVERLAY_STYLES[config.seed % len(DEFAULT_OVERLAY_STYLES)]
-    polygon, hole = _sample_polygon(config.width, config.height, rng, config.touch_border, config.include_hole)
+    labels_on_top = config.labels_on_top or style.labels_on_top
+    circular_viewport = config.circular_viewport or style.circular_viewport
+    polygon, hole = _sample_polygon(
+        config.width,
+        config.height,
+        rng,
+        config.touch_border,
+        config.include_hole,
+        config.complex_boundary or style.labels_on_top,
+        config.large_service_area or style.labels_on_top,
+    )
 
     base = _render_basemap(config, rng)
     mask = _render_mask(config.width, config.height, polygon, hole)
     overlay = _render_overlay(base, polygon, hole, style)
+    if labels_on_top:
+        overlay = _render_top_map_details(overlay, config, random.Random(config.seed + 900_001))
+    if circular_viewport:
+        overlay = _apply_circular_viewport(overlay, config)
     image = _apply_capture_effects(overlay, config)
 
     screenshot_path = sample_dir / "image.jpg" if config.jpeg_quality else sample_dir / "image.png"
@@ -184,6 +211,10 @@ def generate_synthetic_sample(
             "touch_border": config.touch_border,
             "include_ui_chrome": config.include_ui_chrome,
             "include_hole": config.include_hole,
+            "labels_on_top": labels_on_top,
+            "circular_viewport": circular_viewport,
+            "complex_boundary": config.complex_boundary,
+            "large_service_area": config.large_service_area,
             "jpeg_quality": config.jpeg_quality,
             "renderer": "procedural-pillow",
         },
@@ -269,16 +300,26 @@ def _sample_polygon(
     rng: random.Random,
     touch_border: bool,
     include_hole: bool,
+    complex_boundary: bool = False,
+    large_service_area: bool = False,
 ) -> tuple[Polygon, Polygon | None]:
     cx = width * rng.uniform(0.42, 0.58)
     cy = height * rng.uniform(0.42, 0.58)
-    radius_x = width * rng.uniform(0.20, 0.32)
-    radius_y = height * rng.uniform(0.20, 0.32)
-    vertices = rng.randint(7, 11)
+    if large_service_area:
+        radius_x = width * rng.uniform(0.28, 0.42)
+        radius_y = height * rng.uniform(0.30, 0.45)
+    else:
+        radius_x = width * rng.uniform(0.20, 0.34)
+        radius_y = height * rng.uniform(0.20, 0.34)
+    vertices = rng.randint(14, 24) if complex_boundary else rng.randint(7, 12)
     points: list[tuple[float, float]] = []
     for index in range(vertices):
-        angle = (2.0 * math.pi * index / vertices) + rng.uniform(-0.16, 0.16)
-        scale = rng.uniform(0.74, 1.12)
+        angle = (2.0 * math.pi * index / vertices) + rng.uniform(-0.20, 0.20)
+        scale = rng.uniform(0.64, 1.20) if complex_boundary else rng.uniform(0.74, 1.12)
+        if complex_boundary and index % 5 == 2:
+            scale *= rng.uniform(0.45, 0.70)
+        if complex_boundary and index % 7 == 3:
+            scale *= rng.uniform(1.08, 1.32)
         x = cx + math.cos(angle) * radius_x * scale
         y = cy + math.sin(angle) * radius_y * scale
         points.append((min(width - 2, max(2, x)), min(height - 2, max(2, y))))
@@ -336,6 +377,60 @@ def _render_overlay(
         else:
             draw.line(points, fill=stroke, width=max(1, round(style.stroke_width_px)), joint="curve")
     return Image.alpha_composite(image, layer).convert("RGB")
+
+
+def _render_top_map_details(image: Image.Image, config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    image = image.convert("RGBA")
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = ImageFont.load_default()
+    road_light = (210, 234, 255, 135)
+    road_strong = (184, 222, 255, 185)
+    label = (222, 242, 255, 220)
+    shield = (54, 76, 96, 230)
+
+    for _ in range(12):
+        y = rng.randint(35, max(36, config.height - 35))
+        x_offset = rng.randint(-140, 140)
+        draw.line(
+            [(x_offset, y), (config.width + x_offset, y + rng.randint(-90, 90))],
+            fill=road_light,
+            width=rng.choice((1, 2, 3)),
+        )
+    for _ in range(8):
+        x = rng.randint(35, max(36, config.width - 35))
+        y_offset = rng.randint(-90, 90)
+        draw.line(
+            [(x, y_offset), (x + rng.randint(-90, 90), config.height + y_offset)],
+            fill=road_light,
+            width=rng.choice((1, 2, 3)),
+        )
+    for _ in range(4):
+        x = rng.randint(int(config.width * 0.24), int(config.width * 0.76))
+        draw.line(
+            [(x, -20), (x + rng.randint(-90, 90), config.height + 20)],
+            fill=road_strong,
+            width=rng.choice((3, 4, 5)),
+        )
+    for index, text in enumerate(("Houston", "Downtown", "Midtown", "Heights", "Museum District", "First Ward")):
+        x = int((index + 1) * config.width / 7) + rng.randint(-42, 42)
+        y = rng.randint(int(config.height * 0.22), int(config.height * 0.78))
+        draw.text((x, y), text, fill=label, font=font)
+    for _ in range(7):
+        x = rng.randint(int(config.width * 0.20), int(config.width * 0.82))
+        y = rng.randint(int(config.height * 0.15), int(config.height * 0.85))
+        draw.rounded_rectangle((x - 9, y - 7, x + 9, y + 7), radius=5, fill=shield)
+        draw.text((x - 5, y - 4), str(rng.choice((10, 45, 69, 90, 288, 610))), fill=(255, 255, 255, 230), font=font)
+    return image.convert("RGB")
+
+
+def _apply_circular_viewport(image: Image.Image, config: SyntheticSceneConfig) -> Image.Image:
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    mask = Image.new("L", image.size, 0)
+    draw = ImageDraw.Draw(mask)
+    margin = -int(min(config.width, config.height) * 0.01)
+    draw.ellipse((margin, margin, config.width - margin, config.height - margin), fill=255)
+    background.paste(image, (0, 0), mask)
+    return background
 
 
 def _apply_capture_effects(image: Image.Image, config: SyntheticSceneConfig) -> Image.Image:

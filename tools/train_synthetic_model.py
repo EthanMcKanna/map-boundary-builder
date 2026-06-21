@@ -8,7 +8,7 @@ from typing import Sequence
 import numpy as np
 from PIL import Image
 
-from map_boundary_builder.synthetic import generate_synthetic_dataset
+from map_boundary_builder.synthetic import SyntheticDatasetManifest, generate_synthetic_dataset
 
 import torch
 import torch.nn as nn
@@ -18,17 +18,28 @@ import torch.nn.functional as F
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train a synthetic boundary segmentation model.")
     parser.add_argument("--dataset-dir", type=Path, default=Path("out/synthetic-model-train"))
-    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/synthetic_boundary_v2.onnx"))
-    parser.add_argument("--count", type=int, default=1536)
-    parser.add_argument("--validation-count", type=int, default=192)
+    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/synthetic_boundary_v10.onnx"))
+    parser.add_argument("--count", type=int, default=4096)
+    parser.add_argument("--validation-count", type=int, default=384)
     parser.add_argument("--seed", type=int, default=101)
+    parser.add_argument("--render-width", type=int, default=640)
+    parser.add_argument("--render-height", type=int, default=640)
     parser.add_argument("--image-size", type=int, default=256)
-    parser.add_argument("--epochs", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=28)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=0.001)
-    parser.add_argument("--base-channels", type=int, default=32)
+    parser.add_argument("--learning-rate", type=float, default=0.0008)
+    parser.add_argument("--base-channels", type=int, default=40)
     parser.add_argument("--arch", choices=("tiny", "resunet"), default="resunet")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    parser.add_argument("--checkpoint-dir", type=Path, default=None)
+    parser.add_argument("--reuse-dataset", action="store_true")
+    parser.add_argument("--resume-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--resume-weights-only",
+        action="store_true",
+        help="Load model weights from --resume-checkpoint but reset optimizer, scheduler, and epoch count.",
+    )
+    parser.add_argument("--export-checkpoint", type=Path, default=None)
     return parser
 
 
@@ -42,13 +53,21 @@ def main(argv: list[str] | None = None) -> int:
     torch.manual_seed(args.seed)
     device = select_device(args.device)
 
-    manifest = generate_synthetic_dataset(
-        args.dataset_dir,
-        count=args.count + args.validation_count,
-        seed=args.seed,
-        width=320,
-        height=220,
-    )
+    if args.export_checkpoint is not None:
+        export_checkpoint(args)
+        return 0
+
+    manifest_path = args.dataset_dir / "manifest.json"
+    if args.reuse_dataset and manifest_path.exists():
+        manifest = SyntheticDatasetManifest.read_json(manifest_path)
+    else:
+        manifest = generate_synthetic_dataset(
+            args.dataset_dir,
+            count=args.count + args.validation_count,
+            seed=args.seed,
+            width=args.render_width,
+            height=args.render_height,
+        )
     samples = list(manifest.samples)
     validation_samples = samples[: args.validation_count]
     training_samples = samples[args.validation_count :]
@@ -58,6 +77,21 @@ def main(argv: list[str] | None = None) -> int:
     validation_loader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     model = build_model(args.arch, base_channels=args.base_channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
+    checkpoint_dir = args.checkpoint_dir or args.output.parent / f"{args.output.stem}.checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    start_epoch = 0
+    best_validation_iou = -1.0
+    if args.resume_checkpoint is not None:
+        checkpoint = torch.load(args.resume_checkpoint, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        if args.resume_weights_only:
+            best_validation_iou = -1.0
+        else:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            start_epoch = int(checkpoint["epoch"])
+            best_validation_iou = float(checkpoint.get("best_validation_iou", checkpoint.get("validation_iou", -1.0)))
 
     print(
         "training",
@@ -67,40 +101,61 @@ def main(argv: list[str] | None = None) -> int:
         f"train={len(train_dataset)}",
         f"validation={len(validation_dataset)}",
         f"image_size={args.image_size}",
+        f"start_epoch={start_epoch}",
         flush=True,
     )
     model.train()
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         losses: list[float] = []
         for images, masks in loader:
             images = images.to(device)
             masks = masks.to(device)
             logits = model(images)
-            loss = F.binary_cross_entropy_with_logits(logits, masks) + dice_loss(logits, masks)
+            loss = segmentation_loss(logits, masks)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             losses.append(float(loss.detach()))
         validation_iou = evaluate_iou(model, validation_loader, device=device)
+        scheduler.step()
+        is_best = validation_iou >= best_validation_iou
+        if is_best:
+            best_validation_iou = validation_iou
         print(
             f"epoch={epoch + 1} "
             f"loss={sum(losses) / max(1, len(losses)):.5f} "
-            f"validation_iou={validation_iou:.5f}",
+            f"validation_iou={validation_iou:.5f} "
+            f"lr={scheduler.get_last_lr()[0]:.7f}",
             flush=True,
         )
+        checkpoint_path = checkpoint_dir / f"epoch-{epoch + 1:03d}.pt"
+        torch.save(
+            {
+                "epoch": epoch + 1,
+                "arch": args.arch,
+                "base_channels": args.base_channels,
+                "image_size": args.image_size,
+                "validation_iou": validation_iou,
+                "best_validation_iou": best_validation_iou,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+            },
+            checkpoint_path,
+        )
+        (checkpoint_dir / "latest.pt").write_bytes(checkpoint_path.read_bytes())
+        if is_best:
+            (checkpoint_dir / "best.pt").write_bytes(checkpoint_path.read_bytes())
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    model = model.to("cpu").eval()
-    example = torch.zeros((1, 3, args.image_size, args.image_size), dtype=torch.float32)
-    torch.onnx.export(
-        model,
-        example,
-        args.output,
-        input_names=["image"],
-        output_names=["mask_logits"],
-        opset_version=18,
-    )
-    print(f"wrote {args.output}", flush=True)
+    best_checkpoint = checkpoint_dir / "best.pt"
+    if best_checkpoint.exists():
+        checkpoint = torch.load(best_checkpoint, map_location="cpu")
+        model = build_model(str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]))
+        model.load_state_dict(checkpoint["model_state_dict"])
+        export_model(model, args.output, image_size=int(checkpoint["image_size"]))
+    else:
+        export_model(model, args.output, image_size=args.image_size)
     return 0
 
 
@@ -278,6 +333,27 @@ def dice_loss(logits, masks):
     return (1.0 - ((2.0 * intersection + 1.0) / (denominator + 1.0))).mean()
 
 
+def segmentation_loss(logits, masks):
+    return (
+        0.55 * F.binary_cross_entropy_with_logits(logits, masks)
+        + 0.35 * dice_loss(logits, masks)
+        + 0.10 * boundary_loss(logits, masks)
+    )
+
+
+def boundary_loss(logits, masks):
+    probs = torch.sigmoid(logits)
+    pred_edges = edge_map(probs)
+    target_edges = edge_map(masks)
+    return F.l1_loss(pred_edges, target_edges)
+
+
+def edge_map(values):
+    pooled_min = -F.max_pool2d(-values, kernel_size=3, stride=1, padding=1)
+    pooled_max = F.max_pool2d(values, kernel_size=3, stride=1, padding=1)
+    return pooled_max - pooled_min
+
+
 @torch.no_grad()
 def evaluate_iou(model: nn.Module, loader, *, device: torch.device) -> float:
     model.eval()
@@ -307,6 +383,28 @@ def select_device(name: str) -> torch.device:
     if name == "mps" and not torch.backends.mps.is_available():
         raise RuntimeError("MPS was requested but is not available")
     return torch.device(name)
+
+
+def export_checkpoint(args) -> None:
+    checkpoint = torch.load(args.export_checkpoint, map_location="cpu")
+    model = build_model(str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]))
+    model.load_state_dict(checkpoint["model_state_dict"])
+    export_model(model, args.output, image_size=int(checkpoint["image_size"]))
+
+
+def export_model(model: nn.Module, output: Path, *, image_size: int) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    model = model.to("cpu").eval()
+    example = torch.zeros((1, 3, image_size, image_size), dtype=torch.float32)
+    torch.onnx.export(
+        model,
+        example,
+        output,
+        input_names=["image"],
+        output_names=["mask_logits"],
+        opset_version=18,
+    )
+    print(f"wrote {output}", flush=True)
 
 
 if __name__ == "__main__":
