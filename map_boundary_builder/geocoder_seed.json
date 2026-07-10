@@ -1,5 +1,25 @@
 {
   "description": "Read-only geocoder responses for common map-label queries observed in the service-area benchmark. Runtime cache and live geocoders still take precedence/fallback.",
+  "attribution": {
+    "photon": {
+      "service": "Photon",
+      "service_url": "https://photon.komoot.io/",
+      "data": "OpenStreetMap contributors",
+      "license": "ODbL 1.0",
+      "license_url": "https://www.openstreetmap.org/copyright",
+      "seed_queries": {
+        "1611c9c5bccd7db3753b7ebe": "Shiro, Texas",
+        "1801b56df6b0612a15196337": "Doral, Miami",
+        "19158b33c0fe837734384dd2": "Grimes",
+        "29276add9882bbbc450cadc3": "Hialeah, Miami",
+        "3df0cec95a8f646bc646e6b5": "Roans Prairie, Texas",
+        "894151a58cd479650491669e": "Brazos",
+        "a858e68665b0a46fa7b337af": "Singleton, Texas",
+        "ab2b66c355ffb7bbd9d8c5cd": "Sweetwater, Miami",
+        "e533677e0f55c3364bf9857f": "Walker"
+      }
+    }
+  },
   "nominatim": {
     "004b5e80905faffba97b93d9": [],
     "014ef9acc2c90875ab4fcc28": [],
@@ -41303,6 +41323,785 @@
     },
     "1d53af26ec5c929bf0937509": {
       "features": []
+    },
+    "19158b33c0fe837734384dd2": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1839087,
+            "osm_key": "place",
+            "osm_value": "county",
+            "type": "county",
+            "name": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -96.1882672,
+              30.8641473,
+              -95.8041421,
+              30.225522
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.9943034,
+              30.5169334
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 128339,
+            "osm_key": "place",
+            "osm_value": "town",
+            "type": "city",
+            "name": "Grimes",
+            "county": "Polk",
+            "state": "Iowa",
+            "country": "United States",
+            "postcode": "50111",
+            "countrycode": "US",
+            "extent": [
+              -93.8482098,
+              41.7175059,
+              -93.755882,
+              41.632969
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -93.7910575,
+              41.6883214
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 16138482,
+            "osm_key": "place",
+            "osm_value": "village",
+            "type": "city",
+            "name": "Grimes",
+            "county": "Dale",
+            "state": "Alabama",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -85.4604089,
+              31.3119211,
+              -85.4387849,
+              31.2900982
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.44799,
+              31.3046175
+            ]
+          }
+        }
+      ]
+    },
+    "e533677e0f55c3364bf9857f": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1840983,
+            "osm_key": "place",
+            "osm_value": "county",
+            "type": "county",
+            "name": "Walker",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -95.8630717,
+              31.058062,
+              -95.3273002,
+              30.5043882
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.5522823,
+              30.6795741
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 539093,
+            "osm_key": "place",
+            "osm_value": "county",
+            "type": "county",
+            "name": "Walker",
+            "state": "Georgia",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -85.534089,
+              34.9850724,
+              -85.0508384,
+              34.5867826
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -85.3209686,
+              34.7418605
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1848800,
+            "osm_key": "place",
+            "osm_value": "county",
+            "type": "county",
+            "name": "Walker",
+            "state": "Alabama",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -87.636116,
+              34.005749,
+              -86.9536337,
+              33.5128395
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -87.2767248,
+              33.7804491
+            ]
+          }
+        }
+      ]
+    },
+    "894151a58cd479650491669e": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1837743,
+            "osm_key": "place",
+            "osm_value": "county",
+            "type": "county",
+            "name": "Brazos",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -96.6018381,
+              30.9739682,
+              -96.079889,
+              30.3305586
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -96.3497772,
+              30.6993189
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 151931110,
+            "osm_key": "place",
+            "osm_value": "hamlet",
+            "type": "district",
+            "name": "Brazos",
+            "county": "Rio Arriba",
+            "state": "New Mexico",
+            "country": "United States",
+            "postcode": "87551",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -106.5614236,
+              36.7514028
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 150943404,
+            "osm_key": "place",
+            "osm_value": "hamlet",
+            "type": "district",
+            "name": "Brazos",
+            "county": "Napa",
+            "state": "California",
+            "country": "United States",
+            "postcode": "94503",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -122.3060844,
+              38.2082503
+            ]
+          }
+        }
+      ]
+    },
+    "1611c9c5bccd7db3753b7ebe": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 151466089,
+            "osm_key": "place",
+            "osm_value": "village",
+            "type": "city",
+            "name": "Shiro",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.8892168,
+              30.6120797
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 491370831,
+            "osm_key": "landuse",
+            "osm_value": "cemetery",
+            "type": "other",
+            "name": "Shiro Cemetery",
+            "city": "Shiro",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -95.9046834,
+              30.6061477,
+              -95.902921,
+              30.6045858
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.9038004,
+              30.6054556
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 491370831,
+            "osm_key": "amenity",
+            "osm_value": "grave_yard",
+            "type": "house",
+            "name": "Shiro Cemetery",
+            "street": "State Highway 30",
+            "city": "Shiro",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "postcode": "77875",
+            "countrycode": "US",
+            "extent": [
+              -95.9046834,
+              30.6061477,
+              -95.902921,
+              30.6045858
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.9038004,
+              30.6054556
+            ]
+          }
+        }
+      ]
+    },
+    "a858e68665b0a46fa7b337af": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 151438653,
+            "osm_key": "place",
+            "osm_value": "hamlet",
+            "type": "district",
+            "name": "Singleton",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "postcode": "77875",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.958564,
+              30.6521413
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 471611375,
+            "osm_key": "landuse",
+            "osm_value": "cemetery",
+            "type": "other",
+            "name": "Singleton Cemetery",
+            "district": "Singleton",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -95.9606856,
+              30.6474436,
+              -95.9600255,
+              30.6469128
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.9603556,
+              30.6471782
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 356786226,
+            "osm_key": "waterway",
+            "osm_value": "dam",
+            "type": "other",
+            "name": "Singleton Lake Dam",
+            "county": "Swisher",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -101.7787966,
+              34.711725
+            ]
+          }
+        }
+      ]
+    },
+    "3df0cec95a8f646bc646e6b5": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 151911268,
+            "osm_key": "place",
+            "osm_value": "hamlet",
+            "type": "district",
+            "name": "Roans Prairie",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "postcode": "77875",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.943324,
+              30.5836549
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 469280214,
+            "osm_key": "landuse",
+            "osm_value": "cemetery",
+            "type": "other",
+            "name": "Roans Prairie Cemetery",
+            "county": "Grimes",
+            "state": "Texas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -95.9293343,
+              30.5869105,
+              -95.9290169,
+              30.5866206
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.9291756,
+              30.5867656
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 156964763,
+            "osm_key": "highway",
+            "osm_value": "residential",
+            "type": "street",
+            "name": "Roans Prairie Lane",
+            "district": "Crabb",
+            "county": "Fort Bend",
+            "state": "Texas",
+            "country": "United States",
+            "postcode": "77469",
+            "countrycode": "US",
+            "extent": [
+              -95.7071592,
+              29.5443036,
+              -95.7066935,
+              29.5432748
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -95.7069451,
+              29.5437949
+            ]
+          }
+        }
+      ]
+    },
+    "1801b56df6b0612a15196337": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1216666,
+            "osm_key": "place",
+            "osm_value": "suburb",
+            "type": "city",
+            "name": "Doral",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -80.3871613,
+              25.8552646,
+              -80.321017,
+              25.781908
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3553302,
+              25.8195424
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 48998499,
+            "osm_key": "shop",
+            "osm_value": "mall",
+            "type": "house",
+            "housenumber": "1455",
+            "name": "Miami International Mall",
+            "street": "Northwest 107th Avenue",
+            "city": "Doral",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "postcode": "33172",
+            "countrycode": "US",
+            "extent": [
+              -80.3670729,
+              25.7890962,
+              -80.363017,
+              25.7845209
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3656831,
+              25.7868018
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 6030979661,
+            "osm_key": "amenity",
+            "osm_value": "library",
+            "type": "house",
+            "housenumber": "8551",
+            "name": "Doral Branch Library",
+            "street": "Northwest 53rd Street",
+            "locality": "Downtown Doral",
+            "city": "Doral",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "postcode": "33166",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3368042,
+              25.8199708
+            ]
+          }
+        }
+      ]
+    },
+    "29276add9882bbbc450cadc3": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 118853,
+            "osm_key": "place",
+            "osm_value": "suburb",
+            "type": "city",
+            "name": "Hialeah",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -80.3737373,
+              25.9279154,
+              -80.2529823,
+              25.8061064
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.2814009,
+              25.8267775
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 236157526,
+            "osm_key": "amenity",
+            "osm_value": "school",
+            "type": "house",
+            "name": "Hialeah-Miami Lakes Senior High School",
+            "street": "Gratigny Parkway",
+            "city": "Hialeah",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "postcode": "33014",
+            "countrycode": "US",
+            "extent": [
+              -80.3079846,
+              25.8979949,
+              -80.3033219,
+              25.8943506
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3052919,
+              25.8965633
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 463480406,
+            "osm_key": "leisure",
+            "osm_value": "park",
+            "type": "other",
+            "name": "Hialeah Park Race Track",
+            "district": "Hialeah Trailer Park",
+            "city": "Hialeah",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -80.2823004,
+              25.8513655,
+              -80.2742547,
+              25.8416322
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.2782776,
+              25.8464989
+            ]
+          }
+        }
+      ]
+    },
+    "ab2b66c355ffb7bbd9d8c5cd": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "R",
+            "osm_id": 1216824,
+            "osm_key": "place",
+            "osm_value": "suburb",
+            "type": "district",
+            "name": "Sweetwater",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -80.385099,
+              25.7969131,
+              -80.3586323,
+              25.7613844
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3731086,
+              25.7634334
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "N",
+            "osm_id": 6018562986,
+            "osm_key": "office",
+            "osm_value": "government",
+            "type": "house",
+            "housenumber": "1011",
+            "name": "Florida Highway Patrol Regional Communication Center - Miami",
+            "street": "Northwest 111th Avenue",
+            "district": "Sweetwater",
+            "city": "Sweetwater",
+            "county": "Miami-Dade County",
+            "state": "Florida",
+            "country": "United States",
+            "postcode": "33172",
+            "countrycode": "US"
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -80.3741732,
+              25.7808526
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "osm_type": "W",
+            "osm_id": 883936549,
+            "osm_key": "landuse",
+            "osm_value": "residential",
+            "type": "locality",
+            "name": "Sweetwater Creek",
+            "county": "Miami",
+            "state": "Kansas",
+            "country": "United States",
+            "countrycode": "US",
+            "extent": [
+              -94.8206086,
+              38.723661,
+              -94.8161248,
+              38.7186771
+            ]
+          },
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -94.8182983,
+              38.7214134
+            ]
+          }
+        }
+      ]
     }
   },
   "version": 1

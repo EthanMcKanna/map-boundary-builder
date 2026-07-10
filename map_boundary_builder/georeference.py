@@ -161,12 +161,15 @@ OCR_PLACE_TOKEN_ALIASES = {
     "aklawn": "oak lawn",
     "oaklawn": "oak lawn",
     "ook": "willowbrook",
+    "pralie": "prairie",
     "rsey": "jersey",
     "sco": "francisco",
     "scyener": "scyene",
     "sey": "jersey",
+    "singieton": "singleton",
     "sanantonio": "san antonio",
     "sanfrancisco": "san francisco",
+    "sweetvater": "sweetwater",
     "uakland": "oakland",
     "vakland": "oakland",
     "villowbrook": "willowbrook",
@@ -199,6 +202,10 @@ ADMIN_CONTEXT_TYPES = {
     "town",
     "village",
 }
+REGIONAL_ADMIN_LABEL_SUFFIXES = {"county", "parish"}
+NON_POINT_ADMIN_CONTROL_TOKENS = {"cisd", "county", "isd", "parish"}
+REGIONAL_ADMIN_CONTEXT_MIN_LABELS = 2
+REGIONAL_ADMIN_CONTEXT_MAX_DISTANCE_M = 160000.0
 CITY_INFERENCE_STOP_TOKENS = {
     "acy",
     "are",
@@ -1023,19 +1030,40 @@ def georeference_from_label_context(
     allow_sparse_regional_fit: bool = False,
     expand_street_controls: bool = False,
     allow_credible_cached_fit: bool = False,
+    allow_context_title_retry: bool = True,
 ) -> GeoreferenceResult | None:
     if expand_street_controls:
         allow_road_refinement = False
     city_center = city_context.center
-    controls = build_control_points(
-        labels,
-        city_context.query,
-        city_center,
-        max_geocoded_labels=MAX_SPARSE_GEOCODED_LABELS if allow_two_control_fit else MAX_GEOCODED_LABELS,
-        merge_control_sources=allow_two_control_fit,
-        expand_street_controls=expand_street_controls,
-        allow_credible_cached_fit=allow_credible_cached_fit,
-    )
+    regional_admin_context = is_regional_admin_context(city_context)
+    if regional_admin_context:
+        controls = build_geocoded_control_points(
+            labels,
+            city_context.query,
+            city_center,
+            max_labels=MAX_SPARSE_GEOCODED_LABELS,
+            allow_network=False,
+            filter_regional_admin_controls=True,
+        )
+        if len(controls) < min_control_points:
+            controls = build_geocoded_control_points(
+                labels,
+                city_context.query,
+                city_center,
+                max_labels=MAX_SPARSE_GEOCODED_LABELS,
+                allow_network=True,
+                filter_regional_admin_controls=True,
+            )
+    else:
+        controls = build_control_points(
+            labels,
+            city_context.query,
+            city_center,
+            max_geocoded_labels=MAX_SPARSE_GEOCODED_LABELS if allow_two_control_fit else MAX_GEOCODED_LABELS,
+            merge_control_sources=allow_two_control_fit,
+            expand_street_controls=expand_street_controls,
+            allow_credible_cached_fit=allow_credible_cached_fit,
+        )
     required_available_controls = 2 if allow_two_control_fit else min_control_points
     if len(controls) >= required_available_controls:
         fit = choose_similarity_fit(
@@ -1062,7 +1090,11 @@ def georeference_from_label_context(
                         meters_per_pixel=scale,
                         rotation_radians=rotation,
                         confidence=confidence,
-                        source="ocr-georeference:nominatim-label-fit",
+                        source=(
+                            "ocr-georeference:regional-admin-label-fit"
+                            if regional_admin_context
+                            else "ocr-georeference:nominatim-label-fit"
+                        ),
                     )
                     spread = control_spread(pixel_positions(controls, inliers))
                     road_refinement = None
@@ -1133,7 +1165,72 @@ def georeference_from_label_context(
                         road_match=road_refinement,
                         road_match_elapsed_s=road_refinement_elapsed_s,
                     )
+    if allow_context_title_retry:
+        filtered_labels = labels_without_context_title(labels, city_context, width, height)
+        if len(filtered_labels) < len(labels):
+            return georeference_from_label_context(
+                filtered_labels,
+                image_path,
+                city_context,
+                width,
+                height,
+                rgb=rgb,
+                min_control_points=min_control_points,
+                allow_two_control_fit=allow_two_control_fit,
+                road_feature_distance=road_feature_distance,
+                allow_road_refinement=allow_road_refinement,
+                allow_sparse_regional_fit=allow_sparse_regional_fit,
+                expand_street_controls=expand_street_controls,
+                allow_credible_cached_fit=allow_credible_cached_fit,
+                allow_context_title_retry=False,
+            )
     return None
+
+
+def labels_without_context_title(
+    labels: list[OcrLabel],
+    city_context: CityContext,
+    width: int,
+    height: int,
+) -> list[OcrLabel]:
+    """Drop a failed fit's top-left context card while keeping map labels.
+
+    Provider screenshots sometimes render a large city card above the map. It
+    is strong evidence for selecting the city context, but its screen position
+    is UI layout rather than a geographic control point. We only retry without
+    such labels after the ordinary fit has failed.
+    """
+    context_tokens = place_tokens(city_context.query)
+    if not context_tokens:
+        return labels
+    max_x = width * 0.36
+    max_y = height * 0.16
+    min_height = max(28.0, height * 0.025)
+    filtered: list[OcrLabel] = []
+    for label in labels:
+        label_tokens = place_tokens(place_query_text(label.text))
+        title_sized = label.height >= min_height or label.width * label.height >= 4000.0
+        if (
+            label.x <= max_x
+            and label.y <= max_y
+            and title_sized
+            and context_tokens <= label_tokens
+        ):
+            continue
+        filtered.append(label)
+    return filtered
+
+
+def is_regional_admin_context(context: CityContext) -> bool:
+    if context.center.place_type.lower() != "region":
+        return False
+    if len(context.evidence) < REGIONAL_ADMIN_CONTEXT_MIN_LABELS:
+        return False
+    for evidence in context.evidence:
+        parts = place_query_text(evidence).split()
+        if len(parts) < 2 or parts[-1].lower() not in REGIONAL_ADMIN_LABEL_SUFFIXES:
+            return False
+    return True
 
 
 def georeference_from_city_context(
@@ -1365,10 +1462,20 @@ def infer_city_context(labels: list[OcrLabel]) -> CityContext | None:
 def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
     inference_labels = city_inference_labels(labels)
     direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=False)
-    if len(inference_labels) <= 4 and should_use_direct_city_contexts(direct_contexts):
+    regional_admin_contexts = regional_admin_contexts_from_labels(
+        inference_labels,
+        allow_network=False,
+    )
+    if (
+        len(inference_labels) <= 4
+        and should_use_direct_city_contexts(direct_contexts)
+        and not regional_admin_contexts
+    ):
         return direct_contexts
     if should_use_direct_city_contexts(direct_contexts) and is_decisive_direct_context(direct_contexts[0]):
         return direct_contexts_with_region_anchor_fallbacks(direct_contexts)
+    if regional_admin_contexts:
+        return regional_admin_contexts
 
     candidates = geocoded_label_candidates(inference_labels)
     if should_use_direct_city_contexts(direct_contexts):
@@ -1383,6 +1490,12 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
         live_direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=True)
         if should_use_direct_city_contexts(live_direct_contexts):
             return live_direct_contexts
+        live_regional_admin_contexts = regional_admin_contexts_from_labels(
+            inference_labels,
+            allow_network=True,
+        )
+        if live_regional_admin_contexts:
+            return live_regional_admin_contexts
         return prominent_contexts_from_labels(inference_labels)
 
     members = best_candidate_cluster(candidates)
@@ -1390,6 +1503,12 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
         live_direct_contexts = direct_city_contexts_from_labels(inference_labels, allow_network=True)
         if should_use_direct_city_contexts(live_direct_contexts):
             return live_direct_contexts
+        live_regional_admin_contexts = regional_admin_contexts_from_labels(
+            inference_labels,
+            allow_network=True,
+        )
+        if live_regional_admin_contexts:
+            return live_regional_admin_contexts
         return prominent_contexts_from_labels(inference_labels)
 
     contexts: list[CityContext] = []
@@ -1432,6 +1551,129 @@ def infer_city_contexts(labels: list[OcrLabel]) -> list[CityContext]:
         )
     )
     return rank_city_contexts_for_georeferencing(dedupe_city_contexts(contexts))[:MAX_CITY_CONTEXTS]
+
+
+def regional_admin_contexts_from_labels(
+    labels: list[OcrLabel],
+    *,
+    allow_network: bool,
+) -> list[CityContext]:
+    """Infer a regional search context from multiple neighboring counties.
+
+    County labels are useful for disambiguating rural maps, but their label
+    positions are not reliable point controls. Query the base administrative
+    names, require a geographically coherent cluster, and use the shared state
+    or region only as context for matching actual town and village labels.
+    """
+    specs: list[tuple[OcrLabel, str]] = []
+    seen_queries: set[str] = set()
+    for label in labels[:MAX_CITY_INFERENCE_LABELS]:
+        parts = place_query_text(label.text).split()
+        if len(parts) < 2 or parts[-1].lower() not in REGIONAL_ADMIN_LABEL_SUFFIXES:
+            continue
+        query = " ".join(parts[:-1]).strip()
+        key = query.lower()
+        if not query or key in seen_queries:
+            continue
+        seen_queries.add(key)
+        specs.append((label, query))
+    if len(specs) < REGIONAL_ADMIN_CONTEXT_MIN_LABELS:
+        return []
+
+    candidates_by_label: list[tuple[OcrLabel, list[GeocodeResult]]] = []
+    results_by_query = geocode_many(
+        [(query, 3) for _label, query in specs],
+        allow_network=allow_network,
+    )
+    for (label, query), results in zip(specs, results_by_query):
+        candidates = [
+            result
+            for result in results
+            if result.bbox is not None
+            and result.place_type.lower() == "county"
+            and primary_name_matches_label(result.display_name, query)
+        ]
+        if candidates:
+            candidates_by_label.append((label, candidates))
+    if len(candidates_by_label) < REGIONAL_ADMIN_CONTEXT_MIN_LABELS:
+        return []
+
+    best_cluster: list[tuple[OcrLabel, GeocodeResult]] = []
+    best_score: tuple[int, float] | None = None
+    for _anchor_label, anchor_candidates in candidates_by_label:
+        for anchor in anchor_candidates:
+            anchor_x, anchor_y = anchor.mercator
+            cluster: list[tuple[OcrLabel, GeocodeResult]] = []
+            total_distance = 0.0
+            for label, candidates in candidates_by_label:
+                nearest = min(
+                    candidates,
+                    key=lambda result: (
+                        (result.mercator[0] - anchor_x) ** 2
+                        + (result.mercator[1] - anchor_y) ** 2
+                    ),
+                )
+                near_x, near_y = nearest.mercator
+                distance = sqrt((near_x - anchor_x) ** 2 + (near_y - anchor_y) ** 2)
+                if distance > REGIONAL_ADMIN_CONTEXT_MAX_DISTANCE_M:
+                    continue
+                cluster.append((label, nearest))
+                total_distance += distance
+            score = (len(cluster), -total_distance)
+            if best_score is None or score > best_score:
+                best_score = score
+                best_cluster = cluster
+    if len(best_cluster) < REGIONAL_ADMIN_CONTEXT_MIN_LABELS:
+        return []
+
+    parent_name = common_regional_parent_name([result for _label, result in best_cluster])
+    if parent_name is None:
+        return []
+    bboxes = [result.bbox for _label, result in best_cluster if result.bbox is not None]
+    west = min(bbox[0] for bbox in bboxes)
+    south = min(bbox[1] for bbox in bboxes)
+    east = max(bbox[2] for bbox in bboxes)
+    north = max(bbox[3] for bbox in bboxes)
+    center_x = sum(result.mercator[0] for _label, result in best_cluster) / len(best_cluster)
+    center_y = sum(result.mercator[1] for _label, result in best_cluster) / len(best_cluster)
+    lon, lat = mercator_to_lonlat(center_x, center_y)
+    evidence = tuple(label.text for label, _result in best_cluster)
+    return [
+        CityContext(
+            query=parent_name,
+            center=GeocodeResult(
+                label="Inferred map area",
+                lon=lon,
+                lat=lat,
+                display_name=f"Inferred map area, {parent_name}, United States",
+                bbox=(west, south, east, north),
+                importance=0.5,
+                place_type="region",
+            ),
+            inferred=True,
+            evidence=evidence,
+        )
+    ]
+
+
+def common_regional_parent_name(results: list[GeocodeResult]) -> str | None:
+    if not results:
+        return None
+    component_lists = [
+        [clean_query_text(component) for component in result.display_name.split(",")[1:]]
+        for result in results
+    ]
+    common = {component.lower() for component in component_lists[0] if component}
+    for components in component_lists[1:]:
+        common &= {component.lower() for component in components if component}
+    excluded = {"united states", "united states of america", "usa"}
+    for component in component_lists[0]:
+        lowered = component.lower()
+        if not component or lowered in excluded or any(char.isdigit() for char in component):
+            continue
+        if lowered in common and "county" not in lowered and "parish" not in lowered:
+            return component
+    return None
 
 
 def expanded_contexts_from_label_cluster(
@@ -2907,6 +3149,7 @@ def build_geocoded_control_points(
     prefer_large_text: bool = False,
     allow_network: bool = True,
     normalize_road_tokens: bool = False,
+    filter_regional_admin_controls: bool = False,
 ) -> list[ControlPoint]:
     city_x, city_y = city_center.mercator
     max_distance_m = 70000.0
@@ -2917,7 +3160,7 @@ def build_geocoded_control_points(
         labels,
         normalize_road_tokens=normalize_road_tokens,
     )
-    label_specs: list[tuple[OcrLabel, str, list[str]]] = []
+    label_specs: list[tuple[OcrLabel, str, set[str], list[str]]] = []
     for label in rank_geocode_labels(
         labels,
         prefer_large_text=prefer_large_text,
@@ -2930,6 +3173,8 @@ def build_geocoded_control_points(
         text_tokens = place_tokens(query_text, normalize_road_tokens=normalize_road_tokens)
         if not text_tokens or text_tokens & CITY_INFERENCE_STOP_TOKENS:
             continue
+        if filter_regional_admin_controls and text_tokens & NON_POINT_ADMIN_CONTROL_TOKENS:
+            continue
         if len(text_tokens) > 4:
             continue
         if is_noisy_poi_query(text_tokens):
@@ -2941,8 +3186,16 @@ def build_geocoded_control_points(
         if text_tokens == city_tokens:
             controls.append(ControlPoint(label=label, geocode=city_center))
             continue
-        if len(text_tokens) == 1 and text_tokens <= single_token_fragments:
-            continue
+        if len(text_tokens) == 1:
+            if filter_regional_admin_controls:
+                if is_embedded_single_token_fragment(
+                    label,
+                    labels,
+                    normalize_road_tokens=normalize_road_tokens,
+                ):
+                    continue
+            elif text_tokens <= single_token_fragments:
+                continue
         if len(text_tokens) == 1 and next(iter(text_tokens)) in GENERIC_SINGLE_TOKENS:
             continue
         if is_noisy_regional_control_query(text_tokens, city_tokens, city_center):
@@ -2953,18 +3206,18 @@ def build_geocoded_control_points(
         queries.append(query_text)
         if city.lower() in query_text.lower():
             queries.append(query_text)
-        label_specs.append((label, query_text, [query for query in queries if query]))
+        label_specs.append((label, query_text, text_tokens, [query for query in queries if query]))
 
     for start in range(0, len(label_specs), GEOCODE_LABEL_LOOKAHEAD):
         chunk = label_specs[start : start + GEOCODE_LABEL_LOOKAHEAD]
         requests: list[tuple[str, int]] = []
         lengths: list[int] = []
-        for _label, _query_text, query_batch in chunk:
+        for _label, _query_text, _text_tokens, query_batch in chunk:
             lengths.append(len(query_batch))
             requests.extend((query, 3) for query in query_batch)
         batch_results = geocode_many(requests, allow_network=allow_network)
         offset = 0
-        for (label, query_text, _query_batch), length in zip(chunk, lengths):
+        for (label, query_text, text_tokens, _query_batch), length in zip(chunk, lengths):
             query_results = batch_results[offset : offset + length]
             offset += length
 
@@ -2982,7 +3235,16 @@ def build_geocoded_control_points(
                     distance = sqrt((cand_x - city_x) ** 2 + (cand_y - city_y) ** 2)
                     if distance > max_distance_m:
                         continue
-                    score = candidate.importance - distance / max_distance_m
+                    primary_tokens = place_tokens(
+                        candidate.display_name.split(",", 1)[0],
+                        normalize_road_tokens=normalize_road_tokens,
+                    )
+                    exact_primary_bonus = (
+                        0.25
+                        if filter_regional_admin_controls and primary_tokens == text_tokens
+                        else 0.0
+                    )
+                    score = candidate.importance + exact_primary_bonus - distance / max_distance_m
                     if score > best_score:
                         best = candidate
                         best_score = score
@@ -3007,6 +3269,47 @@ def single_tokens_supported_by_fuller_labels(
         if len(tokens) >= 2 and not tokens & CITY_INFERENCE_STOP_TOKENS:
             supported.update(tokens)
     return supported
+
+
+def is_embedded_single_token_fragment(
+    label: OcrLabel,
+    labels: list[OcrLabel],
+    *,
+    normalize_road_tokens: bool = False,
+) -> bool:
+    label_tokens = place_tokens(
+        place_query_text(label.text, normalize_road_tokens=normalize_road_tokens),
+        normalize_road_tokens=normalize_road_tokens,
+    )
+    if len(label_tokens) != 1:
+        return False
+    for other in labels:
+        if other is label:
+            continue
+        other_tokens = place_tokens(
+            place_query_text(other.text, normalize_road_tokens=normalize_road_tokens),
+            normalize_road_tokens=normalize_road_tokens,
+        )
+        if len(other_tokens) <= 1 or not label_tokens < other_tokens:
+            continue
+        if ocr_label_boxes_overlap(label, other):
+            return True
+    return False
+
+
+def ocr_label_boxes_overlap(first: OcrLabel, second: OcrLabel) -> bool:
+    first_left = first.x - first.width / 2.0
+    first_right = first.x + first.width / 2.0
+    first_top = first.y - first.height / 2.0
+    first_bottom = first.y + first.height / 2.0
+    second_left = second.x - second.width / 2.0
+    second_right = second.x + second.width / 2.0
+    second_top = second.y - second.height / 2.0
+    second_bottom = second.y + second.height / 2.0
+    return (
+        min(first_right, second_right) >= max(first_left, second_left)
+        and min(first_bottom, second_bottom) >= max(first_top, second_top)
+    )
 
 
 def has_decisive_control_fit(controls: list[ControlPoint]) -> bool:

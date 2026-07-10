@@ -5319,6 +5319,14 @@ def sparse_ocr_georeference_lacks_support(georef, *, width: int, height: int) ->
     if not str(georef.transform.source).startswith("ocr-georeference:"):
         return False
     control_count = len(georef.control_points)
+    if (
+        georef.transform.source == "ocr-georeference:regional-admin-label-fit"
+        and control_count >= 3
+        and georef.transform.confidence >= 0.82
+        and georef.residual_median_m <= 500.0
+        and georef.residual_p90_m <= 1000.0
+    ):
+        return False
     if sparse_high_residual_fit_without_road_evidence(
         control_count,
         georef.residual_p90_m,

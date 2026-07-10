@@ -20,6 +20,7 @@ from map_boundary_builder.georeference import (
     GeoreferenceResult,
     LabelGeocodeCandidate,
     apply_similarity,
+    build_geocoded_control_points,
     build_osm_place_control_points,
     build_control_points,
     candidate_place_labels,
@@ -2332,6 +2333,58 @@ class PlaceCandidateTests(unittest.TestCase):
         ]
 
         self.assertEqual(single_tokens_supported_by_fuller_labels(labels), {"camellia", "gardens"})
+
+    def test_regional_control_prefers_exact_place_over_suffixed_poi(self) -> None:
+        center = GeocodeResult(
+            label="Inferred map area",
+            lon=-95.9603556,
+            lat=30.6471782,
+            display_name="Inferred map area, Texas, United States",
+            bbox=(-96.60, 30.22, -95.32, 31.06),
+            importance=0.5,
+            place_type="region",
+        )
+        labels = [
+            OcrLabel("Singieton", x=1018, y=165, width=65, height=21, confidence=99),
+            OcrLabel("Shiro", x=1298, y=347, width=43, height=18, confidence=55),
+        ]
+        singleton = GeocodeResult(
+            label="Singleton, Texas",
+            lon=-95.958564,
+            lat=30.6521413,
+            display_name="Singleton, Grimes, Texas, United States",
+            bbox=None,
+            importance=0.35,
+            place_type="hamlet",
+        )
+        cemetery = GeocodeResult(
+            label="Singleton, Texas",
+            lon=-95.9603556,
+            lat=30.6471782,
+            display_name="Singleton Cemetery, Singleton, Grimes, Texas, United States",
+            bbox=(-95.9606856, 30.6469128, -95.9600255, 30.6474436),
+            importance=0.35,
+            place_type="cemetery",
+        )
+
+        def fake_geocode_many(requests, *, allow_network=True):
+            return [
+                [cemetery, singleton] if query.startswith("Singleton") else []
+                for query, _limit in requests
+            ]
+
+        with patch("map_boundary_builder.georeference.geocode_many", side_effect=fake_geocode_many):
+            controls = build_geocoded_control_points(
+                labels,
+                "Texas",
+                center,
+                max_labels=32,
+                allow_network=False,
+                filter_regional_admin_controls=True,
+            )
+
+        self.assertEqual(len(controls), 1)
+        self.assertEqual(controls[0].geocode.display_name, singleton.display_name)
 
     def test_tiny_single_token_places_are_not_direct_contexts(self) -> None:
         francisco = GeocodeResult(

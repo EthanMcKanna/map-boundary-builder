@@ -850,6 +850,37 @@ class AutoFillExtractionTests(unittest.TestCase):
                 hints={"seed_point": (180, 180)},
             )
 
+    def test_unrelated_green_land_does_not_replace_valid_dark_teal_fill(self) -> None:
+        rng = np.random.default_rng(4)
+        height = width = 512
+        base = np.full((height, width, 3), [75, 75, 75], dtype=np.int16)
+        base = base + rng.integers(-18, 19, (height, width, 1))
+        rgb = np.clip(base, 0, 255).astype(np.uint8)
+
+        expected = np.zeros((height, width), dtype=bool)
+        expected[50:170, 50:180] = True
+        teal = np.array([20, 115, 115], dtype=np.int16) + rng.integers(-10, 11, (120, 130, 1))
+        rgb[50:170, 50:180] = np.clip(teal, 0, 255).astype(np.uint8)
+
+        unrelated_green = np.zeros((height, width), dtype=bool)
+        unrelated_green[250:500, 150:410] = True
+        green = np.array([90, 180, 105], dtype=np.int16) + rng.integers(-20, 21, (250, 260, 1))
+        rgb[250:500, 150:410] = np.clip(green, 0, 255).astype(np.uint8)
+        for y in range(255, 500, 18):
+            cv2.line(rgb, (150, y), (409, y), (125, 205, 135), 1)
+        for x in range(156, 410, 23):
+            cv2.line(rgb, (x, 250), (x, 499), (115, 195, 125), 1)
+
+        result = extract_service_area(
+            "unused-teal-with-green-land.png",
+            rgb=rgb,
+            cache=False,
+        )
+
+        self.assertEqual(result.style, "dark-teal")
+        self.assertGreaterEqual(self._intersection_over_union(result.mask, expected), 0.99)
+        self.assertLessEqual(self._intersection_over_union(result.mask, unrelated_green), 0.01)
+
     def test_tiny_disagreeing_generic_does_not_replace_styled(self) -> None:
         mask_styled = np.zeros((100, 100), dtype=bool)
         mask_styled[10:70, 10:70] = True
