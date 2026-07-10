@@ -79,6 +79,13 @@ AUTO_FILL_TAKEOVER_MIN_COVERAGE_RATIO = 0.5
 AUTO_FILL_TAKEOVER_OVERSIZED_STYLED_COVERAGE = 0.6
 AUTO_FILL_FALLBACK_LIGHT_FILL_MAX_COVERAGE = 0.60
 AUTO_FILL_FALLBACK_GRAY_FILL_MAX_COVERAGE = 0.90
+DARK_TEAL_GREEN_MISMATCH_MAX_STYLED_COVERAGE = 0.03
+DARK_TEAL_GREEN_MISMATCH_MIN_STYLED_CONTOURS = 2
+DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_COVERAGE = 0.10
+DARK_TEAL_GREEN_MISMATCH_MIN_COVERAGE_RATIO = 4.0
+DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_SPAN = 0.20
+DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_DENSITY = 0.35
+DARK_TEAL_GREEN_MISMATCH_MAX_COMPONENT_Y_RATIO = 0.95
 # A gray-fill mask that nearly fills its bounding box across the whole frame and
 # bleeds into the frame border is a dark basemap that Otsu swallowed, not a
 # compact service polygon. A real gray service area is a self-contained brighter
@@ -798,10 +805,82 @@ def should_attempt_auto_fill_fallback(result: ExtractionResult, rgb: np.ndarray)
         or gray_fill_is_basemap_grab(result)
     ):
         return True
+    if result.style == "dark-teal" and dark_teal_result_misses_dominant_green_fill(result, rgb):
+        return True
     return (
         result.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE
         or result.coverage_ratio > AUTO_FILL_FALLBACK_MAX_COVERAGE
     )
+
+
+def dark_teal_result_misses_dominant_green_fill(result: ExtractionResult, rgb: np.ndarray) -> bool:
+    """Request generic review for a fragmented teal pick beside one green fill.
+
+    The extra gates are intentionally narrow: the styled result must itself be
+    tiny and fragmented, while the green component must be dense, interior,
+    large, and at least four times the styled coverage. This keeps a legitimate
+    small teal area from being displaced by unrelated green land.
+    """
+    if result.coverage_ratio > DARK_TEAL_GREEN_MISMATCH_MAX_STYLED_COVERAGE:
+        return False
+    if result.contour_count < DARK_TEAL_GREEN_MISMATCH_MIN_STYLED_CONTOURS:
+        return False
+    component = dominant_interior_green_component(rgb)
+    if component is None:
+        return False
+    component_coverage = float(component.mean())
+    if component_coverage < DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_COVERAGE:
+        return False
+    if component_coverage < result.coverage_ratio * DARK_TEAL_GREEN_MISMATCH_MIN_COVERAGE_RATIO:
+        return False
+    union = float(np.logical_or(component, result.mask).sum())
+    if union <= 0.0:
+        return False
+    overlap = float(np.logical_and(component, result.mask).sum()) / union
+    return overlap < AUTO_FILL_TAKEOVER_MAX_IOU
+
+
+def dominant_interior_green_component(rgb: np.ndarray) -> np.ndarray | None:
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    hue = hsv[:, :, 0]
+    sat = hsv[:, :, 1]
+    val = hsv[:, :, 2]
+    r, g = rgb[:, :, 0], rgb[:, :, 1]
+    green = (
+        (hue >= 55)
+        & (hue <= 90)
+        & (sat >= 45)
+        & (val >= 80)
+        & (g.astype(np.int16) > r.astype(np.int16) + 25)
+    )
+    labels, count, stats = connected_components(green)
+    if count == 0:
+        return None
+    areas = stats[1:, cv2.CC_STAT_AREA].astype(float)
+    largest_label = int(np.argmax(areas) + 1)
+    component = labels == largest_label
+    height, width = component.shape
+    ys, xs = np.where(component)
+    if len(ys) == 0:
+        return None
+    if (
+        ys.min() <= height * 0.05
+        or ys.max() >= height * DARK_TEAL_GREEN_MISMATCH_MAX_COMPONENT_Y_RATIO
+        or xs.min() == 0
+        or xs.max() == width - 1
+    ):
+        return None
+    component_height = int(ys.max() - ys.min() + 1)
+    component_width = int(xs.max() - xs.min() + 1)
+    if (
+        component_height < height * DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_SPAN
+        or component_width < width * DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_SPAN
+    ):
+        return None
+    density = float(component.sum()) / max(float(component_height * component_width), 1.0)
+    if density < DARK_TEAL_GREEN_MISMATCH_MIN_COMPONENT_DENSITY:
+        return None
+    return component
 
 
 def mask_color_distinct_from_border(rgb: np.ndarray, mask: np.ndarray) -> bool:
