@@ -24,10 +24,13 @@ EXTRACT_MAX_DIMENSION = max(0, int(os.environ.get("MAP_BOUNDARY_EXTRACT_MAX_DIME
 AUTO_FILL_STYLE = "auto-fill"
 MODEL_EXTRACTOR_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL"
 MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH"
+GENERALIZED_MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_GENERALIZED_MODEL_PATH"
 MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
 MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
 DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 256
 DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.45
+EXPERIMENTAL_MODEL_VARIANT = "experimental_classifier"
+GENERALIZED_MODEL_VARIANT = "generalized_v11"
 MODEL_REVIEW_MAX_COVERAGE = 0.08
 MODEL_REVIEW_MAX_CONTOUR_COUNT = 5
 MODEL_FALLBACK_MIN_DETERMINISTIC_CONFIDENCE = 0.9
@@ -35,6 +38,7 @@ MODEL_FALLBACK_MIN_DETERMINISTIC_COVERAGE = 0.02
 MODEL_FALLBACK_MAX_DETERMINISTIC_COVERAGE = 0.85
 MODEL_FALLBACK_MAX_COVERAGE_RATIO = 0.5
 MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO = 0.75
+MODEL_FALLBACK_MAX_FRAGMENTED_COVERAGE_RATIO = 1.35
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
@@ -285,7 +289,7 @@ def extract_service_area(
     cache: bool = True,
     profile: str | ExtractionProfile | None = None,
     hints: ExtractionHints | dict[str, object] | None = None,
-    use_model: bool | None = None,
+    use_model: bool | str | None = None,
 ) -> ExtractionResult:
     if rgb is None:
         rgb = load_rgb(image_path)
@@ -293,7 +297,12 @@ def extract_service_area(
     extraction_hints = resolve_extraction_hints(hints)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
-    model_result = maybe_extract_with_model(rgb, simplify_px=simplify_px, enabled=use_model)
+    model_result = maybe_extract_with_model(
+        rgb,
+        simplify_px=simplify_px,
+        enabled=use_model,
+        hints=extraction_hints,
+    )
     if model_result is not None and not model_result_needs_deterministic_review(model_result):
         return model_result
     cache = cache and extraction_cache_enabled()
@@ -379,17 +388,41 @@ def extract_service_area(
         )
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
+    if (
+        model_result is not None
+        and use_model == GENERALIZED_MODEL_VARIANT
+        and extraction_hints.seed_point is None
+        and extraction_hints.target_rgb is None
+    ):
+        automatic_hints = extraction_hints_from_result(rgb, result)
+        refined = maybe_extract_with_model(
+            rgb,
+            simplify_px=simplify_px,
+            enabled=GENERALIZED_MODEL_VARIANT,
+            hints=automatic_hints,
+        )
+        if refined is not None:
+            model_result = replace(
+                refined,
+                diagnostics={
+                    **(refined.diagnostics or {}),
+                    "automatic_guidance": "deterministic_candidate",
+                    "candidate_agreement_iou": mask_iou(refined.mask, result.mask),
+                },
+            )
     if model_result is not None and should_fallback_to_deterministic_result(model_result, result):
+        coverage_ratio = model_result.coverage_ratio / max(result.coverage_ratio, 1e-9)
         result = replace(
             result,
             diagnostics={
                 **(result.diagnostics or {}),
                 "model_fallback": {
-                    "reason": "model_underfilled_confident_deterministic_mask",
+                    "reason": model_fallback_reason(model_result, result),
                     "model_style": model_result.style,
                     "model_coverage_ratio": model_result.coverage_ratio,
                     "model_contour_count": model_result.contour_count,
                     "model_confidence": model_result.confidence,
+                    "model_to_deterministic_coverage_ratio": coverage_ratio,
                 },
             },
         )
@@ -400,10 +433,35 @@ def extract_service_area(
 
 
 def model_result_needs_deterministic_review(result: ExtractionResult) -> bool:
+    if (result.diagnostics or {}).get("model_variant") == GENERALIZED_MODEL_VARIANT:
+        guidance = (result.diagnostics or {}).get("model_guidance")
+        if isinstance(guidance, dict) and not any(bool(value) for value in guidance.values()):
+            return True
     return (
         result.coverage_ratio < MODEL_REVIEW_MAX_COVERAGE
         or result.contour_count > MODEL_REVIEW_MAX_CONTOUR_COUNT
     )
+
+
+def extraction_hints_from_result(rgb: np.ndarray, result: ExtractionResult) -> ExtractionHints:
+    ys, xs = np.where(result.mask)
+    if not len(xs):
+        return ExtractionHints()
+    colors = rgb[result.mask]
+    target = tuple(int(round(value)) for value in np.median(colors, axis=0))
+    center_x = float(np.median(xs))
+    center_y = float(np.median(ys))
+    center_index = int(np.argmin((xs - center_x) ** 2 + (ys - center_y) ** 2))
+    return ExtractionHints(
+        seed_point=(float(xs[center_index]), float(ys[center_index])),
+        target_rgb=target,
+    )
+
+
+def mask_iou(first: np.ndarray, second: np.ndarray) -> float:
+    intersection = int(np.logical_and(first, second).sum())
+    union = int(np.logical_or(first, second).sum())
+    return round(intersection / union, 6) if union else 1.0
 
 
 def should_fallback_to_deterministic_result(
@@ -423,42 +481,73 @@ def should_fallback_to_deterministic_result(
     coverage_ratio = model_result.coverage_ratio / max(deterministic_result.coverage_ratio, 1e-9)
     if coverage_ratio < MODEL_FALLBACK_MAX_COVERAGE_RATIO:
         return True
-    if (
-        model_result.contour_count > max(MODEL_REVIEW_MAX_CONTOUR_COUNT, deterministic_result.contour_count * 3)
-        and coverage_ratio < MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO
-    ):
-        return True
+    if model_result.contour_count > max(MODEL_REVIEW_MAX_CONTOUR_COUNT, deterministic_result.contour_count * 3):
+        if coverage_ratio < MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO:
+            return True
+        if coverage_ratio > MODEL_FALLBACK_MAX_FRAGMENTED_COVERAGE_RATIO:
+            return True
     return False
+
+
+def model_fallback_reason(
+    model_result: ExtractionResult,
+    deterministic_result: ExtractionResult,
+) -> str:
+    coverage_ratio = model_result.coverage_ratio / max(deterministic_result.coverage_ratio, 1e-9)
+    fragmented = model_result.contour_count > max(
+        MODEL_REVIEW_MAX_CONTOUR_COUNT,
+        deterministic_result.contour_count * 3,
+    )
+    if coverage_ratio < MODEL_FALLBACK_MAX_COVERAGE_RATIO:
+        return "model_underfilled_confident_deterministic_mask"
+    if fragmented and coverage_ratio > MODEL_FALLBACK_MAX_FRAGMENTED_COVERAGE_RATIO:
+        return "model_fragmented_overfilled_confident_deterministic_mask"
+    if fragmented:
+        return "model_fragmented_underfilled_confident_deterministic_mask"
+    return "suspicious_model_confident_deterministic_mask"
 
 
 def maybe_extract_with_model(
     rgb: np.ndarray,
     *,
     simplify_px: float,
-    enabled: bool | None = None,
+    enabled: bool | str | None = None,
+    hints: ExtractionHints | None = None,
 ) -> ExtractionResult | None:
     if enabled is None:
         enabled = model_extractor_enabled()
     if not enabled:
         return None
+    variant = enabled if isinstance(enabled, str) else EXPERIMENTAL_MODEL_VARIANT
+    if variant not in {EXPERIMENTAL_MODEL_VARIANT, GENERALIZED_MODEL_VARIANT}:
+        raise ValueError(f"Unsupported model extractor variant: {variant}")
 
     from .model_extract import ModelExtractionConfig, extract_service_area_from_rgb_with_session, load_onnx_session
 
     input_size = max(1, int(os.environ.get(MODEL_EXTRACTOR_INPUT_SIZE_ENV, str(DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE))))
     threshold = float(os.environ.get(MODEL_EXTRACTOR_THRESHOLD_ENV, str(DEFAULT_MODEL_EXTRACTOR_THRESHOLD)))
-    model_path = model_extractor_path()
+    model_path = model_extractor_path(variant)
     session = load_onnx_session(str(model_path))
-    return extract_service_area_from_rgb_with_session(
-        rgb,
-        session,
-        config=ModelExtractionConfig(
-            input_width=input_size,
-            input_height=input_size,
-            threshold=threshold,
-            simplify_px=simplify_px,
-            style=AUTO_FILL_STYLE,
-            output_activation="logits",
-        ),
+    config = ModelExtractionConfig(
+        input_width=input_size,
+        input_height=input_size,
+        threshold=threshold,
+        simplify_px=simplify_px,
+        style=AUTO_FILL_STYLE,
+        output_activation="logits",
+        input_channels=5 if variant == GENERALIZED_MODEL_VARIANT else 3,
+    )
+    if variant == GENERALIZED_MODEL_VARIANT:
+        result = extract_service_area_from_rgb_with_session(rgb, session, config=config, hints=hints)
+    else:
+        result = extract_service_area_from_rgb_with_session(rgb, session, config=config)
+    return replace(
+        result,
+        diagnostics={
+            **(result.diagnostics or {}),
+            "model_variant": variant,
+            "model_path": model_path.name,
+        },
     )
 
 
@@ -472,12 +561,15 @@ def model_extractor_enabled() -> bool:
     }
 
 
-def model_extractor_path() -> Path:
-    configured = os.environ.get(MODEL_EXTRACTOR_PATH_ENV)
+def model_extractor_path(variant: str = EXPERIMENTAL_MODEL_VARIANT) -> Path:
+    configured = os.environ.get(
+        GENERALIZED_MODEL_EXTRACTOR_PATH_ENV if variant == GENERALIZED_MODEL_VARIANT else MODEL_EXTRACTOR_PATH_ENV
+    )
     if configured is not None and configured.strip():
         path = Path(configured)
     else:
-        path = Path(__file__).with_name("models") / "synthetic_boundary_v10.onnx"
+        filename = "synthetic_boundary_v11.onnx" if variant == GENERALIZED_MODEL_VARIANT else "synthetic_boundary_v10.onnx"
+        path = Path(__file__).with_name("models") / filename
     if not path.is_absolute():
         path = Path.cwd() / path
     if not path.exists():

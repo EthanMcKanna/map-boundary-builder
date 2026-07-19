@@ -35,6 +35,9 @@ const inputPane = document.querySelector("#inputPane");
 const imageToggle = document.querySelector("#imageToggle");
 const imageModeButtons = [...document.querySelectorAll("[data-image-mode]")];
 const inputPreview = document.querySelector("#inputPreview");
+const extractorInput = document.querySelector("#extractorInput");
+const seedXInput = document.querySelector("#seedXInput");
+const seedYInput = document.querySelector("#seedYInput");
 const overlayPreview = document.querySelector("#overlayPreview");
 const boundaryPane = document.querySelector("#boundaryPane");
 const boundaryMapEl = document.querySelector("#boundaryMap");
@@ -96,17 +99,18 @@ const BOUNDARY_LINE_ID = "generated-boundary-line";
 const HISTORY_STORAGE_KEY = "mapBoundaryBuilder.history.v1";
 const THEME_STORAGE_KEY = "mapBoundaryBuilder.theme.v1";
 const THEME_MODES = new Set(["system", "light", "dark"]);
-const RUN_CACHE_RAW_VERSION = "image-to-geojson-v6";
-const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v8";
+const RUN_CACHE_RAW_VERSION = "image-to-geojson-v7-image-derived";
+const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v9-image-derived";
 const RUN_CACHE_SUCCESS_THRESHOLD_TOKEN = "success-threshold-compatible";
 const RUN_CACHE_SETTING_FIELDS = [
-  "allow_catalog",
   "city",
   "extractor",
+  "seed_x",
+  "seed_y",
+  "target_color",
   "include_overlay",
   "min_confidence",
   "min_control_points",
-  "no_catalog",
   "simplify_px",
   "source_was_svg",
 ];
@@ -115,39 +119,6 @@ const RUN_CACHE_FALSE_BOOLEAN_TOKENS = new Set(["0", "false", "no", "off", ""]);
 const SVG_RASTER_MAX_DIMENSION = 1600;
 const RUN_CACHE_PIXEL_HASH_WAIT_MS = 60;
 const RUN_CACHE_DEFERRED_HISTORY_WAIT_MS = 180;
-const CATALOG_PROBE_MAX_DIMENSION = 520;
-const CATALOG_PROBE_MIN_BYTES = 180_000;
-const CATALOG_PROBE_GENERIC_MIN_BYTES = 650_000;
-const CATALOG_PROBE_WEBP_QUALITY = 0.80;
-const CATALOG_PROBE_JPEG_QUALITY = 0.82;
-const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 1600;
-const FAST_CATALOG_HANDOFF_MIN_BYTES = 500_000;
-const FAST_CATALOG_HANDOFF_MAX_SIZE_RATIO = 0.75;
-const FAST_CATALOG_HANDOFF_WEBP_QUALITY = 0.92;
-const FAST_CATALOG_HANDOFF_MIN_PROBE_IOU = 0.5;
-const FAST_CATALOG_HANDOFF_MIN_CONFIDENCE = 0.84;
-const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE = 0.70;
-const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_IOU = 0.50;
-const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_AREA_RATIO = 0.55;
-const FAST_CATALOG_HANDOFF_PROVIDER_UI_MAX_AREA_RATIO = 2.20;
-const CATALOG_PROBE_HINT_PATTERNS = [
-  /\bwaymo\b/,
-  /\btesla\b/,
-  /\bzoox\b/,
-  /\bavride\b/,
-  /\batlanta\b/,
-  /\baustin\b/,
-  /\bdallas\b/,
-  /\bhouston\b/,
-  /\bmiami\b/,
-  /\bnashville\b/,
-  /\borlando\b/,
-  /\bphoenix\b/,
-  /\b(?:bay\s+area|san\s+francisco|sf)\b/,
-  /\b(?:las\s+vegas|los\s+angeles|san\s+antonio)\b/,
-];
-const CATALOG_PROBE_AREA_HINT_PATTERN = /\b(?:atlanta|austin|dallas|houston|miami|nashville|orlando|phoenix|bay\s+area|san\s+francisco|sf|las\s+vegas|los\s+angeles|san\s+antonio)\b/;
-const CATALOG_PROBE_PROVIDER_HINT_PATTERN = /\b(?:waymo|tesla|zoox|avride)\b/;
 const FILENAME_HINT_CACHE_NOISE_TOKENS = new Set([
   "app",
   "avif",
@@ -361,6 +332,16 @@ imageInput.addEventListener("change", () => {
   setSelectedFile(file);
 });
 
+inputPreview.addEventListener("click", (event) => {
+  if (extractorInput?.value !== "generalized_v11" || !inputPreview.naturalWidth || !inputPreview.naturalHeight) return;
+  const rect = inputPreview.getBoundingClientRect();
+  const x = Math.round((event.clientX - rect.left) * inputPreview.naturalWidth / rect.width);
+  const y = Math.round((event.clientY - rect.top) * inputPreview.naturalHeight / rect.height);
+  seedXInput.value = String(Math.max(0, Math.min(inputPreview.naturalWidth - 1, x)));
+  seedYInput.value = String(Math.max(0, Math.min(inputPreview.naturalHeight - 1, y)));
+  inputPreview.title = `Guidance seed: ${seedXInput.value}, ${seedYInput.value}`;
+});
+
 document.addEventListener("paste", handleClipboardPaste);
 
 runButton.addEventListener("click", (event) => {
@@ -398,64 +379,31 @@ form.addEventListener("submit", async (event) => {
   scheduleGenerationRuntimePrewarm({ eager: true, allowDuringRun: true });
   startEstimatedProgress();
 
-  let catalogProbeAbortController = null;
   try {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    // The public app is image-derived only. Explicitly strip legacy catalog
+    // controls so an old form, extension, or restored page cannot re-enable
+    // exact historical geometry substitution.
+    formData.set("no_catalog", "1");
+    formData.delete("allow_catalog");
+    formData.delete("catalog_probe_only");
+    formData.delete("catalog_probe_missed");
+    formData.delete("catalog_probe_miss_low_iou");
+    formData.delete("fast_catalog_handoff");
     if (isSvgFile(selectedFile) && !isCompressedSvgFile(selectedFile)) {
       formData.set("source_was_svg", "1");
     }
     if (shouldUseServerNormalizedCacheLookup(uploadFile)) {
       formData.set("normalized_cache_lookup", "1");
     }
-    catalogProbeAbortController = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const catalogProbePromise = tryCatalogProbe(uploadFile, formData, {
-      signal: catalogProbeAbortController?.signal,
-    });
     markProgressStep("prepare", "running", "Checking local cache.");
     setStatus("Checking browser cache", 6, "running", {
       step: "prepare",
       note: "Looking for a matching image and settings in this browser.",
     });
     const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);
-    const deferredCacheKeysPromise = () => cacheKeysFromLookupPromise(cacheLookupPromise);
-    const firstFastResult = await Promise.race([
-      catalogProbePromise.then((result) => ({ type: "catalog-probe", result })),
-      cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then((cachedEntry) => (
-        cachedEntry ? { type: "cache-hit", cachedEntry } : null
-      )),
-    ]);
-    if (firstFastResult?.type === "cache-hit") {
-      catalogProbeAbortController?.abort();
-      restoreCachedHistoryEntry(firstFastResult.cachedEntry);
-      pendingRunCacheKey = null;
-      pendingRunCacheKeys = [];
-      pendingRunCacheKeysPromise = null;
-      return;
-    }
-    const catalogProbeResult = firstFastResult?.type === "catalog-probe"
-      ? firstFastResult.result
-      : await catalogProbePromise;
-    if (catalogProbeResult?.payload) {
-      applyInlineRun(catalogProbeResult.payload, {
-        cacheKeysPromise: deferredCacheKeysPromise,
-      });
-      return;
-    }
-    if (catalogProbeResult?.missed) {
-      formData.set("catalog_probe_missed", "1");
-      if (catalogProbeResult.lowIou) {
-        formData.set("catalog_probe_miss_low_iou", "1");
-      }
-      const fastCatalogHandoffResult = await tryFastCatalogHandoff(formData, catalogProbeResult);
-      if (fastCatalogHandoffResult?.payload) {
-        applyInlineRun(fastCatalogHandoffResult.payload, {
-          cacheKeysPromise: deferredCacheKeysPromise,
-        });
-        return;
-      }
-    }
     const cacheLookup = await cacheLookupPromise;
     pendingRunCacheKeys = cacheLookup.lookupKeys;
     pendingRunCacheKey = pendingRunCacheKeys[0] || null;
@@ -465,7 +413,6 @@ form.addEventListener("submit", async (event) => {
       deferredWaitMs: RUN_CACHE_DEFERRED_HISTORY_WAIT_MS,
     });
     if (cachedEntry) {
-      catalogProbeAbortController?.abort();
       restoreCachedHistoryEntry(cachedEntry);
       pendingRunCacheKey = null;
       pendingRunCacheKeys = [];
@@ -499,7 +446,6 @@ form.addEventListener("submit", async (event) => {
     pendingRunCacheKey = null;
     pendingRunCacheKeys = [];
     pendingRunCacheKeysPromise = null;
-    catalogProbeAbortController?.abort();
     finishWithError(error.message);
   }
 });
@@ -923,307 +869,6 @@ async function prepareRunImage(file) {
   return file;
 }
 
-async function tryCatalogProbe(file, formData, options = {}) {
-  if (!shouldTryCatalogProbe(file)) return null;
-  markProgressStep("prepare", "running", "Checking known service areas.");
-  setStatus("Checking known service areas", 7, "running", {
-    step: "prepare",
-    note: "Trying a tiny shape probe before uploading the full screenshot.",
-  });
-  try {
-    const probeCandidate = await catalogProbeCandidate(file, formData);
-    if (!probeCandidate.file) return probeCandidate.skippedMiss ? { missed: true } : null;
-    const probeData = new FormData();
-    formData.forEach((value, name) => {
-      if (name !== "image") probeData.append(name, value);
-    });
-    probeData.set("image", probeCandidate.file, probeCandidate.file.name);
-    probeData.set("catalog_probe_only", "1");
-    probeData.set("include_overlay", "0");
-    probeData.set("normalized_cache_lookup", "0");
-    const responsePromise = postRunUpload(probeData, probeCandidate.file, {
-      signal: options.signal,
-    });
-    const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);
-    const { response, payload } = await responsePromise;
-    if (response.ok && isCatalogRunPayload(payload)) return { payload };
-    if (response.ok && payload?.status === "catalog_miss") {
-      const miss = payload.catalog_probe_miss || {};
-      const result = {
-        missed: true,
-        lowIou: miss.active_shape_iou_is_low === true,
-        bestActiveCatalogSlug: typeof miss.best_active_catalog_slug === "string"
-          ? miss.best_active_catalog_slug
-          : null,
-        bestActiveCatalogIou: Number.isFinite(Number(miss.best_active_catalog_iou))
-          ? Number(miss.best_active_catalog_iou)
-          : null,
-        hasCatalogHint: probeCandidate.hasHint === true,
-        catalogHintText: probeCandidate.hintText || "",
-      };
-      if (shouldUseFastCatalogHandoff(result)) {
-        result.fastHandoffFile = await fastHandoffFilePromise;
-      }
-      return {
-        ...result,
-      };
-    }
-  } catch (error) {
-    if (error?.name !== "AbortError") {
-      console.warn("Known service-area probe failed", error);
-    }
-  }
-  return null;
-}
-
-async function tryFastCatalogHandoff(formData, catalogProbeResult) {
-  if (!catalogProbeResult?.fastHandoffFile) return null;
-  markProgressStep("prepare", "running", "Checking current catalog.");
-  setStatus("Checking current catalog", 7, "running", {
-    step: "prepare",
-    note: "Trying a compact current-shape handoff before the full upload.",
-  });
-  try {
-    const fastData = new FormData();
-    formData.forEach((value, name) => {
-      if (name !== "image" && name !== "catalog_probe_miss_low_iou") {
-        fastData.append(name, value);
-      }
-    });
-    fastData.set("image", catalogProbeResult.fastHandoffFile, catalogProbeResult.fastHandoffFile.name);
-    fastData.set("fast_catalog_handoff", "1");
-    fastData.set("catalog_probe_missed", "1");
-    fastData.set("include_overlay", "0");
-    fastData.set("normalized_cache_lookup", "0");
-    const { response, payload } = await postRunUpload(fastData, catalogProbeResult.fastHandoffFile);
-    if (response.ok && isFastCatalogHandoffPayload(payload, catalogProbeResult)) {
-      return { payload };
-    }
-  } catch (error) {
-    if (error?.name !== "AbortError") {
-      console.warn("Fast current-catalog handoff failed", error);
-    }
-  }
-  return null;
-}
-
-function shouldTryCatalogProbe(file) {
-  if (!file || file.size < CATALOG_PROBE_MIN_BYTES) return false;
-  return !isSvgFile(file) && !requiresJsonUpload(file);
-}
-
-function hasCatalogProbeHint(file, formData) {
-  return CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(catalogProbeHintText(file, formData)));
-}
-
-function catalogProbeHintText(file, formData) {
-  const city = String(formData.get("city") || "");
-  return `${file.name || ""} ${city}`.toLowerCase().replace(/[_-]+/g, " ");
-}
-
-async function catalogProbeCandidate(file, formData) {
-  const hintText = catalogProbeHintText(file, formData);
-  const hasHint = CATALOG_PROBE_HINT_PATTERNS.some((pattern) => pattern.test(hintText));
-  const sourceCanvas = await imageFileToCanvas(file);
-  const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
-  const looksServiceAreaLike = hasHint || catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file);
-  const metadata = {
-    hasHint,
-    hintText,
-    looksServiceAreaLike,
-    maxDimension,
-    sourceCanvas,
-  };
-  if (maxDimension <= CATALOG_PROBE_MAX_DIMENSION) {
-    return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };
-  }
-  if (!looksServiceAreaLike) {
-    return { file: null, skippedMiss: true, ...metadata };
-  }
-  const scale = CATALOG_PROBE_MAX_DIMENSION / maxDimension;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
-  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
-  const context = canvas.getContext("2d");
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
-  const probeBlob = await catalogProbeBlob(canvas);
-  if (!probeBlob || probeBlob.blob.size >= file.size * 0.75) {
-    return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };
-  }
-  return {
-    file: new File([probeBlob.blob], `${fileBaseName(file.name)}.catalog-probe.${probeBlob.extension}`, {
-      type: probeBlob.type,
-      lastModified: file.lastModified,
-    }),
-    skippedMiss: false,
-    ...metadata,
-  };
-}
-
-async function catalogProbeBlob(canvas) {
-  const webpBlob = await canvasToBlob(canvas, "image/webp", CATALOG_PROBE_WEBP_QUALITY);
-  if (webpBlob?.type === "image/webp") {
-    return { blob: webpBlob, extension: "webp", type: "image/webp" };
-  }
-  const jpegBlob = await canvasToBlob(canvas, "image/jpeg", CATALOG_PROBE_JPEG_QUALITY);
-  if (!jpegBlob) return null;
-  return { blob: jpegBlob, extension: "jpg", type: "image/jpeg" };
-}
-
-function catalogProbeCanvasLooksServiceAreaLike(sourceCanvas, file) {
-  const maxDimension = Math.max(sourceCanvas.width, sourceCanvas.height);
-  const sampleSize = 128;
-  const scale = Math.min(1, sampleSize / maxDimension);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
-  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) return false;
-  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  const total = pixels.length / 4;
-  let blue = 0;
-  let neutral = 0;
-  let teal = 0;
-  let purple = 0;
-  for (let index = 0; index < pixels.length; index += 4) {
-    const red = pixels[index];
-    const green = pixels[index + 1];
-    const blueChannel = pixels[index + 2];
-    if (blueChannel >= 125 && green >= 95 && red <= 130 && blueChannel - red >= 45 && green - red >= 5) {
-      blue += 1;
-    }
-    if (
-      green >= 75
-      && blueChannel >= 65
-      && red <= 95
-      && green - red >= 15
-      && blueChannel - red >= 5
-      && Math.abs(green - blueChannel) <= 70
-    ) {
-      teal += 1;
-    }
-    if (blueChannel >= 105 && red >= 80 && green <= 120 && blueChannel - green >= 20 && red - green >= 5) {
-      purple += 1;
-    }
-    if (Math.abs(red - green) <= 18 && Math.abs(green - blueChannel) <= 18 && red >= 85 && red <= 225) {
-      neutral += 1;
-    }
-  }
-  const blueRatio = blue / total;
-  const tealRatio = teal / total;
-  const purpleRatio = purple / total;
-  const neutralRatio = neutral / total;
-  const largeOverlay = file.size >= CATALOG_PROBE_GENERIC_MIN_BYTES
-    && (blueRatio >= 0.04 || tealRatio >= 0.04 || purpleRatio >= 0.03);
-  const smallNeutralOverlay = file.size >= CATALOG_PROBE_MIN_BYTES
-    && maxDimension <= 900
-    && neutralRatio >= 0.02
-    && neutralRatio <= 0.08;
-  const smallTealOverlay = file.size >= CATALOG_PROBE_MIN_BYTES
-    && maxDimension <= 900
-    && tealRatio >= 0.015;
-  return largeOverlay || smallNeutralOverlay || smallTealOverlay;
-}
-
-function isCatalogRunPayload(payload) {
-  const source = payload?.summary?.georeference_source || "";
-  return payload?.status === "complete"
-    && Boolean(payload?.summary?.catalog_slug)
-    && source.startsWith("catalog-shape-match");
-}
-
-function isFastCatalogHandoffPayload(payload, catalogProbeResult) {
-  if (!isCatalogRunPayload(payload)) return false;
-  const summary = payload.summary || {};
-  if (CATALOG_PROBE_AREA_HINT_PATTERN.test(catalogProbeResult.catalogHintText || "")) {
-    if (!catalogSlugMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText)) return false;
-  } else if (catalogProbeResult.bestActiveCatalogSlug && summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug) {
-    if (!isProviderUiCatalogHandoffPayload(summary)) return false;
-    if (!catalogSlugProviderMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText || "")) return false;
-  }
-  if (isProviderUiCatalogHandoffPayload(summary)) return true;
-  const confidence = Number(summary.combined_confidence);
-  return Number.isFinite(confidence) && confidence >= FAST_CATALOG_HANDOFF_MIN_CONFIDENCE;
-}
-
-function isProviderUiCatalogHandoffPayload(summary) {
-  const source = String(summary?.georeference_source || "");
-  if (!source.startsWith("catalog-shape-match:provider-ui-")) return false;
-  const confidence = Number(summary.combined_confidence);
-  const shapeIou = Number(summary.catalog_shape_iou);
-  const areaRatio = Number(summary.catalog_area_ratio);
-  return Number.isFinite(confidence)
-    && confidence >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE
-    && Number.isFinite(shapeIou)
-    && shapeIou >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_IOU
-    && Number.isFinite(areaRatio)
-    && areaRatio >= FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_AREA_RATIO
-    && areaRatio <= FAST_CATALOG_HANDOFF_PROVIDER_UI_MAX_AREA_RATIO;
-}
-
-function catalogSlugProviderMatchesHint(slug, hintText) {
-  if (!slug || !hintText || !CATALOG_PROBE_PROVIDER_HINT_PATTERN.test(hintText)) return true;
-  const provider = String(slug).toLowerCase().split("-").filter(Boolean).at(-1);
-  return Boolean(provider) && hintTextHasToken(hintText, provider);
-}
-
-function catalogSlugMatchesHint(slug, hintText) {
-  if (!slug || !hintText) return false;
-  const parts = String(slug).toLowerCase().split("-").filter(Boolean);
-  if (parts.length < 2) return false;
-  const provider = parts.at(-1);
-  if (CATALOG_PROBE_PROVIDER_HINT_PATTERN.test(hintText) && !hintTextHasToken(hintText, provider)) {
-    return false;
-  }
-  const areaTokens = parts.slice(0, -1);
-  const area = areaTokens.join(" ");
-  if (area === "bay area") return /\b(?:bay\s+area|san\s+francisco|sf)\b/.test(hintText);
-  if (area === "san francisco") return /\b(?:san\s+francisco|sf)\b/.test(hintText);
-  return areaTokens.every((token) => hintTextHasToken(hintText, token));
-}
-
-function hintTextHasToken(hintText, token) {
-  return new RegExp(`\\b${token}\\b`).test(hintText);
-}
-
-async function fastCatalogHandoffCandidate(file, probeCandidate) {
-  if (!shouldPrepareFastCatalogHandoff(file, probeCandidate)) return null;
-  const sourceCanvas = probeCandidate.sourceCanvas;
-  const maxDimension = probeCandidate.maxDimension || Math.max(sourceCanvas.width, sourceCanvas.height);
-  const scale = Math.min(1, FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
-  canvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
-  const context = canvas.getContext("2d");
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
-  const blob = await canvasToBlob(canvas, "image/webp", FAST_CATALOG_HANDOFF_WEBP_QUALITY);
-  if (!blob || blob.type !== "image/webp") return null;
-  if (blob.size >= file.size * FAST_CATALOG_HANDOFF_MAX_SIZE_RATIO) return null;
-  return new File([blob], `${fileBaseName(file.name)}.catalog-handoff.webp`, {
-    type: "image/webp",
-    lastModified: file.lastModified,
-  });
-}
-
-function shouldPrepareFastCatalogHandoff(file, probeCandidate) {
-  if (!file || isSvgFile(file) || requiresJsonUpload(file) || file.size < FAST_CATALOG_HANDOFF_MIN_BYTES) {
-    return false;
-  }
-  if (!probeCandidate?.sourceCanvas || !probeCandidate.looksServiceAreaLike) return false;
-  return true;
-}
-
-function shouldUseFastCatalogHandoff(catalogProbeResult) {
-  if (!catalogProbeResult?.bestActiveCatalogSlug) return false;
-  const probeIou = Number(catalogProbeResult.bestActiveCatalogIou);
-  return Number.isFinite(probeIou) && probeIou >= FAST_CATALOG_HANDOFF_MIN_PROBE_IOU;
-}
-
 async function buildRunCacheKeys(file, formData) {
   if (!window.crypto?.subtle || !file?.arrayBuffer || typeof TextEncoder === "undefined") {
     return { lookupKeys: [], cacheKeysPromise: Promise.resolve([]) };
@@ -1335,11 +980,9 @@ function runCacheSettingsSignature(file, formData, options = {}) {
 
 function normalizedRunCacheSettingValue(field, formData, options = {}) {
   const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
-  if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "city") return normalizedRunCacheCity(rawValue);
   if (field === "extractor") return normalizedRunCacheExtractor(rawValue);
   if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
-  if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);
   if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
   if (options.successThresholdCompatible && (field === "min_confidence" || field === "min_control_points")) {
     return RUN_CACHE_SUCCESS_THRESHOLD_TOKEN;
@@ -1355,7 +998,9 @@ function normalizedRunCacheExtractor(value) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
-  return normalized === "experimentalclassifier" ? "experimental_classifier" : "deterministic";
+  if (normalized === "experimentalclassifier") return "experimental_classifier";
+  if (normalized === "generalizedv11") return "generalized_v11";
+  return "deterministic";
 }
 
 function runCacheSuccessThresholds(formData) {

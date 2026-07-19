@@ -59,6 +59,7 @@ def feature_collection(
             "coverage_ratio": round(result.coverage_ratio, 6),
             "contour_count": result.contour_count,
             "extraction_confidence": result.confidence,
+            "target_selection_confidence": target_selection_confidence(result),
             "georeference_confidence": geo_transform.confidence,
             "georeference_source": geo_transform.source,
             "meters_per_pixel": geo_transform.meters_per_pixel,
@@ -80,6 +81,18 @@ def feature_collection(
             "pixel_geometry": mapping(result.pixel_geometry),
         },
     }
+
+
+def target_selection_confidence(result: ExtractionResult) -> float:
+    diagnostics = result.diagnostics or {}
+    uncertainty = diagnostics.get("uncertainty_fraction")
+    agreement = diagnostics.get("candidate_agreement_iou")
+    scores = [float(result.confidence)]
+    if isinstance(uncertainty, (int, float)):
+        scores.append(max(0.0, min(1.0, 1.0 - float(uncertainty))))
+    if isinstance(agreement, (int, float)):
+        scores.append(max(0.0, min(1.0, float(agreement))))
+    return round(sum(scores) / len(scores), 6)
 
 
 def write_geojson(data: dict[str, Any], path: str | Path) -> None:

@@ -89,6 +89,18 @@ def test_cli_can_generate_and_score_with_lenient_thresholds(monkeypatch, tmp_pat
     assert "mean_iou" in capsys.readouterr().out
 
 
+def test_synthetic_guidance_uses_mask_seed_and_overlay_color(tmp_path: Path) -> None:
+    manifest = generate_synthetic_dataset(tmp_path, count=1, seed=23, width=120, height=90)
+    sample = manifest.samples[0]
+    mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
+
+    hints = synthetic_benchmark.synthetic_guidance(sample, mask)
+
+    assert hints["seed_point"] is not None
+    assert mask[round(hints["seed_point"][1]), round(hints["seed_point"][0])]
+    assert len(hints["target_rgb"]) == 3
+
+
 def sample_polygon():
     from shapely.geometry import Polygon
 

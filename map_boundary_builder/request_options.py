@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 
 AUTO_CITY_TOKENS = {"auto", "automatic", "autodetect", "detect"}
@@ -11,6 +12,12 @@ EXPERIMENTAL_CLASSIFIER_TOKENS = {
     "experimentalonnx",
     "model",
     "onnx",
+}
+GENERALIZED_CLASSIFIER_TOKENS = {
+    "generalized",
+    "generalizedclassifier",
+    "generalizedv11",
+    "v11",
 }
 
 
@@ -51,12 +58,48 @@ def include_overlay_for_request(fields: dict[str, str], *, catalog_probe_only: b
 
 
 def allow_catalog_for_request(fields: dict[str, str]) -> bool:
-    if bool_field(fields, "no_catalog", default=False):
-        return False
-    return bool_field(fields, "allow_catalog", default=True)
+    """Catalog substitution is intentionally disabled for public uploads.
+
+    A newly uploaded service-area image must be interpreted from its own pixels.
+    Request fields are ignored so stale clients cannot re-enable exact geometry
+    replacement from the bundled historical catalog.
+    """
+    return False
 
 
 def experimental_classifier_for_request(fields: dict[str, str]) -> bool:
     extractor = fields.get("extractor", "").strip().lower()
     normalized = re.sub(r"[^a-z0-9]+", "", extractor)
     return normalized in EXPERIMENTAL_CLASSIFIER_TOKENS
+
+
+def extractor_for_request(fields: dict[str, str]) -> str:
+    extractor = fields.get("extractor", "").strip().lower()
+    normalized = re.sub(r"[^a-z0-9]+", "", extractor)
+    if normalized in GENERALIZED_CLASSIFIER_TOKENS:
+        return "generalized_v11"
+    if normalized in EXPERIMENTAL_CLASSIFIER_TOKENS:
+        return "experimental_classifier"
+    return "deterministic"
+
+
+def generalized_classifier_for_request(fields: dict[str, str]) -> bool:
+    return extractor_for_request(fields) == "generalized_v11"
+
+
+def extraction_hints_for_request(fields: dict[str, str]) -> dict[str, object] | None:
+    hints: dict[str, object] = {}
+    seed_x = fields.get("seed_x", "").strip()
+    seed_y = fields.get("seed_y", "").strip()
+    if seed_x and seed_y:
+        try:
+            point = (float(seed_x), float(seed_y))
+            if all(math.isfinite(value) and value >= 0.0 for value in point):
+                hints["seed_point"] = point
+        except ValueError:
+            pass
+
+    target = fields.get("target_color", "").strip().lstrip("#")
+    if re.fullmatch(r"[0-9a-fA-F]{6}", target):
+        hints["target_rgb"] = tuple(int(target[index : index + 2], 16) for index in (0, 2, 4))
+    return hints or None

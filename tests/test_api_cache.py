@@ -1052,7 +1052,7 @@ class ApiRunCacheTests(unittest.TestCase):
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
             overlay_format="webp",
             write_mask_artifact=False,
-            allow_catalog=True,
+            allow_catalog=False,
             catalog_probe_only=False,
             catalog_probe_missed=False,
             catalog_probe_miss_low_iou=False,
@@ -1159,7 +1159,7 @@ class ApiRunCacheTests(unittest.TestCase):
             preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION,
             overlay_format="webp",
             write_mask_artifact=False,
-            allow_catalog=True,
+            allow_catalog=False,
             catalog_probe_only=False,
             catalog_probe_missed=False,
             catalog_probe_miss_low_iou=False,
@@ -1335,7 +1335,7 @@ class ApiRunCacheTests(unittest.TestCase):
                 preview_max_dimension=1200,
                 overlay_format="webp",
                 write_mask_artifact=False,
-                allow_catalog=True,
+                allow_catalog=False,
                 catalog_probe_only=False,
                 catalog_probe_missed=False,
                 catalog_probe_miss_low_iou=False,
@@ -1391,7 +1391,7 @@ class ApiRunCacheTests(unittest.TestCase):
             preview_max_dimension=None,
             overlay_format="png",
             write_mask_artifact=False,
-            allow_catalog=True,
+            allow_catalog=False,
             catalog_probe_only=False,
             catalog_probe_missed=False,
             catalog_probe_miss_low_iou=False,
@@ -1455,7 +1455,7 @@ class ApiRunCacheTests(unittest.TestCase):
             preview_max_dimension=None,
             overlay_format="png",
             write_mask_artifact=False,
-            allow_catalog=True,
+            allow_catalog=False,
             catalog_probe_only=False,
             catalog_probe_missed=False,
             catalog_probe_miss_low_iou=False,
@@ -1548,11 +1548,17 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertEqual(payload["events"][-1]["status"], "failed")
         self.assertEqual(payload["events"][-1]["details"], {"error": "runner import unavailable"})
 
-    def test_create_run_catalog_miss_includes_terminal_event(self) -> None:
+    def test_create_run_ignores_legacy_catalog_fields(self) -> None:
         request = api_index.handler.__new__(api_index.handler)
         request.parse_upload_request = lambda: (
-            {"catalog_probe_only": "1"},
-            {"image": ("Bay Area.png", b"not-an-image")},
+            {
+                "allow_catalog": "1",
+                "catalog_probe_only": "1",
+                "catalog_probe_missed": "1",
+                "catalog_probe_miss_low_iou": "1",
+                "include_overlay": "0",
+            },
+            {"image": ("New service area.png", b"not-an-image")},
             "multipart",
         )
         captured: dict[str, object] = {}
@@ -1561,33 +1567,33 @@ class ApiRunCacheTests(unittest.TestCase):
             captured["payload"] = payload
             captured["status"] = status
 
-        details = {
-            "active_shape_iou_is_low": False,
-            "best_active_catalog_slug": "bay-area-waymo",
-            "best_active_catalog_iou": 0.91,
-        }
-
-        def build_boundary_miss(*args, **kwargs):
-            raise CatalogProbeMiss("No known service-area shape matched the catalog probe.", details=details)
+        def build_boundary_ok(*args, **kwargs):
+            captured["options"] = kwargs["options"]
+            return SimpleNamespace(
+                summary={"city": "New area", "combined_confidence": 0.9, "control_points": 4},
+                geojson={"type": "FeatureCollection", "features": []},
+                overlay_path=None,
+            )
 
         request.send_json = send_json
         with (
-            patch("api.index.get_pipeline_version", return_value="pipeline-catalog-miss-terminal"),
+            patch("api.index.get_pipeline_version", return_value="pipeline-image-derived"),
             patch("api.index.read_run_result_cache", return_value=None),
             patch("api.index.write_run_result_cache"),
-            patch("map_boundary_builder.runner.build_boundary", side_effect=build_boundary_miss),
+            patch("api.index.write_success_run_result_cache_keys"),
+            patch("map_boundary_builder.runner.build_boundary", side_effect=build_boundary_ok),
         ):
             request.handle_create_run()
 
         payload = captured["payload"]
+        options = captured["options"]
         assert isinstance(payload, dict)
-        self.assertEqual(captured["status"], HTTPStatus.OK)
-        self.assertEqual(payload["status"], "catalog_miss")
-        self.assertEqual(payload["catalog_probe_miss"], details)
-        self.assertEqual(payload["events"][-1]["stage"], "catalog_miss")
-        self.assertEqual(payload["events"][-1]["status"], "catalog_miss")
-        self.assertEqual(payload["events"][-1]["message"], "Catalog probe missed")
-        self.assertEqual(payload["events"][-1]["details"], details)
+        self.assertEqual(captured["status"], HTTPStatus.CREATED)
+        self.assertEqual(payload["status"], "complete")
+        self.assertFalse(options.allow_catalog)
+        self.assertFalse(options.catalog_probe_only)
+        self.assertFalse(options.catalog_probe_missed)
+        self.assertFalse(options.catalog_probe_miss_low_iou)
 
     def test_event_stage_elapsed_seconds_sums_repeated_stages(self) -> None:
         events = [
@@ -1859,15 +1865,13 @@ class ApiRunCacheTests(unittest.TestCase):
             image_set,
         )
         cache_lookup = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
-        probe_override = app_js.index(b'probeData.set("normalized_cache_lookup", "0");')
-        handoff_override = app_js.index(b'fastData.set("normalized_cache_lookup", "0");')
         avif_helper = app_js.index(b"function isAvifFile(file) {")
         normalized_helper = app_js.index(b"function shouldUseServerNormalizedCacheLookup(file) {")
 
         self.assertLess(image_set, avif_opt_in)
         self.assertLess(avif_opt_in, cache_lookup)
-        self.assertLess(cache_lookup, probe_override)
-        self.assertLess(probe_override, handoff_override)
+        self.assertNotIn(b"probeData", app_js)
+        self.assertNotIn(b"fastData", app_js)
         self.assertIn(b'type === "image/avif" || /\\.avif$/i.test(file?.name || "")', app_js[avif_helper:normalized_helper])
         self.assertIn(b"return isAvifFile(file);", app_js[normalized_helper:normalized_helper + 120])
 
@@ -1958,113 +1962,34 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(submit_cancel, clear_before_abort)
         self.assertLess(clear_before_abort, abort_active)
 
-    def test_frontend_marks_unhinted_skipped_catalog_probe_as_missed(self) -> None:
+    def test_frontend_removes_catalog_shortcuts_and_forces_image_derived_runs(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
-        self.assertIn(
-            b"if (!probeCandidate.file) return probeCandidate.skippedMiss ? { missed: true } : null;",
-            app_js,
-        )
-        self.assertIn(
-            b"return { file: null, skippedMiss: !looksServiceAreaLike, ...metadata };",
-            app_js,
-        )
-        self.assertIn(
-            b"return { file: null, skippedMiss: true, ...metadata };",
-            app_js,
-        )
-        self.assertIn(
-            b"hasHint,\n    hintText,\n    looksServiceAreaLike,\n    maxDimension,\n    sourceCanvas,",
-            app_js,
-        )
-        self.assertIn(
-            b'if (catalogProbeResult.lowIou) {\n        formData.set("catalog_probe_miss_low_iou", "1");',
-            app_js,
-        )
-        self.assertIn(
-            b"lowIou: miss.active_shape_iou_is_low === true,",
-            app_js,
-        )
-        self.assertIn(
-            b"const FAST_CATALOG_HANDOFF_MAX_DIMENSION = 1600;",
-            app_js,
-        )
-        self.assertIn(
-            b"const FAST_CATALOG_HANDOFF_PROVIDER_UI_MIN_CONFIDENCE = 0.70;",
-            app_js,
-        )
-        self.assertIn(
-            b"const CATALOG_PROBE_AREA_HINT_PATTERN =",
-            app_js,
-        )
-        self.assertIn(
-            b'if (name !== "image" && name !== "catalog_probe_miss_low_iou")',
-            app_js,
-        )
-        self.assertIn(
-            b'fastData.set("fast_catalog_handoff", "1");',
-            app_js,
-        )
-        self.assertIn(
-            b"const fastHandoffFilePromise = fastCatalogHandoffCandidate(file, probeCandidate);",
-            app_js,
-        )
-        self.assertIn(
-            b"if (shouldUseFastCatalogHandoff(result)) {\n        result.fastHandoffFile = await fastHandoffFilePromise;",
-            app_js,
-        )
-        self.assertIn(
-            b"summary.catalog_slug !== catalogProbeResult.bestActiveCatalogSlug",
-            app_js,
-        )
-        self.assertIn(
-            b"if (!isProviderUiCatalogHandoffPayload(summary)) return false;",
-            app_js,
-        )
-        self.assertIn(
-            b"const scale = Math.min(1, FAST_CATALOG_HANDOFF_MAX_DIMENSION / maxDimension);",
-            app_js,
-        )
-        self.assertIn(
-            b"catalogSlugMatchesHint(summary.catalog_slug, catalogProbeResult.catalogHintText)",
-            app_js,
-        )
+        self.assertIn(b'formData.set("no_catalog", "1");', app_js)
+        self.assertIn(b'formData.delete("allow_catalog");', app_js)
+        self.assertIn(b'formData.delete("catalog_probe_only");', app_js)
+        self.assertIn(b'formData.delete("fast_catalog_handoff");', app_js)
+        self.assertNotIn(b"tryCatalogProbe", app_js)
+        self.assertNotIn(b"tryFastCatalogHandoff", app_js)
+        self.assertNotIn(b"CATALOG_PROBE_", app_js)
+        self.assertNotIn(b"FAST_CATALOG_HANDOFF_", app_js)
 
-    def test_frontend_races_browser_cache_hit_against_catalog_probe(self) -> None:
+    def test_frontend_checks_browser_cache_then_uploads_current_image(self) -> None:
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
         cache_start = app_js.index(b"const cacheLookupPromise = buildRunCacheKeys(uploadFile, formData);")
-        deferred_cache = app_js.index(
-            b"const deferredCacheKeysPromise = () => cacheKeysFromLookupPromise(cacheLookupPromise);"
-        )
-        race_start = app_js.index(b"const firstFastResult = await Promise.race([")
-        probe_race = app_js.index(b'catalogProbePromise.then((result) => ({ type: "catalog-probe", result }))')
-        cache_race = app_js.index(b"cachedHistoryEntryFromLookupPromise(cacheLookupPromise).then")
-        cache_hit_branch = app_js.index(b'if (firstFastResult?.type === "cache-hit") {')
-        cache_abort = app_js.index(b"catalogProbeAbortController?.abort();", cache_hit_branch)
-        cache_restore = app_js.index(b"restoreCachedHistoryEntry(firstFastResult.cachedEntry);")
-        probe_result = app_js.index(b'const catalogProbeResult = firstFastResult?.type === "catalog-probe"')
-        first_inline = app_js.index(b"applyInlineRun(catalogProbeResult.payload, {")
         cache_await = app_js.index(b"const cacheLookup = await cacheLookupPromise;")
         cached_entry = app_js.index(
             b"const cachedEntry = await cachedHistoryEntryFromLookupPromise(cacheLookupPromise, {"
         )
+        upload_call = app_js.index(b"const { response, payload } = await postRunUpload(formData, uploadFile);")
 
-        self.assertLess(cache_start, deferred_cache)
-        self.assertLess(deferred_cache, race_start)
-        self.assertLess(race_start, probe_race)
-        self.assertLess(race_start, cache_race)
-        self.assertLess(race_start, cache_hit_branch)
-        self.assertLess(cache_hit_branch, cache_abort)
-        self.assertLess(cache_abort, cache_restore)
-        self.assertLess(cache_hit_branch, probe_result)
-        self.assertLess(probe_result, first_inline)
-        self.assertLess(first_inline, cache_await)
+        self.assertLess(cache_start, cache_await)
         self.assertLess(cache_await, cached_entry)
-        self.assertIn(b"cacheKeysPromise: deferredCacheKeysPromise,", app_js)
-        self.assertIn(b"async function cacheKeysFromLookupPromise(cacheLookupPromise) {", app_js)
+        self.assertLess(cached_entry, upload_call)
+        self.assertNotIn(b"Promise.race", app_js[cache_start:upload_call])
         self.assertIn(
             b"async function cachedHistoryEntryFromLookupPromise(cacheLookupPromise, options = {}) {",
             app_js,
@@ -2170,8 +2095,8 @@ class ApiRunCacheTests(unittest.TestCase):
         app_js, mime = web_asset_response("app.js")
 
         self.assertEqual(mime, "text/javascript; charset=utf-8")
-        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v6";', app_js)
-        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v8";', app_js)
+        self.assertIn(b'const RUN_CACHE_RAW_VERSION = "image-to-geojson-v7-image-derived";', app_js)
+        self.assertIn(b'const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v9-image-derived";', app_js)
         self.assertIn(
             b'const RUN_CACHE_AUTO_CITY_TOKENS = new Set(["auto", "automatic", "autodetect", "detect"]);',
             app_js,
@@ -2202,11 +2127,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertLess(bool_helper, float_helper)
         self.assertLess(float_helper, int_helper)
         self.assertIn(b'const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;', app_js)
-        self.assertIn(b'if (field === "allow_catalog") return normalizedRunCacheBoolean(rawValue, true);', app_js)
         self.assertIn(b'if (field === "city") return normalizedRunCacheCity(rawValue);', app_js)
         self.assertIn(b'if (field === "extractor") return normalizedRunCacheExtractor(rawValue);', app_js)
         self.assertIn(b'if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);', app_js)
-        self.assertIn(b'if (field === "no_catalog") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(b'if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);', app_js)
         self.assertIn(
             b'if (options.successThresholdCompatible && (field === "min_confidence" || field === "min_control_points"))',
@@ -2395,9 +2318,9 @@ class ApiRunCacheTests(unittest.TestCase):
         self.assertTrue(include_overlay_for_request({"include_overlay": "1"}, catalog_probe_only=True))
         self.assertFalse(include_overlay_for_request({"include_overlay": "0"}, catalog_probe_only=False))
 
-    def test_api_can_disable_catalog_matching_for_controlled_no_catalog_runs(self) -> None:
-        self.assertTrue(allow_catalog_for_request({}))
-        self.assertTrue(allow_catalog_for_request({"allow_catalog": "1"}))
+    def test_public_api_always_disables_catalog_matching(self) -> None:
+        self.assertFalse(allow_catalog_for_request({}))
+        self.assertFalse(allow_catalog_for_request({"allow_catalog": "1"}))
         self.assertFalse(allow_catalog_for_request({"allow_catalog": "0"}))
         self.assertFalse(allow_catalog_for_request({"no_catalog": "1"}))
         self.assertFalse(allow_catalog_for_request({"allow_catalog": "1", "no_catalog": "1"}))

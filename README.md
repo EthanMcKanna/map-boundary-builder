@@ -59,8 +59,11 @@ for satellite-like textured backgrounds, low-contrast translucent overlays,
 outline-only regions, and targets that touch the crop border. The Python
 extractor API includes experimental named profiles and hints for this work, such
 as `profile="satellite-overlay"` with a seed point or expected fill color. The
-CLI, web, and API surfaces still default to automatic map-overlay extraction
-plus the existing filename/city hints used for georeferencing.
+web app defaults to Generalized v11, while deterministic extraction remains
+available as a manual comparison path. Public web/API uploads never substitute
+a polygon from the historical service-area catalog: their output must be derived
+from the current image pixels plus OCR/georeference evidence. Filename and city
+hints can guide location inference, but cannot replace the extracted geometry.
 
 ## Requirements
 
@@ -212,7 +215,7 @@ use the deterministic extractor; model-backed extraction should be promoted only
 after it beats the deterministic path on synthetic stress fixtures and the real
 screenshot hard gate.
 
-The packaged synthetic model can be enabled for a deployment with:
+The packaged experimental model can be enabled for a deployment with:
 
 ```bash
 MAP_BOUNDARY_EXTRACTOR_MODEL=1
@@ -221,5 +224,12 @@ MAP_BOUNDARY_EXTRACTOR_MODEL=1
 Optional overrides are `MAP_BOUNDARY_EXTRACTOR_MODEL_PATH`,
 `MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE`, and
 `MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD`. The shipped model was trained with
-`tools/train_synthetic_model.py` and uses the default `128` input size and `0.35`
+`tools/train_synthetic_model.py` and uses the default `256` input size and `0.45`
 threshold.
+
+The web model selector defaults to **Generalized v11**. It accepts automatic
+RGB-only runs or optional target-color and seed-point guidance; clicking the
+input preview while v11 is selected fills the seed coordinates. The v11 ONNX
+contract uses five channels (RGB + seed heatmap + target-color similarity) and
+emits uncertainty and fallback diagnostics. See
+[`docs/generalized-v11.md`](docs/generalized-v11.md) for its scope and promotion gates.

@@ -31,6 +31,8 @@ from map_boundary_builder.request_options import (
     allow_catalog_for_request,
     bool_field,
     city_hint_for_request,
+    extraction_hints_for_request,
+    extractor_for_request,
     experimental_classifier_for_request,
     float_field,
     include_overlay_for_request,
@@ -55,7 +57,7 @@ INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation-v2"
 LEGACY_CRON_WARM_PATH = "/api/cron/warm-generation"
 CRON_WARM_PATHS = frozenset({CRON_WARM_PATH, LEGACY_CRON_WARM_PATH})
-RUN_RESULT_CACHE_VERSION = "run-result-v7"
+RUN_RESULT_CACHE_VERSION = "run-result-v8-image-derived"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
@@ -320,11 +322,16 @@ class handler(BaseHTTPRequestHandler):
         profile_ocr_engine = bool_field(fields, "profile_ocr_engine", default=False)
         if profile_ocr_engine:
             profile["ocr_engine_profile_requested"] = True
-        catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
-        include_overlay = include_overlay_for_request(fields, catalog_probe_only=catalog_probe_only)
-        catalog_probe_missed = bool_field(fields, "catalog_probe_missed", default=False)
+        # Public uploads must always be derived from the uploaded image. Legacy
+        # catalog probe fields are deliberately ignored, including from stale
+        # browser clients.
+        catalog_probe_only = False
+        include_overlay = include_overlay_for_request(fields, catalog_probe_only=False)
+        catalog_probe_missed = False
         allow_catalog = allow_catalog_for_request(fields)
         experimental_classifier = experimental_classifier_for_request(fields)
+        extractor = extractor_for_request(fields)
+        extraction_hints = extraction_hints_for_request(fields)
         options = SimpleNamespace(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
@@ -336,8 +343,10 @@ class handler(BaseHTTPRequestHandler):
             allow_catalog=allow_catalog,
             catalog_probe_only=catalog_probe_only,
             catalog_probe_missed=catalog_probe_missed,
-            catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
+            catalog_probe_miss_low_iou=False,
             experimental_classifier=experimental_classifier,
+            model_variant=None if extractor == "deterministic" else extractor,
+            extraction_hints=extraction_hints,
             filename_hint=original_filename,
             source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )
@@ -1492,6 +1501,8 @@ def run_result_cache_key_for_hash(
         "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
         "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),
         "experimental_classifier": bool(getattr(options, "experimental_classifier", False)),
+        "model_variant": getattr(options, "model_variant", None) or "",
+        "extraction_hints": getattr(options, "extraction_hints", None) or {},
         "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
         "source_was_svg": bool(getattr(options, "source_was_svg", False)),
     }
@@ -2002,6 +2013,8 @@ def overlay_superset_cache_options(options: Any) -> Any | None:
             "catalog_probe_missed": getattr(options, "catalog_probe_missed", False),
             "catalog_probe_miss_low_iou": getattr(options, "catalog_probe_miss_low_iou", False),
             "experimental_classifier": getattr(options, "experimental_classifier", False),
+            "model_variant": getattr(options, "model_variant", None),
+            "extraction_hints": getattr(options, "extraction_hints", None),
             "filename_hint": getattr(options, "filename_hint", None),
             "source_was_svg": getattr(options, "source_was_svg", False),
         }

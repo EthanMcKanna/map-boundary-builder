@@ -230,9 +230,22 @@
             <label class="field compact">
               <span>Extractor</span>
               <select id="extractorInput" form="runForm" name="extractor">
-                <option value="deterministic" selected>Default</option>
+                <option value="generalized_v11" selected>Generalized v11 (recommended)</option>
+                <option value="deterministic">Deterministic</option>
                 <option value="experimental_classifier">Experimental classifier</option>
               </select>
+            </label>
+            <label class="field compact">
+              <span>Target color (optional)</span>
+              <input id="targetColorInput" form="runForm" name="target_color" type="text" inputmode="text" placeholder="#7c3aed" pattern="#?[0-9a-fA-F]{6}" />
+            </label>
+            <label class="field compact">
+              <span>Seed X (optional)</span>
+              <input id="seedXInput" form="runForm" name="seed_x" type="number" min="0" step="1" placeholder="pixel x" />
+            </label>
+            <label class="field compact">
+              <span>Seed Y (optional)</span>
+              <input id="seedYInput" form="runForm" name="seed_y" type="number" min="0" step="1" placeholder="pixel y" />
             </label>
             <label class="field compact">
               <span>Confidence Floor</span>

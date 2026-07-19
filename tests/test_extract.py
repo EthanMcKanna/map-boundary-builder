@@ -35,6 +35,37 @@ def stamp_blue_fill(arr: np.ndarray, y0: int, y1: int, x0: int, x1: int) -> None
 
 
 class MaskRepairTests(unittest.TestCase):
+    def test_generalized_automatic_mode_refines_with_deterministic_candidate_guidance(self) -> None:
+        rgb = np.full((80, 100, 3), 220, dtype=np.uint8)
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 20:80] = True
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(deterministic_mask, 1.0)
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="auto-fill",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=0.95,
+        )
+        initial = extract_module.replace(
+            deterministic_result,
+            diagnostics={"model_variant": "generalized_v11", "model_guidance": {"seed_point": False, "target_rgb": False}},
+        )
+        refined = extract_module.replace(initial, confidence=0.99)
+
+        with (
+            patch.object(extract_module, "maybe_extract_with_model", side_effect=[initial, refined]) as model_extract,
+            patch.object(extract_module, "extract_service_area_from_rgb", return_value=deterministic_result),
+        ):
+            result = extract_service_area(
+                "unused.png", rgb=rgb, cache=False, use_model="generalized_v11"
+            )
+
+        self.assertEqual(model_extract.call_count, 2)
+        self.assertEqual(result.diagnostics["automatic_guidance"], "deterministic_candidate")
+        self.assertEqual(result.diagnostics["candidate_agreement_iou"], 1.0)
+
     def test_model_extractor_env_routes_through_model_session(self) -> None:
         rgb = np.full((48, 64, 3), 255, dtype=np.uint8)
         model_mask = np.zeros((48, 64), dtype=bool)
@@ -143,6 +174,44 @@ class MaskRepairTests(unittest.TestCase):
         self.assertEqual(result.style, "bright-blue")
         np.testing.assert_array_equal(result.mask, deterministic_mask)
         self.assertEqual(result.diagnostics["model_fallback"]["model_coverage_ratio"], model_result.coverage_ratio)
+
+    def test_fragmented_model_overfill_falls_back_to_confident_deterministic_mask(self) -> None:
+        rgb = np.full((80, 100, 3), 255, dtype=np.uint8)
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[8:68, 10:90] = True
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 25:75] = True
+        model_geometry, _model_contours = extract_module.mask_to_geometry(model_mask, 1.0)
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(deterministic_mask, 1.0)
+        model_result = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=26,
+            confidence=0.799,
+        )
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="light-fill",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=1.0,
+        )
+
+        with (
+            patch.object(extract_module, "maybe_extract_with_model", return_value=model_result),
+            patch.object(extract_module, "extract_service_area_from_rgb", return_value=deterministic_result),
+        ):
+            result = extract_service_area("unused.png", rgb=rgb, cache=False, use_model=True)
+
+        self.assertEqual(result.style, "light-fill")
+        np.testing.assert_array_equal(result.mask, deterministic_mask)
+        self.assertEqual(
+            result.diagnostics["model_fallback"]["reason"],
+            "model_fragmented_overfilled_confident_deterministic_mask",
+        )
 
     def test_non_suspicious_model_result_still_bypasses_deterministic_extraction(self) -> None:
         rgb = np.full((80, 100, 3), 255, dtype=np.uint8)

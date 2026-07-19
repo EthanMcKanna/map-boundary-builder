@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=0.0008)
     parser.add_argument("--base-channels", type=int, default=40)
+    parser.add_argument("--input-channels", type=int, choices=(3, 5), default=3)
     parser.add_argument("--arch", choices=("tiny", "resunet"), default="resunet")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
@@ -71,11 +72,15 @@ def main(argv: list[str] | None = None) -> int:
     samples = list(manifest.samples)
     validation_samples = samples[: args.validation_count]
     training_samples = samples[args.validation_count :]
-    train_dataset = SyntheticBoundaryDataset(args.dataset_dir, training_samples, args.image_size, augment=True)
-    validation_dataset = SyntheticBoundaryDataset(args.dataset_dir, validation_samples, args.image_size, augment=False)
+    train_dataset = SyntheticBoundaryDataset(
+        args.dataset_dir, training_samples, args.image_size, augment=True, input_channels=args.input_channels
+    )
+    validation_dataset = SyntheticBoundaryDataset(
+        args.dataset_dir, validation_samples, args.image_size, augment=False, input_channels=args.input_channels
+    )
     loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     validation_loader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    model = build_model(args.arch, base_channels=args.base_channels).to(device)
+    model = build_model(args.arch, base_channels=args.base_channels, input_channels=args.input_channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
     checkpoint_dir = args.checkpoint_dir or args.output.parent / f"{args.output.stem}.checkpoints"
@@ -136,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                 "arch": args.arch,
                 "base_channels": args.base_channels,
                 "image_size": args.image_size,
+                "input_channels": args.input_channels,
                 "validation_iou": validation_iou,
                 "best_validation_iou": best_validation_iou,
                 "model_state_dict": model.state_dict(),
@@ -151,11 +157,14 @@ def main(argv: list[str] | None = None) -> int:
     best_checkpoint = checkpoint_dir / "best.pt"
     if best_checkpoint.exists():
         checkpoint = torch.load(best_checkpoint, map_location="cpu")
-        model = build_model(str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]))
+        input_channels = int(checkpoint.get("input_channels", 3))
+        model = build_model(
+            str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]), input_channels=input_channels
+        )
         model.load_state_dict(checkpoint["model_state_dict"])
-        export_model(model, args.output, image_size=int(checkpoint["image_size"]))
+        export_model(model, args.output, image_size=int(checkpoint["image_size"]), input_channels=input_channels)
     else:
-        export_model(model, args.output, image_size=args.image_size)
+        export_model(model, args.output, image_size=args.image_size, input_channels=args.input_channels)
     return 0
 
 
@@ -167,11 +176,13 @@ class SyntheticBoundaryDataset:
         image_size: int,
         *,
         augment: bool = False,
+        input_channels: int = 3,
     ):
         self.root = root
         self.samples = list(samples)
         self.image_size = image_size
         self.augment = augment
+        self.input_channels = input_channels
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -193,30 +204,59 @@ class SyntheticBoundaryDataset:
                 mask_arr = mask_arr[::-1, :]
             image_arr = color_jitter(image_arr)
         image_tensor = np.transpose(image_arr, (2, 0, 1))
+        if self.input_channels == 5:
+            image_tensor = np.concatenate(
+                [image_tensor, training_guidance_channels(image_arr, mask_arr, sample, augment=self.augment)], axis=0
+            )
         return np.ascontiguousarray(image_tensor), np.ascontiguousarray(mask_arr[np.newaxis, :, :])
 
 
+def training_guidance_channels(image_arr: np.ndarray, mask_arr: np.ndarray, sample, *, augment: bool) -> np.ndarray:
+    height, width = mask_arr.shape
+    seed_map = np.zeros((height, width), dtype=np.float32)
+    target_map = np.zeros((height, width), dtype=np.float32)
+    ys, xs = np.where(mask_arr > 0.5)
+    if len(xs) and (not augment or random.random() < 0.55):
+        pick = random.randrange(len(xs)) if augment else len(xs) // 2
+        x, y = float(xs[pick]), float(ys[pick])
+        yy, xx = np.mgrid[0:height, 0:width]
+        sigma = max(2.0, min(width, height) * 0.035)
+        seed_map = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * sigma**2)).astype(np.float32)
+    if len(xs) and (not augment or random.random() < 0.72):
+        target = np.median(image_arr[mask_arr > 0.5], axis=0).astype(np.float32)
+        if target.shape == (3,):
+            distance = np.linalg.norm(image_arr - target.reshape(1, 1, 3), axis=2) / np.sqrt(3.0)
+            target_map = (1.0 - np.clip(distance, 0.0, 1.0)).astype(np.float32)
+    return np.stack([seed_map, target_map], axis=0)
+
+
 def color_jitter(image_arr: np.ndarray) -> np.ndarray:
-    brightness = random.uniform(0.88, 1.12)
-    contrast = random.uniform(0.90, 1.12)
+    brightness = random.uniform(0.76, 1.24)
+    contrast = random.uniform(0.78, 1.24)
     mean = image_arr.mean(axis=(0, 1), keepdims=True)
     jittered = (image_arr - mean) * contrast + mean
     jittered = jittered * brightness
+    jittered = np.power(np.clip(jittered, 0.0, 1.0), random.uniform(0.72, 1.38))
+    if random.random() < 0.35:
+        gray = jittered.mean(axis=2, keepdims=True)
+        jittered = gray + (jittered - gray) * random.uniform(0.2, 1.7)
+    if random.random() < 0.25:
+        jittered += np.random.normal(0.0, random.uniform(0.005, 0.035), jittered.shape)
     return np.clip(jittered, 0.0, 1.0).astype(np.float32)
 
 
-def build_model(arch: str, *, base_channels: int) -> nn.Module:
+def build_model(arch: str, *, base_channels: int, input_channels: int = 3) -> nn.Module:
     if arch == "tiny":
-        return TinyBoundaryNet()
+        return TinyBoundaryNet(input_channels=input_channels)
     if arch == "resunet":
-        return ResidualBoundaryNet(base_channels=base_channels)
+        return ResidualBoundaryNet(base_channels=base_channels, input_channels=input_channels)
     raise ValueError(f"unknown architecture: {arch}")
 
 
 class TinyBoundaryNet(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, *, input_channels: int = 3) -> None:
         super().__init__()
-        self.enc1 = block(3, 16)
+        self.enc1 = block(input_channels, 16)
         self.enc2 = block(16, 32)
         self.enc3 = block(32, 64)
         self.mid = block(64, 96)
@@ -240,14 +280,14 @@ class TinyBoundaryNet(nn.Module):
 
 
 class ResidualBoundaryNet(nn.Module):
-    def __init__(self, *, base_channels: int = 32) -> None:
+    def __init__(self, *, base_channels: int = 32, input_channels: int = 3) -> None:
         super().__init__()
         c1 = base_channels
         c2 = base_channels * 2
         c3 = base_channels * 4
         c4 = base_channels * 6
         c5 = base_channels * 8
-        self.stem = ResidualBlock(3, c1)
+        self.stem = ResidualBlock(input_channels, c1)
         self.enc2 = DownsampleBlock(c1, c2)
         self.enc3 = DownsampleBlock(c2, c3)
         self.enc4 = DownsampleBlock(c3, c4)
@@ -387,15 +427,18 @@ def select_device(name: str) -> torch.device:
 
 def export_checkpoint(args) -> None:
     checkpoint = torch.load(args.export_checkpoint, map_location="cpu")
-    model = build_model(str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]))
+    input_channels = int(checkpoint.get("input_channels", 3))
+    model = build_model(
+        str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]), input_channels=input_channels
+    )
     model.load_state_dict(checkpoint["model_state_dict"])
-    export_model(model, args.output, image_size=int(checkpoint["image_size"]))
+    export_model(model, args.output, image_size=int(checkpoint["image_size"]), input_channels=input_channels)
 
 
-def export_model(model: nn.Module, output: Path, *, image_size: int) -> None:
+def export_model(model: nn.Module, output: Path, *, image_size: int, input_channels: int = 3) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     model = model.to("cpu").eval()
-    example = torch.zeros((1, 3, image_size, image_size), dtype=torch.float32)
+    example = torch.zeros((1, input_channels, image_size, image_size), dtype=torch.float32)
     torch.onnx.export(
         model,
         example,
