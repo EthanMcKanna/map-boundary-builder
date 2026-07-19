@@ -40,6 +40,29 @@ def test_preprocess_rgb_for_model_returns_nchw_float_tensor() -> None:
     assert float(tensor[:, 0].max()) == 1.0
 
 
+def test_preprocess_generalized_model_adds_seed_and_target_guidance() -> None:
+    rgb = np.full((20, 30, 3), (124, 58, 237), dtype=np.uint8)
+    tensor = preprocess_rgb_for_model(
+        rgb,
+        config=ModelExtractionConfig(input_width=15, input_height=10, input_channels=5),
+        hints={"seed_point": (15, 10), "target_rgb": (124, 58, 237)},
+    )
+
+    assert tensor.shape == (1, 5, 10, 15)
+    assert tensor[0, 3].max() > 0.9
+    assert tensor[0, 4].min() > 0.99
+
+
+def test_preprocess_generalized_model_clamps_seed_to_image_bounds() -> None:
+    rgb = np.zeros((20, 30, 3), dtype=np.uint8)
+    config = ModelExtractionConfig(input_width=15, input_height=10, input_channels=5)
+
+    outside = preprocess_rgb_for_model(rgb, config=config, hints={"seed_point": (-100, -100)})
+    edge = preprocess_rgb_for_model(rgb, config=config, hints={"seed_point": (0, 0)})
+
+    np.testing.assert_allclose(outside[0, 3], edge[0, 3])
+
+
 def test_normalize_model_output_accepts_common_single_channel_shapes() -> None:
     two_dimensional = np.ones((8, 9), dtype=np.float32) * 0.25
     nchw = two_dimensional[np.newaxis, np.newaxis, :, :]

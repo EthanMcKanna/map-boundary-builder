@@ -12,6 +12,7 @@ output/
 input/
 promo-video/
 tests/
+map_boundary_builder/models/*.checkpoints/
 *.log
 __pycache__/
 *.py[cod]

@@ -24,11 +24,13 @@ from .request_options import (
     allow_catalog_for_request,
     bool_field,
     city_hint_for_request,
+    extraction_hints_for_request,
+    extractor_for_request,
     experimental_classifier_for_request,
     float_field,
     int_field,
 )
-from .runner import BoundaryBuildOptions, CatalogProbeMiss, build_boundary
+from .runner import BoundaryBuildOptions, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 from .upload_payload import UploadPayloadError, json_upload_body_limit, parse_json_upload_body
 
@@ -168,79 +170,10 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         image_path = run_dir / f"input{ext}"
         image_path.write_bytes(image_bytes)
         output_path = run_dir / "boundary.geojson"
-        catalog_probe_only = bool_field(fields, "catalog_probe_only", default=False)
-        fast_catalog_handoff = bool_field(fields, "fast_catalog_handoff", default=False)
         allow_catalog = allow_catalog_for_request(fields)
         experimental_classifier = experimental_classifier_for_request(fields)
-        if catalog_probe_only or fast_catalog_handoff:
-            events: list[dict[str, Any]] = []
-            profile: dict[str, Any] = {
-                "pipeline_version": get_pipeline_version(),
-                "upload_bytes": len(image_bytes),
-            }
-
-            def progress(event: dict[str, Any]) -> None:
-                events.append({"timestamp": time.time(), **event})
-
-            options = BoundaryBuildOptions(
-                simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
-                min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
-                min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
-                allow_catalog=allow_catalog,
-                catalog_probe_only=catalog_probe_only,
-                catalog_probe_missed=fast_catalog_handoff or bool_field(fields, "catalog_probe_missed", default=False),
-                experimental_classifier=experimental_classifier,
-                write_mask_artifact=False,
-                filename_hint=original_filename,
-                source_was_svg=bool_field(fields, "source_was_svg", default=False),
-            )
-            try:
-                build_started = time.perf_counter()
-                result = build_boundary(image_path, city, output_path, debug_dir=None, options=options, progress=progress)
-            except CatalogProbeMiss as exc:
-                events = terminal_events(
-                    events,
-                    stage="catalog_miss",
-                    message="Catalog probe missed",
-                    status="catalog_miss",
-                    details=exc.details,
-                )
-                profile["build_boundary_s"] = elapsed_seconds(build_started)
-                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-                profile["total_before_send_s"] = profile["build_boundary_s"]
-                self.send_json(
-                    {
-                        "id": run_id,
-                        "filename": Path(original_filename).name or "uploaded-image",
-                        "status": "catalog_miss",
-                        "percent": 100,
-                        "error": str(exc),
-                        "catalog_probe_miss": exc.details,
-                        "events": events[-20:],
-                        "profile": profile,
-                    },
-                    status=HTTPStatus.OK,
-                )
-                return
-            profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-            profile["total_before_send_s"] = profile["build_boundary_s"]
-            self.send_json(
-                {
-                    "id": run_id,
-                    "city": result.summary["city"],
-                    "filename": Path(original_filename).name or "uploaded-image",
-                    "status": "complete",
-                    "percent": 100,
-                    "summary": result.summary,
-                    "events": events[-20:],
-                    "profile": profile,
-                    "artifacts": {"geojson_inline": result.geojson},
-                },
-                status=HTTPStatus.CREATED,
-            )
-            return
-
+        extractor = extractor_for_request(fields)
+        extraction_hints = extraction_hints_for_request(fields)
         state = RunState(
             run_id=run_id,
             city=city,
@@ -262,9 +195,11 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
             allow_catalog=allow_catalog,
-            catalog_probe_missed=bool_field(fields, "catalog_probe_missed", default=False),
-            catalog_probe_miss_low_iou=bool_field(fields, "catalog_probe_miss_low_iou", default=False),
+            catalog_probe_missed=False,
+            catalog_probe_miss_low_iou=False,
             experimental_classifier=experimental_classifier,
+            model_variant=None if extractor == "deterministic" else extractor,
+            extraction_hints=extraction_hints,
             filename_hint=original_filename,
             source_was_svg=bool_field(fields, "source_was_svg", default=False),
         )

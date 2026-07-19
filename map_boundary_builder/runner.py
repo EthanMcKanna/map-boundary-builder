@@ -364,6 +364,8 @@ class BoundaryBuildOptions:
     catalog_probe_missed: bool = False
     catalog_probe_miss_low_iou: bool = False
     experimental_classifier: bool = False
+    model_variant: str | None = None
+    extraction_hints: dict[str, object] | None = None
     filename_hint: str | None = None
     source_was_svg: bool = False
 
@@ -755,7 +757,8 @@ def extract_svg_service_path_candidate(
                 rgb=rgb,
                 max_dimension=0,
                 cache=False,
-                use_model=opts.experimental_classifier,
+                use_model=opts.model_variant or opts.experimental_classifier,
+                hints=opts.extraction_hints,
             )
             emit_progress(
                 progress,
@@ -1531,7 +1534,8 @@ def build_boundary(
                 rgb=rgb,
                 max_dimension=0 if low_res_catalog_rgb else extraction_max_dimension,
                 cache=not allow_pre_ocr_catalog,
-                use_model=opts.experimental_classifier,
+                use_model=opts.model_variant or opts.experimental_classifier,
+                hints=opts.extraction_hints,
             )
         if low_res_catalog_rgb:
             extraction = rescale_extraction_result(
@@ -1682,7 +1686,8 @@ def build_boundary(
                 rgb=rgb,
                 max_dimension=CATALOG_RETRY_EXTRACT_MAX_DIMENSION,
                 cache=False,
-                use_model=opts.experimental_classifier,
+                use_model=opts.model_variant or opts.experimental_classifier,
+                hints=opts.extraction_hints,
             )
             catalog_probe_miss_extraction = retry_extraction
             catalog_match, catalog_match_source = hinted_catalog_shape_match(
@@ -1869,7 +1874,8 @@ def build_boundary(
                 simplify_px=opts.simplify_px,
                 rgb=rgb,
                 max_dimension=CATALOG_MISS_REFINE_MAX_DIMENSION,
-                use_model=opts.experimental_classifier,
+                use_model=opts.model_variant or opts.experimental_classifier,
+                hints=opts.extraction_hints,
             )
             emit_progress(
                 progress,
@@ -5529,6 +5535,9 @@ def build_summary(
         "bbox": properties["geodesic_bbox_lonlat"],
         "combined_confidence": properties["combined_confidence"],
         "extraction_confidence": properties["extraction_confidence"],
+        "target_selection_confidence": properties.get(
+            "target_selection_confidence", properties["extraction_confidence"]
+        ),
         "georeference_confidence": properties["georeference_confidence"],
         "georeference_source": properties["georeference_source"],
         "control_points": properties["georeference_control_points"],

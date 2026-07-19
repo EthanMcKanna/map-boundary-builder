@@ -9,13 +9,14 @@ artifact contract.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import colorsys
 import json
 import math
 import random
 from pathlib import Path
 from typing import Any, Sequence
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from shapely.geometry import MultiPolygon, Polygon, mapping
 
 from .manifest import (
@@ -25,7 +26,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v10-real-style"
+GENERATOR_VERSION = "synthetic-generator-v11-domain-random"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class SyntheticOverlayStyle:
     fill_enabled: bool = True
     labels_on_top: bool = False
     circular_viewport: bool = False
+    pattern: str | None = None
 
     def metadata(self) -> OverlayStyleMetadata:
         return OverlayStyleMetadata(
@@ -68,6 +70,7 @@ class SyntheticSceneConfig:
     circular_viewport: bool = False
     complex_boundary: bool = False
     large_service_area: bool = False
+    include_distractor: bool = False
 
 
 @dataclass(frozen=True)
@@ -105,7 +108,7 @@ def generate_synthetic_dataset(
     root = Path(output_dir)
     samples: list[SyntheticSampleMetadata] = []
     for index in range(count):
-        style = DEFAULT_OVERLAY_STYLES[index % len(DEFAULT_OVERLAY_STYLES)]
+        style = randomized_overlay_style(seed + index, index=index)
         config = SyntheticSceneConfig(
             provider="synthetic",
             service_area=f"sample-city-{index % 5}",
@@ -121,6 +124,7 @@ def generate_synthetic_dataset(
             circular_viewport=style.circular_viewport or index % 11 == 6,
             complex_boundary=style.labels_on_top or index % 4 == 0,
             large_service_area=style.labels_on_top or index % 10 == 8,
+            include_distractor=index % 3 == 1,
             jpeg_quality=82 if index % 4 == 1 else None,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
@@ -139,6 +143,36 @@ def generate_synthetic_dataset(
     )
     manifest.write_json(root / "manifest.json")
     return manifest
+
+
+def randomized_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
+    """Sample the full visual space instead of teaching the model a short palette."""
+    rng = random.Random(seed * 104729 + index)
+    hue = rng.random()
+    saturation = rng.uniform(0.08, 1.0)
+    lightness = rng.uniform(0.18, 0.84)
+    fill_color = rgb_hex(colorsys.hls_to_rgb(hue, lightness, saturation))
+    stroke_hue = (hue + rng.uniform(-0.12, 0.12)) % 1.0
+    stroke_color = rgb_hex(
+        colorsys.hls_to_rgb(stroke_hue, max(0.08, min(0.92, lightness + rng.uniform(-0.28, 0.20))), saturation)
+    )
+    outline_only = rng.random() < 0.14
+    return SyntheticOverlayStyle(
+        name=f"domain-random-{index:04d}",
+        fill_color=fill_color,
+        fill_opacity=0.0 if outline_only else rng.uniform(0.16, 0.98),
+        stroke_color=stroke_color if rng.random() < 0.82 or outline_only else None,
+        stroke_width_px=rng.uniform(0.0, 8.0) if not outline_only else rng.uniform(2.0, 9.0),
+        dashed=rng.random() < 0.16,
+        fill_enabled=not outline_only,
+        labels_on_top=rng.random() < 0.55,
+        circular_viewport=rng.random() < 0.16,
+        pattern=rng.choice((None, None, None, "hatch", "dots")),
+    )
+
+
+def rgb_hex(rgb: tuple[float, float, float]) -> str:
+    return "#" + "".join(f"{max(0, min(255, round(channel * 255))):02x}" for channel in rgb)
 
 
 def generate_synthetic_sample(
@@ -170,6 +204,10 @@ def generate_synthetic_sample(
     base = _render_basemap(config, rng)
     mask = _render_mask(config.width, config.height, polygon, hole)
     overlay = _render_overlay(base, polygon, hole, style)
+    if config.include_distractor:
+        distractor = _sample_distractor_polygon(config.width, config.height, random.Random(config.seed + 400_009))
+        distractor_style = randomized_overlay_style(config.seed + 800_011, index=config.seed)
+        overlay = _render_overlay(overlay, distractor, None, distractor_style)
     if labels_on_top:
         overlay = _render_top_map_details(overlay, config, random.Random(config.seed + 900_001))
     if circular_viewport:
@@ -215,7 +253,10 @@ def generate_synthetic_sample(
             "circular_viewport": circular_viewport,
             "complex_boundary": config.complex_boundary,
             "large_service_area": config.large_service_area,
+            "include_distractor": config.include_distractor,
             "jpeg_quality": config.jpeg_quality,
+            "overlay_pattern": style.pattern,
+            "overlay_dashed": style.dashed,
             "renderer": "procedural-pillow",
         },
     )
@@ -354,6 +395,22 @@ def _render_mask(width: int, height: int, polygon: Polygon, hole: Polygon | None
     return mask
 
 
+def _sample_distractor_polygon(width: int, height: int, rng: random.Random) -> Polygon:
+    left = rng.choice((width * 0.03, width * 0.70))
+    top = rng.choice((height * 0.05, height * 0.68))
+    box_w = rng.uniform(width * 0.12, width * 0.25)
+    box_h = rng.uniform(height * 0.10, height * 0.24)
+    return Polygon(
+        [
+            (left, top + box_h * 0.25),
+            (left + box_w * 0.45, top),
+            (left + box_w, top + box_h * 0.35),
+            (left + box_w * 0.80, top + box_h),
+            (left + box_w * 0.18, top + box_h * 0.88),
+        ]
+    )
+
+
 def _render_overlay(
     base: Image.Image,
     polygon: Polygon,
@@ -370,6 +427,19 @@ def _render_overlay(
         draw.polygon(_int_points(polygon.exterior.coords), fill=fill)
         if hole is not None:
             draw.polygon(_int_points(hole.exterior.coords), fill=(0, 0, 0, 0))
+        if style.pattern is not None:
+            pattern = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            pattern_draw = ImageDraw.Draw(pattern)
+            pattern_color = _hex_rgba(style.stroke_color or style.fill_color, min(0.75, style.fill_opacity + 0.25))
+            if style.pattern == "hatch":
+                for offset in range(-image.height, image.width, 18):
+                    pattern_draw.line((offset, 0, offset + image.height, image.height), fill=pattern_color, width=1)
+            else:
+                for y in range(7, image.height, 16):
+                    for x in range(7, image.width, 16):
+                        pattern_draw.ellipse((x - 1, y - 1, x + 1, y + 1), fill=pattern_color)
+            clip = _render_mask(image.width, image.height, polygon, hole)
+            layer.alpha_composite(Image.composite(pattern, Image.new("RGBA", image.size), clip))
     if style.stroke_width_px > 0:
         points = _int_points(polygon.exterior.coords)
         if style.dashed:
@@ -434,8 +504,12 @@ def _apply_circular_viewport(image: Image.Image, config: SyntheticSceneConfig) -
 
 
 def _apply_capture_effects(image: Image.Image, config: SyntheticSceneConfig) -> Image.Image:
+    rng = random.Random(config.seed + 700_003)
+    image = ImageEnhance.Brightness(image).enhance(rng.uniform(0.78, 1.22))
+    image = ImageEnhance.Contrast(image).enhance(rng.uniform(0.72, 1.30))
+    image = ImageEnhance.Color(image).enhance(rng.uniform(0.35, 1.55))
     if config.seed % 3 == 0:
-        image = image.filter(ImageFilter.GaussianBlur(radius=0.35))
+        image = image.filter(ImageFilter.GaussianBlur(radius=rng.uniform(0.2, 0.9)))
     if config.seed % 5 == 0:
         small = image.resize((max(1, config.width // 2), max(1, config.height // 2)), Image.Resampling.BILINEAR)
         image = small.resize((config.width, config.height), Image.Resampling.BILINEAR)

@@ -26,6 +26,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-confidence", type=float, default=0.55, help="Fail below this combined confidence.")
     parser.add_argument("--min-control-points", type=int, default=3, help="Minimum OCR/geocoder control points for georeferencing.")
     parser.add_argument(
+        "--extractor",
+        choices=("deterministic", "experimental_classifier", "generalized_v11"),
+        default="deterministic",
+        help="Boundary mask producer. Generalized v11 accepts optional seed/color guidance.",
+    )
+    parser.add_argument("--seed-x", type=float, help="Optional target-region seed x coordinate in source pixels.")
+    parser.add_argument("--seed-y", type=float, help="Optional target-region seed y coordinate in source pixels.")
+    parser.add_argument("--target-color", help="Optional target overlay color as #RRGGBB.")
+    parser.add_argument(
         "--no-catalog",
         action="store_true",
         help="Bypass bundled service-area catalog matching and force OCR/georeference inference.",
@@ -84,6 +93,19 @@ def main(argv: list[str] | None = None) -> int:
     ocr_engine_events: list[dict[str, Any]] | None = None
 
     def run_build_boundary():
+        extraction_hints: dict[str, object] = {}
+        if (args.seed_x is None) != (args.seed_y is None):
+            parser.error("--seed-x and --seed-y must be provided together")
+        if args.seed_x is not None and args.seed_y is not None:
+            extraction_hints["seed_point"] = (args.seed_x, args.seed_y)
+        target_color = (args.target_color or "").strip().lstrip("#")
+        if target_color and len(target_color) != 6:
+            parser.error("--target-color must be a six-digit hexadecimal color")
+        if len(target_color) == 6:
+            try:
+                extraction_hints["target_rgb"] = tuple(int(target_color[index : index + 2], 16) for index in (0, 2, 4))
+            except ValueError:
+                parser.error("--target-color must be a six-digit hexadecimal color")
         return build_boundary(
             image_path,
             args.city,
@@ -93,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
                 simplify_px=args.simplify_px,
                 min_confidence=args.min_confidence,
                 min_control_points=args.min_control_points,
+                experimental_classifier=args.extractor == "experimental_classifier",
+                model_variant=None if args.extractor == "deterministic" else args.extractor,
+                extraction_hints=extraction_hints or None,
                 allow_catalog=not args.no_catalog,
                 catalog_probe_missed=args.catalog_probe_missed,
                 catalog_probe_miss_low_iou=args.catalog_probe_miss_low_iou,
