@@ -9,6 +9,7 @@ referee re-runs.
 from __future__ import annotations
 
 import json
+import math
 from importlib import resources
 from pathlib import Path
 
@@ -155,7 +156,10 @@ def _model_segmentation(
         return None
     mask = select_primary_zone(raw_mask, rgb, probabilities, hints)
     mask = select_hinted_components(mask, rgb, hints)
-    mask = keep_main_components(mask, max_components=3)
+    # Zone selection already enforces color consistency, so allow more
+    # disconnected same-color islands than the legacy cap of three — real
+    # service areas (Tesla Orlando, Miami) ship with four or more.
+    mask = keep_main_components(mask, max_components=6)
     mask = fill_binary_holes(mask)
     try:
         pixel_geometry, contour_count = mask_to_geometry(mask, simplify_px)
@@ -235,6 +239,7 @@ def select_hinted_components(
 
 ZONE_MERGE_MAX_AB_DISTANCE = 30.0
 ZONE_MERGE_MAX_GRAY_CHROMA = 12.0
+ZONE_MERGE_MAX_HUE_DEGREES = 40.0
 ZONE_KMEANS_MAX_SAMPLES = 50_000
 ZONE_MIN_COVERAGE_OF_MASK = 0.02
 ZONE_MIN_OPENING_RETENTION = 0.5
@@ -331,17 +336,27 @@ def _color_zones(mask: np.ndarray, rgb: np.ndarray) -> list[np.ndarray]:
         fit_samples, min(3, len(fit_samples)), None, criteria, 3, cv2.KMEANS_PP_CENTERS
     )
 
-    # Merge centers that are chromatically the same overlay color; low-chroma
-    # (grayish) centers have no meaningful hue and always merge together.
+    # Merge centers that read as the same overlay color. A fill drawn over
+    # dark basemap regions (water, unlit blocks) keeps its hue but loses
+    # chroma, so same-hue centers merge regardless of chroma magnitude;
+    # low-chroma (grayish) centers have no meaningful hue and merge together.
+    def _same_overlay_color(first: np.ndarray, second: np.ndarray) -> bool:
+        first_chroma = float(np.linalg.norm(first))
+        second_chroma = float(np.linalg.norm(second))
+        if first_chroma <= ZONE_MERGE_MAX_GRAY_CHROMA and second_chroma <= ZONE_MERGE_MAX_GRAY_CHROMA:
+            return True
+        if first_chroma <= ZONE_MERGE_MAX_GRAY_CHROMA or second_chroma <= ZONE_MERGE_MAX_GRAY_CHROMA:
+            return float(np.linalg.norm(first - second)) <= ZONE_MERGE_MAX_AB_DISTANCE
+        hue_difference = abs(
+            (math.degrees(math.atan2(first[1], first[0]) - math.atan2(second[1], second[0])) + 180.0) % 360.0
+            - 180.0
+        )
+        return hue_difference <= ZONE_MERGE_MAX_HUE_DEGREES
+
     merged: list[np.ndarray] = []
     for center in centers.astype(np.float64):
         for index, existing in enumerate(merged):
-            close = float(np.linalg.norm(center - existing)) <= ZONE_MERGE_MAX_AB_DISTANCE
-            both_gray = (
-                float(np.linalg.norm(center)) <= ZONE_MERGE_MAX_GRAY_CHROMA
-                and float(np.linalg.norm(existing)) <= ZONE_MERGE_MAX_GRAY_CHROMA
-            )
-            if close or both_gray:
+            if _same_overlay_color(center, existing):
                 merged[index] = (existing + center) / 2.0
                 break
         else:

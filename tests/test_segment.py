@@ -163,6 +163,33 @@ def test_select_hinted_components_target_color():
     assert not selected[75, 75]
 
 
+def test_primary_zone_keeps_same_hue_fill_over_dark_basemap(tmp_path, monkeypatch):
+    """An overlay spanning light land and dark water keeps both halves.
+
+    Over dark basemap the fill keeps its hue but loses chroma; the zone
+    merge must not split it into separate zones (the Tesla Tampa/Orlando
+    over-water failure)."""
+    rgb = np.full((200, 300, 3), 235, dtype=np.uint8)
+    rgb[120:, :] = (25, 28, 32)  # dark water half
+    # bright orange fill over land, dark orange (same hue, low chroma) over water
+    rgb[40:120, 60:240] = (214, 106, 62)
+    rgb[120:180, 60:240] = (96, 52, 34)
+    probabilities = np.zeros(rgb.shape[:2], dtype=np.float32)
+    probabilities[40:180, 60:240] = 0.95
+    model_path = tmp_path / "boundary_v1.onnx"
+    model_path.write_bytes(b"stub")
+    monkeypatch.setattr(segment_module, "load_onnx_session", lambda path: object())
+    monkeypatch.setattr(
+        segment_module,
+        "predict_mask_probabilities",
+        lambda rgb, session, config: probabilities,
+    )
+    result = segment_image(rgb, model_path=model_path)
+    assert result.mask[80, 150]   # over land
+    assert result.mask[160, 150]  # over water — must not be dropped
+    assert result.coverage_ratio == pytest.approx((140 * 180) / (200 * 300), rel=0.15)
+
+
 def test_select_hinted_components_single_component_untouched():
     mask = np.zeros((100, 100), dtype=bool)
     mask[10:30, 10:30] = True
