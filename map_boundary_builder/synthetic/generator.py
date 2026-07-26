@@ -86,6 +86,11 @@ class SyntheticSceneConfig:
     include_admin_shading: bool = False
     # Noise texture over the basemap approximating satellite/aerial imagery.
     textured_basemap: bool = False
+    # Named provider look: "waymo-web" (light basemap, near-opaque brand blue,
+    # labels on top, pale secondary zones) or "tesla-dark" (near-black
+    # basemap, translucent salmon fill, corner city chip). These bias sample
+    # density toward the real maps users most often upload.
+    provider_style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,7 +135,18 @@ def generate_synthetic_dataset(
             and index >= negative_start_index
             and (index - negative_start_index) % negative_every == 0
         )
-        style = randomized_overlay_style(seed + index, index=index)
+        provider = None
+        if not negative:
+            if index % 8 == 6:
+                provider = "waymo-web"
+            elif index % 8 == 2:
+                provider = "tesla-dark"
+        if provider == "waymo-web":
+            style = waymo_web_overlay_style(seed + index)
+        elif provider == "tesla-dark":
+            style = tesla_dark_overlay_style(seed + index)
+        else:
+            style = randomized_overlay_style(seed + index, index=index)
         config = SyntheticSceneConfig(
             provider="synthetic",
             service_area=f"sample-city-{index % 5}",
@@ -150,8 +166,9 @@ def generate_synthetic_dataset(
             shape_family=("rectilinear", "road-following", "angular", "radial")[index % 4],
             jpeg_quality=82 if index % 4 == 1 else None,
             negative_scene=negative,
-            include_admin_shading=index % 5 == 0,
-            textured_basemap=index % 7 == 5,
+            include_admin_shading=index % 5 == 0 or provider == "waymo-web",
+            textured_basemap=index % 7 == 5 and provider is None,
+            provider_style=provider,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
 
@@ -169,6 +186,42 @@ def generate_synthetic_dataset(
     )
     manifest.write_json(root / "manifest.json")
     return manifest
+
+
+def waymo_web_overlay_style(seed: int) -> SyntheticOverlayStyle:
+    """Waymo coverage-map look: near-opaque brand blue, labels drawn on top."""
+    rng = random.Random(seed)
+    hue = rng.uniform(0.55, 0.60)
+    saturation = rng.uniform(0.85, 1.0)
+    lightness = rng.uniform(0.45, 0.55)
+    fill = colorsys.hls_to_rgb(hue, lightness, saturation)
+    stroke = colorsys.hls_to_rgb(hue, max(0.15, lightness - 0.15), saturation)
+    return SyntheticOverlayStyle(
+        name=f"waymo-web-{seed % 97}",
+        fill_color=rgb_hex(fill),
+        fill_opacity=rng.uniform(0.88, 0.98),
+        stroke_color=rgb_hex(stroke) if rng.random() < 0.5 else None,
+        stroke_width_px=rng.uniform(0.0, 2.0),
+        labels_on_top=True,
+        circular_viewport=rng.random() < 0.2,
+    )
+
+
+def tesla_dark_overlay_style(seed: int) -> SyntheticOverlayStyle:
+    """Tesla app look: translucent salmon/orange fill over a dark basemap."""
+    rng = random.Random(seed)
+    hue = rng.uniform(0.02, 0.07)
+    saturation = rng.uniform(0.55, 0.85)
+    lightness = rng.uniform(0.55, 0.68)
+    fill = colorsys.hls_to_rgb(hue, lightness, saturation)
+    return SyntheticOverlayStyle(
+        name=f"tesla-dark-{seed % 97}",
+        fill_color=rgb_hex(fill),
+        fill_opacity=rng.uniform(0.45, 0.75),
+        stroke_color=None,
+        stroke_width_px=0.0,
+        labels_on_top=True,
+    )
 
 
 def randomized_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
@@ -303,6 +356,7 @@ def generate_synthetic_sample(
             "overlay_pattern": style.pattern,
             "overlay_dashed": style.dashed,
             "stroke_join": style.stroke_join,
+            "provider_style": config.provider_style,
             "renderer": "procedural-pillow",
         },
     )
@@ -386,15 +440,20 @@ def _render_admin_shading(base: Image.Image, config: SyntheticSceneConfig, rng: 
     draw = ImageDraw.Draw(image, "RGBA")
     for _ in range(rng.randint(1, 2)):
         polygon = _sample_distractor_polygon(config.width, config.height, random.Random(rng.randint(0, 2**31)))
-        # Muted, desaturated palettes: grays, tans, pale washes.
-        gray = rng.randint(150, 235)
-        tint = rng.choice(
-            [
-                (gray, gray, gray),
-                (gray, gray - rng.randint(0, 18), gray - rng.randint(10, 30)),
-                (gray - rng.randint(10, 25), gray, gray - rng.randint(0, 15)),
-            ]
-        )
+        if config.provider_style == "waymo-web":
+            # Waymo's coverage pages shade secondary zones in pale salmon.
+            red = rng.randint(225, 250)
+            tint = (red, rng.randint(150, 185), rng.randint(125, 160))
+        else:
+            # Muted, desaturated palettes: grays, tans, pale washes.
+            gray = rng.randint(150, 235)
+            tint = rng.choice(
+                [
+                    (gray, gray, gray),
+                    (gray, gray - rng.randint(0, 18), gray - rng.randint(10, 30)),
+                    (gray - rng.randint(10, 25), gray, gray - rng.randint(0, 15)),
+                ]
+            )
         opacity = rng.randint(90, 210)
         points = _int_points(polygon.exterior.coords)
         draw.polygon(points, fill=(*tint, opacity))
@@ -484,7 +543,12 @@ def _slug_part(value: object) -> str:
 
 
 def _render_basemap(config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
-    dark = config.seed % 4 == 0
+    if config.provider_style == "tesla-dark":
+        dark = True
+    elif config.provider_style == "waymo-web":
+        dark = False
+    else:
+        dark = config.seed % 4 == 0
     background = (37, 43, 48) if dark else (242, 240, 234)
     image = Image.new("RGB", (config.width, config.height), background)
     draw = ImageDraw.Draw(image, "RGBA")
@@ -532,13 +596,17 @@ def _render_basemap(config: SyntheticSceneConfig, rng: random.Random) -> Image.I
         y = rng.randint(55, max(56, config.height - 70))
         draw.text((x, y), text, fill=label, font=font)
 
-    if config.include_ui_chrome:
-        draw.rounded_rectangle((18, 18, config.width - 18, 68), radius=10, fill=(255, 255, 255, 235))
-        draw.text((36, 36), "Service area", fill=(42, 44, 48, 235), font=font)
+    if config.include_ui_chrome or config.provider_style == "tesla-dark":
+        chip_fill = (28, 29, 33, 240) if dark else (255, 255, 255, 235)
+        chip_text = (240, 241, 244, 245) if dark else (42, 44, 48, 235)
+        city_names = ("Tampa, FL", "Austin, TX", "Miami, FL", "Phoenix, AZ", "Dallas, TX", "Service area")
+        chip_label = city_names[config.seed % len(city_names)]
+        draw.rounded_rectangle((18, 18, min(config.width - 18, 240), 68), radius=14, fill=chip_fill)
+        draw.text((36, 36), chip_label, fill=chip_text, font=font)
         draw.rounded_rectangle(
             (config.width - 168, config.height - 72, config.width - 24, config.height - 24),
             radius=10,
-            fill=(255, 255, 255, 235),
+            fill=chip_fill,
         )
 
     return image
