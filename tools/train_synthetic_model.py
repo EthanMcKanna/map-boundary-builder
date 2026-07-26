@@ -74,6 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Load model weights from --resume-checkpoint but reset optimizer, scheduler, and epoch count.",
     )
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="Train with CUDA automatic mixed precision (halves activation memory, uses tensor cores).",
+    )
     parser.add_argument("--export-checkpoint", type=Path, default=None)
     parser.add_argument("--export-image-size", type=int, default=0)
     return parser
@@ -208,24 +213,29 @@ def main(argv: list[str] | None = None) -> int:
             f"validation_tail_score={initial_metrics['tail_score']:.5f}",
             flush=True,
         )
+    use_amp = bool(args.amp) and device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     model.train()
     for epoch in range(start_epoch, args.epochs):
         losses: list[float] = []
         for images, masks in loader:
             images = images.to(device)
             masks = masks.to(device)
-            logits = model(images)
-            loss = segmentation_loss(
-                logits,
-                masks,
-                tversky_weight=args.tversky_weight,
-                tversky_alpha=args.tversky_alpha,
-                tversky_beta=args.tversky_beta,
-            )
+            with torch.autocast(device_type="cuda", enabled=use_amp):
+                logits = model(images)
+                loss = segmentation_loss(
+                    logits,
+                    masks,
+                    tversky_weight=args.tversky_weight,
+                    tversky_alpha=args.tversky_alpha,
+                    tversky_beta=args.tversky_beta,
+                )
             optimizer.zero_grad(set_to_none=True)
-            loss.backward()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             losses.append(float(loss.detach()))
         validation_metrics = evaluate_metrics(model, validation_loader, device=device)
         validation_iou = validation_metrics["iou"]
