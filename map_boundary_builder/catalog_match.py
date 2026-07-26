@@ -299,7 +299,20 @@ def catalog_feature_collection(
     image_path: str | Path,
     city_input: str,
 ) -> dict[str, Any]:
-    geom = (match.entry.geometry if match.entry.use_exact_geometry else match.fitted_lonlat_geometry).buffer(0)
+    diagnostics = extraction.diagnostics or {}
+    preserve_source_geometry = bool(
+        diagnostics.get("svg_vector_path") is True
+        or diagnostics.get("source_native") is True
+    )
+    # Catalog matching establishes geographic scale/origin.  A source-native
+    # v20 extraction already owns the current uploaded boundary geometry, so
+    # replacing it with a static catalog polygon would throw away the sharp
+    # edges v20 just recovered.  Legacy/raster-only paths retain the historical
+    # exact-catalog behavior.
+    use_catalog_geometry = match.entry.use_exact_geometry and not preserve_source_geometry
+    geom = (
+        match.entry.geometry if use_catalog_geometry else match.fitted_lonlat_geometry
+    ).buffer(0)
     bbox = geom.bounds
     combined_confidence = min(extraction.confidence, match.confidence)
     return {
@@ -324,6 +337,13 @@ def catalog_feature_collection(
                     "catalog_shape_iou": round(match.iou, 6),
                     "catalog_shape_margin": round(match.margin, 6),
                     "catalog_area_ratio": round(match.area_ratio, 6),
+                    "geometry_source": (
+                        "catalog-exact"
+                        if use_catalog_geometry
+                        else "source-native-catalog-fit"
+                        if preserve_source_geometry
+                        else "catalog-fit"
+                    ),
                     "combined_confidence": combined_confidence,
                     "geodesic_bbox_lonlat": [round(value, 7) for value in bbox],
                     "meters_per_pixel": match.meters_per_pixel,

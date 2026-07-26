@@ -35,6 +35,10 @@ def test_shared_request_option_parsing_matches_api_contract() -> None:
     assert request_options.experimental_classifier_for_request({"extractor": "experimental_classifier"}) is True
     assert request_options.experimental_classifier_for_request({"extractor": "Experimental Classifier"}) is True
     assert request_options.extractor_for_request({"extractor": "generalized_v11"}) == "generalized_v11"
+    assert request_options.extractor_for_request({"extractor": "v20"}) == "generalized_v20_edgegraph"
+    assert request_options.extractor_for_request({"extractor": "Generalized v20 EdgeGraph"}) == "generalized_v20_edgegraph"
+    assert request_options.extractor_for_request({"extractor": "v12"}) == "generalized_v12_boundaryfield"
+    assert request_options.extractor_for_request({"extractor": "Generalized v12 BoundaryField"}) == "generalized_v12_boundaryfield"
     assert request_options.extraction_hints_for_request(
         {"seed_x": "12", "seed_y": "34", "target_color": "#7c3aed"}
     ) == {"seed_point": (12.0, 34.0), "target_rgb": (124, 58, 237)}

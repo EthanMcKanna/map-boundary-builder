@@ -1,0 +1,74 @@
+{
+  "architecture": "generalized-v20-edgegraph-stripnet-vector-v3",
+  "channels": 10,
+  "chunk_length": 256,
+  "coarse_probability_input": false,
+  "conservative_offset_head": false,
+  "hidden_channels": 48,
+  "input_channels": [
+    "rgb_red",
+    "rgb_green",
+    "rgb_blue",
+    "luminance",
+    "scharr_magnitude_p99",
+    "normal_projected_scharr_p99",
+    "target_rgb_similarity",
+    "source_sample_valid",
+    "normalized_native_offset",
+    "inside_direction_sign"
+  ],
+  "inside_direction_sign": "repeated sign inferred from unshifted contour-center coarse profiles",
+  "learned_offset_logits_preserved": true,
+  "loss_weights": {
+    "corner": 0.12,
+    "offset_distribution": 0.5,
+    "reliability": 0.08,
+    "subpixel_offset": 0.25,
+    "supervised_smoothness": 0.05
+  },
+  "normalized_native_offset": "strip_offset_px / strip_radius_px",
+  "offset_head": "unbounded_learned_logits",
+  "offset_step_px": 0.5,
+  "onnx_input_name": "edge_strip_vector_v3",
+  "profile_dilations": [
+    1,
+    2,
+    4
+  ],
+  "profile_receptive_field_bins": 29,
+  "profile_receptive_field_px": 14.0,
+  "strip_radius_px": 12,
+  "supervision": {
+    "corners": "exact vector vertices with interior angle <= 155 degrees",
+    "offsets": "continuous vectorized normal-ray segment intersections",
+    "source": "GeoJSON metadata.pixel_geometry",
+    "target_version": "geojson-pixel-ray-segment-v1"
+  },
+  "target_similarity": "clip(1 - rgb_l2_distance / sqrt(3), 0, 1)",
+  "training_augmentation": {
+    "inside_direction_reference": "unshifted-contour-center-v1",
+    "profile_center_shift_distribution": "uniform",
+    "profile_center_shift_max_abs_px": 6.0,
+    "profile_center_shift_scope": "global_per_sample"
+  },
+  "training_dataset": {
+    "manifest_sha256": "1e90eb0586a7d10b798f980a4d8be53c721375b20e5cecd4e4dc9b0c63e5b51d",
+    "sample_count": 2048,
+    "version": "synthetic-generator-v20-centered-stroke-raster-v2"
+  },
+  "training_epoch": 39,
+  "valid_channel": "bilinear_sample_coordinate_inside_source_bounds",
+  "validation": {
+    "corner_f1": 0.5636445851232195,
+    "corner_precision": 0.3977979894686453,
+    "corner_recall": 0.9666537417603722,
+    "offset_mae_px": 0.35331058502197266,
+    "offset_p95_px": 0.937711238861084,
+    "offset_p99_px": 1.519911527633667,
+    "reliability_accuracy": 0.983673095703125,
+    "reliability_balanced_accuracy": 0.9917578185179479,
+    "within_0_25px": 0.4602680634725004,
+    "within_0_5px": 0.7788630411338777,
+    "within_1px": 0.9576952703743645
+  }
+}

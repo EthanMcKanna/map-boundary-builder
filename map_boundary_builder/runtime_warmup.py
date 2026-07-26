@@ -41,6 +41,13 @@ def prewarm_generation_runtime() -> dict[str, Any]:
         profile["extraction_contour_count"] = extraction_profile["contour_count"]
         profile["extraction_s"] = elapsed_seconds(extraction_started)
 
+        edgegraph_started = time.perf_counter()
+        edgegraph_profile = warm_edgegraph_runtime()
+        profile["edgegraph_warmed"] = True
+        profile["edgegraph_selector_output_shape"] = edgegraph_profile["selector_output_shape"]
+        profile["edgegraph_refiner_output_shapes"] = edgegraph_profile["refiner_output_shapes"]
+        profile["edgegraph_s"] = elapsed_seconds(edgegraph_started)
+
         ocr_started = time.perf_counter()
         from .ocr import warm_rapidocr_runtime
 
@@ -76,6 +83,47 @@ def warm_extraction_runtime() -> dict[str, Any]:
         "coverage_ratio": round(result.coverage_ratio, 6),
         "contour_count": result.contour_count,
         "confidence": round(result.confidence, 6),
+    }
+
+
+def warm_edgegraph_runtime() -> dict[str, Any]:
+    import numpy as np
+
+    from .extract import edgegraph_refiner_path, edgegraph_selector_path
+    from .model_extract import load_onnx_session
+
+    selector = load_onnx_session(str(edgegraph_selector_path()))
+    selector_input = selector.get_inputs()[0]
+    selector_shape = [1 if not isinstance(value, int) else value for value in selector_input.shape]
+    selector_output = selector.run(
+        None,
+        {selector_input.name: np.zeros(selector_shape, dtype=np.float32)},
+    )[0]
+    refiner = load_onnx_session(str(edgegraph_refiner_path()))
+    refiner_input = refiner.get_inputs()[0]
+    # The ONNX contract has a dynamic batch and contour axis.
+    refiner_channels = (
+        int(refiner_input.shape[1])
+        if len(refiner_input.shape) > 1 and isinstance(refiner_input.shape[1], int)
+        else 9
+    )
+    refiner_bins = (
+        int(refiner_input.shape[3])
+        if len(refiner_input.shape) > 3 and isinstance(refiner_input.shape[3], int)
+        else 49
+    )
+    refiner_output = refiner.run(
+        None,
+        {
+            refiner_input.name: np.zeros(
+                (1, refiner_channels, 64, refiner_bins),
+                dtype=np.float32,
+            )
+        },
+    )
+    return {
+        "selector_output_shape": list(np.asarray(selector_output).shape),
+        "refiner_output_shapes": [list(np.asarray(output).shape) for output in refiner_output],
     }
 
 

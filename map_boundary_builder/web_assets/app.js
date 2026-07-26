@@ -333,7 +333,7 @@ imageInput.addEventListener("change", () => {
 });
 
 inputPreview.addEventListener("click", (event) => {
-  if (extractorInput?.value !== "generalized_v11" || !inputPreview.naturalWidth || !inputPreview.naturalHeight) return;
+  if (!["generalized_v11", "generalized_v12_boundaryfield", "generalized_v20_edgegraph"].includes(extractorInput?.value) || !inputPreview.naturalWidth || !inputPreview.naturalHeight) return;
   const rect = inputPreview.getBoundingClientRect();
   const x = Math.round((event.clientX - rect.left) * inputPreview.naturalWidth / rect.width);
   const y = Math.round((event.clientY - rect.top) * inputPreview.naturalHeight / rect.height);
@@ -999,6 +999,8 @@ function normalizedRunCacheExtractor(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
   if (normalized === "experimentalclassifier") return "experimental_classifier";
+  if (normalized === "generalizedv20edgegraph") return "generalized_v20_edgegraph";
+  if (normalized === "generalizedv12boundaryfield") return "generalized_v12_boundaryfield";
   if (normalized === "generalizedv11") return "generalized_v11";
   return "deterministic";
 }

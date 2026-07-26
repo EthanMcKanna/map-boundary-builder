@@ -67,6 +67,12 @@ def test_pipeline_version_tracks_runtime_warmup() -> None:
     assert "runtime_warmup.py" in sources
 
 
+def test_pipeline_version_tracks_gray_outline_detector() -> None:
+    sources = dict(pipeline_version_sources())
+
+    assert "gray_outline.py" in sources
+
+
 def test_pipeline_version_tracks_json_upload_parsing() -> None:
     sources = dict(pipeline_version_sources())
 

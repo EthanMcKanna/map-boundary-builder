@@ -19,6 +19,18 @@ GENERALIZED_CLASSIFIER_TOKENS = {
     "generalizedv11",
     "v11",
 }
+BOUNDARYFIELD_CLASSIFIER_TOKENS = {
+    "boundaryfield",
+    "generalizedv12",
+    "generalizedv12boundaryfield",
+    "v12",
+}
+EDGEGRAPH_CLASSIFIER_TOKENS = {
+    "edgegraph",
+    "generalizedv20",
+    "generalizedv20edgegraph",
+    "v20",
+}
 
 
 def float_field(fields: dict[str, str], name: str, default: float, minimum: float, maximum: float) -> float:
@@ -76,6 +88,10 @@ def experimental_classifier_for_request(fields: dict[str, str]) -> bool:
 def extractor_for_request(fields: dict[str, str]) -> str:
     extractor = fields.get("extractor", "").strip().lower()
     normalized = re.sub(r"[^a-z0-9]+", "", extractor)
+    if normalized in EDGEGRAPH_CLASSIFIER_TOKENS:
+        return "generalized_v20_edgegraph"
+    if normalized in BOUNDARYFIELD_CLASSIFIER_TOKENS:
+        return "generalized_v12_boundaryfield"
     if normalized in GENERALIZED_CLASSIFIER_TOKENS:
         return "generalized_v11"
     if normalized in EXPERIMENTAL_CLASSIFIER_TOKENS:

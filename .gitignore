@@ -19,3 +19,7 @@ input/
 .vercel
 
 map_boundary_builder/models/*.checkpoints/
+_uv/
+build/
+promo-video/
+training-runs/

@@ -17,8 +17,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
-from shapely.geometry import MultiPolygon, Polygon, mapping
+from shapely.affinity import scale
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box, mapping
+from shapely.ops import unary_union
 
+from ..evaluation import rasterize_geometry_mask
 from .manifest import (
     OverlayStyleMetadata,
     SyntheticArtifactPaths,
@@ -26,7 +29,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v11-domain-random"
+GENERATOR_VERSION = "synthetic-generator-v20-centered-stroke-raster-v2"
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ class SyntheticOverlayStyle:
     labels_on_top: bool = False
     circular_viewport: bool = False
     pattern: str | None = None
+    stroke_join: str = "miter"
 
     def metadata(self) -> OverlayStyleMetadata:
         return OverlayStyleMetadata(
@@ -71,6 +75,7 @@ class SyntheticSceneConfig:
     complex_boundary: bool = False
     large_service_area: bool = False
     include_distractor: bool = False
+    shape_family: str = "radial"
 
 
 @dataclass(frozen=True)
@@ -125,6 +130,7 @@ def generate_synthetic_dataset(
             complex_boundary=style.labels_on_top or index % 4 == 0,
             large_service_area=style.labels_on_top or index % 10 == 8,
             include_distractor=index % 3 == 1,
+            shape_family=("rectilinear", "road-following", "angular", "radial")[index % 4],
             jpeg_quality=82 if index % 4 == 1 else None,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
@@ -168,6 +174,7 @@ def randomized_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlaySt
         labels_on_top=rng.random() < 0.55,
         circular_viewport=rng.random() < 0.16,
         pattern=rng.choice((None, None, None, "hatch", "dots")),
+        stroke_join=rng.choice(("miter", "miter", "miter", "round", "bevel")),
     )
 
 
@@ -190,7 +197,9 @@ def generate_synthetic_sample(
     rng = random.Random(config.seed)
     style = config.overlay_style or DEFAULT_OVERLAY_STYLES[config.seed % len(DEFAULT_OVERLAY_STYLES)]
     labels_on_top = config.labels_on_top or style.labels_on_top
-    circular_viewport = config.circular_viewport or style.circular_viewport
+    # Border-pressure fixtures must expose the actual rectangular capture edge;
+    # a circular crop can clip that contact back out of the saved truth mask.
+    circular_viewport = (config.circular_viewport or style.circular_viewport) and not config.touch_border
     polygon, hole = _sample_polygon(
         config.width,
         config.height,
@@ -199,10 +208,19 @@ def generate_synthetic_sample(
         config.include_hole,
         config.complex_boundary or style.labels_on_top,
         config.large_service_area or style.labels_on_top,
+        config.shape_family,
     )
+
+    if hole is not None:
+        polygon = Polygon(polygon.exterior.coords, [hole.exterior.coords])
+        hole = None
+    if circular_viewport:
+        polygon = _largest_polygon(polygon.intersection(_circular_viewport_geometry(config)).buffer(0))
 
     base = _render_basemap(config, rng)
     mask = _render_mask(config.width, config.height, polygon, hole)
+    if config.touch_border and not _mask_touches_border(mask):
+        raise RuntimeError("touch_border sample did not reach an outer mask pixel")
     overlay = _render_overlay(base, polygon, hole, style)
     if config.include_distractor:
         distractor = _sample_distractor_polygon(config.width, config.height, random.Random(config.seed + 400_009))
@@ -254,9 +272,11 @@ def generate_synthetic_sample(
             "complex_boundary": config.complex_boundary,
             "large_service_area": config.large_service_area,
             "include_distractor": config.include_distractor,
+            "shape_family": config.shape_family,
             "jpeg_quality": config.jpeg_quality,
             "overlay_pattern": style.pattern,
             "overlay_dashed": style.dashed,
+            "stroke_join": style.stroke_join,
             "renderer": "procedural-pillow",
         },
     )
@@ -343,7 +363,58 @@ def _sample_polygon(
     include_hole: bool,
     complex_boundary: bool = False,
     large_service_area: bool = False,
+    shape_family: str = "radial",
 ) -> tuple[Polygon, Polygon | None]:
+    if shape_family == "rectilinear":
+        polygon = _sample_rectilinear_polygon(width, height, rng, large_service_area)
+    elif shape_family == "angular":
+        polygon = _sample_angular_polygon(
+            width,
+            height,
+            rng,
+            complex_boundary,
+            large_service_area,
+        )
+    elif shape_family == "road-following":
+        polygon = _sample_road_following_polygon(width, height, rng, large_service_area)
+    else:
+        polygon = _sample_radial_polygon(width, height, rng, complex_boundary, large_service_area)
+
+    if touch_border:
+        anchor = polygon.representative_point()
+        half_height = max(2.0, min(width, height) * 0.015)
+        polygon = _largest_polygon(
+            unary_union(
+                [
+                    polygon,
+                    box(
+                        -1.0,
+                        max(-1.0, anchor.y - half_height),
+                        anchor.x + 1.0,
+                        min(float(height), anchor.y + half_height),
+                    ),
+                ]
+            ).buffer(0)
+        )
+
+    hole = None
+    if include_hole:
+        center = polygon.representative_point()
+        hole_w = width * 0.035
+        hole_h = height * 0.045
+        candidate = box(center.x - hole_w, center.y - hole_h, center.x + hole_w, center.y + hole_h)
+        if polygon.buffer(-3).contains(candidate):
+            hole = candidate
+    return polygon, hole
+
+
+def _sample_radial_polygon(
+    width: int,
+    height: int,
+    rng: random.Random,
+    complex_boundary: bool,
+    large_service_area: bool,
+) -> Polygon:
     cx = width * rng.uniform(0.42, 0.58)
     cy = height * rng.uniform(0.42, 0.58)
     if large_service_area:
@@ -364,35 +435,149 @@ def _sample_polygon(
         x = cx + math.cos(angle) * radius_x * scale
         y = cy + math.sin(angle) * radius_y * scale
         points.append((min(width - 2, max(2, x)), min(height - 2, max(2, y))))
-    if touch_border:
-        points[0] = (1.0, points[0][1])
-        points[1] = (1.0, points[1][1])
-    polygon = _largest_polygon(Polygon(points).buffer(0))
+    return _largest_polygon(Polygon(points).buffer(0))
 
-    hole = None
-    if include_hole:
-        hole_w = width * 0.045
-        hole_h = height * 0.055
-        hole = Polygon(
-            [
-                (cx - hole_w, cy - hole_h),
-                (cx + hole_w, cy - hole_h),
-                (cx + hole_w, cy + hole_h),
-                (cx - hole_w, cy + hole_h),
-            ]
-        )
-        if not polygon.contains(hole):
-            hole = None
-    return polygon, hole
+
+def _sample_angular_polygon(
+    width: int,
+    height: int,
+    rng: random.Random,
+    complex_boundary: bool,
+    large_service_area: bool,
+) -> Polygon:
+    """Build a deliberate straight-edge polygon with acute, obtuse, and reflex corners.
+
+    Angular fixtures used to fall through to the radial generator. This family
+    alternates outer and inset radii around a mildly perturbed angular lattice,
+    producing stable concave corners and long oblique line segments rather than
+    a many-sided approximation of a curve.
+    """
+
+    cx = width * rng.uniform(0.43, 0.57)
+    cy = height * rng.uniform(0.42, 0.58)
+    if large_service_area:
+        radius_x = width * rng.uniform(0.31, 0.42)
+        radius_y = height * rng.uniform(0.32, 0.44)
+    else:
+        radius_x = width * rng.uniform(0.23, 0.34)
+        radius_y = height * rng.uniform(0.24, 0.36)
+
+    vertex_count = rng.choice((8, 10, 12, 14)) if complex_boundary else rng.choice((8, 10, 12))
+    rotation = rng.uniform(-math.pi, math.pi)
+    points: list[tuple[float, float]] = []
+    for index in range(vertex_count):
+        lattice_angle = rotation + (2.0 * math.pi * index / vertex_count)
+        angle = lattice_angle + rng.uniform(-0.045, 0.045)
+        if index % 2:
+            radial_scale = rng.uniform(0.50, 0.68)
+        else:
+            radial_scale = rng.uniform(0.92, 1.08)
+        # Break perfect star symmetry while keeping every edge genuinely linear.
+        if complex_boundary and index % 5 == 0:
+            radial_scale *= rng.uniform(1.04, 1.14)
+        x = cx + math.cos(angle) * radius_x * radial_scale
+        y = cy + math.sin(angle) * radius_y * radial_scale
+        points.append((min(width - 2.0, max(2.0, x)), min(height - 2.0, max(2.0, y))))
+
+    polygon = _largest_polygon(Polygon(points).buffer(0))
+    return _largest_polygon(polygon.intersection(box(2, 2, width - 2, height - 2)).buffer(0))
+
+
+def _sample_rectilinear_polygon(
+    width: int,
+    height: int,
+    rng: random.Random,
+    large_service_area: bool,
+) -> Polygon:
+    """Build connected orthogonal regions with real corner and notch pressure."""
+    span_x = width * rng.uniform(0.48, 0.72 if large_service_area else 0.60)
+    span_y = height * rng.uniform(0.48, 0.76 if large_service_area else 0.62)
+    left = width * rng.uniform(0.14, 0.28)
+    top = height * rng.uniform(0.12, 0.28)
+    right = min(width - 3.0, left + span_x)
+    bottom = min(height - 3.0, top + span_y)
+    pieces = [box(left, top, right, bottom)]
+    for _ in range(rng.randint(2, 5)):
+        side = rng.choice(("left", "right", "top", "bottom"))
+        if side in {"left", "right"}:
+            arm_h = (bottom - top) * rng.uniform(0.12, 0.35)
+            arm_y = rng.uniform(top, bottom - arm_h)
+            arm_w = width * rng.uniform(0.06, 0.18)
+            x0 = left - arm_w if side == "left" else right - 1.0
+            pieces.append(box(x0, arm_y, x0 + arm_w + 1.0, arm_y + arm_h))
+        else:
+            arm_w = (right - left) * rng.uniform(0.12, 0.35)
+            arm_x = rng.uniform(left, right - arm_w)
+            arm_h = height * rng.uniform(0.06, 0.18)
+            y0 = top - arm_h if side == "top" else bottom - 1.0
+            pieces.append(box(arm_x, y0, arm_x + arm_w, y0 + arm_h + 1.0))
+    polygon = _largest_polygon(unary_union(pieces).buffer(0))
+    for _ in range(rng.randint(1, 3)):
+        min_x, min_y, max_x, max_y = polygon.bounds
+        notch_w = (max_x - min_x) * rng.uniform(0.05, 0.14)
+        notch_h = (max_y - min_y) * rng.uniform(0.05, 0.14)
+        edge = rng.choice(("top", "bottom", "left", "right"))
+        if edge in {"top", "bottom"}:
+            x0 = rng.uniform(min_x + 2, max_x - notch_w - 2)
+            y0 = min_y - 1 if edge == "top" else max_y - notch_h + 1
+        else:
+            x0 = min_x - 1 if edge == "left" else max_x - notch_w + 1
+            y0 = rng.uniform(min_y + 2, max_y - notch_h - 2)
+        carved = polygon.difference(box(x0, y0, x0 + notch_w, y0 + notch_h)).buffer(0)
+        if not carved.is_empty:
+            polygon = _largest_polygon(carved)
+    return _largest_polygon(polygon.intersection(box(2, 2, width - 2, height - 2)).buffer(0))
+
+
+def _sample_road_following_polygon(
+    width: int,
+    height: int,
+    rng: random.Random,
+    large_service_area: bool,
+) -> Polygon:
+    """Create a sharp, road-aligned envelope with oblique and square turns."""
+    cx = width * rng.uniform(0.38, 0.55)
+    cy = height * rng.uniform(0.38, 0.58)
+    points = [(cx, cy)]
+    headings = [0, math.pi / 4, math.pi / 2, 3 * math.pi / 4, math.pi, 5 * math.pi / 4, 3 * math.pi / 2, 7 * math.pi / 4]
+    for _ in range(rng.randint(5, 9)):
+        heading = rng.choice(headings)
+        length = min(width, height) * rng.uniform(0.08, 0.19)
+        x = min(width - 12.0, max(12.0, points[-1][0] + math.cos(heading) * length))
+        y = min(height - 12.0, max(12.0, points[-1][1] + math.sin(heading) * length))
+        points.append((x, y))
+    width_px = min(width, height) * rng.uniform(0.075, 0.14 if large_service_area else 0.11)
+    line = LineString(points)
+    corridor = line.buffer(width_px, cap_style="square", join_style="bevel")
+    hub = box(
+        cx - width_px * rng.uniform(1.0, 1.8),
+        cy - width_px * rng.uniform(1.0, 1.8),
+        cx + width_px * rng.uniform(1.0, 1.8),
+        cy + width_px * rng.uniform(1.0, 1.8),
+    )
+    polygon = unary_union([corridor, hub]).intersection(box(2, 2, width - 2, height - 2)).buffer(0)
+    return _largest_polygon(polygon)
 
 
 def _render_mask(width: int, height: int, polygon: Polygon, hole: Polygon | None) -> Image.Image:
-    mask = Image.new("L", (width, height), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.polygon(_int_points(polygon.exterior.coords), fill=255)
+    geometry = polygon
     if hole is not None:
-        draw.polygon(_int_points(hole.exterior.coords), fill=0)
-    return mask
+        interiors = [interior.coords for interior in polygon.interiors]
+        interiors.append(hole.exterior.coords)
+        geometry = Polygon(polygon.exterior.coords, interiors)
+    mask = rasterize_geometry_mask(geometry, width=width, height=height)
+    return Image.fromarray(mask.astype("uint8") * 255)
+
+
+def _mask_touches_border(mask: Image.Image) -> bool:
+    width, height = mask.size
+    edges = (
+        mask.crop((0, 0, width, 1)),
+        mask.crop((0, height - 1, width, height)),
+        mask.crop((0, 0, 1, height)),
+        mask.crop((width - 1, 0, width, height)),
+    )
+    return any(edge.getbbox() is not None for edge in edges)
 
 
 def _sample_distractor_polygon(width: int, height: int, rng: random.Random) -> Polygon:
@@ -425,6 +610,8 @@ def _render_overlay(
 
     if style.fill_enabled and style.fill_opacity > 0:
         draw.polygon(_int_points(polygon.exterior.coords), fill=fill)
+        for interior in polygon.interiors:
+            draw.polygon(_int_points(interior.coords), fill=(0, 0, 0, 0))
         if hole is not None:
             draw.polygon(_int_points(hole.exterior.coords), fill=(0, 0, 0, 0))
         if style.pattern is not None:
@@ -444,9 +631,55 @@ def _render_overlay(
         points = _int_points(polygon.exterior.coords)
         if style.dashed:
             _draw_dashed_ring(draw, points, fill=stroke, width=max(1, round(style.stroke_width_px)))
-        else:
+        elif style.stroke_join == "round":
             draw.line(points, fill=stroke, width=max(1, round(style.stroke_width_px)), joint="curve")
+        elif style.stroke_join == "bevel":
+            draw.line(points, fill=stroke, width=max(1, round(style.stroke_width_px)))
+        else:
+            # Pillow grows a polygon outline entirely inward. That makes the
+            # rendered edge disagree with its vector label and rewards a
+            # contracted prediction. Browser SVG, Canvas, and map renderers
+            # center the stroke on the vector path, so construct that miter
+            # band explicitly.
+            _draw_centered_miter_ring(
+                layer,
+                polygon.exterior.coords,
+                fill=stroke,
+                width=max(1, round(style.stroke_width_px)),
+            )
     return Image.alpha_composite(image, layer).convert("RGB")
+
+
+def _draw_centered_miter_ring(
+    layer: Image.Image,
+    coordinates,
+    *,
+    fill: tuple[int, int, int, int],
+    width: int,
+) -> None:
+    """Paint a closed, centered miter stroke without erasing the fill."""
+
+    band = LineString(list(coordinates)).buffer(
+        float(width) / 2.0,
+        cap_style="flat",
+        join_style="mitre",
+    )
+    if band.is_empty:
+        return
+    stroke_layer = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    stroke_draw = ImageDraw.Draw(stroke_layer)
+    polygons = (
+        [band]
+        if isinstance(band, Polygon)
+        else list(band.geoms)
+        if isinstance(band, MultiPolygon)
+        else []
+    )
+    for part in polygons:
+        stroke_draw.polygon(_int_points(part.exterior.coords), fill=fill)
+        for interior in part.interiors:
+            stroke_draw.polygon(_int_points(interior.coords), fill=(0, 0, 0, 0))
+    layer.alpha_composite(stroke_layer)
 
 
 def _render_top_map_details(image: Image.Image, config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
@@ -501,6 +734,16 @@ def _apply_circular_viewport(image: Image.Image, config: SyntheticSceneConfig) -
     draw.ellipse((margin, margin, config.width - margin, config.height - margin), fill=255)
     background.paste(image, (0, 0), mask)
     return background
+
+
+def _circular_viewport_geometry(config: SyntheticSceneConfig) -> Polygon:
+    """Match the visible ellipse so hidden screenshot corners are not labels."""
+    margin = -int(min(config.width, config.height) * 0.01)
+    radius_x = (config.width - (2 * margin)) / 2.0
+    radius_y = (config.height - (2 * margin)) / 2.0
+    center = (config.width / 2.0, config.height / 2.0)
+    circle = Point(*center).buffer(1.0, quad_segs=128)
+    return scale(circle, xfact=radius_x, yfact=radius_y, origin=center)
 
 
 def _apply_capture_effects(image: Image.Image, config: SyntheticSceneConfig) -> Image.Image:

@@ -143,6 +143,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="extraction",
         help="extraction scores the detected pixel shape after reference-bounds fitting; full scores the exported GeoJSON.",
     )
+    parser.add_argument(
+        "--extractor",
+        choices=(
+            "deterministic",
+            "experimental_classifier",
+            "generalized_v11",
+            "generalized_v12_boundaryfield",
+            "generalized_v20_edgegraph",
+        ),
+        default="deterministic",
+        help="Mask producer used by extraction-mode scoring.",
+    )
     parser.add_argument("--min-iou", type=float, default=0.78)
     parser.add_argument("--mean-iou", type=float, default=0.90)
     parser.add_argument("--timeout-seconds", type=int, default=180, help="Per-image timeout for --mode full.")
@@ -617,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         image_dir=args.image_dir,
         out_dir=args.out_dir,
         mode=args.mode,
+        model_variant=None if args.extractor == "deterministic" else args.extractor,
         min_iou=args.min_iou,
         mean_iou=args.mean_iou,
         timeout_seconds=args.timeout_seconds,
@@ -768,6 +781,7 @@ def run_benchmark(
     profile_ocr_engine: bool = False,
     runner_ocr_cache: bool = True,
     prewarm_runtime: bool = False,
+    model_variant: str | None = None,
 ) -> dict[str, Any]:
     if repeat_profile_runs < 0:
         raise ValueError("repeat_profile_runs must be non-negative")
@@ -903,7 +917,7 @@ def run_benchmark(
                     }
                 )
             else:
-                scores.append(score_extraction_fixture(fixture, min_iou=min_iou))
+                scores.append(score_extraction_fixture(fixture, min_iou=min_iou, model_variant=model_variant))
         repeat_profile = (
             build_repeat_profile(
                 repeat_targets,
@@ -1687,11 +1701,16 @@ def benchmark_runner_ocr_cache_policy(runner_ocr_cache: bool):
             os.environ[RUNNER_OCR_CACHE_ENV] = previous
 
 
-def score_extraction_fixture(fixture: BenchmarkFixture, *, min_iou: float) -> BenchmarkScore:
+def score_extraction_fixture(
+    fixture: BenchmarkFixture,
+    *,
+    min_iou: float,
+    model_variant: str | None = None,
+) -> BenchmarkScore:
     started = time.perf_counter()
     image_dimensions = benchmark_score_image_dimensions(fixture)
     try:
-        extraction = extract_service_area(fixture.image_path)
+        extraction = extract_service_area(fixture.image_path, use_model=model_variant)
         reference = project_geometry(load_reference_geometry(fixture.reference_path))
         fitted = fit_pixel_geometry_to_reference_bounds(extraction.pixel_geometry, reference)
         metrics = compare_geometries(fitted, reference)

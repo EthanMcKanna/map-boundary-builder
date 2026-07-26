@@ -57,13 +57,28 @@ def extract_service_area_with_model(
     return extract_service_area_from_rgb_with_session(rgb, session, config=config, hints=hints)
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=4)
 def load_onnx_session(model_path: str | Path) -> InferenceSessionLike:
     try:
         import onnxruntime as ort
     except ImportError as exc:
         raise RuntimeError("onnxruntime is required for model-backed extraction") from exc
-    return ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    # Serverless workers may execute multiple requests in the same process.
+    # ORT's default per-session thread pools oversubscribe a one-vCPU runtime
+    # and make contour-local inference slower than the work itself. Keep every
+    # cached model session sequential and let the process own concurrency.
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+    return ort.InferenceSession(
+        str(model_path),
+        sess_options=options,
+        providers=["CPUExecutionProvider"],
+    )
 
 
 def extract_service_area_from_rgb_with_session(

@@ -59,7 +59,7 @@ for satellite-like textured backgrounds, low-contrast translucent overlays,
 outline-only regions, and targets that touch the crop border. The Python
 extractor API includes experimental named profiles and hints for this work, such
 as `profile="satellite-overlay"` with a seed point or expected fill color. The
-web app defaults to Generalized v11, while deterministic extraction remains
+web app defaults to Generalized v20 EdgeGraph, while deterministic extraction remains
 available as a manual comparison path. Public web/API uploads never substitute
 a polygon from the historical service-area catalog: their output must be derived
 from the current image pixels plus OCR/georeference evidence. Filename and city
@@ -227,9 +227,26 @@ Optional overrides are `MAP_BOUNDARY_EXTRACTOR_MODEL_PATH`,
 `tools/train_synthetic_model.py` and uses the default `256` input size and `0.45`
 threshold.
 
-The web model selector defaults to **Generalized v11**. It accepts automatic
-RGB-only runs or optional target-color and seed-point guidance; clicking the
-input preview while v11 is selected fills the seed coordinates. The v11 ONNX
-contract uses five channels (RGB + seed heatmap + target-color similarity) and
-emits uncertainty and fallback diagnostics. See
-[`docs/generalized-v11.md`](docs/generalized-v11.md) for its scope and promotion gates.
+The web model selector currently exposes **Generalized v20 EdgeGraph** as an
+opt-in experimental epoch-39 candidate while Generalized v12 BoundaryField
+remains the default until every v20 promotion gate passes. EdgeGraph uses the
+global five-channel selector only for semantic target selection and topology,
+recovers supported selector-missed stems/notches, then localizes raster
+boundaries along native-resolution contour ribbons with a ten-channel
+vector-v3 refiner that receives native edge evidence, coordinates, and only a
+collapsed inside-direction sign from the selector—not raw coarse probability.
+Training anchors that sign to the unshifted contour before applying the
+uniform `[-6px, +6px]` center shift, so translation augmentation cannot invert
+the semantic orientation label.
+Its dilated strip tower sees both sides of centered
+strokes while keeping the same tiny parameter count, and sharp orthogonal runs
+are reconstructed as a guarded line graph before the generic corner-preserving
+fit. Supported SVG paths bypass learned
+geometry entirely and retain exact line vertices with error-bounded curve
+flattening. Catalog matches georeference v20's current extracted shape without
+replacing it with a static catalog polygon. It also accepts optional target-color
+and seed-point guidance. Clicking the input preview while
+v20, v12, or v11 is selected fills the seed coordinates. See
+[`docs/generalized-v20-edgegraph.md`](docs/generalized-v20-edgegraph.md) for the
+architecture, training contract, and fail-closed promotion gates. v12 and v11
+remain available as comparison paths.

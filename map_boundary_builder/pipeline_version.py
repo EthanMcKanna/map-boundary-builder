@@ -21,6 +21,11 @@ PIPELINE_VERSION_PACKAGES = (
     "shapely",
 )
 PIPELINE_VERSION_FILES = (
+    "boundaryfield.py",
+    "edge_phase.py",
+    "edgegraph.py",
+    "edgegraph_proposal.py",
+    "rectilinear_fit.py",
     "catalog_match.py",
     "extract.py",
     "geocoder.py",
@@ -28,7 +33,9 @@ PIPELINE_VERSION_FILES = (
     "georeference.py",
     "georef_transform.py",
     "geojson.py",
+    "gray_outline.py",
     "image_io.py",
+    "model_extract.py",
     "network_policy.py",
     "ocr.py",
     "osm_places.py",
@@ -39,7 +46,14 @@ PIPELINE_VERSION_FILES = (
     "runner.py",
     "runtime_config.py",
     "runtime_warmup.py",
+    "svg_vector.py",
     "upload_payload.py",
+    "models/boundaryfield_v12_refiner.onnx",
+    "models/boundaryfield_v12_refiner.onnx.data",
+    "models/boundaryfield_v12_selector.onnx",
+    "models/boundaryfield_v12_selector.onnx.data",
+    "models/edgegraph_v20_refiner.onnx",
+    "models/edgegraph_v20_refiner.onnx.json",
 )
 PIPELINE_VERSION_REPO_FILES = (
     "api/index.py",

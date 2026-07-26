@@ -1759,8 +1759,7 @@ def test_svg_catalog_shape_shortcut_returns_before_full_rasterization(tmp_path, 
     assert len(rendered_documents) == 1
     assert b"<rect" not in rendered_documents[0]
     assert b'fill="#07f"' in rendered_documents[0]
-    assert extract_calls[0]["cache"] is False
-    assert extract_calls[0]["max_dimension"] == 0
+    assert extract_calls == []
     assert finish_calls[0]["image_path"] == image_path
     assert finish_calls[0]["width"] == 100
     assert finish_calls[0]["height"] == 80
@@ -1839,7 +1838,7 @@ def test_svg_catalog_miss_uses_svg_provider_crop_before_full_raster(tmp_path, mo
     )
 
 
-def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypatch) -> None:
+def test_svg_catalog_miss_reuses_vector_service_path_for_label_match(tmp_path, monkeypatch) -> None:
     image_path = tmp_path / "unknown.svg"
     image_path.write_text(
         """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">
@@ -1929,8 +1928,7 @@ def test_svg_catalog_miss_reuses_service_path_for_label_match(tmp_path, monkeypa
 
     assert result.summary["catalog_slug"] == "miami-waymo"
     assert result.summary["georeference_source"] == "catalog-shape-match:provider-ui-label"
-    assert len(extract_calls) == 1
-    assert extract_calls[0].name.endswith(".catalog-path.png")
+    assert extract_calls == []
     assert generic_ocr_calls == []
     assert len(provider_ocr_calls) == 1
     assert provider_ocr_calls[0]["kwargs"]["source_is_svg"] is True

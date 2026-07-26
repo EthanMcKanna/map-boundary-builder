@@ -27,9 +27,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-control-points", type=int, default=3, help="Minimum OCR/geocoder control points for georeferencing.")
     parser.add_argument(
         "--extractor",
-        choices=("deterministic", "experimental_classifier", "generalized_v11"),
+        choices=(
+            "deterministic",
+            "experimental_classifier",
+            "generalized_v11",
+            "generalized_v12_boundaryfield",
+            "generalized_v20_edgegraph",
+        ),
         default="deterministic",
-        help="Boundary mask producer. Generalized v11 accepts optional seed/color guidance.",
+        help="Boundary producer. Generalized v20 EdgeGraph selects globally, then localizes and vectorizes edges at source resolution.",
     )
     parser.add_argument("--seed-x", type=float, help="Optional target-region seed x coordinate in source pixels.")
     parser.add_argument("--seed-y", type=float, help="Optional target-region seed y coordinate in source pixels.")

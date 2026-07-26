@@ -66,6 +66,264 @@ class MaskRepairTests(unittest.TestCase):
         self.assertEqual(result.diagnostics["automatic_guidance"], "deterministic_candidate")
         self.assertEqual(result.diagnostics["candidate_agreement_iou"], 1.0)
 
+    def test_edgegraph_automatic_mode_uses_selector_bootstrap_and_reviews_deterministic(
+        self,
+    ) -> None:
+        rgb = np.full((80, 100, 3), 220, dtype=np.uint8)
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 20:80] = True
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(
+            deterministic_mask,
+            1.0,
+        )
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="auto-fill",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=0.95,
+        )
+        refined = extract_module.replace(
+            deterministic_result,
+            confidence=0.99,
+            diagnostics={
+                "model_variant": extract_module.EDGEGRAPH_MODEL_VARIANT,
+                "automatic_guidance": "selector_bootstrap",
+                "model_guidance": {
+                    "seed_point": True,
+                    "target_rgb": True,
+                },
+            },
+        )
+
+        with (
+            patch.object(
+                extract_module,
+                "maybe_extract_with_model",
+                return_value=refined,
+            ) as model_extract,
+            patch.object(
+                extract_module,
+                "extract_service_area_from_rgb",
+                return_value=deterministic_result,
+            ),
+        ):
+            result = extract_service_area(
+                "unused.png",
+                rgb=rgb,
+                cache=False,
+                use_model=extract_module.EDGEGRAPH_MODEL_VARIANT,
+            )
+
+        model_extract.assert_called_once()
+        external_hints = model_extract.call_args.kwargs["hints"]
+        self.assertIsNone(external_hints.seed_point)
+        self.assertIsNone(external_hints.target_rgb)
+        self.assertEqual(
+            result.diagnostics["automatic_guidance"],
+            "selector_bootstrap",
+        )
+        self.assertTrue(result.diagnostics["deterministic_review"]["available"])
+        self.assertEqual(
+            result.diagnostics["deterministic_review"]["candidate_agreement_iou"],
+            1.0,
+        )
+
+    def test_edgegraph_deterministic_failure_returns_selector_bootstrap_model(self) -> None:
+        rgb = np.full((80, 100, 3), 220, dtype=np.uint8)
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[16:64, 20:80] = True
+        model_geometry, model_contours = extract_module.mask_to_geometry(
+            model_mask,
+            1.0,
+        )
+        selector_bootstrap = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=model_contours,
+            confidence=0.99,
+            diagnostics={
+                "model_variant": extract_module.EDGEGRAPH_MODEL_VARIANT,
+                "automatic_guidance": "selector_bootstrap",
+                "model_guidance": {
+                    "seed_point": True,
+                    "target_rgb": True,
+                },
+            },
+        )
+
+        with (
+            patch.object(
+                extract_module,
+                "maybe_extract_with_model",
+                return_value=selector_bootstrap,
+            ) as model_extract,
+            patch.object(
+                extract_module,
+                "extract_service_area_from_rgb",
+                side_effect=ValueError("No service-area polygon could be extracted."),
+            ),
+        ):
+            result = extract_service_area(
+                "unused.png",
+                rgb=rgb,
+                cache=False,
+                use_model=extract_module.EDGEGRAPH_MODEL_VARIANT,
+            )
+
+        model_extract.assert_called_once()
+        np.testing.assert_array_equal(result.mask, model_mask)
+        self.assertEqual(result.diagnostics["automatic_guidance"], "selector_bootstrap")
+        self.assertFalse(result.diagnostics["deterministic_review"]["available"])
+        self.assertEqual(
+            result.diagnostics["deterministic_review"]["error"],
+            "No service-area polygon could be extracted.",
+        )
+
+    def test_edgegraph_disagreeing_deterministic_candidate_cannot_override_model(
+        self,
+    ) -> None:
+        rgb = np.full((80, 100, 3), 220, dtype=np.uint8)
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 20:80] = True
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[2:18, 2:18] = True
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(
+            deterministic_mask,
+            1.0,
+        )
+        model_geometry, model_contours = extract_module.mask_to_geometry(
+            model_mask,
+            1.0,
+        )
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="bright-blue",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=1.0,
+        )
+        selector_bootstrap = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=model_contours,
+            confidence=0.99,
+            diagnostics={
+                "model_variant": extract_module.EDGEGRAPH_MODEL_VARIANT,
+                "automatic_guidance": "selector_bootstrap",
+                "model_guidance": {
+                    "seed_point": True,
+                    "target_rgb": True,
+                },
+            },
+        )
+
+        with (
+            patch.object(
+                extract_module,
+                "maybe_extract_with_model",
+                return_value=selector_bootstrap,
+            ) as model_extract,
+            patch.object(
+                extract_module,
+                "extract_service_area_from_rgb",
+                return_value=deterministic_result,
+            ),
+        ):
+            result = extract_service_area(
+                "unused.png",
+                rgb=rgb,
+                cache=False,
+                use_model=extract_module.EDGEGRAPH_MODEL_VARIANT,
+            )
+
+        model_extract.assert_called_once()
+        np.testing.assert_array_equal(result.mask, model_mask)
+        self.assertEqual(result.style, "auto-fill")
+        self.assertNotIn("model_fallback", result.diagnostics)
+        self.assertTrue(result.diagnostics["deterministic_review"]["available"])
+        self.assertEqual(
+            result.diagnostics["deterministic_review"]["candidate_agreement_iou"],
+            0.0,
+        )
+
+    def test_edgegraph_verified_source_native_gray_outline_overrides_model(self) -> None:
+        rgb = np.full((80, 100, 3), 220, dtype=np.uint8)
+        deterministic_mask = np.zeros((80, 100), dtype=bool)
+        deterministic_mask[16:64, 20:80] = True
+        model_mask = np.zeros((80, 100), dtype=bool)
+        model_mask[2:18, 2:18] = True
+        deterministic_geometry, deterministic_contours = extract_module.mask_to_geometry(
+            deterministic_mask,
+            1.0,
+        )
+        model_geometry, model_contours = extract_module.mask_to_geometry(
+            model_mask,
+            1.0,
+        )
+        deterministic_result = extract_module.ExtractionResult(
+            mask=deterministic_mask,
+            style="gray-fill",
+            pixel_geometry=deterministic_geometry,
+            coverage_ratio=float(deterministic_mask.mean()),
+            contour_count=deterministic_contours,
+            confidence=1.0,
+            diagnostics={
+                "gray_outline": {
+                    "verified_source_native": True,
+                },
+            },
+        )
+        selector_bootstrap = extract_module.ExtractionResult(
+            mask=model_mask,
+            style="auto-fill",
+            pixel_geometry=model_geometry,
+            coverage_ratio=float(model_mask.mean()),
+            contour_count=model_contours,
+            confidence=0.99,
+            diagnostics={
+                "model_variant": extract_module.EDGEGRAPH_MODEL_VARIANT,
+                "automatic_guidance": "selector_bootstrap",
+                "model_guidance": {
+                    "seed_point": True,
+                    "target_rgb": True,
+                },
+            },
+        )
+
+        with (
+            patch.object(
+                extract_module,
+                "maybe_extract_with_model",
+                return_value=selector_bootstrap,
+            ) as model_extract,
+            patch.object(
+                extract_module,
+                "extract_service_area_from_rgb",
+                return_value=deterministic_result,
+            ),
+        ):
+            result = extract_service_area(
+                "unused.png",
+                rgb=rgb,
+                cache=False,
+                use_model=extract_module.EDGEGRAPH_MODEL_VARIANT,
+            )
+
+        model_extract.assert_called_once()
+        np.testing.assert_array_equal(result.mask, deterministic_mask)
+        self.assertEqual(result.style, "gray-fill")
+        self.assertEqual(
+            result.diagnostics["model_fallback"]["reason"],
+            "verified_source_native_gray_outline",
+        )
+
     def test_model_extractor_env_routes_through_model_session(self) -> None:
         rgb = np.full((48, 64, 3), 255, dtype=np.uint8)
         model_mask = np.zeros((48, 64), dtype=bool)

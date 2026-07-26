@@ -16,6 +16,7 @@ from shapely.affinity import translate as translate_geometry
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import unary_union
 
+from .gray_outline import detect_gray_outline_mask
 from .pipeline_version import get_pipeline_version, runtime_dependency_signature
 
 DEFAULT_SIMPLIFY_PX = 6.0
@@ -25,12 +26,19 @@ AUTO_FILL_STYLE = "auto-fill"
 MODEL_EXTRACTOR_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL"
 MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_PATH"
 GENERALIZED_MODEL_EXTRACTOR_PATH_ENV = "MAP_BOUNDARY_GENERALIZED_MODEL_PATH"
+BOUNDARYFIELD_REFINER_PATH_ENV = "MAP_BOUNDARY_BOUNDARYFIELD_REFINER_PATH"
+BOUNDARYFIELD_SELECTOR_PATH_ENV = "MAP_BOUNDARY_BOUNDARYFIELD_SELECTOR_PATH"
+EDGEGRAPH_REFINER_PATH_ENV = "MAP_BOUNDARY_EDGEGRAPH_REFINER_PATH"
+EDGEGRAPH_SELECTOR_PATH_ENV = "MAP_BOUNDARY_EDGEGRAPH_SELECTOR_PATH"
 MODEL_EXTRACTOR_INPUT_SIZE_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE"
 MODEL_EXTRACTOR_THRESHOLD_ENV = "MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD"
 DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE = 256
+DEFAULT_BOUNDARYFIELD_INPUT_SIZE = 320
 DEFAULT_MODEL_EXTRACTOR_THRESHOLD = 0.45
 EXPERIMENTAL_MODEL_VARIANT = "experimental_classifier"
 GENERALIZED_MODEL_VARIANT = "generalized_v11"
+BOUNDARYFIELD_MODEL_VARIANT = "generalized_v12_boundaryfield"
+EDGEGRAPH_MODEL_VARIANT = "generalized_v20_edgegraph"
 MODEL_REVIEW_MAX_COVERAGE = 0.08
 MODEL_REVIEW_MAX_CONTOUR_COUNT = 5
 MODEL_FALLBACK_MIN_DETERMINISTIC_CONFIDENCE = 0.9
@@ -39,6 +47,7 @@ MODEL_FALLBACK_MAX_DETERMINISTIC_COVERAGE = 0.85
 MODEL_FALLBACK_MAX_COVERAGE_RATIO = 0.5
 MODEL_FALLBACK_FRAGMENT_COVERAGE_RATIO = 0.75
 MODEL_FALLBACK_MAX_FRAGMENTED_COVERAGE_RATIO = 1.35
+EDGEGRAPH_DETERMINISTIC_MIN_AGREEMENT_IOU = 0.90
 AUTO_FILL_ANALYSIS_MAX_DIMENSION = 512
 AUTO_FILL_CLUSTER_COUNT = 12
 AUTO_FILL_KMEANS_SEED = 7
@@ -96,6 +105,7 @@ DARK_TEAL_GREEN_MISMATCH_MAX_COMPONENT_Y_RATIO = 0.95
 # blob that does not reach the image edges.
 GRAY_FILL_BASEMAP_GRAB_BBOX_SPAN = 0.85
 GRAY_FILL_BASEMAP_GRAB_BORDER_FRACTION = 0.10
+GRAY_OUTLINE_STYLED_AGREEMENT_IOU = 0.985
 # A translucent Waymo service fill keeps street/label texture visible inside it;
 # a solid lake or ocean is flat. A non-trivial bright-blue mask whose eroded
 # interior carries little texture is water, not a service area. Real Waymo fills
@@ -297,13 +307,33 @@ def extract_service_area(
     extraction_hints = resolve_extraction_hints(hints)
     max_dimension = EXTRACT_MAX_DIMENSION if max_dimension is None else max(0, int(max_dimension))
     rgb = np.ascontiguousarray(rgb)
+    if (
+        use_model == EDGEGRAPH_MODEL_VARIANT
+        and extraction_hints.seed_point is None
+        and extraction_hints.target_rgb is None
+    ):
+        exact_result = gray_outline_extraction_result(
+            rgb,
+            simplify_px=simplify_px,
+            profile=extraction_profile,
+        )
+        if exact_result is not None:
+            return replace(
+                exact_result,
+                diagnostics={
+                    **(exact_result.diagnostics or {}),
+                    "automatic_route": "verified-source-native-preflight-v1",
+                },
+            )
     model_result = maybe_extract_with_model(
         rgb,
         simplify_px=simplify_px,
         enabled=use_model,
         hints=extraction_hints,
     )
-    if model_result is not None and not model_result_needs_deterministic_review(model_result):
+    if model_result is not None and not model_result_needs_deterministic_review(
+        model_result
+    ):
         return model_result
     cache = cache and extraction_cache_enabled()
     canonical_key: str | None = None
@@ -353,12 +383,30 @@ def extract_service_area(
             (max(1, round(width * scale)), max(1, round(height * scale))),
             interpolation=cv2.INTER_AREA,
         )
-        scaled = extract_service_area_from_rgb(
-            scaled_rgb,
-            simplify_px=simplify_px * scale,
-            profile=extraction_profile,
-            hints=scale_extraction_hints(extraction_hints, rgb.shape[:2], scaled_rgb.shape[:2]),
-        )
+        try:
+            scaled = extract_service_area_from_rgb(
+                scaled_rgb,
+                simplify_px=simplify_px * scale,
+                profile=extraction_profile,
+                hints=scale_extraction_hints(
+                    extraction_hints,
+                    rgb.shape[:2],
+                    scaled_rgb.shape[:2],
+                ),
+            )
+        except ValueError as exc:
+            if model_result is not None:
+                return replace(
+                    model_result,
+                    diagnostics={
+                        **(model_result.diagnostics or {}),
+                        "deterministic_review": {
+                            "available": False,
+                            "error": str(exc),
+                        },
+                    },
+                )
+            raise
         scaled_cache_status: str | None = None
         if scaled_cache_key is not None:
             scaled_cache_status = (
@@ -380,36 +428,70 @@ def extract_service_area(
             scaled_cache_shape=scaled.mask.shape if scaled_cache_status is not None else None,
         )
     else:
-        result = extract_service_area_from_rgb(
-            rgb,
-            simplify_px=simplify_px,
-            profile=extraction_profile,
-            hints=extraction_hints,
-        )
+        try:
+            result = extract_service_area_from_rgb(
+                rgb,
+                simplify_px=simplify_px,
+                profile=extraction_profile,
+                hints=extraction_hints,
+            )
+        except ValueError as exc:
+            if model_result is not None:
+                return replace(
+                    model_result,
+                    diagnostics={
+                        **(model_result.diagnostics or {}),
+                        "deterministic_review": {
+                            "available": False,
+                            "error": str(exc),
+                        },
+                    },
+                )
+            raise
     if canonical_key is not None:
         write_extraction_cache(canonical_key, result, canonical_rgb.shape[:2], canonical_origin)
     if (
         model_result is not None
-        and use_model == GENERALIZED_MODEL_VARIANT
+        and use_model in {GENERALIZED_MODEL_VARIANT, BOUNDARYFIELD_MODEL_VARIANT, EDGEGRAPH_MODEL_VARIANT}
         and extraction_hints.seed_point is None
         and extraction_hints.target_rgb is None
     ):
-        automatic_hints = extraction_hints_from_result(rgb, result)
-        refined = maybe_extract_with_model(
-            rgb,
-            simplify_px=simplify_px,
-            enabled=GENERALIZED_MODEL_VARIANT,
-            hints=automatic_hints,
-        )
-        if refined is not None:
+        if use_model == EDGEGRAPH_MODEL_VARIANT:
             model_result = replace(
-                refined,
+                model_result,
                 diagnostics={
-                    **(refined.diagnostics or {}),
-                    "automatic_guidance": "deterministic_candidate",
-                    "candidate_agreement_iou": mask_iou(refined.mask, result.mask),
+                    **(model_result.diagnostics or {}),
+                    "deterministic_review": {
+                        "available": True,
+                        "candidate_agreement_iou": mask_iou(
+                            model_result.mask,
+                            result.mask,
+                        ),
+                        "candidate_style": result.style,
+                        "candidate_confidence": result.confidence,
+                    },
                 },
             )
+        else:
+            automatic_hints = extraction_hints_from_result(rgb, result)
+            refined = maybe_extract_with_model(
+                rgb,
+                simplify_px=simplify_px,
+                enabled=use_model,
+                hints=automatic_hints,
+            )
+            if refined is not None:
+                model_result = replace(
+                    refined,
+                    diagnostics={
+                        **(refined.diagnostics or {}),
+                        "automatic_guidance": "deterministic_candidate",
+                        "candidate_agreement_iou": mask_iou(
+                            refined.mask,
+                            result.mask,
+                        ),
+                    },
+                )
     if model_result is not None and should_fallback_to_deterministic_result(model_result, result):
         coverage_ratio = model_result.coverage_ratio / max(result.coverage_ratio, 1e-9)
         result = replace(
@@ -433,7 +515,20 @@ def extract_service_area(
 
 
 def model_result_needs_deterministic_review(result: ExtractionResult) -> bool:
-    if (result.diagnostics or {}).get("model_variant") == GENERALIZED_MODEL_VARIANT:
+    if (
+        (result.diagnostics or {}).get("model_variant") == EDGEGRAPH_MODEL_VARIANT
+        and (result.diagnostics or {}).get("automatic_guidance")
+        == "selector_bootstrap"
+    ):
+        # Exact source-native lanes (notably the verified gray-outline path)
+        # remain eligible to outrank the learned result. Ordinary heuristic
+        # masks are only corroborating candidates and are agreement-gated.
+        return True
+    if (result.diagnostics or {}).get("model_variant") in {
+        GENERALIZED_MODEL_VARIANT,
+        BOUNDARYFIELD_MODEL_VARIANT,
+        EDGEGRAPH_MODEL_VARIANT,
+    }:
         guidance = (result.diagnostics or {}).get("model_guidance")
         if isinstance(guidance, dict) and not any(bool(value) for value in guidance.values()):
             return True
@@ -478,6 +573,20 @@ def should_fallback_to_deterministic_result(
         <= MODEL_FALLBACK_MAX_DETERMINISTIC_COVERAGE
     ):
         return False
+    # A validated light outline is source-native geometry, not a color-mask
+    # estimate. Once it has also passed the enclosed gray-fill contrast gates,
+    # keep its crisp corners instead of replacing it with a learned mask that
+    # can only approximate the same boundary at selector resolution.
+    gray_outline = (deterministic_result.diagnostics or {}).get("gray_outline")
+    if isinstance(gray_outline, dict) and gray_outline.get("verified_source_native") is True:
+        return True
+    if (
+        (model_result.diagnostics or {}).get("model_variant")
+        == EDGEGRAPH_MODEL_VARIANT
+        and mask_iou(model_result.mask, deterministic_result.mask)
+        < EDGEGRAPH_DETERMINISTIC_MIN_AGREEMENT_IOU
+    ):
+        return False
     coverage_ratio = model_result.coverage_ratio / max(deterministic_result.coverage_ratio, 1e-9)
     if coverage_ratio < MODEL_FALLBACK_MAX_COVERAGE_RATIO:
         return True
@@ -493,6 +602,9 @@ def model_fallback_reason(
     model_result: ExtractionResult,
     deterministic_result: ExtractionResult,
 ) -> str:
+    gray_outline = (deterministic_result.diagnostics or {}).get("gray_outline")
+    if isinstance(gray_outline, dict) and gray_outline.get("verified_source_native") is True:
+        return "verified_source_native_gray_outline"
     coverage_ratio = model_result.coverage_ratio / max(deterministic_result.coverage_ratio, 1e-9)
     fragmented = model_result.contour_count > max(
         MODEL_REVIEW_MAX_CONTOUR_COUNT,
@@ -519,13 +631,117 @@ def maybe_extract_with_model(
     if not enabled:
         return None
     variant = enabled if isinstance(enabled, str) else EXPERIMENTAL_MODEL_VARIANT
-    if variant not in {EXPERIMENTAL_MODEL_VARIANT, GENERALIZED_MODEL_VARIANT}:
+    if variant not in {
+        EXPERIMENTAL_MODEL_VARIANT,
+        GENERALIZED_MODEL_VARIANT,
+        BOUNDARYFIELD_MODEL_VARIANT,
+        EDGEGRAPH_MODEL_VARIANT,
+    }:
         raise ValueError(f"Unsupported model extractor variant: {variant}")
 
-    from .model_extract import ModelExtractionConfig, extract_service_area_from_rgb_with_session, load_onnx_session
+    from .model_extract import (
+        ModelExtractionConfig,
+        extract_service_area_from_rgb_with_session,
+        guidance_diagnostics,
+        load_onnx_session,
+        predict_mask_probabilities,
+    )
 
     input_size = max(1, int(os.environ.get(MODEL_EXTRACTOR_INPUT_SIZE_ENV, str(DEFAULT_MODEL_EXTRACTOR_INPUT_SIZE))))
     threshold = float(os.environ.get(MODEL_EXTRACTOR_THRESHOLD_ENV, str(DEFAULT_MODEL_EXTRACTOR_THRESHOLD)))
+    if variant == EDGEGRAPH_MODEL_VARIANT:
+        from .edgegraph import (
+            EdgeGraphConfig,
+            automatic_edgegraph_hints,
+            refine_boundary_with_edgegraph,
+        )
+
+        input_size = max(
+            1,
+            int(os.environ.get(MODEL_EXTRACTOR_INPUT_SIZE_ENV, str(DEFAULT_BOUNDARYFIELD_INPUT_SIZE))),
+        )
+        selector_path = edgegraph_selector_path()
+        selector_session = load_onnx_session(str(selector_path))
+        selector_config = ModelExtractionConfig(
+            input_width=input_size,
+            input_height=input_size,
+            threshold=threshold,
+            simplify_px=0.0,
+            style=AUTO_FILL_STYLE,
+            output_activation="logits",
+            input_channels=5,
+        )
+        has_explicit_guidance = any(guidance_diagnostics(hints).values())
+        coarse_probabilities = predict_mask_probabilities(
+            rgb,
+            selector_session,
+            config=selector_config,
+            hints=hints if has_explicit_guidance else None,
+        )
+        effective_hints = hints
+        automatic_diagnostics: dict[str, object] = {}
+        if not has_explicit_guidance:
+            effective_hints, selector_bootstrap = automatic_edgegraph_hints(
+                rgb,
+                coarse_probabilities,
+                threshold=threshold,
+            )
+            automatic_diagnostics = {
+                "automatic_guidance": "selector_bootstrap",
+                "selector_bootstrap": selector_bootstrap,
+            }
+        refiner_path = edgegraph_refiner_path()
+        edge_result = refine_boundary_with_edgegraph(
+            rgb,
+            coarse_probabilities,
+            load_onnx_session(str(refiner_path)),
+            hints=effective_hints,
+            config=EdgeGraphConfig(coarse_threshold=threshold),
+        )
+        return ExtractionResult(
+            mask=edge_result.mask,
+            style=AUTO_FILL_STYLE,
+            pixel_geometry=edge_result.pixel_geometry,
+            coverage_ratio=float(edge_result.mask.mean()),
+            contour_count=edge_result.contour_count,
+            confidence=edge_result.confidence,
+            diagnostics={
+                **edge_result.diagnostics,
+                **automatic_diagnostics,
+                "model_variant": variant,
+                "model_path": selector_path.name,
+                "edgegraph_refiner_path": refiner_path.name,
+                "model_guidance": guidance_diagnostics(effective_hints),
+            },
+        )
+    if variant == BOUNDARYFIELD_MODEL_VARIANT:
+        from .boundaryfield import BoundaryFieldConfig, extract_service_area_with_boundaryfield
+
+        input_size = max(
+            1,
+            int(os.environ.get(MODEL_EXTRACTOR_INPUT_SIZE_ENV, str(DEFAULT_BOUNDARYFIELD_INPUT_SIZE))),
+        )
+        coarse_path = boundaryfield_selector_path()
+        result = extract_service_area_with_boundaryfield(
+            rgb,
+            load_onnx_session(str(coarse_path)),
+            hints=hints,
+            config=BoundaryFieldConfig(
+                coarse_input_size=input_size,
+                coarse_threshold=threshold,
+                geometry_tolerance_px=min(1.0, max(0.25, float(simplify_px) / 8.0)),
+            ),
+        )
+        return replace(
+            result,
+            diagnostics={
+                **(result.diagnostics or {}),
+                "model_variant": variant,
+                "model_path": coarse_path.name,
+                "model_guidance": guidance_diagnostics(hints),
+            },
+        )
+
     model_path = model_extractor_path(variant)
     session = load_onnx_session(str(model_path))
     config = ModelExtractionConfig(
@@ -574,6 +790,54 @@ def model_extractor_path(variant: str = EXPERIMENTAL_MODEL_VARIANT) -> Path:
         path = Path.cwd() / path
     if not path.exists():
         raise FileNotFoundError(f"Configured extraction model does not exist: {path}")
+    return path
+
+
+def boundaryfield_refiner_path() -> Path:
+    configured = os.environ.get(BOUNDARYFIELD_REFINER_PATH_ENV)
+    path = Path(configured) if configured and configured.strip() else Path(__file__).with_name("models") / "boundaryfield_v12_refiner.onnx"
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured BoundaryField refiner does not exist: {path}")
+    return path
+
+
+def boundaryfield_selector_path() -> Path:
+    configured = os.environ.get(BOUNDARYFIELD_SELECTOR_PATH_ENV)
+    path = Path(configured) if configured and configured.strip() else Path(__file__).with_name("models") / "boundaryfield_v12_selector.onnx"
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured BoundaryField selector does not exist: {path}")
+    return path
+
+
+def edgegraph_selector_path() -> Path:
+    configured = os.environ.get(EDGEGRAPH_SELECTOR_PATH_ENV)
+    path = (
+        Path(configured)
+        if configured and configured.strip()
+        else Path(__file__).with_name("models") / "boundaryfield_v12_selector.onnx"
+    )
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured EdgeGraph selector does not exist: {path}")
+    return path
+
+
+def edgegraph_refiner_path() -> Path:
+    configured = os.environ.get(EDGEGRAPH_REFINER_PATH_ENV)
+    path = (
+        Path(configured)
+        if configured and configured.strip()
+        else Path(__file__).with_name("models") / "edgegraph_v20_refiner.onnx"
+    )
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured EdgeGraph refiner does not exist: {path}")
     return path
 
 
@@ -729,7 +993,47 @@ def _extract_service_area_core(
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
     style = classify_style(rgb, hsv=hsv)
     styled = styled_extraction_result(rgb, style, hsv=hsv, simplify_px=simplify_px, profile=profile)
-    if styled is not None and not should_attempt_auto_fill_fallback(styled, rgb):
+    styled_is_suspect = styled is None or should_attempt_auto_fill_fallback(styled, rgb)
+    # The outline lane is a conservative recovery path, not a replacement for
+    # an already-valid tuned gray-fill mask. It runs only after that mask is
+    # absent or independently flagged as suspect. A strong disagreement with
+    # the independently verified outline/fill consensus is itself such a flag.
+    # Explicit hints keep their existing semantics and never enter this
+    # automatic recovery lane.
+    if (
+        style == "gray-fill"
+        and hints.seed_point is None
+        and hints.target_rgb is None
+    ):
+        outlined = gray_outline_extraction_result(
+            rgb,
+            simplify_px=simplify_px,
+            profile=profile,
+        )
+        if outlined is not None:
+            styled_agreement = (
+                mask_iou(styled.mask, outlined.mask)
+                if styled is not None
+                else None
+            )
+            if (
+                styled_is_suspect
+                or styled_agreement is None
+                or styled_agreement < GRAY_OUTLINE_STYLED_AGREEMENT_IOU
+            ):
+                return replace(
+                    outlined,
+                    diagnostics={
+                        **(outlined.diagnostics or {}),
+                        "styled_mask_iou": styled_agreement,
+                        "styled_recovery_reason": (
+                            "styled-mask-suspect"
+                            if styled_is_suspect
+                            else "styled-outline-disagreement"
+                        ),
+                    },
+                )
+    if styled is not None and not styled_is_suspect:
         return styled
     # A confirmed gray-fill basemap grab (frame-spanning + border-bleeding) is
     # never a valid answer: drop it so a failed fallback fails closed instead of
@@ -752,6 +1056,35 @@ def _extract_service_area_core(
     if styled.coverage_ratio < AUTO_FILL_FALLBACK_MIN_COVERAGE:
         raise ValueError("No service-area polygon could be extracted from the image.")
     return styled
+
+
+def gray_outline_extraction_result(
+    rgb: np.ndarray,
+    *,
+    simplify_px: float,
+    profile: ExtractionProfile,
+) -> ExtractionResult | None:
+    outlined = detect_gray_outline_mask(rgb)
+    if outlined is None:
+        return None
+    try:
+        geometry, contour_count = mask_to_geometry(
+            outlined.mask,
+            simplify_px=min(float(simplify_px), 2.0),
+        )
+    except ValueError:
+        return None
+    coverage_ratio = float(outlined.mask.mean())
+    return ExtractionResult(
+        mask=outlined.mask,
+        style="gray-fill",
+        pixel_geometry=geometry,
+        coverage_ratio=coverage_ratio,
+        contour_count=contour_count,
+        confidence=extraction_confidence(outlined.mask, "gray-fill", contour_count),
+        extraction_profile=profile.name,
+        diagnostics={"gray_outline": outlined.diagnostics},
+    )
 
 
 def gray_fill_is_basemap_grab(result: ExtractionResult) -> bool:

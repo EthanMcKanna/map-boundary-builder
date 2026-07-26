@@ -94,6 +94,7 @@ from .runtime_config import (
     SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION,
     SVG_RASTER_MAX_DIMENSION,
 )
+from .svg_vector import svg_service_path_extraction
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 MAX_ROAD_CONTEXT_CANDIDATES = 1
@@ -721,7 +722,8 @@ def extract_svg_service_path_candidate(
     progress: ProgressCallback | None,
 ) -> SvgServicePathCandidate | None:
     try:
-        svg_document = svg_catalog_service_path_document(read_svg_bytes(image_path))
+        svg_bytes = read_svg_bytes(image_path)
+        svg_document = svg_catalog_service_path_document(svg_bytes)
     except Exception:
         return None
     if svg_document is None:
@@ -751,14 +753,11 @@ def extract_svg_service_path_candidate(
                 percent=18,
                 details={"width": width, "height": height},
             )
-            extraction = extract_service_area(
-                raster_path,
-                simplify_px=opts.simplify_px,
-                rgb=rgb,
-                max_dimension=0,
-                cache=False,
-                use_model=opts.model_variant or opts.experimental_classifier,
-                hints=opts.extraction_hints,
+            extraction = svg_service_path_extraction(
+                svg_bytes,
+                width=width,
+                height=height,
+                fill=SVG_CATALOG_PATH_FILL,
             )
             emit_progress(
                 progress,
