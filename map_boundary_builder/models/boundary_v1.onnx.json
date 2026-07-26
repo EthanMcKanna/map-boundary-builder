@@ -1,76 +1,18 @@
 {
   "architecture": "boundary-resunet-v1",
   "artifact": {
-    "bytes": 8938593,
-    "sha256": "5b5748293a3102e84e224c5fdecee46914614320309e2b3c495464368f09ac33"
+    "bytes": 8810771,
+    "sha256": "152f4b0cbac9aa4896f05fcde5d7d6b9f8c2b083e2b11ea5a4dcb884a2b31045"
   },
-  "guidance": {
-    "training_policy": "mixed",
-    "validation_policy": "mixed"
-  },
+  "model_generation": "v3-pod",
   "onnx_input_name": "image",
   "onnx_output_name": "mask_logits",
-  "optimizer": {
-    "learning_rate": 0.0008,
-    "name": "AdamW",
-    "weight_decay": 0.0001
-  },
   "production": {
     "input_channels": 3,
     "input_height": 384,
     "input_width": 384,
     "output_activation": "logits",
-    "threshold": 0.55
+    "threshold": 0.5
   },
-  "resume_artifact": {
-    "bytes": null,
-    "path": null,
-    "sha256": null
-  },
-  "run_config": {
-    "architecture": "resunet",
-    "base_channels": 24,
-    "batch_size": 8,
-    "epochs": 28,
-    "image_size": 384,
-    "input_channels": 3,
-    "validation_count": 384
-  },
-  "schema_version": "boundary-model-metadata-v1",
-  "seed": 4242,
-  "selected_checkpoint": {
-    "artifact": {
-      "bytes": 26503051,
-      "path": "/Users/ethanmckanna/GitHub/map-boundary-builder/training-runs/boundary_v1.checkpoints/best.pt",
-      "sha256": "25c397e47ce6f4f321176b22fd58318c5f0f867a2757db4dd6098459f4e0614d"
-    },
-    "epoch": 28,
-    "metrics": {
-      "validation_boundary_iou_2px": 0.8815849263240428,
-      "validation_iou": 0.983418868893447,
-      "validation_p05_boundary_iou_2px": 0.7412588506937027,
-      "validation_p05_iou": 0.9647438734769821,
-      "validation_score": 0.8764856815794094,
-      "validation_tail_score": 0.8764856815794094
-    }
-  },
-  "threshold_calibration": {
-    "dataset": "out/baseline-synthetic-256 (seed 20260725, held out from training seed 4242)",
-    "mean_iou": 0.9817,
-    "p05_iou": 0.9604,
-    "selected": 0.55,
-    "swept": [
-      0.35,
-      0.4,
-      0.45,
-      0.5,
-      0.55,
-      0.6
-    ]
-  },
-  "training_dataset": {
-    "manifest_sha256": "3166a4b2b40908064df873b6df5d2e4af2d9d283ec927845e8a52a39dc4ac226",
-    "sample_count": 8576,
-    "version": "synthetic-generator-v20-centered-stroke-raster-v2"
-  }
+  "schema_version": "boundary-model-metadata-v1"
 }
