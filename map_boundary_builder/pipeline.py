@@ -20,7 +20,12 @@ import numpy as np
 
 from .extract import DEFAULT_SIMPLIFY_PX, ExtractionHints, ExtractionResult, load_rgb, write_mask_png, write_overlay_png
 from .geojson import feature_collection, target_selection_confidence, write_geojson
-from .georeference import GeoreferenceResult, georeference_from_labels, resolve_city_contexts
+from .georeference import (
+    GeoreferenceResult,
+    georeference_from_city_context,
+    georeference_from_labels,
+    resolve_city_contexts,
+)
 from .image_io import normalize_image_for_processing
 from .ocr import OcrLabel, extract_ocr_labels_from_rgb
 from .segment import segment_image
@@ -260,6 +265,12 @@ def _georeference_and_export(
             labels=labels,
             cacheable=False,
         )
+    if georeference is None:
+        # Label control points were insufficient (few distinct street names,
+        # garbled OCR). If a city is known — supplied or inferred from labels
+        # like "Tampa FL" — try matching detected road structure against
+        # public OSM road geometry around that city.
+        georeference = _road_search_fallback(rgb, extraction, labels, city)
     timings["georeference_s"] = round(time.monotonic() - stage_start, 3)
 
     if georeference is None:
@@ -352,6 +363,69 @@ def _georeference_and_export(
         mask_path=mask_path,
         overlay_path=overlay_path,
     )
+
+
+ROAD_SEARCH_MAX_DIMENSION = 500
+
+
+def _road_search_fallback(
+    rgb: np.ndarray,
+    extraction: ExtractionResult,
+    labels: tuple[OcrLabel, ...],
+    city: str | None,
+) -> GeoreferenceResult | None:
+    if city is not None:
+        candidates = [city]
+    else:
+        try:
+            contexts = resolve_city_contexts(list(labels), None)
+        except Exception:
+            return None
+        candidates = [context.query for context in contexts[:2]]
+    if not candidates:
+        return None
+
+    # The road-structure search works on low-resolution street grids (its
+    # line-feature matcher only activates below ~520 px), so search on a
+    # downscaled copy and rescale the fitted transform back to source pixels.
+    import cv2
+    from dataclasses import replace as dataclass_replace
+
+    from shapely.affinity import scale as scale_geometry
+
+    height, width = rgb.shape[:2]
+    factor = min(1.0, ROAD_SEARCH_MAX_DIMENSION / max(height, width))
+    if factor < 1.0:
+        small = cv2.resize(
+            rgb,
+            (max(1, round(width * factor)), max(1, round(height * factor))),
+            interpolation=cv2.INTER_AREA,
+        )
+        geometry = scale_geometry(extraction.pixel_geometry, xfact=factor, yfact=factor, origin=(0, 0))
+        pixel_scale = small.shape[1] / float(width)
+    else:
+        small = rgb
+        geometry = extraction.pixel_geometry
+        pixel_scale = 1.0
+
+    for candidate in candidates:
+        try:
+            result = georeference_from_city_context(small, candidate, geometry)
+        except Exception:
+            continue
+        if result is None:
+            continue
+        transform = dataclass_replace(
+            result.transform,
+            meters_per_pixel=result.transform.meters_per_pixel * pixel_scale,
+        )
+        return GeoreferenceResult(
+            transform=transform,
+            control_points=result.control_points,
+            residual_median_m=result.residual_median_m,
+            residual_p90_m=result.residual_p90_m,
+        )
+    return None
 
 
 def _needs_city_detail(labels: tuple[OcrLabel, ...], city: str | None) -> NeedsCityDetail:

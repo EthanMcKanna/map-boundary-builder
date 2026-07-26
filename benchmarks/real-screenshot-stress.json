@@ -1,2062 +1,2096 @@
 {
-  "version": 1,
-  "description": "Local real-download stress screenshots used to catch arbitrary upload failures outside the curated service-area fixture benchmark. Missing images are reported but do not fail unless expectation enforcement is requested.",
-  "cases": [
-    {
-      "slug": "ann-arbor-may-mobility-avif",
-      "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Ann Arbor",
-        "min_control_points": 3,
-        "min_ocr_labels": 16,
-        "min_combined_confidence": 0.8,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 18,
-          "selected_box_count": 14,
-          "result_count": 14,
-          "label_count": 14,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 3
-        },
-        "bbox_approx": [
-          -83.7532039,
-          42.2599682,
-          -83.7359287,
-          42.288679
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "ann-arbor-may-mobility-avif-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:label-shape",
-        "city_equals": "Ann Arbor",
-        "catalog_slug_equals": "ann-arbor-may-mobility",
-        "min_ocr_labels": 16,
-        "min_combined_confidence": 0.8,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 17,
-          "selected_box_count": 14,
-          "result_count": 14,
-          "label_count": 14,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 3
-        },
-        "bbox_approx": [
-          -83.7511022,
-          42.2636441,
-          -83.7308241,
-          42.2879191
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "grand-rapids-may-mobility",
-      "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Grand Rapids",
-        "min_control_points": 5,
-        "min_ocr_labels": 16,
-        "min_combined_confidence": 0.74,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 34,
-          "selected_box_count": 20,
-          "result_count": 17,
-          "label_count": 15,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -85.6950388,
-          42.96273,
-          -85.6671371,
-          42.97809
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "grand-rapids-may-mobility-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Grand Rapids",
-        "catalog_slug_equals": "grand-rapids-may-mobility",
-        "min_combined_confidence": 0.78,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -85.6950388,
-          42.96273,
-          -85.6671371,
-          42.97809
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-las-vegas-mobile",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0071.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "sparse OCR labels",
-        "min_ocr_labels": 3,
-        "ocr_top_labels_contain": [
-          "las vegas",
-          "paradise"
-        ],
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 3,
-          "selected_box_count": 3,
-          "result_count": 3,
-          "label_count": 2,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "zoox-las-vegas-mobile-tall",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0226.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "sparse OCR labels",
-        "min_ocr_labels": 12,
-        "ocr_top_labels_contain": [
-          "las vegas",
-          "paradise",
-          "spring mountain"
-        ],
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 14,
-          "selected_box_count": 13,
-          "result_count": 12,
-          "label_count": 11,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 2
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "tesla-austin-route-receipt",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0084.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 25,
-        "route_ui_categories_include": [
-          "pickup",
-          "plate",
-          "ride"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 28,
-          "selected_box_count": 21,
-          "result_count": 21,
-          "label_count": 19,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "max_total_elapsed_s": 1.5
-      }
-    },
-    {
-      "slug": "tesla-austin-route-active",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0065.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 20,
-        "route_ui_categories_include": [
-          "pickup",
-          "plate",
-          "ride",
-          "rider"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 20,
-          "selected_box_count": 19,
-          "result_count": 19,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "max_total_elapsed_s": 1.5
-      }
-    },
-    {
-      "slug": "tesla-austin-route-active-later",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0066.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 20,
-        "route_ui_categories_include": [
-          "pickup",
-          "plate",
-          "ride",
-          "rider"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 19,
-          "selected_box_count": 17,
-          "result_count": 17,
-          "label_count": 14,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "max_total_elapsed_s": 1.5
-      }
-    },
-    {
-      "slug": "tesla-austin-route-receipt-long",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0083.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 20,
-        "route_ui_categories_include": [
-          "dropoff",
-          "plate",
-          "receipt"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 33,
-          "selected_box_count": 29,
-          "result_count": 29,
-          "label_count": 25,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "tesla-austin-route-receipt-gray-long",
-      "image": "/Users/ethanmckanna/Downloads/us.jpeg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 20,
-        "route_ui_categories_include": [
-          "dropoff",
-          "plate",
-          "receipt"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 41,
-          "selected_box_count": 29,
-          "result_count": 29,
-          "label_count": 24,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 1,
-          "label_confidence_lt_80_count": 1,
-          "label_confidence_lt_90_count": 1
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "tesla-austin-route-active-dark",
-      "image": "/Users/ethanmckanna/Downloads/IMG_0010.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "ride-route UI",
-        "min_ocr_labels": 20,
-        "route_ui_categories_include": [
-          "pickup",
-          "plate",
-          "ride"
-        ],
-        "min_route_metric_labels": 1,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 44,
-          "selected_box_count": 18,
-          "result_count": 18,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "tesla-sync-non-map-ui",
-      "image": "/Users/ethanmckanna/Downloads/IMG_9930.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "non-map app UI",
-        "min_ocr_labels": 20,
-        "non_map_ui_categories_include": [
-          "account",
-          "import",
-          "privacy",
-          "stats",
-          "sync"
-        ],
-        "min_non_map_ui_labels": 3,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 18,
-          "selected_box_count": 15,
-          "result_count": 15,
-          "label_count": 14,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "profile-app-non-map-ui",
-      "image": "/Users/ethanmckanna/Downloads/Simulator Screenshot - iPhone 16 - 2026-03-24 at 01.43.34.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "non-map app UI",
-        "min_ocr_labels": 20,
-        "non_map_ui_categories_include": [
-          "followers",
-          "following",
-          "media"
-        ],
-        "min_non_map_ui_labels": 3,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 21,
-          "selected_box_count": 21,
-          "result_count": 21,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "climate-vulnerability-thematic-map",
-      "image": "/Users/ethanmckanna/Downloads/climate vulnerability index.jpg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "failed",
-        "error_contains": "thematic map",
-        "min_ocr_labels": 2,
-        "min_thematic_map_labels": 1,
-        "thematic_map_labels_contain": [
-          "vulnerability index"
-        ],
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 6,
-          "selected_box_count": 2,
-          "result_count": 2,
-          "label_count": 2,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "max_total_elapsed_s": 1.0
-      }
-    },
-    {
-      "slug": "avride-dallas-map",
-      "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 5,
-        "min_ocr_labels": 20,
-        "min_combined_confidence": 0.9,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 15,
-          "selected_box_count": 15,
-          "result_count": 15,
-          "label_count": 15,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "bbox_approx": [
-          -96.8185907,
-          32.7682169,
-          -96.7555604,
-          32.8374414
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "avride-dallas-map-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Dallas",
-        "catalog_slug_equals": "dallas-avride",
-        "min_combined_confidence": 0.91,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -96.8183506,
-          32.7681501,
-          -96.7551594,
-          32.83758
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "avride-dallas-webp-lowres",
-      "image": "/Users/ethanmckanna/Downloads/avride dallas.webp",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 3,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.74,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 37,
-          "selected_box_count": 22,
-          "result_count": 22,
-          "label_count": 22,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "bbox_approx": [
-          -96.8173575,
-          32.7689853,
-          -96.7658767,
-          32.8249894
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "austin-waymo-disguised-svg",
-      "image": "/Users/ethanmckanna/Downloads/a.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Austin",
-        "min_combined_confidence": 0.95,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -97.8914452,
-          30.1144685,
-          -97.6579857,
-          30.4108558
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "miami-waymo-direct-svg",
-      "image": "/Users/ethanmckanna/Downloads/mi.svg",
-      "no_catalog": false,
-      "filename_hint": "upload.svg",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:provider-ui-label",
-        "city_equals": "Miami",
-        "min_ocr_labels": 8,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 10,
-          "selected_box_count": 9,
-          "result_count": 9,
-          "label_count": 9,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -80.3461737,
-          25.6799742,
-          -80.1149101,
-          25.976257
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "austin-waymo-direct-svg",
-      "image": "/Users/ethanmckanna/Downloads/aymo austin.svg",
-      "no_catalog": false,
-      "filename_hint": "upload.svg",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Austin",
-        "min_combined_confidence": 0.95,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -97.8914452,
-          30.1144685,
-          -97.6579857,
-          30.4108558
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-waymo-svg",
-      "image": "/Users/ethanmckanna/Downloads/h-waymo.svg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Houston",
-        "min_combined_confidence": 0.87,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -95.4320951,
-          29.6684949,
-          -95.2874491,
-          29.8202881
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "nashville-waymo-svg-forced",
-      "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Nashville",
-        "min_control_points": 4,
-        "min_ocr_labels": 24,
-        "min_combined_confidence": 0.78,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 15,
-          "selected_box_count": 15,
-          "result_count": 15,
-          "label_count": 15,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -86.8416146,
-          36.1049219,
-          -86.676782,
-          36.246163
-        ],
-        "max_bbox_error_m": 1500
-      }
-    },
-    {
-      "slug": "nashville-waymo-svg",
-      "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "source_was_svg": true,
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Nashville",
-        "catalog_slug_equals": "nashville-waymo",
-        "min_combined_confidence": 0.97,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -86.8461084,
-          36.1089989,
-          -86.6904545,
-          36.242681
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "nashville-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Nashville.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Nashville",
-        "min_combined_confidence": 0.97,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -86.8461084,
-          36.1089989,
-          -86.6904545,
-          36.242681
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "tesla-bay-area-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Bay Area.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:provider-ui-label",
-        "city_equals": "Bay Area",
-        "catalog_slug_equals": "bay-area-tesla",
-        "min_ocr_labels": 8,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 7,
-          "selected_box_count": 7,
-          "result_count": 7,
-          "label_count": 6,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.5974432,
-          37.1807695,
-          -121.7084889,
-          37.9208366
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Houston.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:provider-ui-label",
-        "city_equals": "Houston",
-        "catalog_slug_equals": "houston-waymo",
-        "min_ocr_labels": 10,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 13,
-          "selected_box_count": 13,
-          "result_count": 13,
-          "label_count": 12,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -95.4320951,
-          29.6684949,
-          -95.2874491,
-          29.8202881
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "miami-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Miami.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:provider-ui-label",
-        "city_equals": "Miami",
-        "catalog_slug_equals": "miami-waymo",
-        "min_ocr_labels": 8,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 14,
-          "selected_box_count": 14,
-          "result_count": 13,
-          "label_count": 12,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 3
-        },
-        "bbox_approx": [
-          -80.3461737,
-          25.6799742,
-          -80.1149101,
-          25.976257
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "phoenix-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/waymo phoenix.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Phoenix",
-        "catalog_slug_equals": "phoenix-waymo",
-        "min_combined_confidence": 0.95,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -112.1166355,
-          33.2312436,
-          -111.8164536,
-          33.6877976
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "dallas-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Dallas",
-        "catalog_slug_equals": "dallas-waymo",
-        "min_combined_confidence": 0.98,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -96.8754673,
-          32.7332127,
-          -96.7276669,
-          32.8672603
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "san-antonio-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "San Antonio",
-        "catalog_slug_equals": "san-antonio-waymo",
-        "min_combined_confidence": 0.98,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -98.5580707,
-          29.3902521,
-          -98.3921385,
-          29.5374699
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "bay-area-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Bay Area",
-        "catalog_slug_equals": "bay-area-waymo",
-        "min_combined_confidence": 0.85,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -122.4980521,
-          37.3075553,
-          -121.8590466,
-          37.7981715
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "los-angeles-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/LA.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Los Angeles",
-        "catalog_slug_equals": "los-angeles-waymo",
-        "min_combined_confidence": 0.84,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -118.5235017,
-          33.9320907,
-          -118.2221488,
-          34.1183233
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "orlando-waymo-current-catalog",
-      "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Orlando",
-        "catalog_slug_equals": "orlando-waymo",
-        "min_combined_confidence": 0.95,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -81.5075254,
-          28.3614576,
-          -81.3638449,
-          28.5537667
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "robotaxi-austin",
-      "image": "/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Austin",
-        "min_control_points": 8,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.94,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 31,
-          "selected_box_count": 22,
-          "result_count": 22,
-          "label_count": 22,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -97.8098256,
-          30.2102538,
-          -97.6775433,
-          30.2751566
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "avride-dallas-web",
-      "image": "/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 3,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.72,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 37,
-          "selected_box_count": 22,
-          "result_count": 22,
-          "label_count": 22,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 1
-        },
-        "bbox_approx": [
-          -96.8173575,
-          32.7689853,
-          -96.7658767,
-          32.8249894
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-sf",
-      "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "San Francisco",
-        "min_control_points": 10,
-        "min_ocr_labels": 18,
-        "min_combined_confidence": 0.9,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 17,
-          "selected_box_count": 17,
-          "result_count": 17,
-          "label_count": 17,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.4411264,
-          37.7478098,
-          -122.3905477,
-          37.8058554
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-sf-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "San Francisco",
-        "catalog_slug_equals": "san-francisco-zoox",
-        "min_combined_confidence": 0.94,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -122.4410255,
-          37.7479064,
-          -122.3876889,
-          37.8056186
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-sf-bigger",
-      "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
-      "no_catalog": true,
-      "filename_hint": "upload.webp",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "San Francisco",
-        "min_control_points": 10,
-        "min_ocr_labels": 18,
-        "min_combined_confidence": 0.94,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 17,
-          "selected_box_count": 17,
-          "result_count": 17,
-          "label_count": 17,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.4411264,
-          37.7478098,
-          -122.3905477,
-          37.8058554
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-sf-bigger-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
-      "no_catalog": false,
-      "filename_hint": "upload.webp",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "San Francisco",
-        "catalog_slug_equals": "san-francisco-zoox",
-        "min_combined_confidence": 0.94,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -122.4410255,
-          37.7479064,
-          -122.3876889,
-          37.8056186
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-sf-service-area-current",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "San Francisco",
-        "min_control_points": 3,
-        "min_ocr_labels": 24,
-        "min_combined_confidence": 0.8,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 19,
-          "selected_box_count": 19,
-          "result_count": 19,
-          "label_count": 19,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.444478,
-          37.7473519,
-          -122.3829801,
-          37.8107792
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "tesla-dallas-jpeg",
-      "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 2,
-        "min_combined_confidence": 0.78,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 5,
-          "selected_box_count": 4,
-          "result_count": 4,
-          "label_count": 4,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -96.8609589,
-          32.7622926,
-          -96.7517738,
-          32.8735617
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "tesla-dallas-jpeg-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Dallas",
-        "catalog_slug_equals": "dallas-tesla",
-        "min_combined_confidence": 0.97,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -96.8582001,
-          32.7624321,
-          -96.7552567,
-          32.8723526
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "austin-tesla-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Austin",
-        "min_control_points": 2,
-        "min_ocr_labels": 3,
-        "min_combined_confidence": 0.8,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 7,
-          "selected_box_count": 3,
-          "result_count": 3,
-          "label_count": 3,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -97.8699676,
-          30.1433799,
-          -97.5541363,
-          30.425308
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "austin-tesla-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Austin",
-        "catalog_slug_equals": "austin-tesla",
-        "min_combined_confidence": 0.96,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -97.868131,
-          30.1428589,
-          -97.5545568,
-          30.4240202
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "dallas-tesla-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Dallas.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 2,
-        "min_ocr_labels": 3,
-        "min_combined_confidence": 0.8,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 5,
-          "selected_box_count": 3,
-          "result_count": 3,
-          "label_count": 3,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -96.8587006,
-          32.7624432,
-          -96.7552405,
-          32.8728894
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "dallas-tesla-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Dallas.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Dallas",
-        "catalog_slug_equals": "dallas-tesla",
-        "min_combined_confidence": 0.96,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -96.8582001,
-          32.7624321,
-          -96.7552567,
-          32.8723526
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "tesla-houston-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Houston.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Houston",
-        "min_control_points": 3,
-        "min_ocr_labels": 4,
-        "min_combined_confidence": 0.82,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 5,
-          "selected_box_count": 4,
-          "result_count": 4,
-          "label_count": 4,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -95.6247125,
-          29.8572751,
-          -95.5245324,
-          29.9718015
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "tesla-houston-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Houston.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Houston",
-        "catalog_slug_equals": "houston-tesla",
-        "min_combined_confidence": 0.96,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -95.624939,
-          29.8584766,
-          -95.5238266,
-          29.971941
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "dallas-waymo",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Dallas",
-        "min_control_points": 5,
-        "min_ocr_labels": 7,
-        "min_combined_confidence": 0.92,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 16,
-          "selected_box_count": 7,
-          "result_count": 7,
-          "label_count": 7,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -96.8760366,
-          32.7327533,
-          -96.729695,
-          32.8659004
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "san-antonio-waymo",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "San Antonio",
-        "min_control_points": 10,
-        "min_ocr_labels": 18,
-        "min_combined_confidence": 0.9,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 22,
-          "selected_box_count": 14,
-          "result_count": 14,
-          "label_count": 14,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -98.5610934,
-          29.3896417,
-          -98.3917587,
-          29.5392142
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "zoox-las-vegas-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Las Vegas",
-        "min_control_points": 3,
-        "min_ocr_labels": 18,
-        "min_combined_confidence": 0.74,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 2,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 48,
-          "selected_box_count": 43,
-          "result_count": 41,
-          "label_count": 38,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 3
-        },
-        "bbox_approx": [
-          -115.3464668,
-          36.0181013,
-          -115.1353609,
-          36.1584044
-        ],
-        "max_bbox_error_m": 1000
-      },
-      "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
-    },
-    {
-      "slug": "zoox-las-vegas-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Las Vegas",
-        "catalog_slug_equals": "las-vegas-zoox",
-        "min_combined_confidence": 0.76,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -115.3464668,
-          36.0181013,
-          -115.1353609,
-          36.1584044
-        ],
-        "max_bbox_error_m": 1000
-      },
-      "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
-    },
-    {
-      "slug": "bay-area-waymo",
-      "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "min_control_points": 16,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.82,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 21,
-          "selected_box_count": 19,
-          "result_count": 19,
-          "label_count": 19,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.5053058,
-          37.3057357,
-          -121.8559714,
-          37.8082677
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "bay-area-waymo-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "min_control_points": 14,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.86,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 21,
-          "selected_box_count": 19,
-          "result_count": 19,
-          "label_count": 19,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.5053058,
-          37.3057357,
-          -121.8559714,
-          37.8082677
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "bay-area-waymo-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Bay Area",
-        "catalog_slug_equals": "bay-area-waymo",
-        "min_combined_confidence": 0.87,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -122.4980521,
-          37.3075553,
-          -121.8590466,
-          37.7981715
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "bay-3-svg",
-      "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Inferred map area",
-        "min_control_points": 16,
-        "min_ocr_labels": 40,
-        "min_combined_confidence": 0.86,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 20,
-          "selected_box_count": 20,
-          "result_count": 20,
-          "label_count": 20,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.5117405,
-          37.2400556,
-          -121.8370661,
-          37.8145499
-        ],
-        "max_bbox_error_m": 1500
-      }
-    },
-    {
-      "slug": "bay-3-svg-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match:svg-label-layer-id",
-        "city_equals": "Bay Area",
-        "catalog_slug_equals": "bay-area-waymo",
-        "min_combined_confidence": 0.72,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -122.4980521,
-          37.3075553,
-          -121.8590466,
-          37.7981715
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "bay-area-waymo-jpeg-small",
-      "image": "/Users/ethanmckanna/Downloads/input.jpg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "min_control_points": 12,
-        "min_ocr_labels": 30,
-        "min_combined_confidence": 0.85,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 22,
-          "selected_box_count": 16,
-          "result_count": 16,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -122.5000691,
-          37.311372,
-          -121.8572994,
-          37.8058701
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "los-angeles-waymo",
-      "image": "/Users/ethanmckanna/Downloads/LA.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Los Angeles",
-        "min_control_points": 18,
-        "min_ocr_labels": 36,
-        "min_combined_confidence": 0.83,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 50,
-          "selected_box_count": 30,
-          "result_count": 29,
-          "label_count": 29,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -118.5240391,
-          33.9302354,
-          -118.2193825,
-          34.1184628
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "los-angeles-waymo-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Los Angeles",
-        "min_control_points": 18,
-        "min_ocr_labels": 36,
-        "min_combined_confidence": 0.87,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 50,
-          "selected_box_count": 30,
-          "result_count": 29,
-          "label_count": 29,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -118.5240391,
-          33.9302354,
-          -118.2193825,
-          34.1184628
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "los-angeles-waymo-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Los Angeles",
-        "catalog_slug_equals": "los-angeles-waymo",
-        "min_combined_confidence": 0.85,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -118.5235017,
-          33.9320907,
-          -118.2221488,
-          34.1183233
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-waymo",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Houston.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "note": "Re-baselined 2026-06-09: the original h-waymo.png was deleted from Downloads, so this case now exercises the no-catalog OCR-georeference path against the current Waymo Houston screenshot. Contract values were captured against this image.",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Houston",
-        "min_control_points": 6,
-        "min_ocr_labels": 13,
-        "min_combined_confidence": 0.84,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 14,
-          "selected_box_count": 12,
-          "result_count": 12,
-          "label_count": 12,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -95.4409766,
-          29.7277367,
-          -95.3465228,
-          29.8228906
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-waymo-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/h-waymo.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "note": "The original h-waymo.png was deleted from Downloads, so the zero-OCR catalog visual-match contract captured against its exact pixels can no longer run; tracked as data debt instead of scored. Equivalent catalog-shape-match coverage lives in houston-waymo-svg and houston-waymo-current-catalog. If h-waymo.png reappears this case fails with 'expected missing' as the signal to restore status complete and the contract below.",
-      "expect": {
-        "status": "missing",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Houston",
-        "catalog_slug_equals": "houston-waymo",
-        "min_combined_confidence": 0.87,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -95.4320951,
-          29.6684949,
-          -95.2874491,
-          29.8202881
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "orlando-waymo",
-      "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Orlando",
-        "min_control_points": 5,
-        "min_ocr_labels": 20,
-        "min_combined_confidence": 0.81,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 16,
-          "selected_box_count": 16,
-          "result_count": 16,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -81.5079188,
-          28.3608344,
-          -81.3623837,
-          28.5556556
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "orlando-waymo-service-area",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Orlando",
-        "min_control_points": 5,
-        "min_ocr_labels": 20,
-        "min_combined_confidence": 0.85,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 16,
-          "selected_box_count": 16,
-          "result_count": 16,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -81.5079188,
-          28.3608344,
-          -81.3623837,
-          28.5556556
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "orlando-waymo-service-area-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Orlando",
-        "catalog_slug_equals": "orlando-waymo",
-        "min_combined_confidence": 0.97,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -81.5075254,
-          28.3614576,
-          -81.3638449,
-          28.5537667
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "nashville-waymo",
-      "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit+osm-road-refine",
-        "city_equals": "Nashville",
-        "min_control_points": 3,
-        "min_ocr_labels": 14,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 14,
-          "selected_box_count": 11,
-          "result_count": 11,
-          "label_count": 11,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -86.8475058,
-          36.1153856,
-          -86.6964806,
-          36.2435026
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "nashville-waymo-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Nashville",
-        "catalog_slug_equals": "nashville-waymo",
-        "min_combined_confidence": 0.96,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -86.8461084,
-          36.1089989,
-          -86.6904545,
-          36.242681
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-robotaxi-gray",
-      "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Houston",
-        "min_control_points": 3,
-        "min_combined_confidence": 0.81,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 6,
-          "selected_box_count": 5,
-          "result_count": 5,
-          "label_count": 5,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -95.666187,
-          29.8350303,
-          -95.4797339,
-          29.9966451
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "houston-robotaxi-gray-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Houston",
-        "catalog_slug_equals": "houston-tesla",
-        "min_combined_confidence": 0.96,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -95.624939,
-          29.8584766,
-          -95.5238266,
-          29.971941
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "miami-waymo",
-      "image": "/Users/ethanmckanna/Downloads/miami.png",
-      "no_catalog": true,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "ocr-georeference:nominatim-label-fit",
-        "city_equals": "Miami",
-        "min_control_points": 5,
-        "min_ocr_labels": 18,
-        "min_combined_confidence": 0.7,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 1,
-        "max_ocr_engine_counts": {
-          "raw_box_count": 27,
-          "selected_box_count": 16,
-          "result_count": 16,
-          "label_count": 16,
-          "label_confidence_lt_50_count": 0,
-          "label_confidence_lt_70_count": 0,
-          "label_confidence_lt_80_count": 0,
-          "label_confidence_lt_90_count": 0
-        },
-        "bbox_approx": [
-          -80.3388012,
-          25.6886035,
-          -80.1116863,
-          25.9830147
-        ],
-        "max_bbox_error_m": 1000
-      }
-    },
-    {
-      "slug": "miami-waymo-ui-default",
-      "image": "/Users/ethanmckanna/Downloads/miami.png",
-      "no_catalog": false,
-      "filename_hint": "upload.png",
-      "expect": {
-        "status": "complete",
-        "source_equals": "catalog-shape-match",
-        "city_equals": "Miami",
-        "catalog_slug_equals": "miami-waymo",
-        "min_combined_confidence": 0.89,
-        "max_total_elapsed_s": 1.0,
-        "max_ocr_engine_calls": 0,
-        "bbox_approx": [
-          -80.3461737,
-          25.6799742,
-          -80.1149101,
-          25.976257
-        ],
-        "max_bbox_error_m": 1000
-      }
-    }
-  ]
+ "version": 1,
+ "description": "Local real-download stress screenshots used to catch arbitrary upload failures outside the curated service-area fixture benchmark. Missing images are reported but do not fail unless expectation enforcement is requested.",
+ "cases": [
+  {
+   "slug": "ann-arbor-may-mobility-avif",
+   "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Ann Arbor",
+    "min_control_points": 3,
+    "min_ocr_labels": 16,
+    "min_combined_confidence": 0.8,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 18,
+     "selected_box_count": 14,
+     "result_count": 14,
+     "label_count": 14,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 3
+    },
+    "bbox_approx": [
+     -83.7532039,
+     42.2599682,
+     -83.7359287,
+     42.288679
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "ann-arbor-may-mobility-avif-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/aa mm.avif",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:label-shape",
+    "city_equals": "Ann Arbor",
+    "catalog_slug_equals": "ann-arbor-may-mobility",
+    "min_ocr_labels": 16,
+    "min_combined_confidence": 0.8,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 17,
+     "selected_box_count": 14,
+     "result_count": 14,
+     "label_count": 14,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 3
+    },
+    "bbox_approx": [
+     -83.7511022,
+     42.2636441,
+     -83.7308241,
+     42.2879191
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "grand-rapids-may-mobility",
+   "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Grand Rapids",
+    "min_control_points": 5,
+    "min_ocr_labels": 16,
+    "min_combined_confidence": 0.74,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 34,
+     "selected_box_count": 20,
+     "result_count": 17,
+     "label_count": 15,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -85.6950388,
+     42.96273,
+     -85.6671371,
+     42.97809
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "grand-rapids-may-mobility-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/mm gr.jpg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Grand Rapids",
+    "catalog_slug_equals": "grand-rapids-may-mobility",
+    "min_combined_confidence": 0.78,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -85.6950388,
+     42.96273,
+     -85.6671371,
+     42.97809
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-las-vegas-mobile",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0071.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "sparse OCR labels",
+    "min_ocr_labels": 3,
+    "ocr_top_labels_contain": [
+     "las vegas",
+     "paradise"
+    ],
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 3,
+     "selected_box_count": 3,
+     "result_count": 3,
+     "label_count": 2,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "zoox-las-vegas-mobile-tall",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0226.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "sparse OCR labels",
+    "min_ocr_labels": 12,
+    "ocr_top_labels_contain": [
+     "las vegas",
+     "paradise",
+     "spring mountain"
+    ],
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 14,
+     "selected_box_count": 13,
+     "result_count": 12,
+     "label_count": 11,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 2
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "tesla-austin-route-receipt",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0084.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 25,
+    "route_ui_categories_include": [
+     "pickup",
+     "plate",
+     "ride"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 28,
+     "selected_box_count": 21,
+     "result_count": 21,
+     "label_count": 19,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "max_total_elapsed_s": 1.5
+   }
+  },
+  {
+   "slug": "tesla-austin-route-active",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0065.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 20,
+    "route_ui_categories_include": [
+     "pickup",
+     "plate",
+     "ride",
+     "rider"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 20,
+     "selected_box_count": 19,
+     "result_count": 19,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "max_total_elapsed_s": 1.5
+   }
+  },
+  {
+   "slug": "tesla-austin-route-active-later",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0066.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 20,
+    "route_ui_categories_include": [
+     "pickup",
+     "plate",
+     "ride",
+     "rider"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 19,
+     "selected_box_count": 17,
+     "result_count": 17,
+     "label_count": 14,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "max_total_elapsed_s": 1.5
+   }
+  },
+  {
+   "slug": "tesla-austin-route-receipt-long",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0083.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 20,
+    "route_ui_categories_include": [
+     "dropoff",
+     "plate",
+     "receipt"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 33,
+     "selected_box_count": 29,
+     "result_count": 29,
+     "label_count": 25,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "tesla-austin-route-receipt-gray-long",
+   "image": "/Users/ethanmckanna/Downloads/us.jpeg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 20,
+    "route_ui_categories_include": [
+     "dropoff",
+     "plate",
+     "receipt"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 41,
+     "selected_box_count": 29,
+     "result_count": 29,
+     "label_count": 24,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 1,
+     "label_confidence_lt_80_count": 1,
+     "label_confidence_lt_90_count": 1
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "tesla-austin-route-active-dark",
+   "image": "/Users/ethanmckanna/Downloads/IMG_0010.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "ride-route UI",
+    "min_ocr_labels": 20,
+    "route_ui_categories_include": [
+     "pickup",
+     "plate",
+     "ride"
+    ],
+    "min_route_metric_labels": 1,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 44,
+     "selected_box_count": 18,
+     "result_count": 18,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "tesla-sync-non-map-ui",
+   "image": "/Users/ethanmckanna/Downloads/IMG_9930.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "non-map app UI",
+    "min_ocr_labels": 20,
+    "non_map_ui_categories_include": [
+     "account",
+     "import",
+     "privacy",
+     "stats",
+     "sync"
+    ],
+    "min_non_map_ui_labels": 3,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 18,
+     "selected_box_count": 15,
+     "result_count": 15,
+     "label_count": 14,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "profile-app-non-map-ui",
+   "image": "/Users/ethanmckanna/Downloads/Simulator Screenshot - iPhone 16 - 2026-03-24 at 01.43.34.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "non-map app UI",
+    "min_ocr_labels": 20,
+    "non_map_ui_categories_include": [
+     "followers",
+     "following",
+     "media"
+    ],
+    "min_non_map_ui_labels": 3,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 21,
+     "selected_box_count": 21,
+     "result_count": 21,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "climate-vulnerability-thematic-map",
+   "image": "/Users/ethanmckanna/Downloads/climate vulnerability index.jpg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "failed",
+    "error_contains": "thematic map",
+    "min_ocr_labels": 2,
+    "min_thematic_map_labels": 1,
+    "thematic_map_labels_contain": [
+     "vulnerability index"
+    ],
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 6,
+     "selected_box_count": 2,
+     "result_count": 2,
+     "label_count": 2,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "max_total_elapsed_s": 1.0
+   }
+  },
+  {
+   "slug": "avride-dallas-map",
+   "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 5,
+    "min_ocr_labels": 20,
+    "min_combined_confidence": 0.9,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 15,
+     "selected_box_count": 15,
+     "result_count": 15,
+     "label_count": 15,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "bbox_approx": [
+     -96.8185907,
+     32.7682169,
+     -96.7555604,
+     32.8374414
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "avride-dallas-map-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/avride dallas.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Dallas",
+    "catalog_slug_equals": "dallas-avride",
+    "min_combined_confidence": 0.91,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -96.8183506,
+     32.7681501,
+     -96.7551594,
+     32.83758
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "avride-dallas-webp-lowres",
+   "image": "/Users/ethanmckanna/Downloads/avride dallas.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 3,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.74,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 37,
+     "selected_box_count": 22,
+     "result_count": 22,
+     "label_count": 22,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "bbox_approx": [
+     -96.8173575,
+     32.7689853,
+     -96.7658767,
+     32.8249894
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "austin-waymo-disguised-svg",
+   "image": "/Users/ethanmckanna/Downloads/a.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Austin",
+    "min_combined_confidence": 0.95,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -97.8914452,
+     30.1144685,
+     -97.6579857,
+     30.4108558
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "miami-waymo-direct-svg",
+   "image": "/Users/ethanmckanna/Downloads/mi.svg",
+   "no_catalog": false,
+   "filename_hint": "upload.svg",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:provider-ui-label",
+    "city_equals": "Miami",
+    "min_ocr_labels": 8,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 10,
+     "selected_box_count": 9,
+     "result_count": 9,
+     "label_count": 9,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -80.3461737,
+     25.6799742,
+     -80.1149101,
+     25.976257
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "austin-waymo-direct-svg",
+   "image": "/Users/ethanmckanna/Downloads/aymo austin.svg",
+   "no_catalog": false,
+   "filename_hint": "upload.svg",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Austin",
+    "min_combined_confidence": 0.95,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -97.8914452,
+     30.1144685,
+     -97.6579857,
+     30.4108558
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-waymo-svg",
+   "image": "/Users/ethanmckanna/Downloads/h-waymo.svg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Houston",
+    "min_combined_confidence": 0.87,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -95.4320951,
+     29.6684949,
+     -95.2874491,
+     29.8202881
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "nashville-waymo-svg-forced",
+   "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Nashville",
+    "min_control_points": 4,
+    "min_ocr_labels": 24,
+    "min_combined_confidence": 0.78,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 15,
+     "selected_box_count": 15,
+     "result_count": 15,
+     "label_count": 15,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -86.8416146,
+     36.1049219,
+     -86.676782,
+     36.246163
+    ],
+    "max_bbox_error_m": 1500
+   }
+  },
+  {
+   "slug": "nashville-waymo-svg",
+   "image": "/Users/ethanmckanna/Downloads/Nashville_ServiceArea.svg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "source_was_svg": true,
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Nashville",
+    "catalog_slug_equals": "nashville-waymo",
+    "min_combined_confidence": 0.97,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -86.8461084,
+     36.1089989,
+     -86.6904545,
+     36.242681
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "nashville-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Nashville.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Nashville",
+    "min_combined_confidence": 0.97,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -86.8461084,
+     36.1089989,
+     -86.6904545,
+     36.242681
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tesla-bay-area-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Bay Area.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:provider-ui-label",
+    "city_equals": "Bay Area",
+    "catalog_slug_equals": "bay-area-tesla",
+    "min_ocr_labels": 8,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 7,
+     "selected_box_count": 7,
+     "result_count": 7,
+     "label_count": 6,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.5974432,
+     37.1807695,
+     -121.7084889,
+     37.9208366
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Houston.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:provider-ui-label",
+    "city_equals": "Houston",
+    "catalog_slug_equals": "houston-waymo",
+    "min_ocr_labels": 10,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 13,
+     "selected_box_count": 13,
+     "result_count": 13,
+     "label_count": 12,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -95.4320951,
+     29.6684949,
+     -95.2874491,
+     29.8202881
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "miami-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Miami.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:provider-ui-label",
+    "city_equals": "Miami",
+    "catalog_slug_equals": "miami-waymo",
+    "min_ocr_labels": 8,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 14,
+     "selected_box_count": 14,
+     "result_count": 13,
+     "label_count": 12,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 3
+    },
+    "bbox_approx": [
+     -80.3461737,
+     25.6799742,
+     -80.1149101,
+     25.976257
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "phoenix-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/waymo phoenix.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Phoenix",
+    "catalog_slug_equals": "phoenix-waymo",
+    "min_combined_confidence": 0.95,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -112.1166355,
+     33.2312436,
+     -111.8164536,
+     33.6877976
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "dallas-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Dallas",
+    "catalog_slug_equals": "dallas-waymo",
+    "min_combined_confidence": 0.98,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -96.8754673,
+     32.7332127,
+     -96.7276669,
+     32.8672603
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "san-antonio-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "San Antonio",
+    "catalog_slug_equals": "san-antonio-waymo",
+    "min_combined_confidence": 0.98,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -98.5580707,
+     29.3902521,
+     -98.3921385,
+     29.5374699
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "bay-area-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Bay Area",
+    "catalog_slug_equals": "bay-area-waymo",
+    "min_combined_confidence": 0.85,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -122.4980521,
+     37.3075553,
+     -121.8590466,
+     37.7981715
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "los-angeles-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/LA.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Los Angeles",
+    "catalog_slug_equals": "los-angeles-waymo",
+    "min_combined_confidence": 0.84,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -118.5235017,
+     33.9320907,
+     -118.2221488,
+     34.1183233
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "orlando-waymo-current-catalog",
+   "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Orlando",
+    "catalog_slug_equals": "orlando-waymo",
+    "min_combined_confidence": 0.95,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -81.5075254,
+     28.3614576,
+     -81.3638449,
+     28.5537667
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "robotaxi-austin",
+   "image": "/Users/ethanmckanna/Downloads/robotaxi-service-area-map.jpg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Austin",
+    "min_control_points": 8,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.94,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 31,
+     "selected_box_count": 22,
+     "result_count": 22,
+     "label_count": 22,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -97.8098256,
+     30.2102538,
+     -97.6775433,
+     30.2751566
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "avride-dallas-web",
+   "image": "/Users/ethanmckanna/Downloads/uber-avride-operating-map-dallas.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 3,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.72,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 37,
+     "selected_box_count": 22,
+     "result_count": 22,
+     "label_count": 22,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 1
+    },
+    "bbox_approx": [
+     -96.8173575,
+     32.7689853,
+     -96.7658767,
+     32.8249894
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-sf",
+   "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "San Francisco",
+    "min_control_points": 10,
+    "min_ocr_labels": 18,
+    "min_combined_confidence": 0.9,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 17,
+     "selected_box_count": 17,
+     "result_count": 17,
+     "label_count": 17,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.4411264,
+     37.7478098,
+     -122.3905477,
+     37.8058554
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-sf-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/zoox-sf.webp",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "San Francisco",
+    "catalog_slug_equals": "san-francisco-zoox",
+    "min_combined_confidence": 0.94,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -122.4410255,
+     37.7479064,
+     -122.3876889,
+     37.8056186
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-sf-bigger",
+   "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.webp",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "San Francisco",
+    "min_control_points": 10,
+    "min_ocr_labels": 18,
+    "min_combined_confidence": 0.94,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 17,
+     "selected_box_count": 17,
+     "result_count": 17,
+     "label_count": 17,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.4411264,
+     37.7478098,
+     -122.3905477,
+     37.8058554
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-sf-bigger-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/zoox sf bigger.webp",
+   "no_catalog": false,
+   "filename_hint": "upload.webp",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "San Francisco",
+    "catalog_slug_equals": "san-francisco-zoox",
+    "min_combined_confidence": 0.94,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -122.4410255,
+     37.7479064,
+     -122.3876889,
+     37.8056186
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-sf-service-area-current",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Zoox San Francisco.PNG",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "San Francisco",
+    "min_control_points": 3,
+    "min_ocr_labels": 24,
+    "min_combined_confidence": 0.8,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 19,
+     "selected_box_count": 19,
+     "result_count": 19,
+     "label_count": 19,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.444478,
+     37.7473519,
+     -122.3829801,
+     37.8107792
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tesla-dallas-jpeg",
+   "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 2,
+    "min_combined_confidence": 0.78,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 5,
+     "selected_box_count": 4,
+     "result_count": 4,
+     "label_count": 4,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -96.8609589,
+     32.7622926,
+     -96.7517738,
+     32.8735617
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tesla-dallas-jpeg-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/d-robotaxi.jpeg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Dallas",
+    "catalog_slug_equals": "dallas-tesla",
+    "min_combined_confidence": 0.97,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -96.8582001,
+     32.7624321,
+     -96.7552567,
+     32.8723526
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "austin-tesla-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Austin",
+    "min_control_points": 2,
+    "min_ocr_labels": 3,
+    "min_combined_confidence": 0.8,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 7,
+     "selected_box_count": 3,
+     "result_count": 3,
+     "label_count": 3,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -97.8699676,
+     30.1433799,
+     -97.5541363,
+     30.425308
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "austin-tesla-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Austin.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Austin",
+    "catalog_slug_equals": "austin-tesla",
+    "min_combined_confidence": 0.96,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -97.868131,
+     30.1428589,
+     -97.5545568,
+     30.4240202
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "dallas-tesla-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Dallas.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 2,
+    "min_ocr_labels": 3,
+    "min_combined_confidence": 0.8,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 5,
+     "selected_box_count": 3,
+     "result_count": 3,
+     "label_count": 3,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -96.8587006,
+     32.7624432,
+     -96.7552405,
+     32.8728894
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "dallas-tesla-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Dallas.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Dallas",
+    "catalog_slug_equals": "dallas-tesla",
+    "min_combined_confidence": 0.96,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -96.8582001,
+     32.7624321,
+     -96.7552567,
+     32.8723526
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tesla-houston-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Houston.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Houston",
+    "min_control_points": 3,
+    "min_ocr_labels": 4,
+    "min_combined_confidence": 0.82,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 5,
+     "selected_box_count": 4,
+     "result_count": 4,
+     "label_count": 4,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -95.6247125,
+     29.8572751,
+     -95.5245324,
+     29.9718015
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tesla-houston-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Tesla Houston.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Houston",
+    "catalog_slug_equals": "houston-tesla",
+    "min_combined_confidence": 0.96,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -95.624939,
+     29.8584766,
+     -95.5238266,
+     29.971941
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "dallas-waymo",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Dallas.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Dallas",
+    "min_control_points": 5,
+    "min_ocr_labels": 7,
+    "min_combined_confidence": 0.92,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 16,
+     "selected_box_count": 7,
+     "result_count": 7,
+     "label_count": 7,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -96.8760366,
+     32.7327533,
+     -96.729695,
+     32.8659004
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "san-antonio-waymo",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo San Antonio.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "San Antonio",
+    "min_control_points": 10,
+    "min_ocr_labels": 18,
+    "min_combined_confidence": 0.9,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 22,
+     "selected_box_count": 14,
+     "result_count": 14,
+     "label_count": 14,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -98.5610934,
+     29.3896417,
+     -98.3917587,
+     29.5392142
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "zoox-las-vegas-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Las Vegas",
+    "min_control_points": 3,
+    "min_ocr_labels": 18,
+    "min_combined_confidence": 0.74,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 2,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 48,
+     "selected_box_count": 43,
+     "result_count": 41,
+     "label_count": 38,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 3
+    },
+    "bbox_approx": [
+     -115.3464668,
+     36.0181013,
+     -115.1353609,
+     36.1584044
+    ],
+    "max_bbox_error_m": 1000
+   },
+   "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
+  },
+  {
+   "slug": "zoox-las-vegas-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Zoox Las Vegas.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Las Vegas",
+    "catalog_slug_equals": "las-vegas-zoox",
+    "min_combined_confidence": 0.76,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -115.3464668,
+     36.0181013,
+     -115.1353609,
+     36.1584044
+    ],
+    "max_bbox_error_m": 1000
+   },
+   "note": "Re-baselined 2026-06-09: the outline-ring extraction now recovers the drawn teal boundary (shape IoU vs av-coverage-checker reference 0.559 -> 0.977), shifting the OCR crop and bbox. Contract values captured against the corrected boundary; absolute georeference still rests on 3 label control points."
+  },
+  {
+   "slug": "bay-area-waymo",
+   "image": "/Users/ethanmckanna/Downloads/bay-area-waymo.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "min_control_points": 16,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.82,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 21,
+     "selected_box_count": 19,
+     "result_count": 19,
+     "label_count": 19,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.5053058,
+     37.3057357,
+     -121.8559714,
+     37.8082677
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "bay-area-waymo-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "min_control_points": 14,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.86,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 21,
+     "selected_box_count": 19,
+     "result_count": 19,
+     "label_count": 19,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.5053058,
+     37.3057357,
+     -121.8559714,
+     37.8082677
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "bay-area-waymo-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/waymo bay area.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Bay Area",
+    "catalog_slug_equals": "bay-area-waymo",
+    "min_combined_confidence": 0.87,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -122.4980521,
+     37.3075553,
+     -121.8590466,
+     37.7981715
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "bay-3-svg",
+   "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Inferred map area",
+    "min_control_points": 16,
+    "min_ocr_labels": 40,
+    "min_combined_confidence": 0.86,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 20,
+     "selected_box_count": 20,
+     "result_count": 20,
+     "label_count": 20,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.5117405,
+     37.2400556,
+     -121.8370661,
+     37.8145499
+    ],
+    "max_bbox_error_m": 1500
+   }
+  },
+  {
+   "slug": "bay-3-svg-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/bay 3.svg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match:svg-label-layer-id",
+    "city_equals": "Bay Area",
+    "catalog_slug_equals": "bay-area-waymo",
+    "min_combined_confidence": 0.72,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -122.4980521,
+     37.3075553,
+     -121.8590466,
+     37.7981715
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "bay-area-waymo-jpeg-small",
+   "image": "/Users/ethanmckanna/Downloads/input.jpg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "min_control_points": 12,
+    "min_ocr_labels": 30,
+    "min_combined_confidence": 0.85,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 22,
+     "selected_box_count": 16,
+     "result_count": 16,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -122.5000691,
+     37.311372,
+     -121.8572994,
+     37.8058701
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "los-angeles-waymo",
+   "image": "/Users/ethanmckanna/Downloads/LA.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Los Angeles",
+    "min_control_points": 18,
+    "min_ocr_labels": 36,
+    "min_combined_confidence": 0.83,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 50,
+     "selected_box_count": 30,
+     "result_count": 29,
+     "label_count": 29,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -118.5240391,
+     33.9302354,
+     -118.2193825,
+     34.1184628
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "los-angeles-waymo-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Los Angeles",
+    "min_control_points": 18,
+    "min_ocr_labels": 36,
+    "min_combined_confidence": 0.87,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 50,
+     "selected_box_count": 30,
+     "result_count": 29,
+     "label_count": 29,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -118.5240391,
+     33.9302354,
+     -118.2193825,
+     34.1184628
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "los-angeles-waymo-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Los Angeles.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Los Angeles",
+    "catalog_slug_equals": "los-angeles-waymo",
+    "min_combined_confidence": 0.85,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -118.5235017,
+     33.9320907,
+     -118.2221488,
+     34.1183233
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-waymo",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Houston.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "note": "Re-baselined 2026-06-09: the original h-waymo.png was deleted from Downloads, so this case now exercises the no-catalog OCR-georeference path against the current Waymo Houston screenshot. Contract values were captured against this image.",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Houston",
+    "min_control_points": 6,
+    "min_ocr_labels": 13,
+    "min_combined_confidence": 0.84,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 14,
+     "selected_box_count": 12,
+     "result_count": 12,
+     "label_count": 12,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -95.4409766,
+     29.7277367,
+     -95.3465228,
+     29.8228906
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-waymo-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/h-waymo.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "note": "The original h-waymo.png was deleted from Downloads, so the zero-OCR catalog visual-match contract captured against its exact pixels can no longer run; tracked as data debt instead of scored. Equivalent catalog-shape-match coverage lives in houston-waymo-svg and houston-waymo-current-catalog. If h-waymo.png reappears this case fails with 'expected missing' as the signal to restore status complete and the contract below.",
+   "expect": {
+    "status": "missing",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Houston",
+    "catalog_slug_equals": "houston-waymo",
+    "min_combined_confidence": 0.87,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -95.4320951,
+     29.6684949,
+     -95.2874491,
+     29.8202881
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "orlando-waymo",
+   "image": "/Users/ethanmckanna/Downloads/waymo-o.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Orlando",
+    "min_control_points": 5,
+    "min_ocr_labels": 20,
+    "min_combined_confidence": 0.81,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 16,
+     "selected_box_count": 16,
+     "result_count": 16,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -81.5079188,
+     28.3608344,
+     -81.3623837,
+     28.5556556
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "orlando-waymo-service-area",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Orlando",
+    "min_control_points": 5,
+    "min_ocr_labels": 20,
+    "min_combined_confidence": 0.85,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 16,
+     "selected_box_count": 16,
+     "result_count": 16,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -81.5079188,
+     28.3608344,
+     -81.3623837,
+     28.5556556
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "orlando-waymo-service-area-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/service area images/Waymo Orlando.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Orlando",
+    "catalog_slug_equals": "orlando-waymo",
+    "min_combined_confidence": 0.97,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -81.5075254,
+     28.3614576,
+     -81.3638449,
+     28.5537667
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "nashville-waymo",
+   "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit+osm-road-refine",
+    "city_equals": "Nashville",
+    "min_control_points": 3,
+    "min_ocr_labels": 14,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 14,
+     "selected_box_count": 11,
+     "result_count": 11,
+     "label_count": 11,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -86.8475058,
+     36.1153856,
+     -86.6964806,
+     36.2435026
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "nashville-waymo-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/waymo-n.webp",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Nashville",
+    "catalog_slug_equals": "nashville-waymo",
+    "min_combined_confidence": 0.96,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -86.8461084,
+     36.1089989,
+     -86.6904545,
+     36.242681
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-robotaxi-gray",
+   "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Houston",
+    "min_control_points": 3,
+    "min_combined_confidence": 0.81,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 6,
+     "selected_box_count": 5,
+     "result_count": 5,
+     "label_count": 5,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -95.666187,
+     29.8350303,
+     -95.4797339,
+     29.9966451
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "houston-robotaxi-gray-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/h-robotaxi.jpeg",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Houston",
+    "catalog_slug_equals": "houston-tesla",
+    "min_combined_confidence": 0.96,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -95.624939,
+     29.8584766,
+     -95.5238266,
+     29.971941
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "miami-waymo",
+   "image": "/Users/ethanmckanna/Downloads/miami.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "ocr-georeference:nominatim-label-fit",
+    "city_equals": "Miami",
+    "min_control_points": 5,
+    "min_ocr_labels": 18,
+    "min_combined_confidence": 0.7,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 1,
+    "max_ocr_engine_counts": {
+     "raw_box_count": 27,
+     "selected_box_count": 16,
+     "result_count": 16,
+     "label_count": 16,
+     "label_confidence_lt_50_count": 0,
+     "label_confidence_lt_70_count": 0,
+     "label_confidence_lt_80_count": 0,
+     "label_confidence_lt_90_count": 0
+    },
+    "bbox_approx": [
+     -80.3388012,
+     25.6886035,
+     -80.1116863,
+     25.9830147
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "miami-waymo-ui-default",
+   "image": "/Users/ethanmckanna/Downloads/miami.png",
+   "no_catalog": false,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "source_equals": "catalog-shape-match",
+    "city_equals": "Miami",
+    "catalog_slug_equals": "miami-waymo",
+    "min_combined_confidence": 0.89,
+    "max_total_elapsed_s": 1.0,
+    "max_ocr_engine_calls": 0,
+    "bbox_approx": [
+     -80.3461737,
+     25.6799742,
+     -80.1149101,
+     25.976257
+    ],
+    "max_bbox_error_m": 1000
+   }
+  },
+  {
+   "slug": "tampa-tesla-sparse-labels",
+   "image": "/Users/ethanmckanna/Documents/Screenshots/tampa tesla.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "city_equals": "Tampa",
+    "bbox_approx": [
+     -82.5672,
+     27.8424,
+     -82.3421,
+     28.0421
+    ],
+    "max_bbox_error_m": 5000
+   }
+  },
+  {
+   "slug": "orlando-tesla-sparse-labels",
+   "image": "/Users/ethanmckanna/Documents/Screenshots/orlando tesla.png",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "city_equals": "Orlando",
+    "bbox_approx": [
+     -81.4729,
+     28.4699,
+     -81.2907,
+     28.6165
+    ],
+    "max_bbox_error_m": 5000
+   }
+  }
+ ]
 }

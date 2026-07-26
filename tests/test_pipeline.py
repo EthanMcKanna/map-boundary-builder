@@ -211,6 +211,52 @@ def test_complete_with_city_reuses_extraction(image_path, tmp_path, patched_stag
     assert second.summary["city_input"] == "Austin, TX"
 
 
+def test_road_search_fallback_rescues_label_fit_failure(image_path, patched_stages):
+    patched_stages.setattr(
+        pipeline_module,
+        "georeference_from_labels",
+        lambda *args, **kwargs: None,
+    )
+    calls: list[str] = []
+
+    def fake_road_search(rgb, candidate, geometry):
+        calls.append(candidate)
+        return fake_georeference()
+
+    patched_stages.setattr(pipeline_module, "georeference_from_city_context", fake_road_search)
+    result = run_pipeline(image_path, city="Tampa, FL")
+    assert result.status == "complete"
+    assert calls == ["Tampa, FL"]
+
+
+def test_road_search_fallback_uses_inferred_contexts(image_path, patched_stages):
+    patched_stages.setattr(
+        pipeline_module,
+        "georeference_from_labels",
+        lambda *args, **kwargs: None,
+    )
+
+    class FakeContext:
+        def __init__(self, query):
+            self.query = query
+
+    patched_stages.setattr(
+        pipeline_module,
+        "resolve_city_contexts",
+        lambda labels, city: [FakeContext("Tampa"), FakeContext("Hillsborough County")],
+    )
+    calls: list[str] = []
+
+    def fake_road_search(rgb, candidate, geometry):
+        calls.append(candidate)
+        return fake_georeference() if candidate == "Hillsborough County" else None
+
+    patched_stages.setattr(pipeline_module, "georeference_from_city_context", fake_road_search)
+    result = run_pipeline(image_path)
+    assert result.status == "complete"
+    assert calls == ["Tampa", "Hillsborough County"]
+
+
 def test_progress_callback_stages(image_path, patched_stages):
     patched_stages.setattr(
         pipeline_module,
