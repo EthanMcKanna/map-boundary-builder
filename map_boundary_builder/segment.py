@@ -136,10 +136,7 @@ def _model_segmentation(
         probabilities = predict_mask_probabilities(rgb, session, config=config)
     except Exception:
         return None
-    mask = probabilities >= config.threshold
-    mask = select_hinted_components(mask, rgb, hints)
-    mask = keep_main_components(mask, max_components=3)
-    mask = fill_binary_holes(mask)
+    raw_mask = probabilities >= config.threshold
     uncertainty_fraction = float(((probabilities >= 0.40) & (probabilities <= 0.60)).mean())
     diagnostics = {
         "segmentation_engine": "model",
@@ -149,10 +146,17 @@ def _model_segmentation(
         "uncertainty_fraction": uncertainty_fraction,
         "probability_mean": float(probabilities.mean()),
     }
-    degenerate = _degenerate_reason(mask, uncertainty_fraction)
+    # Degeneracy is judged on the raw model output: zone selection could trim
+    # an everything-is-boundary prediction into something plausible-looking,
+    # but such an output is untrustworthy and belongs to the fallback.
+    degenerate = _degenerate_reason(raw_mask, uncertainty_fraction)
     if degenerate is not None:
         diagnostics["degenerate_reason"] = degenerate
         return None
+    mask = select_primary_zone(raw_mask, rgb, probabilities, hints)
+    mask = select_hinted_components(mask, rgb, hints)
+    mask = keep_main_components(mask, max_components=3)
+    mask = fill_binary_holes(mask)
     try:
         pixel_geometry, contour_count = mask_to_geometry(mask, simplify_px)
     except ValueError:
@@ -227,6 +231,139 @@ def select_hinted_components(
     if best_label == 0:
         return mask
     return labels == best_label
+
+
+ZONE_MERGE_MAX_AB_DISTANCE = 30.0
+ZONE_MERGE_MAX_GRAY_CHROMA = 12.0
+ZONE_KMEANS_MAX_SAMPLES = 50_000
+ZONE_MIN_COVERAGE_OF_MASK = 0.02
+ZONE_MIN_OPENING_RETENTION = 0.5
+
+
+def select_primary_zone(
+    mask: np.ndarray,
+    rgb: np.ndarray,
+    probabilities: np.ndarray,
+    hints: ExtractionHints,
+) -> np.ndarray:
+    """Reduce a multi-zone mask to its primary color-consistent zone.
+
+    A screenshot can contain several differently-colored highlighted regions
+    with different meanings (the target service area plus unrelated shaded
+    districts), and they may touch, so connected components cannot separate
+    them. The mask is clustered by LAB color into zones; the winning zone is
+    the one containing the seed / matching the target color when hints are
+    given, otherwise the most salient by model confidence, size, centrality,
+    and border avoidance — a highlighted target is usually centered while
+    background shading runs off the crop edges.
+    """
+    if not mask.any():
+        return mask
+    zones = _color_zones(mask, rgb)
+    if len(zones) <= 1:
+        return mask
+    if hints.seed_point is not None:
+        x = int(np.clip(round(hints.seed_point[0]), 0, mask.shape[1] - 1))
+        y = int(np.clip(round(hints.seed_point[1]), 0, mask.shape[0] - 1))
+        containing = [zone for zone in zones if zone[y, x]]
+        if containing:
+            return containing[0]
+    if hints.target_rgb is not None:
+        target = np.asarray(hints.target_rgb, dtype=np.float64)
+        return min(zones, key=lambda zone: float(np.linalg.norm(rgb[zone].reshape(-1, 3).mean(axis=0) - target)))
+    return max(zones, key=lambda zone: _zone_salience(zone, probabilities))
+
+
+def _color_zones(mask: np.ndarray, rgb: np.ndarray) -> list[np.ndarray]:
+    """Split the mask into distinct-color zones, conservatively.
+
+    Clustering runs on the chromatic (a, b) LAB plane only: a translucent
+    overlay's lightness varies with the basemap underneath, but its hue
+    direction is stable, while genuinely different zones (green vs orange)
+    sit far apart chromatically. The split is accepted only when every
+    candidate zone is spatially coherent — texture speckle inside one
+    translucent fill interleaves and dissolves under morphological opening,
+    whereas real zones survive it.
+    """
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
+    ab = lab[:, :, 1:] - 128.0
+    ys, xs = np.nonzero(mask)
+    samples = ab[ys, xs]
+    if len(samples) > ZONE_KMEANS_MAX_SAMPLES:
+        step = len(samples) // ZONE_KMEANS_MAX_SAMPLES + 1
+        fit_samples = np.ascontiguousarray(samples[::step])
+    else:
+        fit_samples = samples
+    if len(fit_samples) < 8:
+        return [mask]
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 0.5)
+    _compactness, _labels, centers = cv2.kmeans(
+        fit_samples, min(3, len(fit_samples)), None, criteria, 3, cv2.KMEANS_PP_CENTERS
+    )
+
+    # Merge centers that are chromatically the same overlay color; low-chroma
+    # (grayish) centers have no meaningful hue and always merge together.
+    merged: list[np.ndarray] = []
+    for center in centers.astype(np.float64):
+        for index, existing in enumerate(merged):
+            close = float(np.linalg.norm(center - existing)) <= ZONE_MERGE_MAX_AB_DISTANCE
+            both_gray = (
+                float(np.linalg.norm(center)) <= ZONE_MERGE_MAX_GRAY_CHROMA
+                and float(np.linalg.norm(existing)) <= ZONE_MERGE_MAX_GRAY_CHROMA
+            )
+            if close or both_gray:
+                merged[index] = (existing + center) / 2.0
+                break
+        else:
+            merged.append(center)
+    if len(merged) <= 1:
+        return [mask]
+
+    centers_array = np.stack(merged)
+    assignments = np.argmin(
+        np.linalg.norm(samples[:, None, :].astype(np.float64) - centers_array[None, :, :], axis=2),
+        axis=1,
+    )
+    zones = []
+    minimum = max(64, int(ZONE_MIN_COVERAGE_OF_MASK * len(samples)))
+    kernel = np.ones((5, 5), np.uint8)
+    for index in range(len(merged)):
+        selected = assignments == index
+        if int(selected.sum()) < minimum:
+            continue
+        zone = np.zeros_like(mask)
+        zone[ys[selected], xs[selected]] = True
+        opened = cv2.morphologyEx(zone.astype(np.uint8), cv2.MORPH_OPEN, kernel).astype(bool)
+        retention = float(opened.sum()) / max(1.0, float(zone.sum()))
+        if retention < ZONE_MIN_OPENING_RETENTION:
+            # Interleaved speckle, not a coherent zone: refuse to split.
+            return [mask]
+        zone = cv2.morphologyEx(zone.astype(np.uint8), cv2.MORPH_CLOSE, kernel).astype(bool)
+        zones.append(zone & mask)
+    if len(zones) <= 1:
+        return [mask]
+    return zones
+
+
+def _zone_salience(zone: np.ndarray, probabilities: np.ndarray) -> float:
+    area = int(zone.sum())
+    if area == 0:
+        return 0.0
+    height, width = zone.shape
+    ys, xs = np.nonzero(zone)
+    center_y, center_x = (height - 1) / 2.0, (width - 1) / 2.0
+    center_norm = float(np.hypot(center_x, center_y))
+    border = float(
+        zone[0, :].sum() + zone[-1, :].sum() + zone[:, 0].sum() + zone[:, -1].sum()
+    ) / max(1.0, 2.0 * (height + width))
+    centroid_distance = float(np.hypot(xs.mean() - center_x, ys.mean() - center_y)) / max(1.0, center_norm)
+    mean_probability = float(probabilities[zone].mean())
+    return (
+        mean_probability
+        * float(np.sqrt(area))
+        * (1.0 - min(0.8, 3.0 * border))
+        * (1.0 - 0.5 * centroid_distance)
+    )
 
 
 def _nearest_component_label(labels: np.ndarray, count: int, x: int, y: int) -> int:

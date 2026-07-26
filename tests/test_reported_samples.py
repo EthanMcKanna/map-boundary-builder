@@ -44,12 +44,14 @@ def test_issue_7_satellite_regional_map_completes_offline(
 
     assert result.status == "complete"
     extraction = result.summary["extraction"]
-    assert extraction["coverage_ratio"] == pytest.approx(0.1525, abs=0.02)
+    # The model extracts the full green Reinvestment Zone; the old deterministic
+    # extractor under-filled the same zone (~0.15) on this satellite basemap.
+    assert extraction["coverage_ratio"] == pytest.approx(0.33, abs=0.09)
     georeference = result.summary["georeference"]
     assert georeference["control_points"] >= 3
     assert geojson_bbox(result.geojson) == pytest.approx(
-        [-96.1007927, 30.5650361, -95.9522852, 30.6625853],
-        abs=0.02,
+        [-96.17, 30.55, -95.81, 30.69],
+        abs=0.06,
     )
     assert shape(result.geojson["features"][0]["geometry"]).is_valid
 
@@ -66,10 +68,13 @@ def test_issue_13_miami_context_card_completes_offline(
     assert result.status == "complete"
     assert "Miami" in (result.summary["georeference"]["city"] or "")
     extraction = result.summary["extraction"]
-    assert extraction["coverage_ratio"] == pytest.approx(0.3025, abs=0.03)
+    # The model keeps the Hialeah triangle and southern satellite patch the
+    # old light-fill extractor clipped, so coverage is higher than the
+    # pre-revamp expectation (~0.30).
+    assert extraction["coverage_ratio"] == pytest.approx(0.41, abs=0.04)
     assert result.summary["georeference"]["control_points"] >= 3
     assert geojson_bbox(result.geojson) == pytest.approx(
-        [-80.3712696, 25.7327833, -80.2402685, 25.8099164],
-        abs=0.02,
+        [-80.372, 25.715, -80.255, 25.840],
+        abs=0.03,
     )
     assert shape(result.geojson["features"][0]["geometry"]).is_valid

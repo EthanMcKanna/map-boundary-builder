@@ -29,7 +29,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v20-centered-stroke-raster-v2"
+GENERATOR_VERSION = "synthetic-generator-v21-negative-ui-scenes"
 
 
 @dataclass(frozen=True)
@@ -76,6 +76,10 @@ class SyntheticSceneConfig:
     large_service_area: bool = False
     include_distractor: bool = False
     shape_family: str = "radial"
+    # Negative scenes render an app-style screen (route map, cards, buttons)
+    # with NO service area; the truth mask is empty. They teach the model that
+    # ride/trip UI screenshots contain nothing to extract.
+    negative_scene: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,8 @@ def generate_synthetic_dataset(
     seed: int = 1,
     width: int = 960,
     height: int = 640,
+    negative_every: int = 0,
+    negative_start_index: int = 0,
 ) -> SyntheticDatasetManifest:
     if count < 1:
         raise ValueError("count must be positive")
@@ -113,6 +119,11 @@ def generate_synthetic_dataset(
     root = Path(output_dir)
     samples: list[SyntheticSampleMetadata] = []
     for index in range(count):
+        negative = (
+            negative_every > 0
+            and index >= negative_start_index
+            and (index - negative_start_index) % negative_every == 0
+        )
         style = randomized_overlay_style(seed + index, index=index)
         config = SyntheticSceneConfig(
             provider="synthetic",
@@ -132,6 +143,7 @@ def generate_synthetic_dataset(
             include_distractor=index % 3 == 1,
             shape_family=("rectilinear", "road-following", "angular", "radial")[index % 4],
             jpeg_quality=82 if index % 4 == 1 else None,
+            negative_scene=negative,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
 
@@ -195,6 +207,8 @@ def generate_synthetic_sample(
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random(config.seed)
+    if config.negative_scene:
+        return _generate_negative_sample(root, sample_dir, config, rng)
     style = config.overlay_style or DEFAULT_OVERLAY_STYLES[config.seed % len(DEFAULT_OVERLAY_STYLES)]
     labels_on_top = config.labels_on_top or style.labels_on_top
     # Border-pressure fixtures must expose the actual rectangular capture edge;
@@ -282,6 +296,134 @@ def generate_synthetic_sample(
     )
     metadata_path.write_text(sample.to_json(), encoding="utf-8")
     return SyntheticRenderResult(sample=sample, polygon=polygon, mask_area_px=_count_mask_pixels(mask))
+
+
+def _generate_negative_sample(
+    root: Path,
+    sample_dir: Path,
+    config: SyntheticSceneConfig,
+    rng: random.Random,
+) -> SyntheticRenderResult:
+    base = _render_basemap(config, rng)
+    image = _render_app_ui(base, config, rng)
+    image = _apply_capture_effects(image, config)
+    mask = Image.new("L", (config.width, config.height), 0)
+
+    screenshot_path = sample_dir / "image.jpg" if config.jpeg_quality else sample_dir / "image.png"
+    if config.jpeg_quality:
+        image.save(screenshot_path, quality=config.jpeg_quality)
+    else:
+        image.save(screenshot_path)
+    overlay_path = sample_dir / "overlay.png"
+    mask_path = sample_dir / "mask.png"
+    image.save(overlay_path)
+    mask.save(mask_path)
+    geojson_path = sample_dir / "boundary.geojson"
+    _write_geojson(geojson_path, None, None, config)
+
+    style = config.overlay_style or DEFAULT_OVERLAY_STYLES[0]
+    artifacts = SyntheticArtifactPaths(
+        screenshot=str(screenshot_path.relative_to(root)),
+        overlay=str(overlay_path.relative_to(root)),
+        mask=str(mask_path.relative_to(root)),
+        geojson=str(geojson_path.relative_to(root)),
+        metadata=str((sample_dir / "metadata.json").relative_to(root)),
+    )
+    sample = SyntheticSampleMetadata.create(
+        provider=config.provider,
+        service_area=config.service_area,
+        variant=config.variant,
+        image_size=(config.width, config.height),
+        overlay_style=style.metadata(),
+        artifacts=artifacts,
+        base_map=config.base_map,
+        seed=config.seed,
+        generator_version=GENERATOR_VERSION,
+        properties={
+            "negative_scene": True,
+            "touch_border": False,
+            "include_ui_chrome": True,
+            "include_hole": False,
+            "labels_on_top": False,
+            "include_distractor": False,
+            "shape_family": "none",
+            "circular_viewport": False,
+        },
+    )
+    (sample_dir / "metadata.json").write_text(
+        json.dumps(sample.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return SyntheticRenderResult(sample=sample, polygon=Polygon(), mask_area_px=0)
+
+
+def _render_app_ui(base: Image.Image, config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    """Compose a ride/trip-app style screen over the basemap: an optional
+    route polyline with pin markers, a stack of UI cards, buttons, and a
+    status bar. Nothing in the result is a service-area overlay."""
+    image = base.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image.size
+    font = ImageFont.load_default()
+
+    # Optional warm/cool full-map tint, like themed app basemaps.
+    if rng.random() < 0.5:
+        tint = rng.choice([(244, 170, 150), (150, 190, 244), (240, 210, 150), (170, 220, 180)])
+        draw.rectangle((0, 0, width, height), fill=(*tint, rng.randint(28, 80)))
+
+    # Route polyline with jittered waypoints and endpoint pins.
+    if rng.random() < 0.8:
+        points = [(rng.randint(int(width * 0.15), int(width * 0.85)), rng.randint(int(height * 0.08), int(height * 0.5)))]
+        for _ in range(rng.randint(3, 7)):
+            prev_x, prev_y = points[-1]
+            points.append(
+                (
+                    max(8, min(width - 8, prev_x + rng.randint(-width // 5, width // 5))),
+                    max(8, min(height - 8, prev_y + rng.randint(0, height // 6))),
+                )
+            )
+        route_color = rng.choice([(84, 92, 214), (30, 120, 240), (30, 30, 34), (219, 68, 55)])
+        draw.line(points, fill=(*route_color, 255), width=rng.randint(4, 9), joint="curve")
+        for px, py in (points[0], points[-1]):
+            draw.ellipse((px - 8, py - 8, px + 8, py + 8), outline=(40, 40, 44, 255), width=4, fill=(255, 255, 255, 255))
+
+    # Card stack rising from the bottom, covering 25-60% of the screen.
+    card_color = rng.choice([(255, 255, 255), (247, 247, 249), (28, 29, 33)])
+    text_color = (120, 122, 128, 255) if card_color[0] > 128 else (170, 172, 180, 255)
+    top = int(height * rng.uniform(0.4, 0.75))
+    y = top
+    while y < height - 20:
+        card_height = rng.randint(60, 180)
+        margin = rng.randint(8, 24)
+        draw.rounded_rectangle(
+            (margin, y, width - margin, min(height - 12, y + card_height)),
+            radius=rng.randint(8, 18),
+            fill=(*card_color, rng.randint(235, 255)),
+        )
+        # Text-like bars and an occasional pill button inside the card.
+        bar_y = y + 18
+        while bar_y < min(height - 24, y + card_height - 16):
+            bar_width = rng.randint(width // 5, int(width * 0.7))
+            draw.rounded_rectangle(
+                (margin + 18, bar_y, margin + 18 + bar_width, bar_y + rng.randint(8, 16)),
+                radius=5,
+                fill=text_color,
+            )
+            bar_y += rng.randint(22, 40)
+        if rng.random() < 0.5:
+            button_width = rng.randint(width // 4, width // 2)
+            button_x = rng.randint(margin + 12, max(margin + 13, width - margin - button_width - 12))
+            draw.rounded_rectangle(
+                (button_x, y + card_height - 52, button_x + button_width, y + card_height - 16),
+                radius=16,
+                fill=(rng.randint(20, 240), rng.randint(20, 120), rng.randint(60, 240), 255),
+            )
+        y += card_height + rng.randint(8, 20)
+
+    # Status bar.
+    bar_color = (250, 250, 250, 240) if card_color[0] > 128 else (18, 18, 20, 240)
+    draw.rectangle((0, 0, width, rng.randint(24, 44)), fill=bar_color)
+    draw.text((width // 12, 8), "12:17", fill=text_color, font=font)
+    return image
 
 
 def _sample_slug(config: SyntheticSceneConfig) -> str:
@@ -759,7 +901,20 @@ def _apply_capture_effects(image: Image.Image, config: SyntheticSceneConfig) -> 
     return image
 
 
-def _write_geojson(path: Path, polygon: Polygon, hole: Polygon | None, config: SyntheticSceneConfig) -> None:
+def _write_geojson(path: Path, polygon: Polygon | None, hole: Polygon | None, config: SyntheticSceneConfig) -> None:
+    if polygon is None:
+        data = {
+            "type": "FeatureCollection",
+            "features": [],
+            "metadata": {
+                "generator": GENERATOR_VERSION,
+                "negative_scene": True,
+                "image_width": config.width,
+                "image_height": config.height,
+            },
+        }
+        path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return
     geometry = polygon
     if hole is not None:
         geometry = Polygon(polygon.exterior.coords, [hole.exterior.coords])

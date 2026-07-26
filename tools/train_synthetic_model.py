@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--count", type=int, default=4096)
     parser.add_argument("--validation-count", type=int, default=384)
     parser.add_argument("--seed", type=int, default=101)
+    parser.add_argument(
+        "--negative-every",
+        type=int,
+        default=0,
+        help="Make every Nth training sample a no-service-area app-UI negative (0 disables). Validation samples stay positive.",
+    )
     parser.add_argument("--render-width", type=int, default=640)
     parser.add_argument("--render-height", type=int, default=640)
     parser.add_argument("--image-size", type=int, default=256)
@@ -98,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             width=args.render_width,
             height=args.render_height,
+            negative_every=args.negative_every,
+            negative_start_index=args.validation_count,
         )
     samples = list(manifest.samples)
     validation_samples = samples[: args.validation_count]
