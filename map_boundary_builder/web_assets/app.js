@@ -384,7 +384,8 @@ form.addEventListener("submit", async (event) => {
   startEstimatedProgress();
 
   try {
-    const uploadFile = await prepareRunImage(selectedFile);
+    const preparedFile = await prepareRunImage(selectedFile);
+    const uploadFile = await fitUploadSizeLimit(preparedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
     const cityValue = cityInput?.value.trim() || "";
@@ -897,6 +898,60 @@ async function prepareRunImage(file) {
     });
   }
   return file;
+}
+
+// Vercel serverless rejects request bodies over ~4.5 MB before they reach the
+// handler, so oversized uploads are downscaled/re-encoded in the browser.
+const MAX_UPLOAD_BODY_BYTES = 3_800_000;
+
+async function fitUploadSizeLimit(file) {
+  if (!file || file.size <= MAX_UPLOAD_BODY_BYTES || requiresJsonUpload(file)) {
+    return file;
+  }
+  let canvas;
+  try {
+    canvas = await imageFileToCanvas(file);
+  } catch {
+    return file;
+  }
+  markProgressStep("prepare", "running", "Shrinking large upload.");
+  setStatus("Shrinking large upload", 4, "running", {
+    step: "prepare",
+    note: "Downscaling the image to fit the upload size limit.",
+  });
+  const attempts = [
+    { maxDimension: 2048, type: "image/webp", quality: 0.92, extension: "webp" },
+    { maxDimension: 2048, type: "image/png", quality: undefined, extension: "png" },
+    { maxDimension: 1600, type: "image/jpeg", quality: 0.9, extension: "jpg" },
+    { maxDimension: 1280, type: "image/jpeg", quality: 0.85, extension: "jpg" },
+  ];
+  for (const attempt of attempts) {
+    const scaled = downscaleCanvas(canvas, attempt.maxDimension, attempt.type === "image/jpeg");
+    const blob = await canvasToBlob(scaled, attempt.type, attempt.quality);
+    if (!blob || blob.size > MAX_UPLOAD_BODY_BYTES) continue;
+    // Safari silently falls back to PNG when WebP encoding is unsupported.
+    const extension = blob.type === "image/webp" ? "webp" : blob.type === "image/jpeg" ? "jpg" : "png";
+    if (blob.type !== attempt.type && blob.size > MAX_UPLOAD_BODY_BYTES) continue;
+    return new File([blob], `${fileBaseName(file.name)}.${extension}`, {
+      type: blob.type,
+      lastModified: file.lastModified,
+    });
+  }
+  return file;
+}
+
+function downscaleCanvas(canvas, maxDimension, flattenBackground) {
+  const scale = Math.min(1, maxDimension / Math.max(canvas.width, canvas.height));
+  const target = document.createElement("canvas");
+  target.width = Math.max(1, Math.round(canvas.width * scale));
+  target.height = Math.max(1, Math.round(canvas.height * scale));
+  const context = target.getContext("2d");
+  if (flattenBackground) {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, target.width, target.height);
+  }
+  context.drawImage(canvas, 0, 0, target.width, target.height);
+  return target;
 }
 
 async function buildRunCacheKeys(file, formData) {
