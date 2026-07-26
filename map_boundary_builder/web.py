@@ -20,22 +20,18 @@ from .extract import DEFAULT_SIMPLIFY_PX
 from .github_reports import FailureReport, GithubReportError, create_failure_issue
 from .image_io import safe_image_extension
 from .pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
+from .pipeline import PipelineOptions, run_pipeline
 from .request_options import (
-    allow_catalog_for_request,
-    bool_field,
     city_hint_for_request,
     extraction_hints_for_request,
-    extractor_for_request,
-    experimental_classifier_for_request,
     float_field,
     int_field,
 )
-from .runner import BoundaryBuildOptions, build_boundary
 from .runtime_warmup import prewarm_generation_runtime, should_prewarm_generation_runtime
 from .upload_payload import UploadPayloadError, json_upload_body_limit, parse_json_upload_body
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-TERMINAL_STATUSES = {"complete", "error", "failed"}
+TERMINAL_STATUSES = {"complete", "needs_city", "error", "failed"}
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 
@@ -62,7 +58,7 @@ class RunState:
         with self.condition:
             return {
                 "id": self.run_id,
-                "city": self.summary["city"] if self.summary else self.city or "Auto",
+                "city": (self.summary or {}).get("city") or self.city or "Auto",
                 "filename": self.original_filename,
                 "status": self.status,
                 "percent": self.percent,
@@ -71,7 +67,7 @@ class RunState:
                 "profile": self.profile,
                 "error": self.error,
                 "events": self.events[-20:],
-                "artifacts": artifact_urls(self) if self.status == "complete" else {},
+                "artifacts": artifact_urls(self) if self.status in {"complete", "needs_city"} else {},
             }
 
 
@@ -170,10 +166,7 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         image_path = run_dir / f"input{ext}"
         image_path.write_bytes(image_bytes)
         output_path = run_dir / "boundary.geojson"
-        allow_catalog = allow_catalog_for_request(fields)
-        experimental_classifier = experimental_classifier_for_request(fields)
-        extractor = extractor_for_request(fields)
-        extraction_hints = extraction_hints_for_request(fields)
+        extraction_hints = extraction_hints_for_request(fields) or {}
         state = RunState(
             run_id=run_id,
             city=city,
@@ -190,18 +183,12 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         with RUNS_LOCK:
             RUNS[run_id] = state
 
-        options = BoundaryBuildOptions(
+        options = PipelineOptions(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
-            allow_catalog=allow_catalog,
-            catalog_probe_missed=False,
-            catalog_probe_miss_low_iou=False,
-            experimental_classifier=experimental_classifier,
-            model_variant=None if extractor == "deterministic" else extractor,
-            extraction_hints=extraction_hints,
-            filename_hint=original_filename,
-            source_was_svg=bool_field(fields, "source_was_svg", default=False),
+            seed_point=extraction_hints.get("seed_point"),  # type: ignore[arg-type]
+            target_rgb=extraction_hints.get("target_rgb"),  # type: ignore[arg-type]
         )
         record_event(
             state,
@@ -386,32 +373,27 @@ class BoundaryWebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
+def run_worker(state: RunState, options: PipelineOptions) -> None:
+    build_started = time.perf_counter()
+
+    def progress(stage: str, percent: int, detail: str) -> None:
+        if stage in TERMINAL_STATUSES:
+            return
+        record_event(
+            state,
+            {"stage": stage, "message": detail, "percent": percent, "status": "running"},
+        )
+
     try:
-        build_started = time.perf_counter()
-        result = build_boundary(
+        result = run_pipeline(
             state.image_path,
-            state.city,
-            state.output_path,
+            city=state.city,
+            output_path=state.output_path,
             debug_dir=state.debug_dir,
             options=options,
-            progress=lambda event: record_event(state, event),
+            progress=progress,
         )
-        with state.condition:
-            state.summary = result.summary
-            profile = dict(state.profile or {})
-            profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
-            profile["total_before_send_s"] = profile["build_boundary_s"]
-            state.profile = profile
-            state.condition.notify_all()
     except Exception as exc:
-        with state.condition:
-            profile = dict(state.profile or {})
-            if "build_started" in locals():
-                profile["build_boundary_s"] = elapsed_seconds(build_started)
-                profile["total_before_send_s"] = profile["build_boundary_s"]
-            state.profile = profile
         record_event(
             state,
             {
@@ -422,12 +404,58 @@ def run_worker(state: RunState, options: BoundaryBuildOptions) -> None:
                 "details": {"error": str(exc)},
             },
         )
-        with state.condition:
-            profile = dict(state.profile or {})
-            if "build_started" in locals():
-                profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
-            state.profile = profile
-            state.condition.notify_all()
+        finalize_profile(state, build_started)
+        return
+
+    summary_path = state.debug_dir / "summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(result.summary, indent=2) + "\n", encoding="utf-8")
+
+    if result.status == "complete":
+        record_event(
+            state,
+            {
+                "stage": "complete",
+                "message": "Boundary complete",
+                "percent": 100,
+                "status": "complete",
+                "details": result.summary,
+            },
+        )
+    elif result.status == "needs_city":
+        record_event(
+            state,
+            {
+                "stage": "needs_city",
+                "message": "Boundary extracted, but the city could not be determined. "
+                "Enter a city to finish georeferencing.",
+                "percent": 100,
+                "status": "needs_city",
+                "details": result.summary,
+            },
+        )
+    else:
+        record_event(
+            state,
+            {
+                "stage": "failed",
+                "message": result.summary.get("message", "Generation failed"),
+                "percent": 100,
+                "status": "failed",
+                "details": {"error": result.summary.get("message", result.reason), **result.summary},
+            },
+        )
+    finalize_profile(state, build_started)
+
+
+def finalize_profile(state: RunState, build_started: float) -> None:
+    with state.condition:
+        profile = dict(state.profile or {})
+        profile["build_boundary_s"] = elapsed_seconds(build_started)
+        profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(state.events)
+        profile["total_before_send_s"] = profile["build_boundary_s"]
+        state.profile = profile
+        state.condition.notify_all()
 
 
 def elapsed_seconds(started: float) -> float:
@@ -479,7 +507,7 @@ def record_event(state: RunState, event: dict[str, Any]) -> None:
         state.events.append(enriched)
         state.status = str(enriched.get("status", state.status))
         state.percent = int(enriched.get("percent", state.percent))
-        if state.status == "complete":
+        if state.status in {"complete", "needs_city"}:
             state.summary = enriched.get("details") if isinstance(enriched.get("details"), dict) else state.summary
         elif state.status in {"error", "failed"}:
             details = enriched.get("details")
@@ -513,11 +541,11 @@ def artifact_file(state: RunState, name: str) -> Path | None:
     if name == "geojson":
         return state.output_path
     if name == "mask":
-        return state.debug_dir / "boundary.mask.png"
+        return state.debug_dir / "mask.png"
     if name == "overlay":
-        return state.debug_dir / "boundary.overlay.png"
+        return state.debug_dir / "overlay.png"
     if name == "summary":
-        return state.debug_dir / "boundary.summary.json"
+        return state.debug_dir / "summary.json"
     return None
 
 

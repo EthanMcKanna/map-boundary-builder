@@ -22,6 +22,42 @@
     <link rel="apple-touch-icon" href="/static/boundary-builder-icon.png" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
     <link rel="stylesheet" href="/static/app.css?v=__MAP_BOUNDARY_ASSET_VERSION__" />
+    <style>
+      .needs-city-panel {
+        display: grid;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 10px;
+      }
+      .needs-city-panel[hidden] {
+        display: none;
+      }
+      .needs-city-panel p {
+        margin: 0;
+        color: var(--ink);
+        font-size: 0.78rem;
+        line-height: 1.25;
+      }
+      .needs-city-panel .needs-city-labels {
+        color: var(--muted);
+      }
+      .needs-city-button {
+        min-height: 40px;
+        border: 1px solid var(--green);
+        border-radius: 8px;
+        background: var(--green);
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 0.78rem;
+        font-weight: 850;
+      }
+      .needs-city-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.62;
+      }
+    </style>
   </head>
   <body>
     <div class="app-shell">
@@ -87,6 +123,15 @@
             <span id="progressFill"></span>
           </div>
           <ol id="timeline" class="timeline"></ol>
+          <div id="needsCityPanel" class="needs-city-panel" hidden>
+            <p>Boundary extracted, but the city couldn't be determined.</p>
+            <p id="needsCityLabels" class="needs-city-labels" hidden></p>
+            <label class="field compact">
+              <span>City</span>
+              <input id="needsCityInput" type="text" placeholder="e.g. Portland, OR" autocomplete="off" />
+            </label>
+            <button id="needsCityButton" class="needs-city-button" type="button">Georeference with this city</button>
+          </div>
           <div id="reportPanel" class="report-panel" hidden>
             <p id="reportText">Report this failed generation to GitHub. Your uploaded screenshot will be public in the issue.</p>
             <button id="reportButton" class="report-button" type="button">Report to GitHub</button>
@@ -228,14 +273,8 @@
           <h3 id="fitSettingsTitle">Fit</h3>
           <div class="settings-grid">
             <label class="field compact">
-              <span>Extractor</span>
-              <select id="extractorInput" form="runForm" name="extractor">
-                <option value="generalized_v20_edgegraph">Generalized v20 EdgeGraph (experimental - epoch 39)</option>
-                <option value="generalized_v12_boundaryfield" selected>Generalized v12 BoundaryField (default)</option>
-                <option value="generalized_v11">Generalized v11</option>
-                <option value="deterministic">Deterministic</option>
-                <option value="experimental_classifier">Experimental classifier</option>
-              </select>
+              <span>City (optional)</span>
+              <input id="cityInput" form="runForm" name="city" type="text" placeholder="Auto-detect from map labels" autocomplete="off" />
             </label>
             <label class="field compact">
               <span>Target color (optional)</span>

@@ -1,8 +1,15 @@
+"""Vercel serverless handler for the unified boundary pipeline.
+
+One pipeline, two cache keys. Each upload is looked up by its raw byte
+digest, then by its decoded-pixel digest (which unifies every container
+format re-encode of the same image), and only then generated. Results are
+cached by outcome class: complete, needs_city, and deterministic failures
+are memoized; transient failures never are.
+"""
+
 from __future__ import annotations
 
 import base64
-from collections import OrderedDict
-from functools import lru_cache
 import gzip
 import hashlib
 import hmac
@@ -10,15 +17,14 @@ import json
 import os
 import re
 import shutil
-import struct
 import tempfile
 import threading
 import time
-from io import BytesIO
+from collections import OrderedDict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
+from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -28,21 +34,16 @@ from map_boundary_builder.asset_response import web_asset_response
 from map_boundary_builder.image_io import svg_rasterizer_diagnostics
 from map_boundary_builder.pipeline_version import get_pipeline_version, pipeline_version_dependency_versions
 from map_boundary_builder.request_options import (
-    allow_catalog_for_request,
-    bool_field,
     city_hint_for_request,
     extraction_hints_for_request,
-    extractor_for_request,
-    experimental_classifier_for_request,
     float_field,
-    include_overlay_for_request,
     int_field,
 )
+from map_boundary_builder.runtime_config import ocr_runtime_config
 from map_boundary_builder.runtime_warmup import (
     prewarm_generation_runtime,
     should_prewarm_generation_runtime,
 )
-from map_boundary_builder.runtime_config import GENERATION_ENV_DEFAULTS, ocr_runtime_config
 from map_boundary_builder.upload_payload import (
     UploadPayloadError,
     json_upload_body_limit,
@@ -57,80 +58,10 @@ INLINE_OVERLAY_MAX_DIMENSION = 1200
 CRON_WARM_PATH = "/api/cron/warm-generation-v2"
 LEGACY_CRON_WARM_PATH = "/api/cron/warm-generation"
 CRON_WARM_PATHS = frozenset({CRON_WARM_PATH, LEGACY_CRON_WARM_PATH})
-RUN_RESULT_CACHE_VERSION = "run-result-v8-image-derived"
+RUN_RESULT_CACHE_VERSION = "run-result-v9-unified-pipeline"
 RUN_RESULT_CACHE_DIR = Path(os.environ["MAP_BOUNDARY_CACHE_DIR"]) / "run-results"
 RUN_RESULT_MEMORY_CACHE_MAX = 64
 RUN_RESULT_MEMORY_CACHE_MAX_BYTES = 512_000
-RUN_RESULT_RUNTIME_ENV_EXCLUDED_DEFAULTS = frozenset(
-    {
-        "MAP_BOUNDARY_CACHE_DIR",
-        "MAP_BOUNDARY_EXTRACTION_CACHE",
-        "MAP_BOUNDARY_GRAY_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
-        "MAP_BOUNDARY_LIGHT_FILL_ROUTE_UI_OCR_MAX_DIMENSION",
-        "MAP_BOUNDARY_PIPELINE_VERSION",
-        "MAP_BOUNDARY_RAPIDOCR_GRAY_FILL_MAX_DIMENSION",
-        "MAP_BOUNDARY_SVG_PROVIDER_UI_CROP_OCR_MAX_DIMENSION",
-    }
-)
-RUN_RESULT_RUNTIME_ENV_DEFAULTS = {
-    name: default
-    for name, default in GENERATION_ENV_DEFAULTS.items()
-    if name not in RUN_RESULT_RUNTIME_ENV_EXCLUDED_DEFAULTS
-}
-_RUN_RESULT_MEMORY_CACHE: OrderedDict[str, str] = OrderedDict()
-_RUN_RESULT_MEMORY_CACHE_LOCK = threading.RLock()
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-PNG_NON_VISUAL_CHUNKS = {b"tEXt", b"zTXt", b"iTXt", b"tIME"}
-JPEG_SIGNATURE = b"\xff\xd8"
-JPEG_COMMENT_MARKER = 0xFE
-JPEG_APP1_MARKER = 0xE1
-JPEG_START_OF_SCAN_MARKER = 0xDA
-JPEG_END_OF_IMAGE = b"\xff\xd9"
-JPEG_EXIF_PREFIX = b"Exif\x00\x00"
-JPEG_XMP_PREFIX = b"http://ns.adobe.com/xap/1.0/\x00"
-WEBP_RIFF_SIGNATURE = b"RIFF"
-WEBP_SIGNATURE = b"WEBP"
-WEBP_NON_VISUAL_CHUNKS = {b"EXIF", b"XMP "}
-AVIF_BRAND_BOX_TYPES = {b"ftyp", b"styp"}
-AVIF_MEDIA_BOX_TYPES = {b"meta", b"mdat"}
-AVIF_CONTAINER_NON_VISUAL_BOXES = {b"free", b"skip"}
-TIFF_LITTLE_ENDIAN_SIGNATURE = b"II"
-TIFF_BIG_ENDIAN_SIGNATURE = b"MM"
-TIFF_CLASSIC_MAGIC = 42
-TIFF_TYPE_SIZES = {
-    1: 1,  # BYTE
-    2: 1,  # ASCII
-    3: 2,  # SHORT
-    4: 4,  # LONG
-    5: 8,  # RATIONAL
-    6: 1,  # SBYTE
-    7: 1,  # UNDEFINED
-    8: 2,  # SSHORT
-    9: 4,  # SLONG
-    10: 8,  # SRATIONAL
-    11: 4,  # FLOAT
-    12: 8,  # DOUBLE
-}
-TIFF_NON_VISUAL_TAGS = {
-    270,  # ImageDescription
-    271,  # Make
-    272,  # Model
-    285,  # PageName
-    305,  # Software
-    306,  # DateTime
-    315,  # Artist
-    33432,  # Copyright
-    33723,  # IPTC
-    34377,  # Photoshop
-    34665,  # ExifIFDPointer
-    34853,  # GPSInfoIFDPointer
-    700,  # XMP
-}
-TIFF_STRIP_OFFSETS_TAG = 273
-TIFF_STRIP_BYTE_COUNTS_TAG = 279
-TIFF_TILE_OFFSETS_TAG = 324
-TIFF_TILE_BYTE_COUNTS_TAG = 325
-TIFF_MAX_IFDS = 16
 SUPPORTED_IMAGE_EXTENSIONS = {
     ".avif",
     ".png",
@@ -138,94 +69,14 @@ SUPPORTED_IMAGE_EXTENSIONS = {
     ".jpeg",
     ".webp",
     ".gif",
-    ".bmp",
     ".tif",
     ".tiff",
+    ".bmp",
     ".svg",
-    ".svgz",
 }
-FILENAME_HINT_CACHE_NOISE_TOKENS = {
-    "app",
-    "avif",
-    "after",
-    "baseline",
-    "boundary",
-    "boundaries",
-    "bmp",
-    "bust",
-    "cache",
-    "capture",
-    "candidate",
-    "cold",
-    "control",
-    "copy",
-    "coverage",
-    "current",
-    "currentref",
-    "debug",
-    "default",
-    "det",
-    "final",
-    "frame",
-    "gate",
-    "geojson",
-    "gif",
-    "health",
-    "hint",
-    "image",
-    "img",
-    "jpeg",
-    "jpg",
-    "latency",
-    "map",
-    "maps",
-    "neutral",
-    "ocr",
-    "operating",
-    "pipeline",
-    "png",
-    "probe",
-    "prod",
-    "production",
-    "profile",
-    "proof",
-    "prune",
-    "repeat",
-    "rerun",
-    "roadskip",
-    "run",
-    "screenshot",
-    "service",
-    "small",
-    "snap",
-    "smoke",
-    "strict",
-    "tail",
-    "tif",
-    "tiff",
-    "ui",
-    "upload",
-    "uploaded",
-    "variant",
-    "version",
-    "warm",
-    "web",
-    "webp",
-}
-FILENAME_HINT_CACHE_TOKEN_ALIASES = {
-    "bayarea": "bay area",
-    "lasvegas": "las vegas",
-    "losangeles": "los angeles",
-    "sanantonio": "san antonio",
-    "sanfrancisco": "san francisco",
-}
-FILENAME_HINT_CACHE_ALLOWED_PHRASES = {
-    ("bay", "area"),
-    ("las", "vegas"),
-    ("los", "angeles"),
-    ("san", "antonio"),
-    ("san", "francisco"),
-}
+
+_RUN_RESULT_MEMORY_CACHE: OrderedDict[str, str] = OrderedDict()
+_RUN_RESULT_MEMORY_CACHE_LOCK = threading.RLock()
 
 
 class RequestError(ValueError):
@@ -235,7 +86,7 @@ class RequestError(ValueError):
 
 
 class handler(BaseHTTPRequestHandler):
-    server_version = "MapBoundaryVercel/0.1"
+    server_version = "MapBoundaryVercel/0.2"
 
     def do_HEAD(self) -> None:
         parsed = urlparse(self.path)
@@ -309,658 +160,104 @@ class handler(BaseHTTPRequestHandler):
             raise RequestError(HTTPStatus.BAD_REQUEST, "Uploaded image is empty.")
         profile["upload_bytes"] = len(image_bytes)
 
-        events: list[dict[str, Any]] = [
-            {"stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}
-        ]
+        from map_boundary_builder.pipeline import PipelineOptions, run_pipeline
 
-        def progress(event: dict[str, Any]) -> None:
-            events.append({"timestamp": time.time(), **event})
-
-        normalized_cache_lookup = bool_field(fields, "normalized_cache_lookup", default=False)
-        profile["normalized_cache_lookup_enabled"] = normalized_cache_lookup
-        profile["normalized_cache_lookup_s"] = 0.0
-        profile_ocr_engine = bool_field(fields, "profile_ocr_engine", default=False)
-        if profile_ocr_engine:
-            profile["ocr_engine_profile_requested"] = True
-        # Public uploads must always be derived from the uploaded image. Legacy
-        # catalog probe fields are deliberately ignored, including from stale
-        # browser clients.
-        catalog_probe_only = False
-        include_overlay = include_overlay_for_request(fields, catalog_probe_only=False)
-        catalog_probe_missed = False
-        allow_catalog = allow_catalog_for_request(fields)
-        experimental_classifier = experimental_classifier_for_request(fields)
-        extractor = extractor_for_request(fields)
-        extraction_hints = extraction_hints_for_request(fields)
-        options = SimpleNamespace(
+        hints = extraction_hints_for_request(fields) or {}
+        options = PipelineOptions(
             simplify_px=float_field(fields, "simplify_px", DEFAULT_SIMPLIFY_PX, 0.0, 10.0),
             min_confidence=float_field(fields, "min_confidence", 0.55, 0.0, 1.0),
             min_control_points=int_field(fields, "min_control_points", 3, 0, 12),
-            include_overlay=include_overlay,
-            preview_max_dimension=INLINE_OVERLAY_MAX_DIMENSION if include_overlay else None,
-            overlay_format="webp" if include_overlay else "png",
-            write_mask_artifact=False,
-            allow_catalog=allow_catalog,
-            catalog_probe_only=catalog_probe_only,
-            catalog_probe_missed=catalog_probe_missed,
-            catalog_probe_miss_low_iou=False,
-            experimental_classifier=experimental_classifier,
-            model_variant=None if extractor == "deterministic" else extractor,
-            extraction_hints=extraction_hints,
-            filename_hint=original_filename,
-            source_was_svg=bool_field(fields, "source_was_svg", default=False),
+            seed_point=hints.get("seed_point"),  # type: ignore[arg-type]
+            target_rgb=hints.get("target_rgb"),  # type: ignore[arg-type]
         )
         run_id = f"{int(time.time())}-{os.urandom(4).hex()}"
-        raw_cache_started = time.perf_counter()
-        raw_image_hash = hashlib.sha256(image_bytes).hexdigest()
-        raw_cache_key, raw_success_cache_key = run_result_cache_key_pair_for_hash(
-            "image_raw_sha256",
-            raw_image_hash,
-            city,
-            options,
-        )
-        cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-            raw_cache_key,
-            raw_success_cache_key,
-            image_hash_name="image_raw_sha256",
-            image_hash=raw_image_hash,
-            city=city,
-            options=options,
-        )
-        profile["raw_cache_lookup_s"] = elapsed_seconds(raw_cache_started)
+        identity = cache_identity(city, options)
+
+        raw_cache_key = run_result_cache_key("image_raw_sha256", hashlib.sha256(image_bytes).hexdigest(), identity)
+        cached = read_run_result_cache(raw_cache_key)
+        cache_hit = "raw" if cached is not None else None
+        visual_cache_key: str | None = None
+        if cached is None:
+            visual_cache_key = run_result_cache_key(
+                "image_pixel_sha256", normalized_image_sha256(image_bytes), identity
+            )
+            cached = read_run_result_cache(visual_cache_key)
+            cache_hit = "visual" if cached is not None else None
         if cached is not None:
-            if compatible_cache_hit or overlay_superset_cache_hit:
-                backfill_cache_hit_keys(
-                    profile,
-                    cached,
-                    raw_cache_key,
-                    raw_success_cache_key=raw_success_cache_key,
-                    warm_success_cache=True,
-                )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "raw",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
+            profile["cache_hit"] = cache_hit
             profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
+            payload = {
+                "id": run_id,
+                "filename": Path(original_filename).name or "uploaded-image",
+                "percent": 100,
+                **cached,
+                "profile": profile,
+            }
+            self.send_json(payload, status=response_status(payload.get("status"), cached=True))
             return
-
-        png_visual_cache_started = time.perf_counter()
-        png_visual_hash = png_visual_sha256(image_bytes)
-        if png_visual_hash is not None:
-            png_visual_cache_key, png_visual_success_cache_key = run_result_cache_key_pair_for_hash(
-                "png_visual_sha256",
-                png_visual_hash,
-                city,
-                options,
-            )
-        else:
-            png_visual_cache_key = None
-            png_visual_success_cache_key = None
-        if png_visual_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                png_visual_cache_key,
-                png_visual_success_cache_key,
-                image_hash_name="png_visual_sha256",
-                image_hash=png_visual_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["png_visual_cache_lookup_s"] = elapsed_seconds(png_visual_cache_started)
-        if png_visual_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=png_visual_cache_key,
-                request_success_cache_key=png_visual_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "png-visual",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        jpeg_commentless_cache_started = time.perf_counter()
-        jpeg_commentless_hash = jpeg_commentless_sha256(image_bytes)
-        if jpeg_commentless_hash is not None:
-            jpeg_commentless_cache_key, jpeg_commentless_success_cache_key = run_result_cache_key_pair_for_hash(
-                "jpeg_commentless_sha256",
-                jpeg_commentless_hash,
-                city,
-                options,
-            )
-        else:
-            jpeg_commentless_cache_key = None
-            jpeg_commentless_success_cache_key = None
-        if jpeg_commentless_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                jpeg_commentless_cache_key,
-                jpeg_commentless_success_cache_key,
-                image_hash_name="jpeg_commentless_sha256",
-                image_hash=jpeg_commentless_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["jpeg_commentless_cache_lookup_s"] = elapsed_seconds(jpeg_commentless_cache_started)
-        if jpeg_commentless_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=jpeg_commentless_cache_key,
-                request_success_cache_key=jpeg_commentless_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "jpeg-commentless",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        jpeg_visual_cache_started = time.perf_counter()
-        jpeg_visual_hash = jpeg_visual_sha256(image_bytes)
-        if jpeg_visual_hash is not None:
-            jpeg_visual_cache_key, jpeg_visual_success_cache_key = run_result_cache_key_pair_for_hash(
-                "jpeg_visual_sha256",
-                jpeg_visual_hash,
-                city,
-                options,
-            )
-        else:
-            jpeg_visual_cache_key = None
-            jpeg_visual_success_cache_key = None
-        if jpeg_visual_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                jpeg_visual_cache_key,
-                jpeg_visual_success_cache_key,
-                image_hash_name="jpeg_visual_sha256",
-                image_hash=jpeg_visual_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["jpeg_visual_cache_lookup_s"] = elapsed_seconds(jpeg_visual_cache_started)
-        if jpeg_visual_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=jpeg_visual_cache_key,
-                request_success_cache_key=jpeg_visual_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "jpeg-visual",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        webp_visual_cache_started = time.perf_counter()
-        webp_visual_hash = webp_visual_sha256(image_bytes)
-        if webp_visual_hash is not None:
-            webp_visual_cache_key, webp_visual_success_cache_key = run_result_cache_key_pair_for_hash(
-                "webp_visual_sha256",
-                webp_visual_hash,
-                city,
-                options,
-            )
-        else:
-            webp_visual_cache_key = None
-            webp_visual_success_cache_key = None
-        if webp_visual_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                webp_visual_cache_key,
-                webp_visual_success_cache_key,
-                image_hash_name="webp_visual_sha256",
-                image_hash=webp_visual_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["webp_visual_cache_lookup_s"] = elapsed_seconds(webp_visual_cache_started)
-        if webp_visual_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=webp_visual_cache_key,
-                request_success_cache_key=webp_visual_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "webp-visual",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        avif_container_cache_started = time.perf_counter()
-        avif_container_hash = avif_container_sha256(image_bytes)
-        if avif_container_hash is not None:
-            avif_container_cache_key, avif_container_success_cache_key = run_result_cache_key_pair_for_hash(
-                "avif_container_sha256",
-                avif_container_hash,
-                city,
-                options,
-            )
-        else:
-            avif_container_cache_key = None
-            avif_container_success_cache_key = None
-        if avif_container_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                avif_container_cache_key,
-                avif_container_success_cache_key,
-                image_hash_name="avif_container_sha256",
-                image_hash=avif_container_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["avif_container_cache_lookup_s"] = elapsed_seconds(avif_container_cache_started)
-        if avif_container_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=avif_container_cache_key,
-                request_success_cache_key=avif_container_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "avif-container",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        tiff_visual_cache_started = time.perf_counter()
-        tiff_visual_hash = tiff_visual_sha256(image_bytes)
-        if tiff_visual_hash is not None:
-            tiff_visual_cache_key, tiff_visual_success_cache_key = run_result_cache_key_pair_for_hash(
-                "tiff_visual_sha256",
-                tiff_visual_hash,
-                city,
-                options,
-            )
-        else:
-            tiff_visual_cache_key = None
-            tiff_visual_success_cache_key = None
-        if tiff_visual_cache_key is not None:
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                tiff_visual_cache_key,
-                tiff_visual_success_cache_key,
-                image_hash_name="tiff_visual_sha256",
-                image_hash=tiff_visual_hash,
-                city=city,
-                options=options,
-            )
-        else:
-            compatible_cache_hit = False
-            overlay_superset_cache_hit = False
-        profile["tiff_visual_cache_lookup_s"] = elapsed_seconds(tiff_visual_cache_started)
-        if tiff_visual_cache_key is not None and cached is not None:
-            backfill_cache_hit_keys(
-                profile,
-                cached,
-                raw_cache_key,
-                raw_success_cache_key=raw_success_cache_key,
-                request_cache_key=tiff_visual_cache_key,
-                request_success_cache_key=tiff_visual_success_cache_key,
-                warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-            )
-            profile["cache_hit"] = cache_hit_profile_value(
-                "tiff-visual",
-                compatible=compatible_cache_hit,
-                overlay_superset=overlay_superset_cache_hit,
-            )
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = cached_run_payload(
-                cached,
-                run_id,
-                original_filename,
-                events,
-                profile=profile,
-                include_overlay=options.include_overlay,
-            )
-            self.send_json(
-                payload,
-                status=cached_run_response_status(payload),
-            )
-            return
-
-        cache_key: str | None = None
-        if normalized_cache_lookup:
-            normalized_cache_started = time.perf_counter()
-            normalized_image_hash = normalized_image_sha256(image_bytes)
-            cache_key, normalized_success_cache_key = run_result_cache_key_pair_for_hash(
-                "image_pixel_sha256",
-                normalized_image_hash,
-                city,
-                options,
-            )
-            cached, compatible_cache_hit, overlay_superset_cache_hit = read_run_result_cache_with_overlay_fallback(
-                cache_key,
-                normalized_success_cache_key,
-                image_hash_name="image_pixel_sha256",
-                image_hash=normalized_image_hash,
-                city=city,
-                options=options,
-            )
-            profile["normalized_cache_lookup_s"] = elapsed_seconds(normalized_cache_started)
-            if cached is not None:
-                backfill_cache_hit_keys(
-                    profile,
-                    cached,
-                    raw_cache_key,
-                    raw_success_cache_key=raw_success_cache_key,
-                    request_cache_key=cache_key,
-                    request_success_cache_key=normalized_success_cache_key,
-                    warm_success_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                    warm_request_cache=compatible_cache_hit or overlay_superset_cache_hit,
-                )
-                profile["cache_hit"] = cache_hit_profile_value(
-                    "normalized",
-                    compatible=compatible_cache_hit,
-                    overlay_superset=overlay_superset_cache_hit,
-                )
-                profile["total_before_send_s"] = elapsed_seconds(request_started)
-                payload = cached_run_payload(
-                    cached,
-                    run_id,
-                    original_filename,
-                    events,
-                    profile=profile,
-                    include_overlay=options.include_overlay,
-                )
-                self.send_json(
-                    payload,
-                    status=cached_run_response_status(payload),
-                )
-                return
 
         run_dir = Path(tempfile.gettempdir()) / "map-boundary-builder" / run_id
-        debug_dir = run_dir / "debug" if options.include_overlay else None
+        debug_dir = run_dir / "debug"
         run_dir.mkdir(parents=True, exist_ok=True)
         image_path = run_dir / f"input{safe_extension(original_filename)}"
-        output_path = run_dir / "boundary.geojson"
-        write_upload_started = time.perf_counter()
         image_path.write_bytes(image_bytes)
-        profile["write_upload_s"] = elapsed_seconds(write_upload_started)
+        output_path = run_dir / "boundary.geojson"
+
+        events: list[dict[str, Any]] = [
+            {"timestamp": time.time(), "stage": "queued", "message": "Run queued", "percent": 1, "status": "queued"}
+        ]
+
+        def progress(stage: str, percent: int, detail: str) -> None:
+            events.append(
+                {
+                    "timestamp": time.time(),
+                    "stage": stage,
+                    "message": detail,
+                    "percent": percent,
+                    "status": "running",
+                }
+            )
 
         build_started = time.perf_counter()
         try:
-            from map_boundary_builder.runner import CatalogProbeMiss, build_boundary
+            result = run_pipeline(
+                image_path,
+                city=city,
+                output_path=output_path,
+                debug_dir=debug_dir,
+                options=options,
+                progress=progress,
+            )
         except Exception as exc:
-            events = generation_failure_events(events, exc)
             profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-            profile["cache_hit"] = "miss"
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = generation_error_payload(exc, run_id, original_filename, events, profile)
-            self.send_json(
-                payload,
-                status=generation_error_status(exc),
-            )
-            return
-
-        ocr_engine_events: list[dict[str, Any]] | None = None
-        ocr_engine_profile_summarizer = None
-
-        def attach_ocr_engine_profile() -> None:
-            if ocr_engine_profile_summarizer is None:
-                return
-            profile["ocr_engine_profile"] = ocr_engine_profile_summarizer(ocr_engine_events)
-
-        try:
-            if profile_ocr_engine:
-                from map_boundary_builder.ocr import collect_rapidocr_profiles, summarize_rapidocr_profile_events
-
-                ocr_engine_profile_summarizer = summarize_rapidocr_profile_events
-                with collect_rapidocr_profiles() as collected:
-                    ocr_engine_events = collected
-                    result = build_boundary(
-                        image_path,
-                        city,
-                        output_path,
-                        debug_dir=debug_dir,
-                        options=options,
-                        progress=progress,
-                    )
-            else:
-                result = build_boundary(
-                    image_path,
-                    city,
-                    output_path,
-                    debug_dir=debug_dir,
-                    options=options,
-                    progress=progress,
-                )
-            profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-            attach_ocr_engine_profile()
-        except CatalogProbeMiss as exc:
-            events = terminal_run_events(
-                events,
-                stage="catalog_miss",
-                message="Catalog probe missed",
-                status="catalog_miss",
-                details=exc.details,
-            )
-            profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-            attach_ocr_engine_profile()
             profile["cache_hit"] = "miss"
             profile["total_before_send_s"] = elapsed_seconds(request_started)
             payload = {
                 "id": run_id,
                 "filename": Path(original_filename).name or "uploaded-image",
-                "status": "catalog_miss",
+                "status": "failed",
                 "percent": 100,
                 "error": str(exc),
-                "catalog_probe_miss": exc.details,
                 "events": events[-20:],
                 "profile": profile,
             }
-            if cache_key is not None:
-                write_run_result_cache(cache_key, payload)
-            if png_visual_cache_key is not None:
-                write_run_result_cache(png_visual_cache_key, payload)
-            if jpeg_commentless_cache_key is not None:
-                write_run_result_cache(jpeg_commentless_cache_key, payload)
-            if jpeg_visual_cache_key is not None:
-                write_run_result_cache(jpeg_visual_cache_key, payload)
-            if webp_visual_cache_key is not None:
-                write_run_result_cache(webp_visual_cache_key, payload)
-            if avif_container_cache_key is not None:
-                write_run_result_cache(avif_container_cache_key, payload)
-            if tiff_visual_cache_key is not None:
-                write_run_result_cache(tiff_visual_cache_key, payload)
+            self.send_json(payload, status=HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        profile["build_boundary_s"] = elapsed_seconds(build_started)
+        profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
+
+        payload = run_result_payload(result, run_id, original_filename, events)
+        if result.cacheable:
+            if visual_cache_key is None:
+                visual_cache_key = run_result_cache_key(
+                    "image_pixel_sha256", normalized_image_sha256(image_bytes), identity
+                )
             write_run_result_cache(raw_cache_key, payload)
-            self.send_json(payload, status=HTTPStatus.OK)
-            return
-        except Exception as exc:
-            events = generation_failure_events(events, exc)
-            profile["build_boundary_s"] = elapsed_seconds(build_started)
-            profile["build_stage_elapsed_s"] = event_stage_elapsed_seconds(events)
-            attach_ocr_engine_profile()
-            profile["cache_hit"] = "miss"
-            profile["total_before_send_s"] = elapsed_seconds(request_started)
-            payload = generation_error_payload(exc, run_id, original_filename, events, profile)
-            if generation_error_status(exc) == HTTPStatus.UNPROCESSABLE_ENTITY:
-                if cache_key is not None:
-                    write_run_result_cache(cache_key, payload)
-                if png_visual_cache_key is not None:
-                    write_run_result_cache(png_visual_cache_key, payload)
-                if jpeg_commentless_cache_key is not None:
-                    write_run_result_cache(jpeg_commentless_cache_key, payload)
-                if jpeg_visual_cache_key is not None:
-                    write_run_result_cache(jpeg_visual_cache_key, payload)
-                if webp_visual_cache_key is not None:
-                    write_run_result_cache(webp_visual_cache_key, payload)
-                if avif_container_cache_key is not None:
-                    write_run_result_cache(avif_container_cache_key, payload)
-                if tiff_visual_cache_key is not None:
-                    write_run_result_cache(tiff_visual_cache_key, payload)
-                write_run_result_cache(raw_cache_key, payload)
-            self.send_json(
-                payload,
-                status=generation_error_status(exc),
-            )
-            return
-        artifacts_started = time.perf_counter()
-        artifacts = {
-            "geojson_inline": result.geojson,
-        }
-        if options.include_overlay:
-            artifacts["overlay_data_url"] = inline_overlay(result.overlay_path)
-        profile["build_artifacts_s"] = elapsed_seconds(artifacts_started)
-        payload = {
-            "id": run_id,
-            "city": result.summary["city"],
-            "filename": Path(original_filename).name or "uploaded-image",
-            "status": "complete",
-            "percent": 100,
-            "summary": result.summary,
-            "events": events[-20:],
-            "artifacts": artifacts,
-        }
-        cache_write_started = time.perf_counter()
-        if cache_key is not None:
-            write_run_result_cache(cache_key, payload)
-        if png_visual_cache_key is not None:
-            write_run_result_cache(png_visual_cache_key, payload)
-        if jpeg_commentless_cache_key is not None:
-            write_run_result_cache(jpeg_commentless_cache_key, payload)
-        if jpeg_visual_cache_key is not None:
-            write_run_result_cache(jpeg_visual_cache_key, payload)
-        if webp_visual_cache_key is not None:
-            write_run_result_cache(webp_visual_cache_key, payload)
-        if avif_container_cache_key is not None:
-            write_run_result_cache(avif_container_cache_key, payload)
-        if tiff_visual_cache_key is not None:
-            write_run_result_cache(tiff_visual_cache_key, payload)
-        write_run_result_cache(raw_cache_key, payload)
-        write_success_run_result_cache_keys(
-            payload,
-            raw_success_cache_key,
-            png_visual_success_cache_key,
-            jpeg_commentless_success_cache_key,
-            jpeg_visual_success_cache_key,
-            webp_visual_success_cache_key,
-            avif_container_success_cache_key,
-            tiff_visual_success_cache_key,
-            normalized_success_cache_key if cache_key is not None else None,
-        )
-        profile["cache_write_s"] = elapsed_seconds(cache_write_started)
+            write_run_result_cache(visual_cache_key, payload)
         profile["cache_hit"] = "miss"
         profile["total_before_send_s"] = elapsed_seconds(request_started)
         payload["profile"] = profile
-        self.send_json(payload, status=HTTPStatus.CREATED)
+        self.send_json(payload, status=response_status(result.status, cached=False))
 
     def handle_create_report(self) -> None:
         fields, files, _upload_encoding = self.parse_upload_request()
@@ -1103,9 +400,190 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def inline_overlay(path: Path | None) -> str | None:
-    if path is None or not path.exists():
+def run_result_payload(result: Any, run_id: str, original_filename: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+    filename = Path(original_filename).name or "uploaded-image"
+    if result.status == "complete":
+        events.append(
+            {
+                "timestamp": time.time(),
+                "stage": "complete",
+                "message": "Boundary complete",
+                "percent": 100,
+                "status": "complete",
+            }
+        )
+        return {
+            "id": run_id,
+            "city": result.summary.get("city"),
+            "filename": filename,
+            "status": "complete",
+            "percent": 100,
+            "summary": result.summary,
+            "events": events[-20:],
+            "artifacts": {
+                "geojson_inline": result.geojson,
+                "overlay_data_url": inline_overlay(result.overlay_path),
+            },
+        }
+    if result.status == "needs_city":
+        events.append(
+            {
+                "timestamp": time.time(),
+                "stage": "needs_city",
+                "message": "Boundary extracted, but the city could not be determined.",
+                "percent": 100,
+                "status": "needs_city",
+            }
+        )
+        return {
+            "id": run_id,
+            "filename": filename,
+            "status": "needs_city",
+            "percent": 100,
+            "summary": result.summary,
+            "needs_city": result.summary.get("needs_city"),
+            "events": events[-20:],
+            "artifacts": {
+                "overlay_data_url": inline_overlay(result.overlay_path),
+            },
+        }
+    message = result.summary.get("message") or result.reason or "Generation failed"
+    events.append(
+        {
+            "timestamp": time.time(),
+            "stage": "failed",
+            "message": str(message),
+            "percent": 100,
+            "status": "failed",
+            "details": {"error": str(message)},
+        }
+    )
+    return {
+        "id": run_id,
+        "filename": filename,
+        "status": "failed",
+        "percent": 100,
+        "error": str(message),
+        "reason": result.reason,
+        "summary": result.summary,
+        "events": events[-20:],
+    }
+
+
+def response_status(status: str | None, *, cached: bool) -> HTTPStatus:
+    if status == "complete":
+        return HTTPStatus.OK if cached else HTTPStatus.CREATED
+    if status == "needs_city":
+        return HTTPStatus.OK
+    return HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def cache_identity(city: str | None, options: Any) -> dict[str, Any]:
+    return {
+        "version": RUN_RESULT_CACHE_VERSION,
+        "pipeline_version": get_pipeline_version(),
+        "city": (city or "").strip().lower(),
+        "simplify_px": options.simplify_px,
+        "min_confidence": options.min_confidence,
+        "min_control_points": options.min_control_points,
+        "seed_point": list(options.seed_point) if options.seed_point else None,
+        "target_rgb": list(options.target_rgb) if options.target_rgb else None,
+    }
+
+
+def run_result_cache_key(hash_name: str, image_hash: str, identity: dict[str, Any]) -> str:
+    digest = hashlib.sha256()
+    digest.update(json.dumps({**identity, hash_name: image_hash}, sort_keys=True).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def normalized_image_sha256(image_bytes: bytes) -> str:
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(BytesIO(image_bytes)) as image:
+            normalized = ImageOps.exif_transpose(image).convert("RGBA")
+            digest = hashlib.sha256()
+            digest.update(str(normalized.size).encode("ascii"))
+            digest.update(normalized.mode.encode("ascii"))
+            digest.update(normalized.tobytes())
+            return digest.hexdigest()
+    except Exception:
+        return hashlib.sha256(image_bytes).hexdigest()
+
+
+def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
+    with _RUN_RESULT_MEMORY_CACHE_LOCK:
+        cached_json = _RUN_RESULT_MEMORY_CACHE.get(cache_key)
+        if cached_json is not None:
+            _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
+    if cached_json is not None:
+        try:
+            return json.loads(cached_json)
+        except Exception:
+            with _RUN_RESULT_MEMORY_CACHE_LOCK:
+                _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
+            return None
+    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
+    if not cache_path.exists():
         return None
+    try:
+        encoded = cache_path.read_text()
+        payload = json.loads(encoded)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    remember_run_result_cache(cache_key, payload, encoded=encoded)
+    return payload
+
+
+def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
+    if payload.get("status") == "failed":
+        cached = {
+            "status": "failed",
+            "error": payload.get("error"),
+            "reason": payload.get("reason"),
+        }
+    else:
+        cached = {
+            "status": payload.get("status"),
+            "city": payload.get("city"),
+            "summary": payload.get("summary"),
+            "needs_city": payload.get("needs_city"),
+            "artifacts": payload.get("artifacts"),
+        }
+    encoded = remember_run_result_cache(cache_key, cached)
+    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
+    tmp_path = cache_path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_text(encoded)
+        tmp_path.replace(cache_path)
+    except OSError:
+        tmp_path.unlink(missing_ok=True)
+        return
+
+
+def remember_run_result_cache(cache_key: str, payload: dict[str, Any], *, encoded: str | None = None) -> str:
+    if encoded is None:
+        encoded = json.dumps(payload, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > RUN_RESULT_MEMORY_CACHE_MAX_BYTES:
+        with _RUN_RESULT_MEMORY_CACHE_LOCK:
+            _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
+        return encoded
+    with _RUN_RESULT_MEMORY_CACHE_LOCK:
+        _RUN_RESULT_MEMORY_CACHE[cache_key] = encoded
+        _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
+        while len(_RUN_RESULT_MEMORY_CACHE) > RUN_RESULT_MEMORY_CACHE_MAX:
+            _RUN_RESULT_MEMORY_CACHE.popitem(last=False)
+    return encoded
+
+
+def inline_overlay(path: Path | None) -> str | None:
+    if path is None or not Path(path).exists():
+        return None
+    path = Path(path)
     data = path.read_bytes()
     mime = "image/webp" if path.suffix.lower() == ".webp" else "image/png"
     if mime == "image/png" and len(data) > INLINE_OVERLAY_OPTIMIZE_BYTES:
@@ -1191,7 +669,6 @@ def health_payload(*, warm: str | None = None) -> dict[str, Any]:
         "runtime_dependencies": runtime_dependencies,
         "svg_rasterizer": svg_rasterizer,
         "ocr": ocr_runtime_config(),
-        "generation_env": generation_runtime_env_config(),
     }
     if should_prewarm_generation_runtime(warm):
         warm_payload = prewarm_generation_runtime()
@@ -1260,1003 +737,3 @@ def event_stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float
     for (stage, timestamp), (_, next_timestamp) in zip(timestamped, timestamped[1:]):
         totals[stage] = totals.get(stage, 0.0) + max(0.0, next_timestamp - timestamp)
     return {stage: round(total, 6) for stage, total in totals.items()}
-
-
-def generation_error_status(exc: Exception) -> HTTPStatus:
-    if isinstance(exc, ValueError):
-        return HTTPStatus.UNPROCESSABLE_ENTITY
-    return HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-def generation_failure_events(events: list[dict[str, Any]], exc: Exception) -> list[dict[str, Any]]:
-    return terminal_run_events(
-        events,
-        stage="failed",
-        message="Generation failed",
-        status="failed",
-        details={"error": str(exc)},
-    )
-
-
-def terminal_run_events(
-    events: list[dict[str, Any]],
-    *,
-    stage: str,
-    message: str,
-    status: str,
-    details: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    if events and events[-1].get("stage") == stage and events[-1].get("status") == status:
-        return events[-20:]
-    event: dict[str, Any] = {
-        "timestamp": time.time(),
-        "stage": stage,
-        "message": message,
-        "percent": 100,
-        "status": status,
-    }
-    if details:
-        event["details"] = details
-    return [*events[-19:], event]
-
-
-def generation_error_payload(
-    exc: Exception,
-    run_id: str,
-    original_filename: str,
-    events: list[dict[str, Any]],
-    profile: dict[str, Any],
-) -> dict[str, Any]:
-    events = generation_failure_events(events, exc)
-    return {
-        "id": run_id,
-        "filename": Path(original_filename).name or "uploaded-image",
-        "status": "failed",
-        "percent": 100,
-        "error": str(exc),
-        "events": events[-20:],
-        "profile": profile,
-    }
-
-
-def run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
-    return run_result_cache_key_for_hash("image_pixel_sha256", normalized_image_sha256(image_bytes), city, options)
-
-
-def run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
-    return run_result_cache_key_for_hash(
-        "image_pixel_sha256",
-        normalized_image_sha256(image_bytes),
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def raw_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
-    return run_result_cache_key_for_hash("image_raw_sha256", hashlib.sha256(image_bytes).hexdigest(), city, options)
-
-
-def raw_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str:
-    return run_result_cache_key_for_hash(
-        "image_raw_sha256",
-        hashlib.sha256(image_bytes).hexdigest(),
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def png_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = png_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash("png_visual_sha256", visual_hash, city, options)
-
-
-def png_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = png_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "png_visual_sha256",
-        visual_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def jpeg_commentless_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = jpeg_commentless_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash("jpeg_commentless_sha256", visual_hash, city, options)
-
-
-def jpeg_commentless_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = jpeg_commentless_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "jpeg_commentless_sha256",
-        visual_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def jpeg_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = jpeg_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash("jpeg_visual_sha256", visual_hash, city, options)
-
-
-def jpeg_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = jpeg_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "jpeg_visual_sha256",
-        visual_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def webp_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = webp_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash("webp_visual_sha256", visual_hash, city, options)
-
-
-def webp_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = webp_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "webp_visual_sha256",
-        visual_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def avif_container_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    container_hash = avif_container_sha256(image_bytes)
-    if container_hash is None:
-        return None
-    return run_result_cache_key_for_hash("avif_container_sha256", container_hash, city, options)
-
-
-def avif_container_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    container_hash = avif_container_sha256(image_bytes)
-    if container_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "avif_container_sha256",
-        container_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def tiff_visual_run_result_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = tiff_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash("tiff_visual_sha256", visual_hash, city, options)
-
-
-def tiff_visual_run_result_success_cache_key(image_bytes: bytes, city: str | None, options: Any) -> str | None:
-    visual_hash = tiff_visual_sha256(image_bytes)
-    if visual_hash is None:
-        return None
-    return run_result_cache_key_for_hash(
-        "tiff_visual_sha256",
-        visual_hash,
-        city,
-        options,
-        threshold_compatible=True,
-    )
-
-
-def run_result_cache_key_for_hash(
-    image_hash_name: str,
-    image_hash: str,
-    city: str | None,
-    options: Any,
-    *,
-    threshold_compatible: bool = False,
-) -> str:
-    parts = {
-        "version": RUN_RESULT_CACHE_VERSION,
-        "pipeline_version": get_pipeline_version(),
-        "runtime_config": run_result_runtime_config(),
-        image_hash_name: image_hash,
-        "city": city or "",
-        "simplify_px": round(float(options.simplify_px), 4),
-        "min_confidence": (
-            "success-threshold-compatible"
-            if threshold_compatible
-            else round(float(options.min_confidence), 4)
-        ),
-        "min_control_points": (
-            "success-threshold-compatible"
-            if threshold_compatible
-            else int(options.min_control_points)
-        ),
-        "include_overlay": bool(getattr(options, "include_overlay", True)),
-        "preview_max_dimension": getattr(options, "preview_max_dimension", None) or "",
-        "overlay_format": getattr(options, "overlay_format", "png"),
-        "write_mask_artifact": bool(getattr(options, "write_mask_artifact", True)),
-        "allow_catalog": bool(getattr(options, "allow_catalog", True)),
-        "catalog_probe_only": bool(getattr(options, "catalog_probe_only", False)),
-        "catalog_probe_missed": bool(getattr(options, "catalog_probe_missed", False)),
-        "catalog_probe_miss_low_iou": bool(getattr(options, "catalog_probe_miss_low_iou", False)),
-        "experimental_classifier": bool(getattr(options, "experimental_classifier", False)),
-        "model_variant": getattr(options, "model_variant", None) or "",
-        "extraction_hints": getattr(options, "extraction_hints", None) or {},
-        "filename_hint": filename_hint_cache_value(getattr(options, "filename_hint", None)),
-        "source_was_svg": bool(getattr(options, "source_was_svg", False)),
-    }
-    encoded = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def run_result_cache_key_pair_for_hash(
-    image_hash_name: str,
-    image_hash: str,
-    city: str | None,
-    options: Any,
-) -> tuple[str, str]:
-    return (
-        run_result_cache_key_for_hash(image_hash_name, image_hash, city, options),
-        run_result_cache_key_for_hash(
-            image_hash_name,
-            image_hash,
-            city,
-            options,
-            threshold_compatible=True,
-        ),
-    )
-
-
-def run_result_runtime_config() -> dict[str, Any]:
-    return {
-        "ocr": ocr_runtime_config(),
-        "generation_env": generation_runtime_env_config(),
-        "runtime_dependencies": run_result_runtime_dependencies_config(),
-    }
-
-
-@lru_cache(maxsize=1)
-def run_result_runtime_dependencies_config() -> dict[str, str]:
-    return dict(pipeline_version_dependency_versions())
-
-
-def generation_runtime_env_config() -> dict[str, str]:
-    return {
-        name: os.environ.get(name, default)
-        for name, default in sorted(RUN_RESULT_RUNTIME_ENV_DEFAULTS.items())
-    }
-
-
-def filename_hint_cache_value(filename_hint: object) -> str:
-    if not filename_hint:
-        return ""
-    filename = Path(str(filename_hint)).name
-    path = Path(filename)
-    extension = path.suffix.lower().lstrip(".")
-    raw_tokens = [
-        FILENAME_HINT_CACHE_TOKEN_ALIASES.get(token, token)
-        for token in re.split(r"[^a-z0-9]+", path.stem.lower())
-        if len(token) >= 2 and not any(char.isdigit() for char in token)
-    ]
-    protected_indexes = filename_hint_cache_phrase_indexes(raw_tokens)
-    tokens: list[str] = []
-    seen: set[str] = set()
-    for index, token in enumerate(raw_tokens):
-        if index not in protected_indexes and token in FILENAME_HINT_CACHE_NOISE_TOKENS:
-            continue
-        if token in seen:
-            continue
-        seen.add(token)
-        tokens.append(token)
-    token_part = " ".join(tokens)
-    if extension:
-        return f"{extension}:{token_part}"
-    return token_part
-
-
-def filename_hint_cache_phrase_indexes(tokens: list[str]) -> set[int]:
-    protected: set[int] = set()
-    for phrase in FILENAME_HINT_CACHE_ALLOWED_PHRASES:
-        size = len(phrase)
-        for index in range(0, max(0, len(tokens) - size + 1)):
-            if tuple(tokens[index : index + size]) == phrase:
-                protected.update(range(index, index + size))
-    return protected
-
-
-def normalized_image_sha256(image_bytes: bytes) -> str:
-    try:
-        from PIL import Image, ImageOps
-
-        with Image.open(BytesIO(image_bytes)) as image:
-            normalized = ImageOps.exif_transpose(image).convert("RGBA")
-            digest = hashlib.sha256()
-            digest.update(str(normalized.size).encode("ascii"))
-            digest.update(normalized.mode.encode("ascii"))
-            digest.update(normalized.tobytes())
-            return digest.hexdigest()
-    except Exception:
-        return hashlib.sha256(image_bytes).hexdigest()
-
-
-def png_visual_sha256(image_bytes: bytes) -> str | None:
-    if not image_bytes.startswith(PNG_SIGNATURE):
-        return None
-    digest = hashlib.sha256()
-    digest.update(b"png-visual-v1")
-    digest.update(PNG_SIGNATURE)
-    offset = len(PNG_SIGNATURE)
-    seen_iend = False
-    while offset + 12 <= len(image_bytes):
-        chunk_length = int.from_bytes(image_bytes[offset : offset + 4], "big")
-        chunk_type = image_bytes[offset + 4 : offset + 8]
-        data_start = offset + 8
-        data_end = data_start + chunk_length
-        crc_end = data_end + 4
-        if crc_end > len(image_bytes):
-            return None
-        if chunk_type not in PNG_NON_VISUAL_CHUNKS:
-            digest.update(chunk_type)
-            digest.update(chunk_length.to_bytes(4, "big"))
-            digest.update(image_bytes[data_start:data_end])
-        offset = crc_end
-        if chunk_type == b"IEND":
-            seen_iend = True
-            break
-    if not seen_iend:
-        return None
-    return digest.hexdigest()
-
-
-def jpeg_commentless_sha256(image_bytes: bytes) -> str | None:
-    if not image_bytes.startswith(JPEG_SIGNATURE):
-        return None
-    digest = hashlib.sha256()
-    digest.update(b"jpeg-commentless-v1")
-    digest.update(JPEG_SIGNATURE)
-    offset = len(JPEG_SIGNATURE)
-    while offset < len(image_bytes):
-        if image_bytes[offset] != 0xFF:
-            return None
-        while offset < len(image_bytes) and image_bytes[offset] == 0xFF:
-            offset += 1
-        if offset >= len(image_bytes):
-            return None
-        marker = image_bytes[offset]
-        offset += 1
-        if marker == 0x00:
-            return None
-        marker_bytes = bytes((0xFF, marker))
-        if jpeg_marker_has_no_payload(marker):
-            digest.update(marker_bytes)
-            if marker_bytes == JPEG_END_OF_IMAGE:
-                return digest.hexdigest()
-            continue
-        if offset + 2 > len(image_bytes):
-            return None
-        segment_length = int.from_bytes(image_bytes[offset : offset + 2], "big")
-        if segment_length < 2:
-            return None
-        segment_end = offset + segment_length
-        if segment_end > len(image_bytes):
-            return None
-        if marker != JPEG_COMMENT_MARKER:
-            digest.update(marker_bytes)
-            digest.update(image_bytes[offset : offset + 2])
-            digest.update(image_bytes[offset + 2 : segment_end])
-        offset = segment_end
-        if marker == JPEG_START_OF_SCAN_MARKER:
-            scan_bytes = image_bytes[offset:]
-            if JPEG_END_OF_IMAGE not in scan_bytes:
-                return None
-            digest.update(scan_bytes)
-            return digest.hexdigest()
-    return None
-
-
-def jpeg_marker_has_no_payload(marker: int) -> bool:
-    return marker == 0x01 or marker == 0xD8 or marker == 0xD9 or 0xD0 <= marker <= 0xD7
-
-
-def jpeg_visual_sha256(image_bytes: bytes) -> str | None:
-    if not image_bytes.startswith(JPEG_SIGNATURE):
-        return None
-    digest = hashlib.sha256()
-    digest.update(b"jpeg-visual-v1")
-    digest.update(JPEG_SIGNATURE)
-    offset = len(JPEG_SIGNATURE)
-    while offset < len(image_bytes):
-        if image_bytes[offset] != 0xFF:
-            return None
-        while offset < len(image_bytes) and image_bytes[offset] == 0xFF:
-            offset += 1
-        if offset >= len(image_bytes):
-            return None
-        marker = image_bytes[offset]
-        offset += 1
-        if marker == 0x00:
-            return None
-        marker_bytes = bytes((0xFF, marker))
-        if jpeg_marker_has_no_payload(marker):
-            digest.update(marker_bytes)
-            if marker_bytes == JPEG_END_OF_IMAGE:
-                return digest.hexdigest()
-            continue
-        if offset + 2 > len(image_bytes):
-            return None
-        segment_length = int.from_bytes(image_bytes[offset : offset + 2], "big")
-        if segment_length < 2:
-            return None
-        segment_end = offset + segment_length
-        if segment_end > len(image_bytes):
-            return None
-        payload = image_bytes[offset + 2 : segment_end]
-        if not jpeg_segment_is_non_visual(marker, payload):
-            digest.update(marker_bytes)
-            digest.update(image_bytes[offset : offset + 2])
-            digest.update(payload)
-        offset = segment_end
-        if marker == JPEG_START_OF_SCAN_MARKER:
-            scan_bytes = image_bytes[offset:]
-            if JPEG_END_OF_IMAGE not in scan_bytes:
-                return None
-            digest.update(scan_bytes)
-            return digest.hexdigest()
-    return None
-
-
-def jpeg_segment_is_non_visual(marker: int, payload: bytes) -> bool:
-    if marker == JPEG_COMMENT_MARKER:
-        return True
-    if marker != JPEG_APP1_MARKER:
-        return False
-    return payload.startswith(JPEG_EXIF_PREFIX) or payload.startswith(JPEG_XMP_PREFIX)
-
-
-def webp_visual_sha256(image_bytes: bytes) -> str | None:
-    if (
-        len(image_bytes) < 12
-        or image_bytes[:4] != WEBP_RIFF_SIGNATURE
-        or image_bytes[8:12] != WEBP_SIGNATURE
-    ):
-        return None
-    riff_size = int.from_bytes(image_bytes[4:8], "little")
-    if riff_size + 8 > len(image_bytes):
-        return None
-    digest = hashlib.sha256()
-    digest.update(b"webp-visual-v1")
-    digest.update(WEBP_SIGNATURE)
-    offset = 12
-    riff_end = 8 + riff_size
-    while offset + 8 <= riff_end:
-        chunk_type = image_bytes[offset : offset + 4]
-        chunk_length = int.from_bytes(image_bytes[offset + 4 : offset + 8], "little")
-        data_start = offset + 8
-        data_end = data_start + chunk_length
-        padded_end = data_end + (chunk_length % 2)
-        if padded_end > len(image_bytes) or padded_end > riff_end:
-            return None
-        if chunk_type not in WEBP_NON_VISUAL_CHUNKS:
-            digest.update(chunk_type)
-            digest.update(chunk_length.to_bytes(4, "little"))
-            digest.update(image_bytes[data_start:data_end])
-        offset = padded_end
-    if offset != riff_end:
-        return None
-    return digest.hexdigest()
-
-
-def avif_container_sha256(image_bytes: bytes) -> str | None:
-    if len(image_bytes) < 16:
-        return None
-    digest = hashlib.sha256()
-    digest.update(b"avif-container-v1")
-    offset = 0
-    saw_avif_brand = False
-    saw_media_box = False
-    while offset < len(image_bytes):
-        if offset + 8 > len(image_bytes):
-            return None
-        box_size = int.from_bytes(image_bytes[offset : offset + 4], "big")
-        box_type = image_bytes[offset + 4 : offset + 8]
-        header_size = 8
-        if box_size == 1:
-            if offset + 16 > len(image_bytes):
-                return None
-            box_size = int.from_bytes(image_bytes[offset + 8 : offset + 16], "big")
-            header_size = 16
-        elif box_size == 0:
-            box_size = len(image_bytes) - offset
-        if box_size < header_size or offset + box_size > len(image_bytes):
-            return None
-        payload_start = offset + header_size
-        payload = image_bytes[payload_start : offset + box_size]
-        if box_type in AVIF_BRAND_BOX_TYPES:
-            if b"avif" not in payload and b"avis" not in payload:
-                return None
-            saw_avif_brand = True
-        if box_type in AVIF_MEDIA_BOX_TYPES:
-            saw_media_box = True
-        if box_type not in AVIF_CONTAINER_NON_VISUAL_BOXES:
-            digest.update(box_type)
-            digest.update(len(payload).to_bytes(8, "big"))
-            digest.update(payload)
-        offset += box_size
-    if offset != len(image_bytes) or not saw_avif_brand or not saw_media_box:
-        return None
-    return digest.hexdigest()
-
-
-def tiff_visual_sha256(image_bytes: bytes) -> str | None:
-    if len(image_bytes) < 8 or image_bytes[:2] not in {
-        TIFF_LITTLE_ENDIAN_SIGNATURE,
-        TIFF_BIG_ENDIAN_SIGNATURE,
-    }:
-        return None
-    byte_order = "little" if image_bytes[:2] == TIFF_LITTLE_ENDIAN_SIGNATURE else "big"
-    endian = "<" if byte_order == "little" else ">"
-    magic = int.from_bytes(image_bytes[2:4], byte_order)
-    if magic != TIFF_CLASSIC_MAGIC:
-        return None
-    ifd_offset = int.from_bytes(image_bytes[4:8], byte_order)
-    digest = hashlib.sha256()
-    digest.update(b"tiff-visual-v1")
-    digest.update(image_bytes[:4])
-    visited_ifds: set[int] = set()
-    ifd_count = 0
-
-    def entry_value_bytes(type_id: int, value_count: int, raw_value: bytes) -> bytes | None:
-        type_size = TIFF_TYPE_SIZES.get(type_id)
-        if type_size is None:
-            return None
-        value_size = type_size * value_count
-        if value_size <= 4:
-            return raw_value[:value_size]
-        value_offset = int.from_bytes(raw_value, byte_order)
-        if value_offset < 0 or value_offset + value_size > len(image_bytes):
-            return None
-        return image_bytes[value_offset : value_offset + value_size]
-
-    def entry_int_values(type_id: int, value_count: int, raw_value: bytes) -> list[int] | None:
-        value = entry_value_bytes(type_id, value_count, raw_value)
-        if value is None:
-            return None
-        if type_id == 3:
-            step = 2
-        elif type_id == 4:
-            step = 4
-        else:
-            return None
-        if len(value) != value_count * step:
-            return None
-        return [int.from_bytes(value[index : index + step], byte_order) for index in range(0, len(value), step)]
-
-    def hash_image_segments(label: bytes, offsets: list[int] | None, byte_counts: list[int] | None) -> bool:
-        if offsets is None and byte_counts is None:
-            return True
-        if not offsets or not byte_counts or len(offsets) != len(byte_counts):
-            return False
-        digest.update(label)
-        digest.update(len(offsets).to_bytes(4, "big"))
-        for data_offset, byte_count in zip(offsets, byte_counts):
-            if data_offset < 0 or byte_count < 0 or data_offset + byte_count > len(image_bytes):
-                return False
-            digest.update(byte_count.to_bytes(8, "big"))
-            digest.update(image_bytes[data_offset : data_offset + byte_count])
-        return True
-
-    while ifd_offset:
-        if ifd_offset in visited_ifds or ifd_offset + 2 > len(image_bytes) or ifd_count >= TIFF_MAX_IFDS:
-            return None
-        visited_ifds.add(ifd_offset)
-        ifd_count += 1
-        entry_count = int.from_bytes(image_bytes[ifd_offset : ifd_offset + 2], byte_order)
-        entries_start = ifd_offset + 2
-        entries_end = entries_start + entry_count * 12
-        next_ifd_offset_start = entries_end
-        if entries_end + 4 > len(image_bytes):
-            return None
-        digest.update(b"IFD")
-        strip_offsets: list[int] | None = None
-        strip_byte_counts: list[int] | None = None
-        tile_offsets: list[int] | None = None
-        tile_byte_counts: list[int] | None = None
-        for entry_index in range(entry_count):
-            entry_start = entries_start + entry_index * 12
-            tag, type_id, value_count = struct.unpack(endian + "HHI", image_bytes[entry_start : entry_start + 8])
-            raw_value = image_bytes[entry_start + 8 : entry_start + 12]
-            if tag == TIFF_STRIP_OFFSETS_TAG:
-                strip_offsets = entry_int_values(type_id, value_count, raw_value)
-                continue
-            if tag == TIFF_STRIP_BYTE_COUNTS_TAG:
-                strip_byte_counts = entry_int_values(type_id, value_count, raw_value)
-                continue
-            if tag == TIFF_TILE_OFFSETS_TAG:
-                tile_offsets = entry_int_values(type_id, value_count, raw_value)
-                continue
-            if tag == TIFF_TILE_BYTE_COUNTS_TAG:
-                tile_byte_counts = entry_int_values(type_id, value_count, raw_value)
-                continue
-            if tag in TIFF_NON_VISUAL_TAGS:
-                continue
-            value = entry_value_bytes(type_id, value_count, raw_value)
-            if value is None:
-                return None
-            digest.update(struct.pack(endian + "HHI", tag, type_id, value_count))
-            digest.update(len(value).to_bytes(8, "big"))
-            digest.update(value)
-        if strip_offsets is None and tile_offsets is None:
-            return None
-        if not hash_image_segments(b"STRIPS", strip_offsets, strip_byte_counts):
-            return None
-        if not hash_image_segments(b"TILES", tile_offsets, tile_byte_counts):
-            return None
-        ifd_offset = int.from_bytes(image_bytes[next_ifd_offset_start : next_ifd_offset_start + 4], byte_order)
-    return digest.hexdigest()
-
-
-def read_run_result_cache(cache_key: str) -> dict[str, Any] | None:
-    with _RUN_RESULT_MEMORY_CACHE_LOCK:
-        cached_json = _RUN_RESULT_MEMORY_CACHE.get(cache_key)
-        if cached_json is not None:
-            _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
-    if cached_json is not None:
-        try:
-            return json.loads(cached_json)
-        except Exception:
-            with _RUN_RESULT_MEMORY_CACHE_LOCK:
-                _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
-            return None
-    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
-    if not cache_path.exists():
-        return None
-    try:
-        encoded = cache_path.read_text()
-        payload = json.loads(encoded)
-    except Exception:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    remember_run_result_cache(cache_key, payload, encoded=encoded)
-    return payload
-
-
-def read_run_result_cache_with_success_fallback(
-    cache_key: str,
-    success_cache_key: str | None,
-    *,
-    options: Any,
-) -> tuple[dict[str, Any] | None, bool]:
-    cached = read_run_result_cache(cache_key)
-    if cached is not None:
-        return cached, False
-    if success_cache_key is None or success_cache_key == cache_key:
-        return None, False
-    cached = read_run_result_cache(success_cache_key)
-    if cached is None or not cached_payload_satisfies_success_options(cached, options):
-        return None, False
-    return cached, True
-
-
-def read_run_result_cache_with_overlay_fallback(
-    cache_key: str,
-    success_cache_key: str | None,
-    *,
-    image_hash_name: str,
-    image_hash: str,
-    city: str | None,
-    options: Any,
-) -> tuple[dict[str, Any] | None, bool, bool]:
-    cached, compatible = read_run_result_cache_with_success_fallback(
-        cache_key,
-        success_cache_key,
-        options=options,
-    )
-    if cached is not None:
-        return cached_payload_for_request_options(cached, options), compatible, False
-
-    overlay_options = overlay_superset_cache_options(options)
-    if overlay_options is None:
-        return None, False, False
-    overlay_cache_key, overlay_success_cache_key = run_result_cache_key_pair_for_hash(
-        image_hash_name,
-        image_hash,
-        city,
-        overlay_options,
-    )
-    cached, compatible = read_run_result_cache_with_success_fallback(
-        overlay_cache_key,
-        overlay_success_cache_key,
-        options=options,
-    )
-    if cached is None:
-        return None, False, False
-    return cached_payload_for_request_options(cached, options), compatible, True
-
-
-def overlay_superset_cache_options(options: Any) -> Any | None:
-    if bool(getattr(options, "include_overlay", True)):
-        return None
-    if bool(getattr(options, "catalog_probe_only", False)):
-        return None
-    try:
-        values = vars(options).copy()
-    except TypeError:
-        values = {
-            "simplify_px": getattr(options, "simplify_px", DEFAULT_SIMPLIFY_PX),
-            "min_confidence": getattr(options, "min_confidence", 0.55),
-            "min_control_points": getattr(options, "min_control_points", 3),
-            "write_mask_artifact": getattr(options, "write_mask_artifact", False),
-            "allow_catalog": getattr(options, "allow_catalog", True),
-            "catalog_probe_only": getattr(options, "catalog_probe_only", False),
-            "catalog_probe_missed": getattr(options, "catalog_probe_missed", False),
-            "catalog_probe_miss_low_iou": getattr(options, "catalog_probe_miss_low_iou", False),
-            "experimental_classifier": getattr(options, "experimental_classifier", False),
-            "model_variant": getattr(options, "model_variant", None),
-            "extraction_hints": getattr(options, "extraction_hints", None),
-            "filename_hint": getattr(options, "filename_hint", None),
-            "source_was_svg": getattr(options, "source_was_svg", False),
-        }
-    values["include_overlay"] = True
-    values["preview_max_dimension"] = INLINE_OVERLAY_MAX_DIMENSION
-    values["overlay_format"] = "webp"
-    return SimpleNamespace(**values)
-
-
-def cached_payload_for_request_options(cached: dict[str, Any], options: Any) -> dict[str, Any]:
-    payload = json.loads(json.dumps(cached))
-    if bool(getattr(options, "include_overlay", True)):
-        return payload
-    artifacts = payload.get("artifacts")
-    if isinstance(artifacts, dict):
-        artifacts = dict(artifacts)
-        artifacts.pop("overlay_data_url", None)
-        payload["artifacts"] = artifacts
-    return payload
-
-
-def cache_hit_profile_value(base: str, *, compatible: bool, overlay_superset: bool = False) -> str:
-    if overlay_superset:
-        return f"{base}-overlay-compatible" if compatible else f"{base}-overlay"
-    return f"{base}-compatible" if compatible else base
-
-
-def backfill_cache_hit_keys(
-    profile: dict[str, Any],
-    cached: dict[str, Any],
-    raw_cache_key: str,
-    *,
-    raw_success_cache_key: str | None = None,
-    request_cache_key: str | None = None,
-    request_success_cache_key: str | None = None,
-    warm_success_cache: bool = False,
-    warm_request_cache: bool = False,
-) -> None:
-    written_keys: set[str] = set()
-    raw_cache_write_started = time.perf_counter()
-    write_run_result_cache(raw_cache_key, cached)
-    written_keys.add(raw_cache_key)
-    profile["raw_cache_write_s"] = elapsed_seconds(raw_cache_write_started)
-    if warm_success_cache:
-        backfill_success_cache_key(
-            profile,
-            cached,
-            raw_success_cache_key,
-            profile_key="raw_success_cache_write_s",
-            written_keys=written_keys,
-        )
-    if not warm_request_cache or request_cache_key is None or request_cache_key == raw_cache_key:
-        if warm_success_cache:
-            backfill_success_cache_key(
-                profile,
-                cached,
-                request_success_cache_key,
-                profile_key="request_success_cache_write_s",
-                written_keys=written_keys,
-            )
-        return
-    request_cache_write_started = time.perf_counter()
-    write_run_result_cache(request_cache_key, cached)
-    written_keys.add(request_cache_key)
-    profile["request_cache_write_s"] = elapsed_seconds(request_cache_write_started)
-    if warm_success_cache:
-        backfill_success_cache_key(
-            profile,
-            cached,
-            request_success_cache_key,
-            profile_key="request_success_cache_write_s",
-            written_keys=written_keys,
-        )
-
-
-def backfill_success_cache_key(
-    profile: dict[str, Any],
-    cached: dict[str, Any],
-    cache_key: str | None,
-    *,
-    profile_key: str,
-    written_keys: set[str],
-) -> None:
-    if cache_key is None or cache_key in written_keys or not cached_payload_can_seed_success_cache(cached):
-        return
-    started = time.perf_counter()
-    write_run_result_cache(cache_key, cached)
-    written_keys.add(cache_key)
-    profile[profile_key] = elapsed_seconds(started)
-
-
-def cached_payload_can_seed_success_cache(payload: dict[str, Any]) -> bool:
-    if payload.get("status") in {"failed", "catalog_miss"}:
-        return False
-    return isinstance(payload.get("summary"), dict) and isinstance(payload.get("artifacts"), dict)
-
-
-def cached_payload_satisfies_success_options(payload: dict[str, Any], options: Any) -> bool:
-    if payload.get("status") in {"failed", "catalog_miss"}:
-        return False
-    summary = payload.get("summary")
-    if not isinstance(summary, dict) or not isinstance(payload.get("artifacts"), dict):
-        return False
-    try:
-        cached_confidence = float(summary.get("combined_confidence"))
-    except (TypeError, ValueError):
-        return False
-    if cached_confidence < float(getattr(options, "min_confidence", 0.0)):
-        return False
-    try:
-        control_points = int(summary.get("control_points"))
-    except (TypeError, ValueError):
-        return False
-    return control_points >= int(getattr(options, "min_control_points", 0))
-
-
-def write_run_result_cache(cache_key: str, payload: dict[str, Any]) -> None:
-    if payload.get("status") == "failed":
-        cached = {
-            "status": "failed",
-            "error": payload.get("error"),
-        }
-    elif payload.get("status") == "catalog_miss":
-        cached = {
-            "status": "catalog_miss",
-            "error": payload.get("error"),
-        }
-        if isinstance(payload.get("catalog_probe_miss"), dict):
-            cached["catalog_probe_miss"] = payload.get("catalog_probe_miss")
-    else:
-        cached = {
-            "city": payload.get("city"),
-            "summary": payload.get("summary"),
-            "artifacts": payload.get("artifacts"),
-        }
-    encoded = remember_run_result_cache(cache_key, cached)
-    cache_path = RUN_RESULT_CACHE_DIR / f"{cache_key}.json"
-    tmp_path = run_result_cache_tmp_path(cache_path)
-    try:
-        RUN_RESULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        tmp_path.write_text(encoded)
-        tmp_path.replace(cache_path)
-    except OSError:
-        tmp_path.unlink(missing_ok=True)
-        return
-
-
-def write_success_run_result_cache_keys(
-    payload: dict[str, Any],
-    *cache_keys: str | None,
-) -> None:
-    if payload.get("status") != "complete":
-        return
-    for cache_key in dict.fromkeys(key for key in cache_keys if key is not None):
-        write_run_result_cache(cache_key, payload)
-
-
-def remember_run_result_cache(cache_key: str, payload: dict[str, Any], *, encoded: str | None = None) -> str:
-    if encoded is None:
-        encoded = json.dumps(payload, separators=(",", ":"))
-    if len(encoded.encode("utf-8")) > RUN_RESULT_MEMORY_CACHE_MAX_BYTES:
-        with _RUN_RESULT_MEMORY_CACHE_LOCK:
-            _RUN_RESULT_MEMORY_CACHE.pop(cache_key, None)
-        return encoded
-    with _RUN_RESULT_MEMORY_CACHE_LOCK:
-        _RUN_RESULT_MEMORY_CACHE[cache_key] = encoded
-        _RUN_RESULT_MEMORY_CACHE.move_to_end(cache_key)
-        while len(_RUN_RESULT_MEMORY_CACHE) > RUN_RESULT_MEMORY_CACHE_MAX:
-            _RUN_RESULT_MEMORY_CACHE.popitem(last=False)
-    return encoded
-
-
-def run_result_cache_tmp_path(cache_path: Path) -> Path:
-    return cache_path.with_name(f"{cache_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-
-
-def cached_run_payload(
-    cached: dict[str, Any],
-    run_id: str,
-    original_filename: str,
-    events: list[dict[str, Any]],
-    *,
-    profile: dict[str, Any] | None = None,
-    include_overlay: bool | None = None,
-) -> dict[str, Any]:
-    payload = json.loads(json.dumps(cached))
-    if include_overlay is False and isinstance(payload.get("artifacts"), dict):
-        artifacts = dict(payload["artifacts"])
-        artifacts.pop("overlay_data_url", None)
-        payload["artifacts"] = artifacts
-    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
-    raw_status = payload.get("status")
-    status = raw_status if raw_status in {"catalog_miss", "failed"} else "complete"
-    event_details = cached_run_event_details(status, payload=payload, summary=summary)
-    event_message = {
-        "catalog_miss": "Catalog miss ready from cache",
-        "failed": "Generation failure ready from cache",
-    }.get(status, "Boundary export ready from cache")
-    payload.update(
-        {
-            "id": run_id,
-            "city": payload.get("city") or summary.get("city"),
-            "filename": Path(original_filename).name or "uploaded-image",
-            "status": status,
-            "percent": 100,
-            "cached": True,
-            "events": [
-                *events,
-                {
-                    "timestamp": time.time(),
-                    "stage": status,
-                    "message": event_message,
-                    "percent": 100,
-                    "status": status,
-                    "details": event_details,
-                },
-            ],
-        }
-    )
-    if profile is not None:
-        payload["profile"] = profile
-    return payload
-
-
-def cached_run_event_details(
-    status: str,
-    *,
-    payload: dict[str, Any],
-    summary: dict[str, Any],
-) -> dict[str, Any]:
-    if status == "catalog_miss" and isinstance(payload.get("catalog_probe_miss"), dict):
-        return payload["catalog_probe_miss"]
-    if status == "failed":
-        error = payload.get("error")
-        if isinstance(error, str) and error:
-            return {"error": error}
-    return summary
-
-
-def cached_run_response_status(payload: dict[str, Any]) -> HTTPStatus:
-    if payload.get("status") == "failed":
-        return HTTPStatus.UNPROCESSABLE_ENTITY
-    if payload.get("status") == "catalog_miss":
-        return HTTPStatus.OK
-    return HTTPStatus.CREATED

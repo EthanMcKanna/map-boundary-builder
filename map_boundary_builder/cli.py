@@ -3,20 +3,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
-from typing import Any
 
 from .extract import DEFAULT_SIMPLIFY_PX
-from .ocr import collect_rapidocr_profiles, summarize_rapidocr_profile_events
+from .pipeline import PipelineOptions, PipelineResult, complete_with_city, run_pipeline
 from .pipeline_version import get_pipeline_version
-from .runner import BoundaryBuildOptions, build_boundary
+
+EXIT_OK = 0
+EXIT_FAILED = 1
+EXIT_NEEDS_CITY = 3
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="map-boundary-builder",
-        description="Extract a scaled GeoJSON service-area polygon from a map screenshot.",
+        description="Extract a georeferenced GeoJSON service-area polygon from a map screenshot.",
     )
     parser.add_argument("--image", help="Input service-map screenshot.")
     parser.add_argument("--city", help="Optional city override. Omit to infer from map labels.")
@@ -25,56 +26,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--simplify-px", type=float, default=DEFAULT_SIMPLIFY_PX, help="Pixel simplification tolerance.")
     parser.add_argument("--min-confidence", type=float, default=0.55, help="Fail below this combined confidence.")
     parser.add_argument("--min-control-points", type=int, default=3, help="Minimum OCR/geocoder control points for georeferencing.")
-    parser.add_argument(
-        "--extractor",
-        choices=(
-            "deterministic",
-            "experimental_classifier",
-            "generalized_v11",
-            "generalized_v12_boundaryfield",
-            "generalized_v20_edgegraph",
-        ),
-        default="deterministic",
-        help="Boundary producer. Generalized v20 EdgeGraph selects globally, then localizes and vectorizes edges at source resolution.",
-    )
     parser.add_argument("--seed-x", type=float, help="Optional target-region seed x coordinate in source pixels.")
     parser.add_argument("--seed-y", type=float, help="Optional target-region seed y coordinate in source pixels.")
     parser.add_argument("--target-color", help="Optional target overlay color as #RRGGBB.")
+    parser.add_argument("--model-path", help="Override the packaged segmentation model.")
+    parser.add_argument("--model-threshold", type=float, help="Override the calibrated model threshold.")
     parser.add_argument(
-        "--no-catalog",
+        "--no-input",
         action="store_true",
-        help="Bypass bundled service-area catalog matching and force OCR/georeference inference.",
-    )
-    parser.add_argument(
-        "--catalog-probe-missed",
-        action="store_true",
-        help="Skip the low-resolution catalog probe after a prior probe miss and run the full handoff path.",
-    )
-    parser.add_argument(
-        "--catalog-probe-miss-low-iou",
-        action="store_true",
-        help="Treat the prior catalog probe miss as far from active catalog shapes and overlap OCR with extraction.",
-    )
-    parser.add_argument(
-        "--filename-hint",
-        help="Override the uploaded filename hint used for catalog/context matching.",
-    )
-    parser.add_argument(
-        "--source-was-svg",
-        action="store_true",
-        help="Treat a raster upload as originating from SVG for OCR profile selection.",
+        help="Never prompt interactively; exit with status 3 when a city is needed.",
     )
     parser.add_argument("--print-summary", action="store_true", help="Print a compact JSON summary.")
-    parser.add_argument(
-        "--profile-events",
-        action="store_true",
-        help="Include progress events and per-stage elapsed seconds in the printed summary.",
-    )
-    parser.add_argument(
-        "--profile-ocr-engine",
-        action="store_true",
-        help="Include RapidOCR detector/recognizer timing details in the printed summary.",
-    )
     return parser
 
 
@@ -90,102 +52,92 @@ def main(argv: list[str] | None = None) -> int:
     if not image_path.exists():
         parser.error(f"Input image does not exist: {image_path}")
 
-    events: list[dict[str, Any]] = []
-    started = time.perf_counter()
+    options = build_options(parser, args)
+    result = run_pipeline(
+        image_path,
+        city=args.city,
+        output_path=args.output,
+        debug_dir=args.debug_dir,
+        options=options,
+    )
 
-    def progress(event: dict[str, Any]) -> None:
-        events.append({"elapsed_s": round(time.perf_counter() - started, 6), **event})
+    if result.status == "needs_city":
+        result = maybe_prompt_for_city(args, image_path, result, options)
 
-    ocr_engine_events: list[dict[str, Any]] | None = None
+    if args.print_summary:
+        summary = dict(result.summary)
+        summary["pipeline_version"] = get_pipeline_version()
+        print(json.dumps(summary, indent=2))
 
-    def run_build_boundary():
-        extraction_hints: dict[str, object] = {}
-        if (args.seed_x is None) != (args.seed_y is None):
-            parser.error("--seed-x and --seed-y must be provided together")
-        if args.seed_x is not None and args.seed_y is not None:
-            extraction_hints["seed_point"] = (args.seed_x, args.seed_y)
-        target_color = (args.target_color or "").strip().lstrip("#")
-        if target_color and len(target_color) != 6:
-            parser.error("--target-color must be a six-digit hexadecimal color")
-        if len(target_color) == 6:
-            try:
-                extraction_hints["target_rgb"] = tuple(int(target_color[index : index + 2], 16) for index in (0, 2, 4))
-            except ValueError:
-                parser.error("--target-color must be a six-digit hexadecimal color")
-        return build_boundary(
-            image_path,
-            args.city,
-            args.output,
-            debug_dir=args.debug_dir,
-            options=BoundaryBuildOptions(
-                simplify_px=args.simplify_px,
-                min_confidence=args.min_confidence,
-                min_control_points=args.min_control_points,
-                experimental_classifier=args.extractor == "experimental_classifier",
-                model_variant=None if args.extractor == "deterministic" else args.extractor,
-                extraction_hints=extraction_hints or None,
-                allow_catalog=not args.no_catalog,
-                catalog_probe_missed=args.catalog_probe_missed,
-                catalog_probe_miss_low_iou=args.catalog_probe_miss_low_iou,
-                filename_hint=args.filename_hint if args.filename_hint is not None else image_path.name,
-                source_was_svg=args.source_was_svg,
-            ),
-            progress=progress if args.profile_events else None,
+    if result.status == "complete":
+        return EXIT_OK
+    if result.status == "needs_city":
+        print(
+            "map-boundary-builder: the city could not be inferred from map labels. "
+            'Re-run with --city "City, ST".',
+            file=sys.stderr,
         )
+        if result.needs_city is not None and result.needs_city.sample_labels:
+            labels = ", ".join(result.needs_city.sample_labels[:5])
+            print(f"map-boundary-builder: labels read from the map: {labels}", file=sys.stderr)
+        return EXIT_NEEDS_CITY
+    message = result.summary.get("message") or result.reason or "extraction failed"
+    print(f"map-boundary-builder: error: {message}", file=sys.stderr)
+    return EXIT_FAILED
 
+
+def build_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> PipelineOptions:
+    if (args.seed_x is None) != (args.seed_y is None):
+        parser.error("--seed-x and --seed-y must be provided together")
+    seed_point = (args.seed_x, args.seed_y) if args.seed_x is not None else None
+    target_rgb = None
+    target_color = (args.target_color or "").strip().lstrip("#")
+    if target_color:
+        if len(target_color) != 6:
+            parser.error("--target-color must be a six-digit hexadecimal color")
+        try:
+            target_rgb = tuple(int(target_color[index : index + 2], 16) for index in (0, 2, 4))
+        except ValueError:
+            parser.error("--target-color must be a six-digit hexadecimal color")
+    return PipelineOptions(
+        simplify_px=args.simplify_px,
+        min_confidence=args.min_confidence,
+        min_control_points=args.min_control_points,
+        seed_point=seed_point,
+        target_rgb=target_rgb,
+        model_path=Path(args.model_path) if args.model_path else None,
+        model_threshold=args.model_threshold,
+    )
+
+
+def maybe_prompt_for_city(
+    args: argparse.Namespace,
+    image_path: Path,
+    result: PipelineResult,
+    options: PipelineOptions,
+) -> PipelineResult:
+    if args.no_input or not sys.stdin.isatty():
+        return result
+    detail = result.needs_city
+    if detail is not None and detail.sample_labels:
+        labels = ", ".join(detail.sample_labels[:5])
+        print(f"Boundary extracted, but the city could not be determined. Labels read: {labels}")
+    else:
+        print("Boundary extracted, but the city could not be determined.")
     try:
-        if args.profile_ocr_engine:
-            with collect_rapidocr_profiles() as collected:
-                ocr_engine_events = collected
-                result = run_build_boundary()
-        else:
-            result = run_build_boundary()
-
-        if args.print_summary:
-            summary = dict(result.summary)
-            summary["pipeline_version"] = get_pipeline_version()
-            if args.profile_events:
-                summary["event_profile"] = {
-                    "total_elapsed_s": round(time.perf_counter() - started, 6),
-                    "stage_elapsed_s": stage_elapsed_seconds(events),
-                    "events": events,
-                }
-            if args.profile_ocr_engine:
-                summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
-            print(json.dumps(summary, indent=2))
-        return 0
-    except Exception as exc:
-        if args.print_summary:
-            summary: dict[str, Any] = {
-                "status": "failed",
-                "error": str(exc),
-                "pipeline_version": get_pipeline_version(),
-            }
-            if args.profile_events:
-                summary["event_profile"] = {
-                    "total_elapsed_s": round(time.perf_counter() - started, 6),
-                    "stage_elapsed_s": stage_elapsed_seconds(events),
-                    "events": events,
-                }
-            if args.profile_ocr_engine:
-                summary["ocr_engine_profile"] = summarize_rapidocr_profile_events(ocr_engine_events)
-            print(json.dumps(summary, indent=2))
-        print(f"map-boundary-builder: error: {exc}", file=sys.stderr)
-        return 1
-
-
-def stage_elapsed_seconds(events: list[dict[str, Any]]) -> dict[str, float]:
-    totals: dict[str, float] = {}
-    for current, following in zip(events, events[1:]):
-        stage = current.get("stage")
-        elapsed = current.get("elapsed_s")
-        next_elapsed = following.get("elapsed_s")
-        if not isinstance(stage, str) or not isinstance(elapsed, (int, float)):
-            continue
-        if not isinstance(next_elapsed, (int, float)):
-            continue
-        totals[stage] = totals.get(stage, 0.0) + max(0.0, float(next_elapsed) - float(elapsed))
-    return {stage: round(total, 6) for stage, total in totals.items()}
+        city = input('Enter the city (e.g. "Austin, TX"), or press Enter to abort: ').strip()
+    except EOFError:
+        return result
+    if not city:
+        return result
+    return complete_with_city(
+        image_path,
+        result,
+        city,
+        output_path=args.output,
+        debug_dir=args.debug_dir,
+        options=options,
+    )
 
 
 if __name__ == "__main__":

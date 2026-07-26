@@ -274,6 +274,15 @@ def _georeference_and_export(
             )
         detail = _needs_city_detail(labels, city)
         summary["needs_city"] = detail.to_dict()
+        summary["status"] = "needs_city"
+        mask_path = overlay_path = None
+        if debug_dir is not None:
+            # The caller will show the extracted boundary while prompting for
+            # a city, so the debug artifacts are written even without a fit.
+            mask_path = debug_dir / "mask.png"
+            overlay_path = debug_dir / "overlay.png"
+            write_mask_png(extraction.mask, mask_path)
+            write_overlay_png(normalized_path, extraction.mask, overlay_path, rgb=rgb)
         return PipelineResult(
             status="needs_city",
             reason=detail.reason,
@@ -281,6 +290,8 @@ def _georeference_and_export(
             extraction=extraction,
             labels=labels,
             needs_city=detail,
+            mask_path=mask_path,
+            overlay_path=overlay_path,
         )
 
     transform = georeference.transform

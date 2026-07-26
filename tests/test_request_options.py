@@ -5,18 +5,13 @@ from map_boundary_builder import request_options
 
 def test_api_and_local_web_share_request_option_helpers() -> None:
     for name in (
-        "allow_catalog_for_request",
-        "bool_field",
         "city_hint_for_request",
         "extraction_hints_for_request",
-        "extractor_for_request",
-        "experimental_classifier_for_request",
         "float_field",
         "int_field",
     ):
         assert getattr(api_index, name) is getattr(request_options, name)
         assert getattr(web, name) is getattr(request_options, name)
-    assert api_index.include_overlay_for_request is request_options.include_overlay_for_request
 
 
 def test_shared_request_option_parsing_matches_api_contract() -> None:
@@ -27,18 +22,8 @@ def test_shared_request_option_parsing_matches_api_contract() -> None:
     assert request_options.float_field({"min_confidence": "2"}, "min_confidence", 0.55, 0, 1) == 1
     assert request_options.float_field({"min_confidence": "bad"}, "min_confidence", 0.55, 0, 1) == 0.55
     assert request_options.int_field({"min_control_points": "1.0"}, "min_control_points", 3, 0, 12) == 3
-    assert request_options.allow_catalog_for_request({"no_catalog": "1", "allow_catalog": "1"}) is False
-    assert request_options.allow_catalog_for_request({"allow_catalog": "1"}) is False
-    assert request_options.include_overlay_for_request({}, catalog_probe_only=True) is False
-    assert request_options.experimental_classifier_for_request({}) is False
-    assert request_options.experimental_classifier_for_request({"extractor": "deterministic"}) is False
-    assert request_options.experimental_classifier_for_request({"extractor": "experimental_classifier"}) is True
-    assert request_options.experimental_classifier_for_request({"extractor": "Experimental Classifier"}) is True
-    assert request_options.extractor_for_request({"extractor": "generalized_v11"}) == "generalized_v11"
-    assert request_options.extractor_for_request({"extractor": "v20"}) == "generalized_v20_edgegraph"
-    assert request_options.extractor_for_request({"extractor": "Generalized v20 EdgeGraph"}) == "generalized_v20_edgegraph"
-    assert request_options.extractor_for_request({"extractor": "v12"}) == "generalized_v12_boundaryfield"
-    assert request_options.extractor_for_request({"extractor": "Generalized v12 BoundaryField"}) == "generalized_v12_boundaryfield"
+    assert request_options.include_overlay_for_request({}) is True
+    assert request_options.include_overlay_for_request({"include_overlay": "0"}) is False
     assert request_options.extraction_hints_for_request(
         {"seed_x": "12", "seed_y": "34", "target_color": "#7c3aed"}
     ) == {"seed_point": (12.0, 34.0), "target_rgb": (124, 58, 237)}

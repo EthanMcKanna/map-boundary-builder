@@ -35,7 +35,11 @@ const inputPane = document.querySelector("#inputPane");
 const imageToggle = document.querySelector("#imageToggle");
 const imageModeButtons = [...document.querySelectorAll("[data-image-mode]")];
 const inputPreview = document.querySelector("#inputPreview");
-const extractorInput = document.querySelector("#extractorInput");
+const cityInput = document.querySelector("#cityInput");
+const needsCityPanel = document.querySelector("#needsCityPanel");
+const needsCityLabels = document.querySelector("#needsCityLabels");
+const needsCityInput = document.querySelector("#needsCityInput");
+const needsCityButton = document.querySelector("#needsCityButton");
 const seedXInput = document.querySelector("#seedXInput");
 const seedYInput = document.querySelector("#seedYInput");
 const overlayPreview = document.querySelector("#overlayPreview");
@@ -104,7 +108,6 @@ const RUN_CACHE_PIXEL_VERSION = "image-to-geojson-v9-image-derived";
 const RUN_CACHE_SUCCESS_THRESHOLD_TOKEN = "success-threshold-compatible";
 const RUN_CACHE_SETTING_FIELDS = [
   "city",
-  "extractor",
   "seed_x",
   "seed_y",
   "target_color",
@@ -208,6 +211,7 @@ const stageLabels = {
   georeference: "Georeference",
   export: "Export",
   complete: "Complete",
+  needs_city: "City needed",
   failed: "Failed",
   error: "Error",
 };
@@ -333,7 +337,7 @@ imageInput.addEventListener("change", () => {
 });
 
 inputPreview.addEventListener("click", (event) => {
-  if (!["generalized_v11", "generalized_v12_boundaryfield", "generalized_v20_edgegraph"].includes(extractorInput?.value) || !inputPreview.naturalWidth || !inputPreview.naturalHeight) return;
+  if (!inputPreview.naturalWidth || !inputPreview.naturalHeight) return;
   const rect = inputPreview.getBoundingClientRect();
   const x = Math.round((event.clientX - rect.left) * inputPreview.naturalWidth / rect.width);
   const y = Math.round((event.clientY - rect.top) * inputPreview.naturalHeight / rect.height);
@@ -383,6 +387,12 @@ form.addEventListener("submit", async (event) => {
     const uploadFile = await prepareRunImage(selectedFile);
     const formData = new FormData(form);
     formData.set("image", uploadFile, uploadFile.name);
+    const cityValue = cityInput?.value.trim() || "";
+    if (cityValue) {
+      formData.set("city", cityValue);
+    } else {
+      formData.delete("city");
+    }
     // The public app is image-derived only. Explicitly strip legacy catalog
     // controls so an old form, extension, or restored page cannot re-enable
     // exact historical geometry substitution.
@@ -438,6 +448,9 @@ form.addEventListener("submit", async (event) => {
         cacheKeys: pendingRunCacheKeys,
         cacheKeysPromise: pendingRunCacheKeysPromise,
       });
+    } else if (payload.status === "needs_city") {
+      stopEstimatedProgress();
+      applyNeedsCityStatus(payload);
     } else {
       latestRunId = payload.id || null;
       connectEvents(payload.id);
@@ -475,6 +488,22 @@ brandHomeLink.addEventListener("click", (event) => {
 reportButton.addEventListener("click", () => openReportDialog("failed"));
 reportTrigger.addEventListener("click", () => {
   openReportDialog("completed");
+});
+needsCityButton.addEventListener("click", () => {
+  if (!selectedFile || isRunButtonRunning()) return;
+  const city = needsCityInput.value.trim();
+  if (!city) {
+    needsCityInput.focus();
+    return;
+  }
+  cityInput.value = city;
+  hideNeedsCityPanel();
+  form.requestSubmit();
+});
+needsCityInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  needsCityButton.click();
 });
 reportForm.addEventListener("submit", submitGenerationReport);
 reportCloseButton.addEventListener("click", closeReportDialog);
@@ -737,6 +766,7 @@ function setSelectedFile(file) {
   updateRunButton();
   updateReportTrigger();
   hideFailureReport();
+  hideNeedsCityPanel();
   setStatus("Image ready", 0, "idle", {
     note: "Review settings, then run the boundary export.",
   });
@@ -981,7 +1011,6 @@ function runCacheSettingsSignature(file, formData, options = {}) {
 function normalizedRunCacheSettingValue(field, formData, options = {}) {
   const rawValue = formData.has(field) ? String(formData.get(field) ?? "") : null;
   if (field === "city") return normalizedRunCacheCity(rawValue);
-  if (field === "extractor") return normalizedRunCacheExtractor(rawValue);
   if (field === "include_overlay") return normalizedRunCacheBoolean(rawValue, true);
   if (field === "source_was_svg") return normalizedRunCacheBoolean(rawValue, false);
   if (options.successThresholdCompatible && (field === "min_confidence" || field === "min_control_points")) {
@@ -991,18 +1020,6 @@ function normalizedRunCacheSettingValue(field, formData, options = {}) {
   if (field === "simplify_px") return normalizedRunCacheFloat(rawValue, 6, 0, 10);
   if (field === "min_control_points") return normalizedRunCacheInteger(rawValue, 3, 0, 12);
   return rawValue;
-}
-
-function normalizedRunCacheExtractor(value) {
-  const normalized = String(value || "deterministic")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  if (normalized === "experimentalclassifier") return "experimental_classifier";
-  if (normalized === "generalizedv20edgegraph") return "generalized_v20_edgegraph";
-  if (normalized === "generalizedv12boundaryfield") return "generalized_v12_boundaryfield";
-  if (normalized === "generalizedv11") return "generalized_v11";
-  return "deterministic";
 }
 
 function runCacheSuccessThresholds(formData) {
@@ -1505,6 +1522,12 @@ function connectEvents(runId) {
         markAllProgressStepsDone();
         updateRunButton();
       }
+    if (event.status === "needs_city") {
+      eventSource.close();
+      stopEstimatedProgress();
+      await loadNeedsCitySnapshot(runId);
+      updateRunButton();
+    }
     if (event.status === "error") {
       eventSource.close();
       stopEstimatedProgress();
@@ -1589,6 +1612,10 @@ function applyEvent(event) {
   if (event.status === "complete") {
     latestRunStatus = "completed";
     markAllProgressStepsDone();
+  } else if (event.status === "needs_city" || event.stage === "needs_city") {
+    latestRunStatus = "needs_city";
+    markPreviousProgressStepsDone("georeference");
+    markProgressStep("georeference", "pending", "Waiting for a city name.");
   } else if (failed) {
     latestRunStatus = "failed";
     latestRunError = displayMessage || latestRunError;
@@ -1633,7 +1660,8 @@ function setStatus(message, percent, status = "running", options = {}) {
 function setProgressPanelState(status) {
   const isRunning = status === "running" || status === "queued";
   const isError = status === "error";
-  progressPanel.hidden = !(isRunning || isError);
+  const needsCity = status === "needs_city";
+  progressPanel.hidden = !(isRunning || isError || needsCity);
   progressPanel.classList.toggle("is-running", isRunning);
 }
 
@@ -1798,6 +1826,7 @@ function humanProgressNote(event) {
 
 function progressLabel(status, stepKey) {
   if (status === "complete") return "Done";
+  if (status === "needs_city") return "Needs city";
   if (status === "error") return "Issue";
   const index = progressSteps.findIndex((step) => step.key === stepKey);
   return index >= 0 ? `Step ${index + 1}/${progressSteps.length}` : selectedFile ? "Ready" : "Idle";
@@ -1805,6 +1834,7 @@ function progressLabel(status, stepKey) {
 
 function defaultProgressNote(status, stepKey) {
   if (status === "complete") return "GeoJSON and previews are ready.";
+  if (status === "needs_city") return "Enter a city below to finish georeferencing.";
   if (status === "error") return "The run needs attention.";
   const step = progressSteps.find((item) => item.key === stepKey);
   if (!step) return selectedFile ? "Review settings, then run the boundary export." : "Add a map screenshot to start.";
@@ -1873,6 +1903,67 @@ async function loadFailureSnapshot(runId) {
   } catch (error) {
     console.warn("Could not load failed run details", error);
   }
+}
+
+async function loadNeedsCitySnapshot(runId) {
+  try {
+    const status = await fetchJson(`/api/runs/${runId}`);
+    applyNeedsCityStatus(status, runId);
+  } catch (error) {
+    console.warn("Could not load run details for the city prompt", error);
+    applyNeedsCityStatus({}, runId);
+  }
+}
+
+function applyNeedsCityStatus(status, runId = null) {
+  stopEstimatedProgress();
+  latestRunId = status.id || runId || latestRunId;
+  latestRunStatus = "needs_city";
+  latestRunError = null;
+  latestRunEvents = Array.isArray(status.events) && status.events.length ? status.events : latestRunEvents;
+  latestRunSummary = status.summary || latestRunSummary;
+  latestRunProfile = status.profile || latestRunProfile;
+  pendingRunCacheKey = null;
+  pendingRunCacheKeys = [];
+  pendingRunCacheKeysPromise = null;
+  const artifacts = status.artifacts || {};
+  if (artifacts.input && !inputPreview.classList.contains("ready")) {
+    inputPreview.src = artifacts.input;
+    inputPreview.classList.add("ready");
+  }
+  const overlaySrc = artifacts.overlay || artifacts.overlay_data_url;
+  if (overlaySrc) {
+    overlayPreview.src = overlaySrc;
+    overlayPreview.classList.add("ready");
+    setImageMode("overlay");
+  }
+  updateImagePane();
+  hideFailureReport();
+  markPreviousProgressStepsDone("georeference");
+  markProgressStep("georeference", "pending", "Waiting for a city name.");
+  showNeedsCityPanel(latestRunSummary?.needs_city || null);
+  setStatus("Boundary extracted, city needed", 100, "needs_city", {
+    note: "Enter the city shown in the screenshot to place the boundary.",
+  });
+  activateTab("input");
+  updateRunButton();
+  updateReportTrigger();
+}
+
+function showNeedsCityPanel(needsCity) {
+  const labels = Array.isArray(needsCity?.sample_labels)
+    ? needsCity.sample_labels.filter((label) => typeof label === "string" && label.trim()).slice(0, 8)
+    : [];
+  needsCityLabels.hidden = labels.length === 0;
+  needsCityLabels.textContent = labels.length ? `Labels read from the map: ${labels.join(", ")}` : "";
+  needsCityInput.value = cityInput.value.trim();
+  needsCityButton.disabled = !selectedFile;
+  needsCityPanel.hidden = false;
+  window.setTimeout(() => needsCityInput.focus(), 0);
+}
+
+function hideNeedsCityPanel() {
+  needsCityPanel.hidden = true;
 }
 
 function queueHistorySave(payload) {
@@ -2386,6 +2477,7 @@ function restoreHistoryEntry(entry) {
   workspaceTitle.textContent = entry.title;
   markAllProgressStepsDone();
   hideFailureReport();
+  hideNeedsCityPanel();
   setStatus("Loaded from history", 100, "complete", {
     note: "Previous GeoJSON and previews are restored locally.",
   });
@@ -2775,6 +2867,7 @@ function startNewRun() {
   workspaceTitle.textContent = "Ready for a screenshot";
   setCopyCommandCopied(false);
   hideFailureReport();
+  hideNeedsCityPanel();
   setStatus("Idle", 0, "idle", {
     note: "Add a map screenshot to start.",
   });
@@ -2797,6 +2890,7 @@ function resetRun() {
   pendingRunCacheKeys = [];
   pendingRunCacheKeysPromise = null;
   hideFailureReport();
+  hideNeedsCityPanel();
   resetProgressSteps();
   markProgressStep("prepare", "running", "Preparing image.");
   clearGeneratedArtifacts();
