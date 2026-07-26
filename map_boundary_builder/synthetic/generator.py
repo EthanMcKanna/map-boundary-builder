@@ -80,6 +80,12 @@ class SyntheticSceneConfig:
     # with NO service area; the truth mask is empty. They teach the model that
     # ride/trip UI screenshots contain nothing to extract.
     negative_scene: bool = False
+    # Large desaturated district-style polygons beneath the target overlay,
+    # excluded from the truth mask — real maps shade school districts, admin
+    # areas, and water bodies that must not read as service areas.
+    include_admin_shading: bool = False
+    # Noise texture over the basemap approximating satellite/aerial imagery.
+    textured_basemap: bool = False
 
 
 @dataclass(frozen=True)
@@ -144,6 +150,8 @@ def generate_synthetic_dataset(
             shape_family=("rectilinear", "road-following", "angular", "radial")[index % 4],
             jpeg_quality=82 if index % 4 == 1 else None,
             negative_scene=negative,
+            include_admin_shading=index % 5 == 0,
+            textured_basemap=index % 7 == 5,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
 
@@ -232,6 +240,10 @@ def generate_synthetic_sample(
         polygon = _largest_polygon(polygon.intersection(_circular_viewport_geometry(config)).buffer(0))
 
     base = _render_basemap(config, rng)
+    if config.textured_basemap:
+        base = _apply_basemap_texture(base, random.Random(config.seed + 700_003))
+    if config.include_admin_shading:
+        base = _render_admin_shading(base, config, random.Random(config.seed + 500_017))
     mask = _render_mask(config.width, config.height, polygon, hole)
     if config.touch_border and not _mask_touches_border(mask):
         raise RuntimeError("touch_border sample did not reach an outer mask pixel")
@@ -354,6 +366,41 @@ def _generate_negative_sample(
         json.dumps(sample.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     return SyntheticRenderResult(sample=sample, polygon=Polygon(), mask_area_px=0)
+
+
+def _apply_basemap_texture(base: Image.Image, rng: random.Random) -> Image.Image:
+    """Blend blurred noise over the basemap to mimic satellite imagery grain."""
+    import numpy as np
+
+    width, height = base.size
+    noise_rng = np.random.default_rng(rng.randint(0, 2**31))
+    coarse = noise_rng.integers(0, 255, size=(height // 8 + 1, width // 8 + 1, 3), dtype=np.uint8)
+    noise = Image.fromarray(coarse, "RGB").resize((width, height), Image.Resampling.BILINEAR)
+    strength = rng.uniform(0.08, 0.22)
+    return Image.blend(base, noise, strength)
+
+
+def _render_admin_shading(base: Image.Image, config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    """Draw 1-2 large muted district polygons that are NOT the service area."""
+    image = base.copy()
+    draw = ImageDraw.Draw(image, "RGBA")
+    for _ in range(rng.randint(1, 2)):
+        polygon = _sample_distractor_polygon(config.width, config.height, random.Random(rng.randint(0, 2**31)))
+        # Muted, desaturated palettes: grays, tans, pale washes.
+        gray = rng.randint(150, 235)
+        tint = rng.choice(
+            [
+                (gray, gray, gray),
+                (gray, gray - rng.randint(0, 18), gray - rng.randint(10, 30)),
+                (gray - rng.randint(10, 25), gray, gray - rng.randint(0, 15)),
+            ]
+        )
+        opacity = rng.randint(90, 210)
+        points = _int_points(polygon.exterior.coords)
+        draw.polygon(points, fill=(*tint, opacity))
+        if rng.random() < 0.7:
+            draw.line([*points, points[0]], fill=(60, 62, 66, 200), width=rng.randint(2, 4))
+    return image
 
 
 def _render_app_ui(base: Image.Image, config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
