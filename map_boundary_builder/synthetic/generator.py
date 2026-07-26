@@ -29,7 +29,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v21-negative-ui-scenes"
+GENERATOR_VERSION = "synthetic-generator-v22-realistic-scenes"
 
 
 @dataclass(frozen=True)
@@ -163,7 +163,18 @@ def generate_synthetic_dataset(
             complex_boundary=style.labels_on_top or index % 4 == 0,
             large_service_area=style.labels_on_top or index % 10 == 8,
             include_distractor=index % 3 == 1,
-            shape_family=("rectilinear", "road-following", "angular", "radial")[index % 4],
+            shape_family=(
+                "blocks",
+                "real-catalog",
+                "blocks",
+                "angular",
+                "real-catalog",
+                "blocks",
+                "rectilinear",
+                "radial",
+                "real-catalog",
+                "road-following",
+            )[index % 10],
             jpeg_quality=82 if index % 4 == 1 else None,
             negative_scene=negative,
             include_admin_shading=index % 5 == 0 or provider == "waymo-web",
@@ -275,6 +286,7 @@ def generate_synthetic_sample(
     # Border-pressure fixtures must expose the actual rectangular capture edge;
     # a circular crop can clip that contact back out of the saved truth mask.
     circular_viewport = (config.circular_viewport or style.circular_viewport) and not config.touch_border
+    network = _generate_road_network(config.width, config.height, random.Random(config.seed + 260_003))
     polygon, hole = _sample_polygon(
         config.width,
         config.height,
@@ -284,6 +296,7 @@ def generate_synthetic_sample(
         config.complex_boundary or style.labels_on_top,
         config.large_service_area or style.labels_on_top,
         config.shape_family,
+        network=network,
     )
 
     if hole is not None:
@@ -292,7 +305,7 @@ def generate_synthetic_sample(
     if circular_viewport:
         polygon = _largest_polygon(polygon.intersection(_circular_viewport_geometry(config)).buffer(0))
 
-    base = _render_basemap(config, rng)
+    base = _render_basemap(config, rng, network=network)
     if config.textured_basemap:
         base = _apply_basemap_texture(base, random.Random(config.seed + 700_003))
     if config.include_admin_shading:
@@ -542,59 +555,184 @@ def _slug_part(value: object) -> str:
     return "-".join(part for part in text.split("-") if part)
 
 
-def _render_basemap(config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+def _render_basemap(
+    config: SyntheticSceneConfig,
+    rng: random.Random,
+    network: dict | None = None,
+) -> Image.Image:
+    """Render a structured city basemap: water, parks, a jittered street
+    grid with arterials and curved highways, street/place labels with halos,
+    and map furniture (attribution, scale bar, zoom control)."""
     if config.provider_style == "tesla-dark":
         dark = True
     elif config.provider_style == "waymo-web":
         dark = False
     else:
         dark = config.seed % 4 == 0
-    background = (37, 43, 48) if dark else (242, 240, 234)
+    if network is None:
+        network = _generate_road_network(config.width, config.height, random.Random(config.seed + 260_003))
+
+    jitter = rng.randint(-6, 6)
+    background = (37 + jitter // 2, 43 + jitter // 2, 48 + jitter // 2) if dark else (
+        242 + jitter // 3,
+        240 + jitter // 3,
+        234 + jitter // 3,
+    )
     image = Image.new("RGB", (config.width, config.height), background)
     draw = ImageDraw.Draw(image, "RGBA")
 
-    water = (42, 83, 110, 210) if dark else (177, 213, 226, 230)
-    park = (51, 91, 65, 190) if dark else (194, 224, 181, 210)
-    road = (196, 199, 199, 210) if dark else (255, 255, 255, 235)
-    arterial = (220, 160, 86, 210) if dark else (245, 190, 105, 230)
-    label = (224, 228, 230, 220) if dark else (72, 78, 84, 220)
+    water = (42, 83, 110, 220) if dark else (170 + jitter, 211 + jitter, 227 + jitter, 235)
+    park = (51, 91, 65, 200) if dark else (194, 224, 181, 215)
+    minor_road = (72, 79, 86, 200) if dark else (255, 255, 255, 240)
+    arterial_casing = (30, 34, 38, 220) if dark else (222, 210, 180, 235)
+    arterial_fill = (108, 116, 124, 230) if dark else (250, 220, 140, 245)
+    highway_casing = (24, 27, 30, 235) if dark else (230, 176, 92, 245)
+    highway_fill = (132, 140, 150, 240) if dark else (252, 235, 170, 250)
+    label_color = (214, 218, 224, 230) if dark else (86, 90, 96, 235)
+    halo_color = (*background, 220)
 
-    draw.polygon(
-        [
-            (0, int(config.height * 0.72)),
-            (int(config.width * 0.2), int(config.height * 0.65)),
-            (int(config.width * 0.55), config.height),
-            (0, config.height),
-        ],
-        fill=water,
+    # Water: coastline, lakes, or a river.
+    water_rng = random.Random(config.seed + 310_007)
+    if water_rng.random() < 0.4:
+        side = water_rng.choice(["left", "right", "top", "bottom"])
+        depth = water_rng.uniform(0.12, 0.34)
+        points = []
+        steps = 14
+        for step in range(steps + 1):
+            t = step / steps
+            wobble = water_rng.uniform(-0.06, 0.06)
+            if side in ("left", "right"):
+                y = t * config.height
+                x = (depth + wobble) * config.width
+                points.append((x if side == "left" else config.width - x, y))
+            else:
+                x = t * config.width
+                y = (depth + wobble) * config.height
+                points.append((x, y if side == "top" else config.height - y))
+        if side == "left":
+            ring = [(0, 0), *points, (0, config.height)]
+        elif side == "right":
+            ring = [(config.width, 0), *points, (config.width, config.height)]
+        elif side == "top":
+            ring = [(0, 0), *points, (config.width, 0)]
+        else:
+            ring = [(0, config.height), *points, (config.width, config.height)]
+        draw.polygon(ring, fill=water)
+    if water_rng.random() < 0.4:
+        for _ in range(water_rng.randint(1, 2)):
+            cx = water_rng.uniform(0.1, 0.9) * config.width
+            cy = water_rng.uniform(0.1, 0.9) * config.height
+            radius = water_rng.uniform(0.04, 0.12) * min(config.width, config.height)
+            blob = Point(cx, cy).buffer(radius, resolution=10)
+            ring = [
+                (
+                    x + water_rng.uniform(-radius * 0.25, radius * 0.25),
+                    y + water_rng.uniform(-radius * 0.25, radius * 0.25),
+                )
+                for x, y in blob.exterior.coords
+            ]
+            draw.polygon(ring, fill=water)
+
+    # Parks.
+    park_rng = random.Random(config.seed + 330_011)
+    for _ in range(park_rng.randint(2, 6)):
+        cx = park_rng.uniform(0.05, 0.95) * config.width
+        cy = park_rng.uniform(0.05, 0.95) * config.height
+        radius = park_rng.uniform(0.03, 0.1) * min(config.width, config.height)
+        blob = Point(cx, cy).buffer(radius, resolution=8)
+        ring = [
+            (
+                x + park_rng.uniform(-radius * 0.3, radius * 0.3),
+                y + park_rng.uniform(-radius * 0.3, radius * 0.3),
+            )
+            for x, y in blob.exterior.coords
+        ]
+        draw.polygon(ring, fill=park)
+
+    # Streets: minor grid, then arterial casing/fill, then highways.
+    for start_point, end_point in network["minor"]:
+        draw.line([start_point, end_point], fill=minor_road, width=2)
+    for start_point, end_point in network["arterial"]:
+        draw.line([start_point, end_point], fill=arterial_casing, width=7)
+    for start_point, end_point in network["arterial"]:
+        draw.line([start_point, end_point], fill=arterial_fill, width=5)
+    for polyline in network["highways"]:
+        draw.line(polyline, fill=highway_casing, width=11, joint="curve")
+    for polyline in network["highways"]:
+        draw.line(polyline, fill=highway_fill, width=7, joint="curve")
+
+    # Street names along arterial segments.
+    label_rng = random.Random(config.seed + 350_021)
+    street_names = (
+        "Main St", "1st Ave", "Oak St", "Grand Ave", "Broadway", "Central Ave",
+        "5th St", "Lake Rd", "Hill Blvd", "Union St", "Park Ave", "Mill Rd",
+        "River Rd", "Church St", "Market St", "Elm St", "Washington Ave", "2nd St",
     )
-    draw.polygon(
-        [
-            (int(config.width * 0.68), int(config.height * 0.08)),
-            (config.width, int(config.height * 0.02)),
-            (config.width, int(config.height * 0.28)),
-            (int(config.width * 0.74), int(config.height * 0.32)),
-        ],
-        fill=park,
+    arterials = network["arterial"]
+    if arterials:
+        for _ in range(min(len(arterials), label_rng.randint(6, 14))):
+            start_point, end_point = arterials[label_rng.randrange(len(arterials))]
+            mid_x = (start_point[0] + end_point[0]) / 2
+            mid_y = (start_point[1] + end_point[1]) / 2
+            if not (0 <= mid_x <= config.width and 0 <= mid_y <= config.height):
+                continue
+            angle = math.degrees(math.atan2(-(end_point[1] - start_point[1]), end_point[0] - start_point[0]))
+            if angle > 90:
+                angle -= 180
+            if angle < -90:
+                angle += 180
+            _draw_rotated_text(
+                image,
+                (mid_x, mid_y),
+                label_rng.choice(street_names),
+                _map_font(label_rng.randint(9, 13)),
+                label_color,
+                halo_color,
+                angle,
+            )
+        draw = ImageDraw.Draw(image, "RGBA")
+
+    # Place labels with halos.
+    place_names = (
+        "Downtown", "Midtown", "Central", "River Park", "Station", "Market",
+        "Heights", "Old Town", "Eastside", "Westwood", "Harbor", "University",
+        "Fairview", "Lakeside", "North End", "Arts District",
     )
+    for index in range(label_rng.randint(5, 10)):
+        text = place_names[(index * 3 + config.seed) % len(place_names)]
+        x = label_rng.uniform(0.06, 0.86) * config.width
+        y = label_rng.uniform(0.08, 0.9) * config.height
+        font = _map_font(label_rng.randint(11, 17))
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            draw.text((x + dx, y + dy), text, fill=halo_color, font=font)
+        draw.text((x, y), text, fill=label_color, font=font)
 
-    for _ in range(16):
-        y = rng.randint(30, max(31, config.height - 30))
-        x_offset = rng.randint(-120, 120)
-        draw.line([(x_offset, y), (config.width + x_offset, y + rng.randint(-80, 80))], fill=road, width=3)
-    for _ in range(10):
-        x = rng.randint(30, max(31, config.width - 30))
-        y_offset = rng.randint(-80, 80)
-        draw.line([(x, y_offset), (x + rng.randint(-80, 80), config.height + y_offset)], fill=road, width=3)
-    for _ in range(3):
-        y = rng.randint(90, max(91, config.height - 90))
-        draw.line([(-20, y), (config.width + 20, y + rng.randint(-50, 50))], fill=arterial, width=7)
+    # Highway shields.
+    shield_rng = random.Random(config.seed + 370_027)
+    for polyline in network["highways"]:
+        if shield_rng.random() < 0.75:
+            px, py = polyline[len(polyline) // 2]
+            if 20 < px < config.width - 20 and 20 < py < config.height - 20:
+                draw.rounded_rectangle((px - 15, py - 10, px + 15, py + 10), radius=5, fill=(255, 255, 255, 245), outline=(90, 90, 94, 255))
+                draw.text((px - 8, py - 6), str(shield_rng.choice((5, 10, 35, 45, 75, 101, 280, 400))), fill=(50, 52, 56, 255), font=_map_font(10))
 
-    font = ImageFont.load_default()
-    for index, text in enumerate(("Downtown", "Central", "River Park", "Station", "Market", "Heights")):
-        x = int((index + 1) * config.width / 7) + rng.randint(-28, 28)
-        y = rng.randint(55, max(56, config.height - 70))
-        draw.text((x, y), text, fill=label, font=font)
+    # Map furniture.
+    furniture_rng = random.Random(config.seed + 390_031)
+    small_font = _map_font(9)
+    if furniture_rng.random() < 0.6:
+        attribution = furniture_rng.choice(("© Mapbox © OpenStreetMap", "Map data © OpenStreetMap", "© OpenStreetMap contributors", "Google"))
+        draw.text((config.width - 8 - draw.textlength(attribution, font=small_font), config.height - 16), attribution, fill=label_color, font=small_font)
+    if furniture_rng.random() < 0.4:
+        bar_width = furniture_rng.choice((60, 80, 100))
+        bar_y = config.height - 26
+        draw.line([(16, bar_y), (16 + bar_width, bar_y)], fill=label_color, width=2)
+        draw.text((16, bar_y - 14), furniture_rng.choice(("1 mi", "2 km", "5 km", "1 km")), fill=label_color, font=small_font)
+    if furniture_rng.random() < 0.3:
+        bx = config.width - 44
+        by = config.height // 2 - 36
+        draw.rounded_rectangle((bx, by, bx + 30, by + 64), radius=6, fill=(255, 255, 255, 240) if not dark else (40, 42, 46, 240))
+        draw.text((bx + 11, by + 8), "+", fill=label_color, font=_map_font(15))
+        draw.text((bx + 12, by + 38), "-", fill=label_color, font=_map_font(15))
 
     if config.include_ui_chrome or config.provider_style == "tesla-dark":
         chip_fill = (28, 29, 33, 240) if dark else (255, 255, 255, 235)
@@ -602,7 +740,7 @@ def _render_basemap(config: SyntheticSceneConfig, rng: random.Random) -> Image.I
         city_names = ("Tampa, FL", "Austin, TX", "Miami, FL", "Phoenix, AZ", "Dallas, TX", "Service area")
         chip_label = city_names[config.seed % len(city_names)]
         draw.rounded_rectangle((18, 18, min(config.width - 18, 240), 68), radius=14, fill=chip_fill)
-        draw.text((36, 36), chip_label, fill=chip_text, font=font)
+        draw.text((36, 36), chip_label, fill=chip_text, font=_map_font(14))
         draw.rounded_rectangle(
             (config.width - 168, config.height - 72, config.width - 24, config.height - 24),
             radius=10,
@@ -610,6 +748,217 @@ def _render_basemap(config: SyntheticSceneConfig, rng: random.Random) -> Image.I
         )
 
     return image
+
+
+_FONT_CANDIDATES = (
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+
+
+def _map_font(size: int):
+    for candidate in _FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(candidate, size)
+        except (OSError, ValueError):
+            continue
+    return ImageFont.load_default()
+
+
+def _draw_rotated_text(image, center, text, font, fill, halo, angle_degrees):
+    probe = ImageDraw.Draw(image)
+    text_width = int(probe.textlength(text, font=font)) + 8
+    text_height = (font.size if hasattr(font, "size") else 12) + 8
+    tile = Image.new("RGBA", (text_width, text_height), (0, 0, 0, 0))
+    tile_draw = ImageDraw.Draw(tile)
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        tile_draw.text((4 + dx, 2 + dy), text, fill=halo, font=font)
+    tile_draw.text((4, 2), text, fill=fill, font=font)
+    rotated = tile.rotate(angle_degrees, expand=True, resample=Image.Resampling.BICUBIC)
+    paste_x = int(center[0] - rotated.width / 2)
+    paste_y = int(center[1] - rotated.height / 2)
+    image.paste(rotated, (paste_x, paste_y), rotated)
+
+
+_REAL_SHAPE_LIBRARY: list[list[list[float]]] | None = None
+
+
+def _real_shape_rings() -> list[list[list[float]]]:
+    global _REAL_SHAPE_LIBRARY
+    if _REAL_SHAPE_LIBRARY is None:
+        library_path = Path(__file__).parent / "real_shape_library.json"
+        data = json.loads(library_path.read_text(encoding="utf-8"))
+        _REAL_SHAPE_LIBRARY = [shape["ring"] for shape in data["shapes"]]
+    return _REAL_SHAPE_LIBRARY
+
+
+def _sample_real_catalog_polygon(width: int, height: int, rng: random.Random, large: bool) -> Polygon:
+    """Augmented real service-area morphology from the shape library.
+
+    Rotation, mirroring, anisotropic scaling, and vertex jitter keep the
+    boundary character (street-following notches, corridors, harbor cutouts)
+    while preventing the model from memorizing any single real area.
+    """
+    from shapely import affinity
+
+    ring = rng.choice(_real_shape_rings())
+    polygon = Polygon(ring).buffer(0)
+    if isinstance(polygon, MultiPolygon):
+        polygon = max(polygon.geoms, key=lambda p: p.area)
+    if rng.random() < 0.5:
+        polygon = affinity.scale(polygon, xfact=-1.0, origin="center")
+    polygon = affinity.rotate(polygon, rng.uniform(0.0, 360.0), origin="center")
+    polygon = affinity.scale(
+        polygon, xfact=rng.uniform(0.85, 1.18), yfact=rng.uniform(0.85, 1.18), origin="center"
+    )
+    span = min(width, height) * (rng.uniform(0.55, 0.85) if large else rng.uniform(0.4, 0.7))
+    min_x, min_y, max_x, max_y = polygon.bounds
+    scale_factor = span / max(max_x - min_x, max_y - min_y)
+    polygon = affinity.scale(polygon, xfact=scale_factor, yfact=scale_factor, origin="center")
+    min_x, min_y, max_x, max_y = polygon.bounds
+    center_x = width / 2 + rng.uniform(-width * 0.08, width * 0.08)
+    center_y = height / 2 + rng.uniform(-height * 0.08, height * 0.08)
+    polygon = affinity.translate(
+        polygon,
+        xoff=center_x - (min_x + max_x) / 2,
+        yoff=center_y - (min_y + max_y) / 2,
+    )
+    tolerance = rng.uniform(0.0, 2.0)
+    if tolerance > 0.3:
+        polygon = polygon.simplify(tolerance, preserve_topology=True)
+    clipped = polygon.intersection(box(4, 4, width - 4, height - 4)).buffer(0)
+    return _largest_polygon(clipped) if not clipped.is_empty else _largest_polygon(polygon.buffer(0))
+
+
+def _generate_road_network(width: int, height: int, rng: random.Random) -> dict:
+    """Structured street grid with jitter: nodes, segments, and city blocks."""
+    angle = rng.uniform(-0.12, 0.12) if rng.random() < 0.55 else 0.0
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    center_x, center_y = width / 2.0, height / 2.0
+    pad = int(max(width, height) * 0.35)
+    spacing_x = rng.randint(48, 96)
+    spacing_y = rng.randint(48, 96)
+
+    def build_axis(start: int, end: int, spacing: int) -> list[float]:
+        positions = []
+        value = float(start)
+        while value < end:
+            positions.append(value)
+            value += spacing * rng.uniform(0.7, 1.35)
+        return positions
+
+    xs = build_axis(-pad, width + pad, spacing_x)
+    ys = build_axis(-pad, height + pad, spacing_y)
+    jitter = min(spacing_x, spacing_y) * 0.16
+
+    def node(ix: int, iy: int) -> tuple[float, float]:
+        node_rng = random.Random((ix * 73856093) ^ (iy * 19349663) ^ rng_seed)
+        x = xs[ix] + node_rng.uniform(-jitter, jitter)
+        y = ys[iy] + node_rng.uniform(-jitter, jitter)
+        dx, dy = x - center_x, y - center_y
+        return (center_x + dx * cos_a - dy * sin_a, center_y + dx * sin_a + dy * cos_a)
+
+    rng_seed = rng.randint(0, 2**31)
+    minor_segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    arterial_segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    arterial_cols = {index for index in range(len(xs)) if index % rng.randint(3, 5) == 1}
+    arterial_rows = {index for index in range(len(ys)) if index % rng.randint(3, 5) == 2}
+    for ix in range(len(xs)):
+        for iy in range(len(ys)):
+            if ix + 1 < len(xs) and rng.random() > 0.06:
+                seg = (node(ix, iy), node(ix + 1, iy))
+                (arterial_segments if iy in arterial_rows else minor_segments).append(seg)
+            if iy + 1 < len(ys) and rng.random() > 0.06:
+                seg = (node(ix, iy), node(ix, iy + 1))
+                (arterial_segments if ix in arterial_cols else minor_segments).append(seg)
+
+    highways: list[list[tuple[float, float]]] = []
+    for _ in range(rng.randint(1, 2)):
+        edge = rng.random()
+        if edge < 0.5:
+            start = (-pad, rng.uniform(0, height))
+            end = (width + pad, rng.uniform(0, height))
+        else:
+            start = (rng.uniform(0, width), -pad)
+            end = (rng.uniform(0, width), height + pad)
+        control = (
+            (start[0] + end[0]) / 2 + rng.uniform(-width * 0.3, width * 0.3),
+            (start[1] + end[1]) / 2 + rng.uniform(-height * 0.3, height * 0.3),
+        )
+        points = []
+        for step in range(25):
+            t = step / 24.0
+            x = (1 - t) ** 2 * start[0] + 2 * (1 - t) * t * control[0] + t**2 * end[0]
+            y = (1 - t) ** 2 * start[1] + 2 * (1 - t) * t * control[1] + t**2 * end[1]
+            points.append((x, y))
+        highways.append(points)
+
+    cells: list[Polygon] = []
+    for ix in range(len(xs) - 1):
+        for iy in range(len(ys) - 1):
+            quad = Polygon([node(ix, iy), node(ix + 1, iy), node(ix + 1, iy + 1), node(ix, iy + 1)])
+            if quad.is_valid and quad.area > 100:
+                cells.append(quad)
+    return {
+        "minor": minor_segments,
+        "arterial": arterial_segments,
+        "highways": highways,
+        "cells": cells,
+        "grid_shape": (len(xs) - 1, len(ys) - 1),
+    }
+
+
+def _sample_block_union_polygon(
+    network: dict,
+    width: int,
+    height: int,
+    rng: random.Random,
+    large: bool,
+) -> Polygon:
+    """Service area as a union of contiguous city blocks.
+
+    Real deployment boundaries follow streets; the union of grid cells
+    produces exactly that stepped, road-aligned outline.
+    """
+    cells = network["cells"]
+    cols, rows = network["grid_shape"]
+    index_of = {}
+    for flat_index, cell in enumerate(cells):
+        index_of[flat_index] = cell
+    target_fraction = rng.uniform(0.24, 0.45) if large else rng.uniform(0.1, 0.28)
+    target_area = width * height * target_fraction
+
+    center = Point(
+        width / 2 + rng.uniform(-width * 0.12, width * 0.12),
+        height / 2 + rng.uniform(-height * 0.12, height * 0.12),
+    )
+    order = sorted(range(len(cells)), key=lambda i: cells[i].centroid.distance(center))
+    seed_index = order[0]
+    selected = {seed_index}
+    frontier = [seed_index]
+    area = cells[seed_index].area
+    # Neighbors by shared-edge adjacency in the flat grid layout.
+    while frontier and area < target_area:
+        current = frontier.pop(rng.randrange(len(frontier)))
+        row_size = rows
+        for neighbor in (current - 1, current + 1, current - row_size, current + row_size):
+            if neighbor in selected or neighbor < 0 or neighbor >= len(cells):
+                continue
+            if not cells[neighbor].touches(cells[current]) and cells[neighbor].distance(cells[current]) > 1.0:
+                continue
+            if rng.random() < 0.72:
+                selected.add(neighbor)
+                frontier.append(neighbor)
+                area += cells[neighbor].area
+                if area >= target_area:
+                    break
+    union = unary_union([cells[i] for i in selected]).buffer(1.5).buffer(-1.5)
+    polygon = _largest_polygon(union)
+    clipped = polygon.intersection(box(4, 4, width - 4, height - 4)).buffer(0)
+    if not clipped.is_empty:
+        polygon = _largest_polygon(clipped)
+    return polygon
 
 
 def _sample_polygon(
@@ -621,8 +970,13 @@ def _sample_polygon(
     complex_boundary: bool = False,
     large_service_area: bool = False,
     shape_family: str = "radial",
+    network: dict | None = None,
 ) -> tuple[Polygon, Polygon | None]:
-    if shape_family == "rectilinear":
+    if shape_family == "blocks" and network is not None:
+        polygon = _sample_block_union_polygon(network, width, height, rng, large_service_area)
+    elif shape_family == "real-catalog":
+        polygon = _sample_real_catalog_polygon(width, height, rng, large_service_area)
+    elif shape_family == "rectilinear":
         polygon = _sample_rectilinear_polygon(width, height, rng, large_service_area)
     elif shape_family == "angular":
         polygon = _sample_angular_polygon(
