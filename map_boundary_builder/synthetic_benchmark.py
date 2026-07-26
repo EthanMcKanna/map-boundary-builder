@@ -1,9 +1,8 @@
-"""Benchmark extraction against synthetic image/mask artifacts."""
+"""Benchmark the unified segmentation path against synthetic image/mask artifacts."""
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -34,24 +33,13 @@ from .evaluation import (
     recall,
     topology_signature,
 )
-from .extract import (
-    ExtractionResult,
-    extract_service_area,
-    gray_outline_extraction_result,
-    mask_iou,
-    model_fallback_reason,
-    resolve_extraction_profile,
-    should_fallback_to_deterministic_result,
-)
-from .model_extract import ModelExtractionConfig, extract_service_area_with_model
+from .extract import ExtractionResult, load_rgb
+from .segment import default_model_path, segment_image
 from .synthetic import SyntheticDatasetManifest, generate_synthetic_dataset
 
 
-REPORT_SCHEMA_VERSION = "synthetic-benchmark-v3"
+REPORT_SCHEMA_VERSION = "synthetic-benchmark-v4"
 ARTIFACT_BUNDLE_SCHEMA_VERSION = "onnx-artifact-bundle-v1"
-AUTOMATIC_EDGEGRAPH_ROUTE = (
-    "verified-source-native-preflight-else-selector-bootstrap-then-edgegraph-with-guarded-deterministic-review-v1"
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,14 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--width", type=int, default=960, help="Generated sample width.")
     parser.add_argument("--height", type=int, default=640, help="Generated sample height.")
     parser.add_argument("--limit", type=int, default=0, help="Score only the first N manifest samples.")
-    parser.add_argument("--model-path", type=Path, default=None, help="Optional ONNX mask model to score.")
-    parser.add_argument("--boundaryfield-refiner-path", type=Path, default=None)
-    parser.add_argument("--boundaryfield-selector-only", action="store_true")
-    parser.add_argument("--edgegraph-refiner-path", type=Path, default=None)
-    parser.add_argument("--model-input-size", type=int, default=256)
-    parser.add_argument("--model-input-channels", type=int, choices=(3, 5), default=3)
+    parser.add_argument(
+        "--model-path",
+        type=Path,
+        default=None,
+        help="ONNX mask model to score. Defaults to the packaged model.",
+    )
+    parser.add_argument(
+        "--model-threshold",
+        type=float,
+        default=None,
+        help="Override the model probability threshold.",
+    )
     parser.add_argument("--guided", action="store_true", help="Score with manifest-derived seed and color guidance.")
-    parser.add_argument("--model-threshold", type=float, default=0.25)
     parser.add_argument("--min-iou", type=float, default=0.70, help="Hard gate for every scored row.")
     parser.add_argument("--mean-iou", type=float, default=0.85, help="Hard gate for report mean IoU.")
     parser.add_argument("--p05-iou", type=float, default=0.0, help="Hard gate for fifth-percentile IoU.")
@@ -112,24 +105,12 @@ def main(argv: list[str] | None = None) -> int:
             properties={**manifest.properties, "score_limit": args.limit},
         )
 
-    model_config = None
-    if args.model_path is not None:
-        model_config = ModelExtractionConfig(
-            input_width=args.model_input_size,
-            input_height=args.model_input_size,
-            threshold=args.model_threshold,
-            output_activation="logits",
-            input_channels=args.model_input_channels,
-        )
     report = score_synthetic_manifest(
         manifest,
         dataset_dir,
         model_path=args.model_path,
-        model_config=model_config,
+        model_threshold=args.model_threshold or None,
         guided=args.guided,
-        boundaryfield_refiner_path=args.boundaryfield_refiner_path,
-        boundaryfield_selector_only=args.boundaryfield_selector_only,
-        edgegraph_refiner_path=args.edgegraph_refiner_path,
         manifest_path=manifest_path,
     )
     report["thresholds"] = {
@@ -166,27 +147,18 @@ def score_synthetic_manifest(
     dataset_dir: str | Path,
     *,
     model_path: str | Path | None = None,
-    model_config: ModelExtractionConfig | None = None,
+    model_threshold: float | None = None,
     guided: bool = False,
-    boundaryfield_refiner_path: str | Path | None = None,
-    boundaryfield_selector_only: bool = False,
-    edgegraph_refiner_path: str | Path | None = None,
     manifest_path: str | Path | None = None,
 ) -> dict[str, Any]:
     root = Path(dataset_dir)
-    effective_model_config = model_config
-    if edgegraph_refiner_path is not None:
-        effective_model_config = _edgegraph_selector_config(model_config)
     rows = [
         score_synthetic_sample(
             sample,
             root,
             model_path=model_path,
-            model_config=effective_model_config,
+            model_threshold=model_threshold,
             guided=guided,
-            boundaryfield_refiner_path=boundaryfield_refiner_path,
-            boundaryfield_selector_only=boundaryfield_selector_only,
-            edgegraph_refiner_path=edgegraph_refiner_path,
         )
         for sample in manifest.samples
     ]
@@ -232,6 +204,8 @@ def score_synthetic_manifest(
         }
     summary["stroke_width_groups"] = stroke_groups
     resolved_manifest_path = Path(manifest_path) if manifest_path is not None else None
+    resolved_model_path = Path(model_path) if model_path is not None else default_model_path()
+    model_resolves = model_path is not None or resolved_model_path.is_file()
     return {
         "schema_version": REPORT_SCHEMA_VERSION,
         "manifest": {
@@ -243,27 +217,14 @@ def score_synthetic_manifest(
             "guidance_mode": "oracle_guided" if guided else "automatic",
             "guided": bool(guided),
             "oracle_hints": bool(guided),
-            "automatic_inference_route": (
-                None
-                if guided or edgegraph_refiner_path is None
-                else AUTOMATIC_EDGEGRAPH_ROUTE
-            ),
-            "selector_config": (
-                _model_config_identity(effective_model_config)
-                if edgegraph_refiner_path is not None
-                else None
-            ),
             "manifest_sha256": (
                 _file_sha256(resolved_manifest_path)
                 if resolved_manifest_path is not None and resolved_manifest_path.is_file()
                 else None
             ),
-            "model_artifacts": {
-                "selector": _artifact_identity(model_path),
-                "refiner": _artifact_identity(edgegraph_refiner_path),
-            },
+            "model_artifact": _artifact_identity(resolved_model_path) if model_resolves else None,
         },
-        "extractor": "edgegraph" if edgegraph_refiner_path is not None else "boundaryfield" if boundaryfield_refiner_path is not None or boundaryfield_selector_only else "model" if model_path is not None else "deterministic",
+        "extractor": "model" if model_resolves else "auto-fill",
         "model_path": str(model_path) if model_path is not None else None,
         "summary": summary,
         "rows": rows,
@@ -392,234 +353,27 @@ def _artifact_bundle_sha256(records: list[dict[str, Any]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _edgegraph_selector_config(
-    config: ModelExtractionConfig | None,
-) -> ModelExtractionConfig:
-    if config is None:
-        return ModelExtractionConfig(
-            input_width=320,
-            input_height=320,
-            threshold=0.45,
-            simplify_px=0.0,
-            style="auto-fill",
-            output_activation="logits",
-            input_channels=5,
-        )
-    if config.input_channels != 5:
-        raise ValueError("EdgeGraph selector scoring requires five input channels")
-    if config.output_activation != "logits":
-        raise ValueError("EdgeGraph selector scoring requires logits output")
-    if abs(float(config.threshold) - 0.45) > 1e-9:
-        raise ValueError("EdgeGraph selector scoring requires the production threshold 0.45")
-    return replace(
-        config,
-        simplify_px=0.0,
-        style="auto-fill",
-    )
-
-
-def _model_config_identity(
-    config: ModelExtractionConfig | None,
-) -> dict[str, object] | None:
-    if config is None:
-        return None
-    return {
-        "input_width": int(config.input_width),
-        "input_height": int(config.input_height),
-        "input_channels": int(config.input_channels),
-        "threshold": float(config.threshold),
-        "output_activation": config.output_activation,
-    }
-
-
 def score_synthetic_sample(
     sample,
     dataset_dir: Path,
     *,
     model_path: str | Path | None = None,
-    model_config: ModelExtractionConfig | None = None,
+    model_threshold: float | None = None,
     guided: bool = False,
-    boundaryfield_refiner_path: str | Path | None = None,
-    boundaryfield_selector_only: bool = False,
-    edgegraph_refiner_path: str | Path | None = None,
 ) -> dict[str, Any]:
     image_path = dataset_dir / sample.artifacts.screenshot
     mask_path = dataset_dir / sample.artifacts.mask
     started = time.perf_counter()
     try:
         expected_mask = _load_mask(mask_path)
-        if edgegraph_refiner_path is not None:
-            if model_path is None:
-                raise ValueError("EdgeGraph scoring requires --model-path for the global selector")
-            from .edgegraph import (
-                EdgeGraphConfig,
-                automatic_edgegraph_hints,
-                refine_boundary_with_edgegraph,
-            )
-            from .model_extract import (
-                guidance_diagnostics,
-                load_onnx_session,
-                predict_mask_probabilities,
-            )
-
-            rgb = _load_rgb(image_path)
-            if not guided:
-                exact_result = gray_outline_extraction_result(
-                    rgb,
-                    simplify_px=6.0,
-                    profile=resolve_extraction_profile(),
-                )
-                if exact_result is not None:
-                    exact_result = replace(
-                        exact_result,
-                        diagnostics={
-                            **(exact_result.diagnostics or {}),
-                            "automatic_route": "verified-source-native-preflight-v1",
-                        },
-                    )
-                    return _scored_synthetic_row(
-                        sample,
-                        dataset_dir,
-                        expected_mask,
-                        exact_result,
-                        started,
-                    )
-            selector_config = _edgegraph_selector_config(model_config)
-            if guided:
-                hints = synthetic_guidance(sample, expected_mask, rgb)
-                selector_hints = hints
-                automatic_diagnostics: dict[str, object] = {}
-            else:
-                selector_hints = None
-            coarse = predict_mask_probabilities(
-                rgb,
-                load_onnx_session(str(model_path)),
-                config=selector_config,
-                hints=selector_hints,
-            )
-            if not guided:
-                hints, selector_bootstrap = automatic_edgegraph_hints(
-                    rgb,
-                    coarse,
-                    threshold=selector_config.threshold,
-                )
-                automatic_diagnostics = {
-                    "automatic_guidance": "selector_bootstrap",
-                    "selector_bootstrap": selector_bootstrap,
-                }
-            edge_result = refine_boundary_with_edgegraph(
-                rgb,
-                coarse,
-                load_onnx_session(str(edgegraph_refiner_path)),
-                hints=hints,
-                config=EdgeGraphConfig(coarse_threshold=selector_config.threshold),
-            )
-            result = ExtractionResult(
-                mask=edge_result.mask,
-                style="auto-fill",
-                pixel_geometry=edge_result.pixel_geometry,
-                coverage_ratio=float(edge_result.mask.mean()),
-                contour_count=edge_result.contour_count,
-                confidence=edge_result.confidence,
-                diagnostics={
-                    **edge_result.diagnostics,
-                    **automatic_diagnostics,
-                    "model_variant": "generalized_v20_edgegraph",
-                    "model_path": Path(model_path).name,
-                    "edgegraph_refiner_path": Path(edgegraph_refiner_path).name,
-                    "model_guidance": guidance_diagnostics(hints),
-                },
-            )
-            if not guided:
-                try:
-                    deterministic_result = extract_service_area(
-                        image_path,
-                        rgb=rgb,
-                        cache=False,
-                        use_model=False,
-                    )
-                except ValueError as exc:
-                    result = replace(
-                        result,
-                        diagnostics={
-                            **(result.diagnostics or {}),
-                            "deterministic_review": {
-                                "available": False,
-                                "error": str(exc),
-                            },
-                        },
-                    )
-                    deterministic_result = None
-            else:
-                deterministic_result = None
-            if deterministic_result is not None:
-                result = replace(
-                    result,
-                    diagnostics={
-                        **(result.diagnostics or {}),
-                        "deterministic_review": {
-                            "available": True,
-                            "candidate_agreement_iou": mask_iou(
-                                result.mask,
-                                deterministic_result.mask,
-                            ),
-                            "candidate_style": deterministic_result.style,
-                            "candidate_confidence": deterministic_result.confidence,
-                        },
-                    },
-                )
-                if should_fallback_to_deterministic_result(
-                    result,
-                    deterministic_result,
-                ):
-                    coverage_ratio = result.coverage_ratio / max(
-                        deterministic_result.coverage_ratio,
-                        1e-9,
-                    )
-                    deterministic_result = replace(
-                        deterministic_result,
-                        diagnostics={
-                            **(deterministic_result.diagnostics or {}),
-                            "model_fallback": {
-                                "reason": model_fallback_reason(
-                                    result,
-                                    deterministic_result,
-                                ),
-                                "model_style": result.style,
-                                "model_coverage_ratio": result.coverage_ratio,
-                                "model_contour_count": result.contour_count,
-                                "model_confidence": result.confidence,
-                                "model_to_deterministic_coverage_ratio": coverage_ratio,
-                            },
-                        },
-                    )
-                    result = deterministic_result
-        elif boundaryfield_refiner_path is not None or boundaryfield_selector_only:
-            if model_path is None:
-                raise ValueError("BoundaryField scoring requires --model-path for the global selector")
-            from .boundaryfield import BoundaryFieldConfig, extract_service_area_with_boundaryfield
-            from .model_extract import load_onnx_session
-
-            hints = synthetic_guidance(sample, expected_mask, _load_rgb(image_path)) if guided else None
-            result = extract_service_area_with_boundaryfield(
-                _load_rgb(image_path),
-                load_onnx_session(str(model_path)),
-                load_onnx_session(str(boundaryfield_refiner_path)) if boundaryfield_refiner_path is not None else None,
-                hints=hints,
-                config=BoundaryFieldConfig(
-                    coarse_input_size=(model_config.input_width if model_config is not None else 256),
-                    coarse_threshold=(model_config.threshold if model_config is not None else 0.45),
-                ),
-            )
-        elif model_path is None:
-            result = extract_service_area(image_path, cache=False)
-        else:
-            hints = (
-                synthetic_guidance(sample, expected_mask, _load_rgb(image_path))
-                if guided
-                else None
-            )
-            result = extract_service_area_with_model(image_path, model_path, config=model_config, hints=hints)
+        rgb = load_rgb(image_path)
+        hints = synthetic_guidance(sample, expected_mask, rgb) if guided else None
+        result = segment_image(
+            rgb,
+            model_path=model_path,
+            threshold=model_threshold,
+            hints=hints,
+        )
         return _scored_synthetic_row(
             sample,
             dataset_dir,
@@ -824,11 +578,6 @@ def _score_masks(
 def _load_mask(path: str | Path) -> np.ndarray:
     with Image.open(path) as image:
         return np.asarray(image.convert("L")) > 0
-
-
-def _load_rgb(path: str | Path) -> np.ndarray:
-    with Image.open(path) as image:
-        return np.asarray(image.convert("RGB"))
 
 
 def _passes_thresholds(

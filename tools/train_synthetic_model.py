@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 GUIDANCE_POLICIES = ("mixed", "automatic-heavy", "none")
 AUTOMATIC_HEAVY_GUIDANCE_EXPOSURE = 0.15
-SELECTOR_METADATA_SCHEMA_VERSION = "generalized-v20-edgegraph-selector-metadata-v1"
+SELECTOR_METADATA_SCHEMA_VERSION = "boundary-model-metadata-v1"
 SELECTOR_PRODUCTION_THRESHOLD = 0.45
 SELECTOR_OPTIMIZER_WEIGHT_DECAY = 1e-4
 
@@ -28,7 +28,7 @@ SELECTOR_OPTIMIZER_WEIGHT_DECAY = 1e-4
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train a synthetic boundary segmentation model.")
     parser.add_argument("--dataset-dir", type=Path, default=Path("out/synthetic-model-train"))
-    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/synthetic_boundary_v10.onnx"))
+    parser.add_argument("--output", type=Path, default=Path("map_boundary_builder/models/boundary_v1.onnx"))
     parser.add_argument("--count", type=int, default=4096)
     parser.add_argument("--validation-count", type=int, default=384)
     parser.add_argument("--seed", type=int, default=101)
@@ -750,7 +750,7 @@ def write_selector_metadata(
     architecture = str(checkpoint["arch"])
     metadata = {
         "schema_version": SELECTOR_METADATA_SCHEMA_VERSION,
-        "architecture": f"generalized-v20-edgegraph-selector-{architecture}-v1",
+        "architecture": f"boundary-{architecture}-v1",
         "onnx_input_name": "image",
         "onnx_output_name": "mask_logits",
         "training_dataset": {

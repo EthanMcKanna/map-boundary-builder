@@ -21,19 +21,12 @@ PIPELINE_VERSION_PACKAGES = (
     "shapely",
 )
 PIPELINE_VERSION_FILES = (
-    "boundaryfield.py",
-    "edge_phase.py",
-    "edgegraph.py",
-    "edgegraph_proposal.py",
-    "rectilinear_fit.py",
-    "catalog_match.py",
     "extract.py",
     "geocoder.py",
     "geocoder_seed.json",
     "georeference.py",
     "georef_transform.py",
     "geojson.py",
-    "gray_outline.py",
     "image_io.py",
     "model_extract.py",
     "network_policy.py",
@@ -42,18 +35,19 @@ PIPELINE_VERSION_FILES = (
     "osm_places_seed.json.gz",
     "osm_road_points_seed.npz",
     "osm_roads.py",
+    "pipeline.py",
     "pipeline_version.py",
-    "runner.py",
     "runtime_config.py",
     "runtime_warmup.py",
-    "svg_vector.py",
+    "segment.py",
     "upload_payload.py",
-    "models/boundaryfield_v12_refiner.onnx",
-    "models/boundaryfield_v12_refiner.onnx.data",
-    "models/boundaryfield_v12_selector.onnx",
-    "models/boundaryfield_v12_selector.onnx.data",
-    "models/edgegraph_v20_refiner.onnx",
-    "models/edgegraph_v20_refiner.onnx.json",
+)
+# Model artifacts are hashed when present so a retrained boundary model
+# invalidates caches, but a source checkout without the trained model still
+# resolves a pipeline version.
+PIPELINE_VERSION_OPTIONAL_FILES = (
+    "models/boundary_v1.onnx",
+    "models/boundary_v1.onnx.json",
 )
 PIPELINE_VERSION_REPO_FILES = (
     "api/index.py",
@@ -87,10 +81,10 @@ def pipeline_version_sources():
     package_root = resources.files("map_boundary_builder")
     for filename in PIPELINE_VERSION_FILES:
         yield filename, package_root.joinpath(filename)
-    catalog_dir = package_root.joinpath("service_area_catalog")
-    for source in sorted(catalog_dir.iterdir(), key=lambda item: item.name):
-        if source.name.endswith(".json"):
-            yield f"service_area_catalog/{source.name}", source
+    for filename in PIPELINE_VERSION_OPTIONAL_FILES:
+        source = package_root.joinpath(filename)
+        if source.is_file():
+            yield filename, source
     repo_root = Path(__file__).resolve().parents[1]
     for filename in PIPELINE_VERSION_REPO_FILES:
         source = repo_root / filename

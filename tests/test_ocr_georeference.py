@@ -12,7 +12,6 @@ from PIL import Image, PngImagePlugin
 
 import map_boundary_builder.ocr as ocr_module
 import map_boundary_builder.geocoder as geocoder_module
-import map_boundary_builder.runner as runner_module
 import map_boundary_builder.runtime_config as runtime_config_module
 from map_boundary_builder.georeference import (
     CityContext,
@@ -28,8 +27,6 @@ from map_boundary_builder.georeference import (
     direct_city_contexts_from_labels,
     detect_label_marker_dots,
     direct_contexts_with_region_anchor_fallbacks,
-    filename_city_contexts,
-    filename_context_queries,
     fit_similarity,
     geocode_many,
     geocode_contexts,
@@ -82,12 +79,6 @@ from map_boundary_builder.ocr import (
     rgb_to_bgr,
     warm_rapidocr_runtime,
     write_ocr_cache,
-)
-from map_boundary_builder.runner import (
-    fit_georeference,
-    is_fast_context_hint_georeference,
-    rank_road_context_queries,
-    rapidocr_full_detail_max_dimension_for_ocr_style,
 )
 
 
@@ -976,42 +967,6 @@ class OcrGroupingTests(unittest.TestCase):
             config = runtime_config_module.ocr_runtime_config()
 
         self.assertEqual(config["rapidocr_bright_blue_full_detail_max_dimension"], 1500)
-
-    def test_bright_blue_full_detail_retry_can_step_above_fast_cap(self) -> None:
-        with (
-            patch.object(runner_module, "RAPIDOCR_MAX_DIMENSION", 1600),
-            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION", 1400),
-            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500),
-            patch.object(runner_module, "RAPIDOCR_DARK_TEAL_WIDE_MAX_DIMENSION", 1400),
-        ):
-            bright_blue = rapidocr_full_detail_max_dimension_for_ocr_style(
-                "bright-blue",
-                width=2400,
-                height=2400,
-            )
-            svg_bright_blue = rapidocr_full_detail_max_dimension_for_ocr_style(
-                "bright-blue",
-                width=2400,
-                height=2400,
-                source_is_svg=True,
-            )
-
-        self.assertEqual(bright_blue, 1500)
-        self.assertEqual(svg_bright_blue, 1600)
-
-    def test_bright_blue_full_detail_retry_does_not_lower_uncapped_ocr(self) -> None:
-        with (
-            patch.object(runner_module, "RAPIDOCR_MAX_DIMENSION", 1600),
-            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_MAX_DIMENSION", 1600),
-            patch.object(runner_module, "RAPIDOCR_BRIGHT_BLUE_FULL_DETAIL_MAX_DIMENSION", 1500),
-        ):
-            max_dimension = rapidocr_full_detail_max_dimension_for_ocr_style(
-                "bright-blue",
-                width=2400,
-                height=2400,
-            )
-
-        self.assertIsNone(max_dimension)
 
     def test_runtime_config_can_use_explicit_v5_recognition_asset_paths(self) -> None:
         with TemporaryDirectory() as workdir:
@@ -3059,59 +3014,6 @@ class PlaceCandidateTests(unittest.TestCase):
         self.assertTrue(has_reliable_candidate_cluster(regional_cluster))
 
 
-class RoadContextRankingTests(unittest.TestCase):
-    def test_broad_regional_context_beats_small_city_label(self) -> None:
-        from map_boundary_builder.georeference import CityContext
-
-        sunnyvale = CityContext(
-            query="Sunnyvale",
-            center=GeocodeResult(
-                label="Sunnyvale",
-                lon=-122.0363,
-                lat=37.3688,
-                display_name="Sunnyvale, Santa Clara County, California, United States",
-                bbox=(-122.0652, 37.3302, -121.9825, 37.4637),
-                importance=0.55,
-                place_type="city",
-            ),
-            inferred=True,
-            evidence=("Sunnyvale",),
-        )
-        santa_clara_region = CityContext(
-            query="Santa Clara",
-            center=GeocodeResult(
-                label="Santa Clara",
-                lon=-122.1483,
-                lat=37.3509,
-                display_name="Santa Clara",
-                bbox=(-122.3846, 37.0939, -121.9119, 37.6070),
-                importance=0.5,
-                place_type="region",
-            ),
-            inferred=True,
-            evidence=("Menlo Park", "Mountain View", "Redwood City", "Sunnyvale"),
-        )
-        school_district = CityContext(
-            query="Mountain View Los Altos Union High School District",
-            center=GeocodeResult(
-                label="Mountain Altos",
-                lon=-122.0648,
-                lat=37.3610,
-                display_name="Mountain View Los Altos Union High School District",
-                bbox=(-122.0652, 37.3608, -122.0647, 37.3612),
-                importance=0.35,
-                place_type="educational_institution",
-            ),
-            inferred=True,
-            evidence=("Mountain View",),
-        )
-
-        ranked = rank_road_context_queries([sunnyvale, school_district, santa_clara_region])
-
-        self.assertEqual("Santa Clara", ranked[0])
-        self.assertEqual("Mountain View Los Altos Union High School District", ranked[-1])
-
-
 def control_points_for_context(label_prefix: str, count: int) -> list[ControlPoint]:
     return [
         ControlPoint(
@@ -3780,198 +3682,6 @@ class GeoreferenceFallbackTests(unittest.TestCase):
             )
         )
 
-    def test_ranked_context_failure_falls_back_to_label_fit(self) -> None:
-        labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
-        fallback_result = object()
-
-        with (
-            patch("map_boundary_builder.runner.road_contexts_from_labels", return_value=[object()]),
-            patch("map_boundary_builder.runner.road_context_queries", return_value=[]),
-            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=True),
-            patch("map_boundary_builder.runner.georeference_from_ranked_label_contexts", return_value=None),
-            patch("map_boundary_builder.runner.georeference_from_labels", return_value=fallback_result) as label_fit,
-        ):
-            result = fit_georeference(
-                labels,
-                Path("input.png"),
-                pixel_geometry=object(),
-                rgb=None,
-                city_input=None,
-                width=1920,
-                height=1080,
-                coverage_ratio=0.22,
-                min_control_points=3,
-                label_y_min=None,
-                label_y_max=None,
-                progress=None,
-            )
-
-        self.assertIs(result, fallback_result)
-        label_fit.assert_called_once()
-
-    def test_road_network_context_fallback_is_disabled_by_default(self) -> None:
-        labels = [OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96)]
-
-        with (
-            patch("map_boundary_builder.runner.georeference_from_labels", return_value=None),
-            patch(
-                "map_boundary_builder.runner.road_contexts_from_labels",
-                return_value=[SimpleNamespace(query="Dallas")],
-            ),
-            patch("map_boundary_builder.runner.road_context_queries", return_value=["Dallas"]),
-            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=False),
-            patch("map_boundary_builder.runner.georeference_from_road_contexts") as road_contexts,
-        ):
-            result = fit_georeference(
-                labels,
-                Path("input.png"),
-                pixel_geometry=object(),
-                rgb=None,
-                city_input=None,
-                width=680,
-                height=551,
-                coverage_ratio=0.27,
-                min_control_points=3,
-                label_y_min=None,
-                label_y_max=None,
-                progress=None,
-            )
-
-        self.assertIsNone(result)
-        road_contexts.assert_not_called()
-
-    def test_road_network_context_fallback_can_be_enabled_for_experiments(self) -> None:
-        labels = [OcrLabel("Dallas", x=342, y=293.5, width=70, height=19, confidence=96)]
-        fallback_result = object()
-
-        with (
-            patch.dict(os.environ, {"MAP_BOUNDARY_ENABLE_ROAD_CONTEXT_FALLBACK": "1"}),
-            patch("map_boundary_builder.runner.georeference_from_labels", return_value=None),
-            patch(
-                "map_boundary_builder.runner.road_contexts_from_labels",
-                return_value=[SimpleNamespace(query="Dallas")],
-            ),
-            patch("map_boundary_builder.runner.road_context_queries", return_value=["Dallas"]),
-            patch("map_boundary_builder.runner.should_try_ranked_context_first", return_value=False),
-            patch(
-                "map_boundary_builder.runner.georeference_from_road_contexts",
-                return_value=fallback_result,
-            ) as road_contexts,
-        ):
-            result = fit_georeference(
-                labels,
-                Path("input.png"),
-                pixel_geometry=object(),
-                rgb=None,
-                city_input=None,
-                width=680,
-                height=551,
-                coverage_ratio=0.27,
-                min_control_points=3,
-                label_y_min=None,
-                label_y_max=None,
-                progress=None,
-            )
-
-        self.assertIs(result, fallback_result)
-        road_contexts.assert_called_once()
-
-    def test_filename_context_queries_extract_city_without_provider_noise(self) -> None:
-        queries = filename_context_queries("Avride Dallas df72214 small variant.png")
-        cache_bust_queries = filename_context_queries(
-            "avride-dallas-pipeline-version-1780067151-e527924-ui.png"
-        )
-        artifact_queries = filename_context_queries("baseline-currentref-strict-gate.png")
-        concatenated_area_queries = filename_context_queries(
-            "upload-bayarea-tail-prune-68bd278.png"
-        )
-        tesla_area_queries = filename_context_queries("Tesla Bay Area screenshot.png")
-
-        self.assertIn("Dallas", queries)
-        self.assertNotIn("Avride Dallas", queries)
-        self.assertNotIn("Small Variant", queries)
-        self.assertNotIn("Dallas Png", queries)
-        self.assertNotIn("Variant Png", queries)
-        self.assertEqual(cache_bust_queries, ["Dallas"])
-        self.assertEqual(artifact_queries, [])
-        self.assertEqual(concatenated_area_queries, ["Bay Area"])
-        self.assertEqual(tesla_area_queries, ["Bay Area", "San Francisco"])
-
-    def test_filename_city_contexts_use_cached_city_and_bay_area_hints(self) -> None:
-        dallas_contexts = filename_city_contexts("Avride Dallas df72214 small variant.png")
-        bay_area_contexts = filename_city_contexts("Waymo Bay Area screenshot.png")
-        tesla_area_contexts = filename_city_contexts("Tesla Bay Area screenshot.png")
-
-        self.assertTrue(dallas_contexts)
-        self.assertEqual(dallas_contexts[0].query, "Dallas")
-        self.assertTrue(bay_area_contexts)
-        self.assertEqual(bay_area_contexts[0].query, "San Francisco Bay Area")
-        self.assertEqual(len(bay_area_contexts), 1)
-        self.assertTrue(tesla_area_contexts)
-        self.assertEqual(tesla_area_contexts[0].query, "San Francisco Bay Area")
-        self.assertEqual(tesla_area_contexts[1].query, "San Francisco")
-
-    def test_context_hint_fast_path_skips_expensive_context_inference(self) -> None:
-        labels = [OcrLabel("Belmont", x=10, y=10, width=80, height=24, confidence=96)]
-        hinted_result = object()
-
-        with (
-            patch("map_boundary_builder.runner.georeference_from_labels", return_value=hinted_result) as label_fit,
-            patch("map_boundary_builder.runner.is_fast_context_hint_georeference", return_value=True),
-            patch("map_boundary_builder.runner.road_contexts_from_labels") as road_contexts,
-        ):
-            result = fit_georeference(
-                labels,
-                Path("input.png"),
-                pixel_geometry=object(),
-                rgb=None,
-                city_input=None,
-                context_hints=[SimpleNamespace(query="Dallas")],
-                width=680,
-                height=551,
-                coverage_ratio=0.27,
-                min_control_points=3,
-                label_y_min=None,
-                label_y_max=None,
-                progress=None,
-            )
-
-        self.assertIs(result, hinted_result)
-        label_fit.assert_called_once()
-        road_contexts.assert_not_called()
-
-    def test_context_hint_failure_falls_back_to_normal_context_inference(self) -> None:
-        labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]
-        weak_result = object()
-        fallback_result = object()
-
-        with (
-            patch(
-                "map_boundary_builder.runner.georeference_from_labels",
-                side_effect=[weak_result, fallback_result],
-            ) as label_fit,
-            patch("map_boundary_builder.runner.is_fast_context_hint_georeference", return_value=False),
-            patch("map_boundary_builder.runner.road_contexts_from_labels", return_value=[]),
-        ):
-            result = fit_georeference(
-                labels,
-                Path("input.png"),
-                pixel_geometry=object(),
-                rgb=None,
-                city_input=None,
-                context_hints=[SimpleNamespace(query="Dallas")],
-                width=1920,
-                height=1080,
-                coverage_ratio=0.22,
-                min_control_points=3,
-                label_y_min=None,
-                label_y_max=None,
-                progress=None,
-            )
-
-        self.assertIs(result, fallback_result)
-        self.assertEqual(label_fit.call_count, 2)
-
     def test_context_hint_georeference_rejects_loose_five_control_fit(self) -> None:
         result = GeoreferenceResult(
             transform=GeoreferenceTransform(
@@ -3991,7 +3701,6 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         )
 
         self.assertFalse(is_credible_context_hint_georeference(result))
-        self.assertFalse(is_fast_context_hint_georeference(result))
 
     def test_context_hint_georeference_keeps_tight_multi_control_fit(self) -> None:
         result = GeoreferenceResult(
@@ -4012,7 +3721,6 @@ class GeoreferenceFallbackTests(unittest.TestCase):
         )
 
         self.assertTrue(is_credible_context_hint_georeference(result))
-        self.assertTrue(is_fast_context_hint_georeference(result))
 
     def test_specific_city_fit_keeps_city_after_synthetic_context_failure(self) -> None:
         labels = [OcrLabel("Nashville", x=1141, y=454, width=162, height=44, confidence=98)]

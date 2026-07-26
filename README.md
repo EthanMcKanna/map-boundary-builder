@@ -4,19 +4,29 @@
 GeoJSON polygon. It ships as a CLI, a local browser workspace, and a hosted
 Vercel app.
 
-It does three things automatically:
+The pipeline is one linear path for every input:
 
-1. Detects service-area fills across light, bright-blue, green, and dark map styles,
-   with a color-agnostic fallback that clusters the image in LAB space so fills in
-   arbitrary palettes (red, orange, yellow, magenta, ...) extract without a tuned
-   style. The fallback also recovers outline-only boundaries (solid or dashed
-   colored strokes with no fill) and rejects flat basemap regions like water and
-   parkland via texture and chroma gates instead of guessing.
-2. Repairs text, road shields, highway lines, and small rendering gaps in the mask.
-3. Georeferences the pixel polygon from readable map labels and public map data.
+```
+load → segment → polygonize → read labels → locate → georeference → export
+```
 
-The repo intentionally does not include provider screenshots or bundled example
-maps. Bring your own crop from a map view you have permission to use.
+1. **Segment.** A single packaged ONNX model (`boundary_v1`, ~9 MB, trained on
+   domain-randomized synthetic maps) predicts the service-area mask for any
+   color, style, or provider — fills, translucent overlays, outline-only
+   boundaries, dashed strokes, dark and light basemaps. A color-agnostic LAB
+   clustering fallback covers the rare degenerate model output. There are no
+   per-provider color rules.
+2. **Locate.** OCR reads map labels (RapidOCR/ONNX, with local Tesseract as a
+   CLI fallback), public OpenStreetMap-backed geocoders resolve them, and
+   label clusters infer the city — no filename tricks, no provider presets.
+3. **Georeference.** A rotation-aware Web Mercator transform is fitted from
+   label control points with residual gates, optionally refined against OSM
+   road geometry.
+
+When the city cannot be inferred, the pipeline does not fail: it returns a
+`needs_city` result carrying the extracted boundary and the labels it could
+read, and the CLI/web UI ask you for the city and finish georeferencing
+without re-extracting.
 
 ## Quick Start
 
@@ -31,222 +41,91 @@ python3.12 -m venv .venv
   --print-summary
 ```
 
-The output is a GeoJSON `FeatureCollection` with the extracted polygon in
-longitude/latitude coordinates and metadata describing the extraction strategy,
-georeference fit, pixel coverage, and confidence.
+The output is a GeoJSON `FeatureCollection` with the polygon in
+longitude/latitude coordinates plus metadata describing extraction and
+georeference confidence.
 
-## Extractor Generalization Direction
-
-The extractor is intentionally layered so it can become more general without
-making every image pass through one fragile threshold. Today it first tries
-style-specific masks for known service-map looks such as bright-blue, light,
-gray, purple, and dark-teal fills. When those tuned paths are missing or
-suspect, it falls back to a generic `auto-fill` path that clusters colors in LAB
-space, scores candidates by coverage, border behavior, color distinctness,
-texture, and chroma, and can also recover outline-only boundaries.
-
-That makes non-standard map palettes and some textured backgrounds possible,
-but not guaranteed. Satellite imagery, street-level screenshots, product maps,
-and app UI captures are harder because natural textures, shadows, water,
-vegetation, roads, and frame-touching target areas can violate assumptions that
-work well for map overlays. The current contract is conservative: prefer a
-failed extraction or low-confidence result over returning a plausible-looking
-basemap region.
-
-Generalization work should stay benchmark-driven. New image classes should be
-added as synthetic and real stress fixtures before broadening gates, especially
-for satellite-like textured backgrounds, low-contrast translucent overlays,
-outline-only regions, and targets that touch the crop border. The Python
-extractor API includes experimental named profiles and hints for this work, such
-as `profile="satellite-overlay"` with a seed point or expected fill color. The
-web app defaults to Generalized v20 EdgeGraph, while deterministic extraction remains
-available as a manual comparison path. Public web/API uploads never substitute
-a polygon from the historical service-area catalog: their output must be derived
-from the current image pixels plus OCR/georeference evidence. Filename and city
-hints can guide location inference, but cannot replace the extracted geometry.
+CLI exit codes: `0` success, `1` failure, `3` city needed (with `--no-input`;
+on a terminal the CLI prompts for the city instead). `--city "Austin, TX"`
+supplies it up front. `--seed-x/--seed-y` and `--target-color` optionally
+steer which region is selected when a screenshot contains several candidates.
 
 ## Requirements
 
 - Python 3.12
 - Internet access for OpenStreetMap/Nominatim lookups during georeferencing
-- The hosted and local web apps run OCR on the server so uploaded screenshots follow the same backend georeferencing path.
-- The CLI uses local Tesseract OCR when available (`brew install tesseract` on macOS), then falls back to RapidOCR/ONNX before failing closed if it cannot infer enough map evidence.
+  (bundled read-only seed caches cover common lookups; `MAP_BOUNDARY_BLOCK_NETWORK=1`
+  forces seed-only operation)
+- Optional: local Tesseract (`brew install tesseract`) as a CLI OCR fallback
 
 ## Interactive Web Tool
 
-The same pipeline is available as an end-to-end web workspace:
-
 ```bash
-.venv/bin/python -m map_boundary_builder.web
+.venv/bin/map-boundary-web
 ```
 
-Open `http://127.0.0.1:8765`, drop in a service-map screenshot, and run the
-builder. The web tool streams each stage as it happens, writes run
-artifacts under `out/web-runs/<run-id>/`, previews the extracted mask overlay,
-renders the generated boundary, and exposes the final GeoJSON for download or
-copying.
+Open `http://127.0.0.1:8765`, drop in a screenshot, and run the builder. The
+app streams each stage, previews the extracted mask, renders the boundary on
+a map, and offers the GeoJSON for download. An optional **City** field
+overrides auto-detection; when a run ends in *city needed*, the app shows
+what it extracted and asks inline.
 
-The hosted Vercel app is available at
-`https://map-boundary-builder.vercel.app`. It runs browser-side OCR plus the
-same Python extraction/georeferencing backend as a serverless function. Large or
-low-detail screenshots can still time out or fail closed if there is not enough
-OCR/geocoded map evidence.
+The hosted app at `https://map-boundary-builder.vercel.app` runs the same
+pipeline as a serverless function. Results are cached by image content (raw
+bytes and decoded pixels): re-uploads and format re-encodes of the same
+screenshot return instantly. Transient failures (geocoder timeouts) are
+never cached; a `needs_city` retry with a city is a fresh, separately cached
+run.
 
-When a web generation fails, or when a completed boundary looks wrong, the UI
-can create a GitHub debug report. Set `GITHUB_REPORT_TOKEN` in the deployment
-environment with access to create issues and write repository contents. The app
-stores the reported screenshot on the public `debug-reports` branch, embeds it
-in the issue, and warns the user that the uploaded image will be public before
-they report it. Optional overrides are `GITHUB_REPORT_REPOSITORY` and
-`GITHUB_REPORT_BRANCH`.
+When a web generation fails or looks wrong, the UI can create a GitHub debug
+report (`GITHUB_REPORT_TOKEN` in the deployment environment; the reported
+screenshot is stored publicly and the user is warned first).
+
+## The Model
+
+`models/boundary_v1.onnx` is a ~2.2 M-parameter ResUNet (3×384×384 RGB in,
+mask logits out) trained by `tools/train_synthetic_model.py` on the
+procedural generator in `map_boundary_builder/synthetic/`. The generator
+domain-randomizes overlay hue, opacity, stroke style (solid/dashed,
+outline-only), patterns, distractor overlays, UI chrome, JPEG artifacts, and
+basemap style, so the model generalizes across providers instead of
+memorizing palettes. The decision threshold is calibrated on a held-out
+synthetic split and stored in the `.onnx.json` sidecar.
+
+Retraining:
+
+```bash
+.venv/bin/python tools/train_synthetic_model.py \
+  --dataset-dir out/train-boundary \
+  --count 8192 --image-size 384 --base-channels 24 --arch resunet
+```
+
+## Benchmarks and the Promotion Gate
+
+- `map-boundary-synthetic-benchmark` scores raw masks against exact synthetic
+  truth (IoU, boundary F1, topology, latency). Generate-and-score:
+
+  ```bash
+  .venv/bin/map-boundary-synthetic-benchmark \
+    --dataset-dir out/synthetic-eval --generate --count 256
+  ```
+
+- `map-boundary-real-benchmark` runs the full pipeline over the real
+  screenshot manifest (`benchmarks/real-screenshot-stress.json`, images
+  resolved from `benchmarks/real-screenshots/`) and scores durable
+  expectations: status, inferred city, bounding-box error, control points.
+
+- `tools/check_promotion.py` is the single gate: a fresh synthetic report
+  must meet the committed pre-revamp v12 baseline, and the real manifest may
+  not regress any previously-complete case to failure. Baselines live in
+  `benchmarks/baselines/`.
 
 ## Georeferencing Model
 
-The final product has no provider boundary presets, manual georeference flags,
-or ground-truth-reference fitting. It infers map position from OCR-detected
-labels, queries public OpenStreetMap-backed geocoders with a cached fallback,
-clusters geocoded label candidates to infer the map city or region, matches
-labels against cached OpenStreetMap place names near that inferred location, and
-fits a rotation-aware Web Mercator transform only when there are enough control
-points with low residual error. Small read-only geocoder and OSM-place seed
-caches, derived from OpenStreetMap-backed responses and preserving their
-attribution metadata, avoid common cold-start lookup stalls; live public map
-services remain the fallback for new places. When multiple inferred contexts fit,
-the builder scores them by
-residuals, control-point support, and visible-road alignment so large regional
-screenshots are not forced into a single city scale. The CLI still accepts
-`--city` as an optional override for unusually sparse screenshots.
-
-If label control points are not available and a city override is supplied, the
-CLI can attempt a lower-confidence city-context road search using public
-OpenStreetMap road data. For low-resolution map crops with visible street grids,
-it can rerank candidate transforms by matching detected image line segments
-against projected OpenStreetMap road segments. If the map does not contain
-enough readable labels or public-map structure, the tool fails instead of falling
-back to a hardcoded city/provider boundary.
-
-## Service-Area Benchmark
-
-The local benchmark compares known service-area screenshots with reference
-polygons from the Robotaxi Tracker service-area registry. By default it runs the
-fast extraction benchmark: it extracts the pixel polygon, fits that shape into
-the reference bounds, and reports IoU, area ratio, vertex count, and unmatched
-inventory. Fixture-status overrides live in
-`benchmarks/service-area-fixtures.json`, so known bad screenshot/reference pairs
-stay visible as skipped data debt instead of weakening the model score.
-
-```bash
-.venv/bin/map-boundary-benchmark \
-  --polygon-dir /Users/ethanmckanna/GitHub/av-coverage-checker/data/service-areas/polygons \
-  --image-dir "/Users/ethanmckanna/Downloads/service area images"
-```
-
-For slower end-to-end georeferencing checks, run `--mode full`. The full mode
-uses the same CLI output path as production and scores the exported GeoJSON
-against the same references.
-
-Use `--neutral-filename-hint` with `--mode full` when you want an image-only
-generalization gate. It replaces market/provider fixture filenames with a
-generic upload hint so the benchmark cannot lean on names like
-`Waymo Phoenix.png` while fitting OCR labels.
-
-## Real Screenshot Stress Gate
-
-The stress runner exercises the real screenshot manifest end to end and can run
-the current production-warm hard gate as a single preset:
-
-```bash
-.venv/bin/map-boundary-stress \
-  --out-dir out/real-screenshot-hard-gate \
-  --real-screenshot-hard-gate
-```
-
-The preset targets the full `benchmarks/real-screenshot-stress.json` manifest.
-It enables in-process production-style execution, runtime prewarm, OCR engine
-profiling, cache-disabled repeat samples, signature-drift checks, latency/OCR
-budgets, and the manifest OCR contract coverage gate. It fails closed on
-unexpected status, output-signature drift, latency or OCR work-volume
-regressions, prewarm stalls, or missing row-level OCR contracts.
-
-## Synthetic Boundary Fixtures
-
-The synthetic pipeline creates paired map-like screenshots, exact raster masks,
-GeoJSON sidecars, and metadata manifests. It is designed to replace fragile
-human-guessed screenshot labels with deterministic samples whose pixel truth is
-known before extraction runs.
-
-```bash
-.venv/bin/map-boundary-synthetic-benchmark \
-  --dataset-dir out/synthetic-boundary-smoke \
-  --generate \
-  --count 24
-```
-
-The command exits nonzero when generated samples fail the default quality gate
-(`min_iou=0.70`, `mean_iou=0.85`) or when any sample fails to extract. Lower the
-thresholds only for exploratory report generation.
-
-Each generated sample contains:
-
-- `image.png` or `image.jpg`: the screenshot-style input.
-- `overlay.png`: the rendered target overlay on the procedural basemap.
-- `mask.png`: the exact binary service-area mask.
-- `boundary.geojson`: lon/lat output plus pixel-geometry metadata.
-- `metadata.json`: deterministic sample metadata and artifact paths.
-
-The benchmark scores the current extractor against the exact mask before any
-reference-bounds fitting or georeferencing. Reports include mask IoU, Dice,
-precision, recall, area ratio, centroid distance, boundary IoU at several pixel
-tolerances, extraction diagnostics, and Shapely geometry validity.
-
-This first renderer is intentionally lightweight and uses local procedural maps
-so the data contract, metrics, and CI hooks can mature quickly. The next renderer
-should keep the same artifact contract while swapping the image source to
-MapLibre/Playwright with locally cached map tiles and randomized GeoJSON
-fill/line layers.
-
-## Optional Model Mask Producer
-
-`map_boundary_builder.model_extract` defines the opt-in interface for a trained
-ONNX segmentation model. It preprocesses RGB screenshots, runs a single-channel
-mask model with ONNX Runtime, thresholds and resizes the probability mask, then
-reuses the existing OpenCV/Shapely polygonization path. Production defaults still
-use the deterministic extractor; model-backed extraction should be promoted only
-after it beats the deterministic path on synthetic stress fixtures and the real
-screenshot hard gate.
-
-The packaged experimental model can be enabled for a deployment with:
-
-```bash
-MAP_BOUNDARY_EXTRACTOR_MODEL=1
-```
-
-Optional overrides are `MAP_BOUNDARY_EXTRACTOR_MODEL_PATH`,
-`MAP_BOUNDARY_EXTRACTOR_MODEL_INPUT_SIZE`, and
-`MAP_BOUNDARY_EXTRACTOR_MODEL_THRESHOLD`. The shipped model was trained with
-`tools/train_synthetic_model.py` and uses the default `256` input size and `0.45`
-threshold.
-
-The web model selector currently exposes **Generalized v20 EdgeGraph** as an
-opt-in experimental epoch-39 candidate while Generalized v12 BoundaryField
-remains the default until every v20 promotion gate passes. EdgeGraph uses the
-global five-channel selector only for semantic target selection and topology,
-recovers supported selector-missed stems/notches, then localizes raster
-boundaries along native-resolution contour ribbons with a ten-channel
-vector-v3 refiner that receives native edge evidence, coordinates, and only a
-collapsed inside-direction sign from the selector—not raw coarse probability.
-Training anchors that sign to the unshifted contour before applying the
-uniform `[-6px, +6px]` center shift, so translation augmentation cannot invert
-the semantic orientation label.
-Its dilated strip tower sees both sides of centered
-strokes while keeping the same tiny parameter count, and sharp orthogonal runs
-are reconstructed as a guarded line graph before the generic corner-preserving
-fit. Supported SVG paths bypass learned
-geometry entirely and retain exact line vertices with error-bounded curve
-flattening. Catalog matches georeference v20's current extracted shape without
-replacing it with a static catalog polygon. It also accepts optional target-color
-and seed-point guidance. Clicking the input preview while
-v20, v12, or v11 is selected fills the seed coordinates. See
-[`docs/generalized-v20-edgegraph.md`](docs/generalized-v20-edgegraph.md) for the
-architecture, training contract, and fail-closed promotion gates. v12 and v11
-remain available as comparison paths.
+There are no provider boundary presets and no ground-truth fitting. Position
+is inferred from OCR labels geocoded against public OpenStreetMap services
+(Nominatim, Photon, Overpass) with small bundled seed caches for cold
+starts. A similarity transform is accepted only with enough control points
+and low residual error; road-grid alignment can refine it. If the evidence
+is insufficient, the result is `needs_city` (awaiting user input) or a
+failure — never a hardcoded fallback boundary.

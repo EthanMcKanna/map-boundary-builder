@@ -35,8 +35,6 @@ dependencies = [
 [project.scripts]
 map-boundary-builder = "map_boundary_builder.cli:main"
 map-boundary = "map_boundary_builder.cli:main"
-map-boundary-benchmark = "map_boundary_builder.benchmark:main"
-map-boundary-stress = "map_boundary_builder.stress_benchmark:main"
 map-boundary-synthetic-benchmark = "map_boundary_builder.synthetic_benchmark:main"
 map-boundary-real-benchmark = "map_boundary_builder.real_benchmark:main"
 map-boundary-web = "map_boundary_builder.web:main"
@@ -73,4 +71,4 @@ where = ["."]
 include = ["map_boundary_builder*"]
 
 [tool.setuptools.package-data]
-map_boundary_builder = ["web_assets/*", "ocr_models/*", "models/*.onnx", "models/*.onnx.data", "models/*.onnx.json", "geocoder_seed.json", "osm_places_seed.json.gz", "osm_road_points_seed.npz", "service_area_catalog/*.json"]
+map_boundary_builder = ["web_assets/*", "ocr_models/*", "models/boundary_v1.onnx", "models/boundary_v1.onnx.json", "geocoder_seed.json", "osm_places_seed.json.gz", "osm_road_points_seed.npz"]

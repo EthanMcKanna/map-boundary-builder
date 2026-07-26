@@ -1,27 +1,25 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image
 from shapely.geometry import shape
 
 import map_boundary_builder.synthetic_benchmark as synthetic_benchmark
-import map_boundary_builder.edgegraph as edgegraph
-import map_boundary_builder.model_extract as model_extract
 from map_boundary_builder.evaluation import rasterize_geometry_mask
-from map_boundary_builder.extract import ExtractionHints, ExtractionResult
-from map_boundary_builder.synthetic import SyntheticSceneConfig, generate_synthetic_dataset
+from map_boundary_builder.extract import ExtractionResult
+from map_boundary_builder.synthetic import generate_synthetic_dataset
 
 
 def test_score_synthetic_manifest_reports_raw_mask_metrics(monkeypatch, tmp_path: Path) -> None:
     manifest = generate_synthetic_dataset(tmp_path, count=2, seed=11, width=180, height=120)
+    pending_masks = [
+        synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
+        for sample in manifest.samples
+    ]
 
-    def fake_extract(image_path, **_kwargs):
-        sample = next(
-            sample for sample in manifest.samples if str(image_path).endswith(sample.artifacts.screenshot)
-        )
-        mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
+    def fake_segment(rgb, **_kwargs):
+        mask = pending_masks.pop(0)
         return ExtractionResult(
             mask=mask,
             style="synthetic-oracle",
@@ -31,7 +29,7 @@ def test_score_synthetic_manifest_reports_raw_mask_metrics(monkeypatch, tmp_path
             confidence=1.0,
         )
 
-    monkeypatch.setattr(synthetic_benchmark, "extract_service_area", fake_extract)
+    monkeypatch.setattr(synthetic_benchmark, "segment_image", fake_segment)
 
     report = synthetic_benchmark.score_synthetic_manifest(manifest, tmp_path)
 
@@ -49,10 +47,10 @@ def test_score_synthetic_manifest_reports_raw_mask_metrics(monkeypatch, tmp_path
 def test_score_synthetic_manifest_records_extraction_failures(monkeypatch, tmp_path: Path) -> None:
     manifest = generate_synthetic_dataset(tmp_path, count=1, seed=1, width=120, height=90)
 
-    def fake_extract(*_args, **_kwargs):
+    def fake_segment(*_args, **_kwargs):
         raise RuntimeError("synthetic extraction failed")
 
-    monkeypatch.setattr(synthetic_benchmark, "extract_service_area", fake_extract)
+    monkeypatch.setattr(synthetic_benchmark, "segment_image", fake_segment)
 
     report = synthetic_benchmark.score_synthetic_manifest(manifest, tmp_path)
 
@@ -63,9 +61,12 @@ def test_score_synthetic_manifest_records_extraction_failures(monkeypatch, tmp_p
 
 
 def test_cli_can_generate_and_score_with_lenient_thresholds(monkeypatch, tmp_path: Path, capsys) -> None:
-    def fake_extract(image_path, **_kwargs):
+    def fake_load_rgb(image_path):
         mask_path = Path(str(image_path)).with_name("mask.png")
-        mask = np.asarray(Image.open(mask_path).convert("L")) > 0
+        return np.asarray(Image.open(mask_path).convert("L"))
+
+    def fake_segment(rgb, **_kwargs):
+        mask = np.asarray(rgb) > 0
         return ExtractionResult(
             mask=mask,
             style="synthetic-oracle",
@@ -75,7 +76,8 @@ def test_cli_can_generate_and_score_with_lenient_thresholds(monkeypatch, tmp_pat
             confidence=1.0,
         )
 
-    monkeypatch.setattr(synthetic_benchmark, "extract_service_area", fake_extract)
+    monkeypatch.setattr(synthetic_benchmark, "load_rgb", fake_load_rgb)
+    monkeypatch.setattr(synthetic_benchmark, "segment_image", fake_segment)
 
     exit_code = synthetic_benchmark.main(
         [
@@ -115,144 +117,7 @@ def test_synthetic_guidance_uses_mask_seed_and_overlay_color(tmp_path: Path) -> 
     assert len(hints["target_rgb"]) == 3
 
 
-def test_automatic_edgegraph_scoring_uses_selector_bootstrap_guidance(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    manifest = generate_synthetic_dataset(tmp_path, count=1, seed=31, width=120, height=90)
-    sample = manifest.samples[0]
-    expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
-    reference_geometry = _reference_geometry(tmp_path, sample)
-    deterministic = ExtractionResult(
-        mask=expected_mask,
-        style="auto-fill",
-        pixel_geometry=reference_geometry,
-        coverage_ratio=float(expected_mask.mean()),
-        contour_count=1,
-        confidence=0.98,
-        diagnostics={"candidate": True},
-    )
-    automatic_hints = ExtractionHints(
-        seed_point=(42.0, 36.0),
-        target_rgb=(88, 177, 211),
-    )
-    observed: dict[str, object] = {}
-
-    def fake_extract(image_path, **kwargs):
-        observed["deterministic_image_path"] = image_path
-        observed["deterministic_kwargs"] = kwargs
-        return deterministic
-
-    def fake_hints(rgb, coarse, *, threshold):
-        observed["hint_rgb"] = rgb
-        observed["hint_coarse"] = coarse
-        observed["hint_threshold"] = threshold
-        return automatic_hints, {"route": "selector-bootstrap-v1"}
-
-    def fake_predict(rgb, session, *, config, hints):
-        observed["selector_hints"] = hints
-        return expected_mask.astype(np.float32)
-
-    def fake_refine(rgb, coarse, session, *, hints, config):
-        observed["refiner_hints"] = hints
-        return SimpleNamespace(
-            mask=expected_mask,
-            pixel_geometry=reference_geometry,
-            contour_count=1,
-            confidence=0.99,
-            diagnostics={
-                "source_native_proposals": True,
-                "source_native_proposal": {"reason": "accepted"},
-            },
-        )
-
-    monkeypatch.setattr(synthetic_benchmark, "extract_service_area", fake_extract)
-    monkeypatch.setattr(edgegraph, "automatic_edgegraph_hints", fake_hints)
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "should_fallback_to_deterministic_result",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(model_extract, "load_onnx_session", lambda path: path)
-    monkeypatch.setattr(model_extract, "predict_mask_probabilities", fake_predict)
-    monkeypatch.setattr(edgegraph, "refine_boundary_with_edgegraph", fake_refine)
-
-    row = synthetic_benchmark.score_synthetic_sample(
-        sample,
-        tmp_path,
-        model_path=tmp_path / "selector.onnx",
-        edgegraph_refiner_path=tmp_path / "refiner.onnx",
-    )
-
-    assert row["status"] == "scored"
-    assert observed["selector_hints"] is None
-    assert observed["refiner_hints"] is automatic_hints
-    deterministic_kwargs = observed["deterministic_kwargs"]
-    assert deterministic_kwargs["cache"] is False
-    assert deterministic_kwargs["use_model"] is False
-    assert row["extraction"]["diagnostics"]["automatic_guidance"] == "selector_bootstrap"
-    assert row["extraction"]["diagnostics"]["selector_bootstrap"]["route"] == (
-        "selector-bootstrap-v1"
-    )
-    assert row["extraction"]["diagnostics"]["deterministic_review"][
-        "candidate_agreement_iou"
-    ] == 1.0
-    assert row["extraction"]["diagnostics"]["source_native_proposals"] is True
-    assert row["extraction"]["diagnostics"]["model_guidance"] == {
-        "seed_point": True,
-        "target_rgb": True,
-    }
-
-
-def test_automatic_edgegraph_scoring_preflights_verified_source_native_geometry(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    manifest = generate_synthetic_dataset(tmp_path, count=1, seed=35, width=120, height=90)
-    sample = manifest.samples[0]
-    expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
-    exact_result = ExtractionResult(
-        mask=expected_mask,
-        style="gray-fill",
-        pixel_geometry=_reference_geometry(tmp_path, sample),
-        coverage_ratio=float(expected_mask.mean()),
-        contour_count=1,
-        confidence=1.0,
-        diagnostics={
-            "gray_outline": {
-                "verified_source_native": True,
-            },
-        },
-    )
-
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "gray_outline_extraction_result",
-        lambda *_args, **_kwargs: exact_result,
-    )
-    monkeypatch.setattr(
-        model_extract,
-        "load_onnx_session",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("verified source-native geometry must bypass model inference")
-        ),
-    )
-
-    row = synthetic_benchmark.score_synthetic_sample(
-        sample,
-        tmp_path,
-        model_path=tmp_path / "selector.onnx",
-        edgegraph_refiner_path=tmp_path / "refiner.onnx",
-    )
-
-    assert row["status"] == "scored"
-    assert row["metrics"]["iou"] == 1.0
-    assert row["extraction"]["diagnostics"]["automatic_route"] == (
-        "verified-source-native-preflight-v1"
-    )
-
-
-def test_guided_edgegraph_scoring_uses_oracle_without_deterministic_candidate(
+def test_guided_scoring_passes_manifest_hints_to_segment_image(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -260,153 +125,117 @@ def test_guided_edgegraph_scoring_uses_oracle_without_deterministic_candidate(
     sample = manifest.samples[0]
     expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
     reference_geometry = _reference_geometry(tmp_path, sample)
-    oracle_hints = {"seed_point": (20.0, 20.0), "target_rgb": (20, 120, 220)}
     observed: dict[str, object] = {}
 
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "extract_service_area",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("guided scoring must not run deterministic extraction")
-        ),
-    )
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "synthetic_guidance",
-        lambda scored_sample, mask, rgb: oracle_hints,
-    )
-    monkeypatch.setattr(model_extract, "load_onnx_session", lambda path: path)
-    monkeypatch.setattr(
-        model_extract,
-        "predict_mask_probabilities",
-        lambda rgb, session, *, config, hints: (
-            observed.setdefault("selector_hints", hints),
-            expected_mask.astype(np.float32),
-        )[1],
-    )
-    monkeypatch.setattr(
-        edgegraph,
-        "refine_boundary_with_edgegraph",
-        lambda rgb, coarse, session, *, hints, config: (
-            observed.setdefault("refiner_hints", hints),
-            SimpleNamespace(
-                mask=expected_mask,
-                pixel_geometry=reference_geometry,
-                contour_count=1,
-                confidence=0.99,
-                diagnostics={"source_native_proposals": True},
-            ),
-        )[1],
-    )
+    def fake_segment(rgb, *, model_path=None, threshold=None, hints=None, **_kwargs):
+        observed["model_path"] = model_path
+        observed["threshold"] = threshold
+        observed["hints"] = hints
+        return ExtractionResult(
+            mask=expected_mask,
+            style="model-mask",
+            pixel_geometry=reference_geometry,
+            coverage_ratio=float(expected_mask.mean()),
+            contour_count=1,
+            confidence=0.99,
+        )
+
+    monkeypatch.setattr(synthetic_benchmark, "segment_image", fake_segment)
 
     row = synthetic_benchmark.score_synthetic_sample(
         sample,
         tmp_path,
-        model_path=tmp_path / "selector.onnx",
-        edgegraph_refiner_path=tmp_path / "refiner.onnx",
+        model_path=tmp_path / "boundary.onnx",
+        model_threshold=0.4,
         guided=True,
     )
 
     assert row["status"] == "scored"
-    assert observed["selector_hints"] is oracle_hints
-    assert observed["refiner_hints"] is oracle_hints
-    assert "automatic_guidance" not in row["extraction"]["diagnostics"]
+    assert observed["model_path"] == tmp_path / "boundary.onnx"
+    assert observed["threshold"] == 0.4
+    hints = observed["hints"]
+    assert hints is not None
+    assert expected_mask[round(hints["seed_point"][1]), round(hints["seed_point"][0])]
+    assert len(hints["target_rgb"]) == 3
 
 
-def test_automatic_edgegraph_scoring_preserves_production_fallback(
+def test_unguided_scoring_passes_no_hints(monkeypatch, tmp_path: Path) -> None:
+    manifest = generate_synthetic_dataset(tmp_path, count=1, seed=31, width=120, height=90)
+    sample = manifest.samples[0]
+    expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
+    observed: dict[str, object] = {"hints": "unset"}
+
+    def fake_segment(rgb, *, hints=None, **_kwargs):
+        observed["hints"] = hints
+        return ExtractionResult(
+            mask=expected_mask,
+            style="model-mask",
+            pixel_geometry=_reference_geometry(tmp_path, sample),
+            coverage_ratio=float(expected_mask.mean()),
+            contour_count=1,
+            confidence=0.99,
+        )
+
+    monkeypatch.setattr(synthetic_benchmark, "segment_image", fake_segment)
+
+    row = synthetic_benchmark.score_synthetic_sample(sample, tmp_path)
+
+    assert row["status"] == "scored"
+    assert observed["hints"] is None
+    assert row["metrics"]["iou"] == 1.0
+
+
+def test_report_extractor_and_model_artifact_follow_model_path(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     manifest = generate_synthetic_dataset(tmp_path, count=1, seed=41, width=120, height=90)
     sample = manifest.samples[0]
     expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
-    reference_geometry = _reference_geometry(tmp_path, sample)
-    deterministic = ExtractionResult(
-        mask=expected_mask,
-        style="auto-fill",
-        pixel_geometry=reference_geometry,
-        coverage_ratio=float(expected_mask.mean()),
-        contour_count=1,
-        confidence=0.99,
-        diagnostics={"deterministic": True},
-    )
-    model_mask = np.zeros_like(expected_mask)
-    model_mask[10:14, 10:14] = True
+    model_file = tmp_path / "boundary.onnx"
+    model_file.write_bytes(b"onnx-graph")
 
     monkeypatch.setattr(
         synthetic_benchmark,
-        "extract_service_area",
-        lambda *_args, **_kwargs: deterministic,
-    )
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "should_fallback_to_deterministic_result",
-        lambda *_args: True,
-    )
-    monkeypatch.setattr(
-        edgegraph,
-        "automatic_edgegraph_hints",
-        lambda *_args, **_kwargs: (
-            ExtractionHints(
-                seed_point=(20.0, 20.0),
-                target_rgb=(30, 120, 210),
-            ),
-            {"route": "selector-bootstrap-v1"},
-        ),
-    )
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "model_fallback_reason",
-        lambda *_args: "test_fallback",
-    )
-    monkeypatch.setattr(model_extract, "load_onnx_session", lambda path: path)
-    monkeypatch.setattr(
-        model_extract,
-        "predict_mask_probabilities",
-        lambda *_args, **_kwargs: model_mask.astype(np.float32),
-    )
-    monkeypatch.setattr(
-        edgegraph,
-        "refine_boundary_with_edgegraph",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            mask=model_mask,
-            pixel_geometry=sample_polygon(),
+        "segment_image",
+        lambda rgb, **_kwargs: ExtractionResult(
+            mask=expected_mask,
+            style="model-mask",
+            pixel_geometry=_reference_geometry(tmp_path, sample),
+            coverage_ratio=float(expected_mask.mean()),
             contour_count=1,
-            confidence=0.6,
-            diagnostics={"edgegraph": True},
+            confidence=0.99,
         ),
     )
 
-    row = synthetic_benchmark.score_synthetic_sample(
-        sample,
+    with_model = synthetic_benchmark.score_synthetic_manifest(
+        manifest,
         tmp_path,
-        model_path=tmp_path / "selector.onnx",
-        edgegraph_refiner_path=tmp_path / "refiner.onnx",
+        model_path=model_file,
     )
+    assert with_model["extractor"] == "model"
+    assert with_model["model_path"] == str(model_file)
+    assert with_model["metadata"]["model_artifact"]["path"] == str(model_file.resolve())
+    assert len(with_model["metadata"]["model_artifact"]["sha256"]) == 64
 
-    assert row["status"] == "scored"
-    assert row["metrics"]["iou"] == 1.0
-    assert row["extraction"]["diagnostics"]["deterministic"] is True
-    fallback = row["extraction"]["diagnostics"]["model_fallback"]
-    assert fallback["reason"] == "test_fallback"
-    assert fallback["model_coverage_ratio"] == float(model_mask.mean())
-
-
-def test_edgegraph_selector_config_rejects_nonproduction_contract() -> None:
-    incompatible = synthetic_benchmark.ModelExtractionConfig(
-        input_width=320,
-        input_height=320,
-        threshold=0.45,
-        output_activation="logits",
-        input_channels=3,
+    missing_packaged = tmp_path / "missing" / "boundary_v1.onnx"
+    monkeypatch.setattr(
+        synthetic_benchmark,
+        "default_model_path",
+        lambda: missing_packaged,
     )
+    without_model = synthetic_benchmark.score_synthetic_manifest(manifest, tmp_path)
+    assert without_model["extractor"] == "auto-fill"
+    assert without_model["model_path"] is None
+    assert without_model["metadata"]["model_artifact"] is None
 
-    try:
-        synthetic_benchmark._edgegraph_selector_config(incompatible)
-    except ValueError as exc:
-        assert "five input channels" in str(exc)
-    else:
-        raise AssertionError("nonproduction EdgeGraph selector config was accepted")
+    packaged = tmp_path / "packaged.onnx"
+    packaged.write_bytes(b"packaged-onnx-graph")
+    monkeypatch.setattr(synthetic_benchmark, "default_model_path", lambda: packaged)
+    with_packaged = synthetic_benchmark.score_synthetic_manifest(manifest, tmp_path)
+    assert with_packaged["extractor"] == "model"
+    assert with_packaged["model_path"] is None
+    assert with_packaged["metadata"]["model_artifact"]["path"] == str(packaged.resolve())
 
 
 def test_artifact_identity_binds_external_data_and_metadata_bytes(
@@ -438,76 +267,6 @@ def test_artifact_identity_binds_external_data_and_metadata_bytes(
     }
     assert all(record["exists"] is True for record in identity["files"])
     assert all(len(record["sha256"]) == 64 for record in identity["files"])
-
-
-def test_automatic_edgegraph_report_binds_route_and_selector_config(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    manifest = generate_synthetic_dataset(tmp_path, count=1, seed=43, width=120, height=90)
-    sample = manifest.samples[0]
-    expected_mask = synthetic_benchmark._load_mask(tmp_path / sample.artifacts.mask)
-    reference_geometry = _reference_geometry(tmp_path, sample)
-    hints = ExtractionHints(seed_point=(30.0, 30.0), target_rgb=(40, 100, 180))
-
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "extract_service_area",
-        lambda *_args, **_kwargs: ExtractionResult(
-            mask=expected_mask,
-            style="auto-fill",
-            pixel_geometry=reference_geometry,
-            coverage_ratio=float(expected_mask.mean()),
-            contour_count=1,
-            confidence=0.99,
-        ),
-    )
-    monkeypatch.setattr(
-        synthetic_benchmark,
-        "should_fallback_to_deterministic_result",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(
-        edgegraph,
-        "automatic_edgegraph_hints",
-        lambda *_args, **_kwargs: (hints, {"route": "selector-bootstrap-v1"}),
-    )
-    monkeypatch.setattr(model_extract, "load_onnx_session", lambda path: path)
-    monkeypatch.setattr(
-        model_extract,
-        "predict_mask_probabilities",
-        lambda *_args, **_kwargs: expected_mask.astype(np.float32),
-    )
-    monkeypatch.setattr(
-        edgegraph,
-        "refine_boundary_with_edgegraph",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            mask=expected_mask,
-            pixel_geometry=reference_geometry,
-            contour_count=1,
-            confidence=0.99,
-            diagnostics={"edgegraph": True},
-        ),
-    )
-
-    report = synthetic_benchmark.score_synthetic_manifest(
-        manifest,
-        tmp_path,
-        model_path=tmp_path / "selector.onnx",
-        edgegraph_refiner_path=tmp_path / "refiner.onnx",
-    )
-
-    assert report["schema_version"] == synthetic_benchmark.REPORT_SCHEMA_VERSION
-    assert report["metadata"]["automatic_inference_route"] == (
-        synthetic_benchmark.AUTOMATIC_EDGEGRAPH_ROUTE
-    )
-    assert report["metadata"]["selector_config"] == {
-        "input_width": 320,
-        "input_height": 320,
-        "input_channels": 5,
-        "threshold": 0.45,
-        "output_activation": "logits",
-    }
 
 
 def test_score_masks_gates_reference_normalized_roughness() -> None:

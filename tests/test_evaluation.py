@@ -252,22 +252,6 @@ def test_geometry_complexity_is_normalized_to_reference_floor() -> None:
     assert degraded["canonical_complexity_ratio"] > 1.0
 
 
-def test_evaluation_rasterizer_matches_production_rounding_and_holes() -> None:
-    from map_boundary_builder.edgegraph import rasterize_geometry_mask as production_rasterize
-
-    polygon = Polygon(
-        [(-1.2, 2.4), (22.6, 1.5), (25.8, 20.6), (1.4, 22.7)],
-        [[(7.4, 7.6), (15.5, 7.4), (15.6, 15.7), (7.5, 15.4)]],
-    )
-
-    expected = production_rasterize(polygon, width=24, height=24)
-    actual = rasterize_geometry_mask(polygon, width=24, height=24)
-
-    assert np.array_equal(actual, expected)
-    assert actual.dtype == bool
-    assert actual[:, 0].any()
-    assert not actual[10, 10]
-
 
 def test_corner_f1_and_topology_capture_vector_fidelity() -> None:
     reference = np.zeros((80, 80), dtype=bool)

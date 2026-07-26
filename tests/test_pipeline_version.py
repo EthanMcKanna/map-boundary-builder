@@ -67,10 +67,18 @@ def test_pipeline_version_tracks_runtime_warmup() -> None:
     assert "runtime_warmup.py" in sources
 
 
-def test_pipeline_version_tracks_gray_outline_detector() -> None:
+def test_pipeline_version_tracks_pipeline_modules() -> None:
     sources = dict(pipeline_version_sources())
 
-    assert "gray_outline.py" in sources
+    assert "pipeline.py" in sources
+    assert "segment.py" in sources
+
+
+def test_pipeline_version_tracks_model_artifact_when_present() -> None:
+    sources = dict(pipeline_version_sources())
+
+    if Path("map_boundary_builder/models/boundary_v1.onnx").exists():
+        assert "models/boundary_v1.onnx" in sources
 
 
 def test_pipeline_version_tracks_json_upload_parsing() -> None:
