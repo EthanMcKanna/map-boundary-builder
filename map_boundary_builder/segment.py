@@ -266,12 +266,42 @@ def select_primary_zone(
         x = int(np.clip(round(hints.seed_point[0]), 0, mask.shape[1] - 1))
         y = int(np.clip(round(hints.seed_point[1]), 0, mask.shape[0] - 1))
         containing = [zone for zone in zones if zone[y, x]]
-        if containing:
-            return containing[0]
-    if hints.target_rgb is not None:
+        winner = containing[0] if containing else None
+    elif hints.target_rgb is not None:
         target = np.asarray(hints.target_rgb, dtype=np.float64)
-        return min(zones, key=lambda zone: float(np.linalg.norm(rgb[zone].reshape(-1, 3).mean(axis=0) - target)))
-    return max(zones, key=lambda zone: _zone_salience(zone, probabilities))
+        winner = min(zones, key=lambda zone: float(np.linalg.norm(rgb[zone].reshape(-1, 3).mean(axis=0) - target)))
+    else:
+        winner = max(zones, key=lambda zone: _zone_salience(zone, probabilities))
+    if winner is None:
+        return mask
+    return _components_for_zone(mask, winner)
+
+
+def _components_for_zone(mask: np.ndarray, winner: np.ndarray) -> np.ndarray:
+    """Map the winning color zone back onto whole mask components.
+
+    Components mostly covered by the winner are kept intact (interior
+    texture like roads and labels belongs to its zone even when its pixels
+    cluster differently); components barely touching the winner are dropped
+    (different-colored stray zones); components genuinely straddling two
+    color zones — touching zones merged into one component — keep only
+    their winner-colored pixels.
+    """
+    count, labels = cv2.connectedComponents(mask.astype(np.uint8))
+    keep = np.zeros_like(mask)
+    for label in range(1, count):
+        component = labels == label
+        component_area = float(component.sum())
+        if component_area == 0:
+            continue
+        overlap = float((component & winner).sum()) / component_area
+        if overlap >= 0.8:
+            keep |= component
+        elif overlap >= 0.2:
+            keep |= component & winner
+    if not keep.any():
+        return mask
+    return keep
 
 
 def _color_zones(mask: np.ndarray, rgb: np.ndarray) -> list[np.ndarray]:
@@ -336,8 +366,10 @@ def _color_zones(mask: np.ndarray, rgb: np.ndarray) -> list[np.ndarray]:
         opened = cv2.morphologyEx(zone.astype(np.uint8), cv2.MORPH_OPEN, kernel).astype(bool)
         retention = float(opened.sum()) / max(1.0, float(zone.sum()))
         if retention < ZONE_MIN_OPENING_RETENTION:
-            # Interleaved speckle, not a coherent zone: refuse to split.
-            return [mask]
+            # Interleaved speckle (roads, labels, texture inside another
+            # zone's fill) is not a zone candidate; its pixels stay with
+            # whatever component they sit in via the majority mapping.
+            continue
         zone = cv2.morphologyEx(zone.astype(np.uint8), cv2.MORPH_CLOSE, kernel).astype(bool)
         zones.append(zone & mask)
     if len(zones) <= 1:
