@@ -2091,6 +2091,26 @@
     ],
     "max_bbox_error_m": 5000
    }
+  },
+  {
+   "slug": "tampa-tesla-grayline",
+   "image": "/Users/ethanmckanna/Downloads/tampa robotaxi.jpeg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "city_equals": "Tampa"
+   }
+  },
+  {
+   "slug": "orlando-tesla-grayline",
+   "image": "/Users/ethanmckanna/Downloads/orlando robotaxi.jpeg",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "city_equals": "Orlando"
+   }
   }
  ]
 }

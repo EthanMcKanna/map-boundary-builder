@@ -140,11 +140,13 @@ def generate_synthetic_dataset(
             if index % 8 == 6:
                 provider = "waymo-web"
             elif index % 8 == 2:
-                provider = "tesla-dark"
+                provider = "tesla-dark" if (index // 8) % 2 == 0 else "tesla-grayline"
         if provider == "waymo-web":
             style = waymo_web_overlay_style(seed + index)
         elif provider == "tesla-dark":
             style = tesla_dark_overlay_style(seed + index)
+        elif provider == "tesla-grayline":
+            style = tesla_grayline_overlay_style(seed + index)
         else:
             style = randomized_overlay_style(seed + index, index=index)
         config = SyntheticSceneConfig(
@@ -231,6 +233,25 @@ def tesla_dark_overlay_style(seed: int) -> SyntheticOverlayStyle:
         fill_opacity=rng.uniform(0.45, 0.75),
         stroke_color=None,
         stroke_width_px=0.0,
+        labels_on_top=True,
+    )
+
+
+def tesla_grayline_overlay_style(seed: int) -> SyntheticOverlayStyle:
+    """Tesla's current dark-mode look: a barely-lighter neutral gray fill on
+    a near-black basemap, delineated by a crisp white outline. The luminance
+    step is subtle (~10-30 gray levels); the outline carries the boundary."""
+    rng = random.Random(seed)
+    gray = rng.uniform(0.32, 0.5)
+    fill = colorsys.hls_to_rgb(0.0, gray, rng.uniform(0.0, 0.04))
+    stroke_level = rng.uniform(0.85, 1.0)
+    stroke = (stroke_level, stroke_level, stroke_level)
+    return SyntheticOverlayStyle(
+        name=f"tesla-grayline-{seed % 97}",
+        fill_color=rgb_hex(fill),
+        fill_opacity=rng.uniform(0.28, 0.55),
+        stroke_color=rgb_hex(stroke),
+        stroke_width_px=rng.uniform(2.0, 4.5),
         labels_on_top=True,
     )
 
@@ -563,7 +584,7 @@ def _render_basemap(
     """Render a structured city basemap: water, parks, a jittered street
     grid with arterials and curved highways, street/place labels with halos,
     and map furniture (attribution, scale bar, zoom control)."""
-    if config.provider_style == "tesla-dark":
+    if config.provider_style in ("tesla-dark", "tesla-grayline"):
         dark = True
     elif config.provider_style == "waymo-web":
         dark = False
@@ -734,7 +755,7 @@ def _render_basemap(
         draw.text((bx + 11, by + 8), "+", fill=label_color, font=_map_font(15))
         draw.text((bx + 12, by + 38), "-", fill=label_color, font=_map_font(15))
 
-    if config.include_ui_chrome or config.provider_style == "tesla-dark":
+    if config.include_ui_chrome or config.provider_style in ("tesla-dark", "tesla-grayline"):
         chip_fill = (28, 29, 33, 240) if dark else (255, 255, 255, 235)
         chip_text = (240, 241, 244, 245) if dark else (42, 44, 48, 235)
         city_names = ("Tampa, FL", "Austin, TX", "Miami, FL", "Phoenix, AZ", "Dallas, TX", "Service area")
