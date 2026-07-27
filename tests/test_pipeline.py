@@ -236,15 +236,21 @@ def test_road_search_fallback_uses_inferred_contexts(image_path, patched_stages)
         lambda *args, **kwargs: None,
     )
 
+    class FakeCenter:
+        mercator = (-9175000.0, 3225000.0)
+
     class FakeContext:
         def __init__(self, query):
             self.query = query
+            self.center = FakeCenter()
 
     patched_stages.setattr(
         pipeline_module,
         "resolve_city_contexts",
         lambda labels, city: [FakeContext("Tampa"), FakeContext("Hillsborough County")],
     )
+    patched_stages.setattr(pipeline_module, "_label_anchors", lambda labels, center, query="": [])
+    patched_stages.setattr(pipeline_module, "_rescue_fit_is_sane", lambda result, anchors, w, h: True)
     calls: list[str] = []
 
     def fake_road_search(rgb, candidate, geometry):

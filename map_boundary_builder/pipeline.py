@@ -20,6 +20,7 @@ import numpy as np
 
 from .extract import DEFAULT_SIMPLIFY_PX, ExtractionHints, ExtractionResult, load_rgb, write_mask_png, write_overlay_png
 from .geojson import feature_collection, target_selection_confidence, write_geojson
+from .georef_transform import GeoreferenceTransform
 from .georeference import (
     GeoreferenceResult,
     georeference_from_city_context,
@@ -366,6 +367,155 @@ def _georeference_and_export(
 
 
 ROAD_SEARCH_MAX_DIMENSION = 500
+RESCUE_MAX_ROTATION_DEGREES = 8.0
+RESCUE_MIN_METERS_PER_PIXEL = 1.5
+RESCUE_MAX_METERS_PER_PIXEL = 120.0
+RESCUE_MAX_LABEL_ERROR_FRACTION = 0.15
+RESCUE_MAX_CITY_DISTANCE_M = 80_000.0
+
+
+def _label_anchors(
+    labels: tuple[OcrLabel, ...],
+    city_center_mercator: tuple[float, float] | None,
+    city_query: str = "",
+) -> list[tuple[OcrLabel, tuple[float, float], bool]]:
+    """Geocoded label anchors near the candidate city.
+
+    Each entry is (label, mercator, is_city_label). Ambiguous names are
+    resolved by choosing the geocode candidate nearest the inferred city —
+    a map of Orlando means "Conway" is the Orlando neighborhood, not the
+    Arkansas city. City-name labels are flagged: their drawn position is
+    cartographic, not geographic, so they validate but never fit.
+    """
+    from .geocoder import geocode
+
+    city_tokens = {token for token in city_query.lower().replace(",", " ").split() if len(token) > 2}
+    anchors: list[tuple[OcrLabel, tuple[float, float], bool]] = []
+    for label in labels:
+        text = label.text.strip()
+        if len(text) < 4 or not any(ch.isalpha() for ch in text):
+            continue
+        try:
+            results = geocode(text, limit=5)
+        except Exception:
+            continue
+        if not results:
+            continue
+        best: tuple[float, tuple[float, float]] | None = None
+        for result in results:
+            mercator = result.mercator
+            if city_center_mercator is None:
+                best = (0.0, mercator)
+                break
+            distance = float(
+                np.hypot(mercator[0] - city_center_mercator[0], mercator[1] - city_center_mercator[1])
+            )
+            if distance <= RESCUE_MAX_CITY_DISTANCE_M and (best is None or distance < best[0]):
+                best = (distance, mercator)
+        if best is None:
+            continue
+        label_tokens = {token for token in text.lower().split() if len(token) > 2}
+        is_city_label = bool(city_tokens and city_tokens & label_tokens)
+        anchors.append((label, best[1], is_city_label))
+    return anchors
+
+
+def _north_up_anchor_fit(
+    anchors: list[tuple[OcrLabel, tuple[float, float], bool]],
+    width: int,
+    height: int,
+    city: str,
+) -> GeoreferenceResult | None:
+    """Least-squares north-up similarity fit from geocoded label anchors.
+
+    Screenshots of coverage maps are north-up; locking rotation to zero
+    makes two anchors sufficient and immune to the rotated local optima the
+    road search can fall into. City-name labels are excluded (their drawn
+    position is arbitrary)."""
+    from .georef_transform import mercator_to_lonlat
+
+    fitting = [(label, mercator) for label, mercator, is_city in anchors if not is_city]
+    if len(fitting) < 2:
+        return None
+    pixels = np.array([[label.x, -label.y] for label, _ in fitting])
+    mercs = np.array([list(mercator) for _, mercator in fitting])
+    spread = float(np.hypot(*(pixels.max(axis=0) - pixels.min(axis=0))))
+    if spread < 0.12 * float(np.hypot(width, height)):
+        return None
+    # Solve merc = origin + pixel * mpp in least squares over both axes.
+    pixel_deltas = pixels - pixels.mean(axis=0)
+    merc_deltas = mercs - mercs.mean(axis=0)
+    denominator = float((pixel_deltas**2).sum())
+    if denominator <= 0:
+        return None
+    mpp = float((pixel_deltas * merc_deltas).sum() / denominator)
+    if not RESCUE_MIN_METERS_PER_PIXEL <= mpp <= RESCUE_MAX_METERS_PER_PIXEL:
+        return None
+    origin = mercs.mean(axis=0) - pixels.mean(axis=0) * mpp
+    residuals = np.hypot(*(mercs - (origin + pixels * mpp)).T)
+    lon, lat = mercator_to_lonlat(float(origin[0]), float(origin[1]))
+    transform = GeoreferenceTransform(
+        city=city,
+        lon=lon,
+        lat=lat,
+        origin_x_ratio=0.0,
+        origin_y_ratio=0.0,
+        meters_per_pixel=mpp,
+        rotation_radians=0.0,
+        confidence=0.58,
+        source="label-anchors:north-up-fit",
+    )
+    return GeoreferenceResult(
+        transform=transform,
+        control_points=[],
+        residual_median_m=float(np.median(residuals)),
+        residual_p90_m=float(np.quantile(residuals, 0.9)),
+    )
+
+
+def _mercator_to_pixel(
+    mercator: tuple[float, float],
+    width: int,
+    height: int,
+    transform,
+) -> tuple[float, float]:
+    import math
+
+    from .georef_transform import lonlat_to_mercator
+
+    origin_x = transform.origin_x_ratio * width
+    origin_y = transform.origin_y_ratio * height
+    origin_merc = lonlat_to_mercator(transform.lon, transform.lat)
+    rx = (mercator[0] - origin_merc[0]) / transform.meters_per_pixel
+    ry = (mercator[1] - origin_merc[1]) / transform.meters_per_pixel
+    cos_r = math.cos(transform.rotation_radians)
+    sin_r = math.sin(transform.rotation_radians)
+    px = rx * cos_r + ry * sin_r
+    py = -rx * sin_r + ry * cos_r
+    return px + origin_x, origin_y - py
+
+
+def _rescue_fit_is_sane(
+    result: GeoreferenceResult,
+    anchors: list[tuple[OcrLabel, tuple[float, float]]],
+    width: int,
+    height: int,
+) -> bool:
+    transform = result.transform
+    rotation_degrees = abs(transform.rotation_radians) * 180.0 / np.pi
+    if rotation_degrees > RESCUE_MAX_ROTATION_DEGREES:
+        return False
+    if not RESCUE_MIN_METERS_PER_PIXEL <= transform.meters_per_pixel <= RESCUE_MAX_METERS_PER_PIXEL:
+        return False
+    if anchors:
+        diagonal = float(np.hypot(width, height))
+        errors = []
+        for label, mercator, _is_city in anchors:
+            px, py = _mercator_to_pixel(mercator, width, height, transform)
+            errors.append(float(np.hypot(px - label.x, py - label.y)))
+        if float(np.median(errors)) > RESCUE_MAX_LABEL_ERROR_FRACTION * diagonal:
+            return False
+    return True
 
 
 def _road_search_fallback(
@@ -374,16 +524,25 @@ def _road_search_fallback(
     labels: tuple[OcrLabel, ...],
     city: str | None,
 ) -> GeoreferenceResult | None:
-    if city is not None:
-        candidates = [city]
-    else:
-        try:
-            contexts = resolve_city_contexts(list(labels), None)
-        except Exception:
-            return None
-        candidates = [context.query for context in contexts[:2]]
-    if not candidates:
+    try:
+        contexts = resolve_city_contexts(list(labels), city)
+    except Exception:
         return None
+    if not contexts:
+        return None
+    candidates = [context.query for context in contexts[:2]]
+    height, width = rgb.shape[:2]
+    center_mercator = contexts[0].center.mercator
+    anchors = _label_anchors(labels, center_mercator, contexts[0].query)
+
+    # A north-up anchor fit beats road matching whenever at least two solid
+    # geocoded neighborhood labels exist (three is the standard fit's
+    # minimum, which already declined). Rotation is locked to zero — these
+    # screenshots are north-up — making the fit immune to the rotated
+    # optima the road search can fall into.
+    north_up = _north_up_anchor_fit(anchors, width, height, contexts[0].query)
+    if north_up is not None and _rescue_fit_is_sane(north_up, anchors, width, height):
+        return north_up
 
     # The road-structure search works on low-resolution street grids (its
     # line-feature matcher only activates below ~520 px), so search on a
@@ -419,12 +578,17 @@ def _road_search_fallback(
             result.transform,
             meters_per_pixel=result.transform.meters_per_pixel * pixel_scale,
         )
-        return GeoreferenceResult(
+        rescued = GeoreferenceResult(
             transform=transform,
             control_points=result.control_points,
             residual_median_m=result.residual_median_m,
             residual_p90_m=result.residual_p90_m,
         )
+        # Road matching can converge to rotated or mis-scaled optima; a fit
+        # that disagrees with where geocoded labels actually sit is wrong.
+        if not _rescue_fit_is_sane(rescued, anchors, width, height):
+            continue
+        return rescued
     return None
 
 
