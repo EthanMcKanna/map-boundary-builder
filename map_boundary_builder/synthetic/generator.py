@@ -335,6 +335,10 @@ def generate_synthetic_sample(
     if config.touch_border and not _mask_touches_border(mask):
         raise RuntimeError("touch_border sample did not reach an outer mask pixel")
     overlay = _render_overlay(base, polygon, hole, style)
+    if config.provider_style == "tesla-grayline":
+        overlay = _apply_out_of_area_vignette(
+            overlay, polygon, config, random.Random(config.seed + 910_007)
+        )
     if config.include_distractor:
         distractor = _sample_distractor_polygon(config.width, config.height, random.Random(config.seed + 400_009))
         distractor_style = randomized_overlay_style(config.seed + 800_011, index=config.seed)
@@ -454,6 +458,38 @@ def _generate_negative_sample(
         json.dumps(sample.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     return SyntheticRenderResult(sample=sample, polygon=Polygon(), mask_area_px=0)
+
+
+def _apply_out_of_area_vignette(
+    overlay: Image.Image,
+    polygon: Polygon,
+    config: SyntheticSceneConfig,
+    rng: random.Random,
+) -> Image.Image:
+    """Dim regions outside the service area, and paint dim same-gray patches
+    beyond it — Tesla's dark mode brightens the area and vignettes the rest.
+
+    The truth mask stays the polygon alone, so the model learns that dim
+    gray continuations abutting the bright outlined area are NOT fill.
+    """
+    if rng.random() < 0.25:
+        return overlay
+    width, height = overlay.size
+    outside = Image.new("L", (width, height), 255)
+    ImageDraw.Draw(outside).polygon(_int_points(polygon.exterior.coords), fill=0)
+    # Dim patches: large soft blobs of near-fill gray outside the area.
+    patches = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    patch_draw = ImageDraw.Draw(patches)
+    for _ in range(rng.randint(1, 4)):
+        blob = _sample_distractor_polygon(width, height, random.Random(rng.randint(0, 2**31)))
+        gray = rng.randint(46, 84)
+        patch_draw.polygon(_int_points(blob.exterior.coords), fill=(gray, gray, gray, rng.randint(160, 235)))
+    dimmed = Image.composite(patches, Image.new("RGBA", patches.size, (0, 0, 0, 0)), outside)
+    overlay = Image.alpha_composite(overlay.convert("RGBA"), dimmed).convert("RGB")
+    # Overall outside darkening.
+    darken = Image.new("RGBA", (width, height), (0, 0, 0, rng.randint(60, 140)))
+    darken_masked = Image.composite(darken, Image.new("RGBA", darken.size, (0, 0, 0, 0)), outside)
+    return Image.alpha_composite(overlay.convert("RGBA"), darken_masked).convert("RGB")
 
 
 def _apply_basemap_texture(base: Image.Image, rng: random.Random) -> Image.Image:
