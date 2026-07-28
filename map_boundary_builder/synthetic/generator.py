@@ -29,7 +29,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v22-realistic-scenes"
+GENERATOR_VERSION = "synthetic-generator-v23-balanced-quotas"
 
 
 @dataclass(frozen=True)
@@ -91,6 +91,12 @@ class SyntheticSceneConfig:
     # basemap, translucent salmon fill, corner city chip). These bias sample
     # density toward the real maps users most often upload.
     provider_style: str | None = None
+    # Which non-map scene a negative sample renders: "app-ui", "document",
+    # "chart", or "photo". Only consulted when negative_scene is set.
+    negative_family: str = "app-ui"
+    # Quota-schedule slice this sample fills; recorded in metadata so the
+    # trainer can report per-slice validation metrics and stratify its split.
+    slice_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +120,39 @@ DEFAULT_OVERLAY_STYLES: tuple[SyntheticOverlayStyle, ...] = (
 )
 
 
+SLICE_QUOTAS: tuple[tuple[str, int], ...] = (
+    ("saturated-fill", 14),
+    ("light-fill", 6),
+    ("grayline", 6),
+    ("tesla-dark", 4),
+    ("waymo-web", 5),
+    ("outline", 4),
+    ("satellite", 4),
+    ("negative", 7),
+)
+
+NEGATIVE_FAMILIES: tuple[str, ...] = ("app-ui", "document", "chart", "photo")
+
+
+def _build_slice_schedule() -> tuple[str, ...]:
+    """Smooth weighted round-robin over SLICE_QUOTAS: exact quotas per cycle,
+    with each slice spread evenly through the schedule instead of clumped."""
+    weights = dict(SLICE_QUOTAS)
+    total = sum(weights.values())
+    credits = {name: 0.0 for name in weights}
+    schedule: list[str] = []
+    for _ in range(total):
+        for name in credits:
+            credits[name] += weights[name] / total
+        pick = max(credits, key=lambda name: (credits[name], weights[name], name))
+        credits[pick] -= 1.0
+        schedule.append(pick)
+    return tuple(schedule)
+
+
+SLICE_SCHEDULE = _build_slice_schedule()
+
+
 def generate_synthetic_dataset(
     output_dir: str | Path,
     *,
@@ -124,31 +163,45 @@ def generate_synthetic_dataset(
     negative_every: int = 0,
     negative_start_index: int = 0,
 ) -> SyntheticDatasetManifest:
+    """Render `count` samples following the SLICE_SCHEDULE quota table.
+
+    negative_every > 0 enables the schedule's negative slots (the quota table
+    fixes their share; the value itself no longer sets a cadence). Negative
+    slots before negative_start_index render as saturated fills instead so a
+    leading validation carve-out can stay positive-only when needed.
+    """
     if count < 1:
         raise ValueError("count must be positive")
 
     root = Path(output_dir)
     samples: list[SyntheticSampleMetadata] = []
+    negative_count = 0
     for index in range(count):
-        negative = (
-            negative_every > 0
-            and index >= negative_start_index
-            and (index - negative_start_index) % negative_every == 0
-        )
-        provider = None
-        if not negative:
-            if index % 8 == 6:
-                provider = "waymo-web"
-            elif index % 8 == 2:
-                provider = "tesla-dark" if (index // 8) % 2 == 0 else "tesla-grayline"
+        slice_name = SLICE_SCHEDULE[index % len(SLICE_SCHEDULE)]
+        if slice_name == "negative" and (negative_every <= 0 or index < negative_start_index):
+            slice_name = "saturated-fill"
+        negative = slice_name == "negative"
+        provider = {
+            "waymo-web": "waymo-web",
+            "tesla-dark": "tesla-dark",
+            "grayline": "tesla-grayline",
+        }.get(slice_name)
         if provider == "waymo-web":
             style = waymo_web_overlay_style(seed + index)
         elif provider == "tesla-dark":
             style = tesla_dark_overlay_style(seed + index)
         elif provider == "tesla-grayline":
             style = tesla_grayline_overlay_style(seed + index)
+        elif slice_name == "light-fill":
+            style = light_fill_overlay_style(seed + index, index=index)
+        elif slice_name == "outline":
+            style = outline_only_overlay_style(seed + index, index=index)
+        elif slice_name == "saturated-fill":
+            style = randomized_overlay_style(seed + index, index=index, force_fill=True)
         else:
             style = randomized_overlay_style(seed + index, index=index)
+        if negative:
+            negative_count += 1
         config = SyntheticSceneConfig(
             provider="synthetic",
             service_area=f"sample-city-{index % 5}",
@@ -179,9 +232,11 @@ def generate_synthetic_dataset(
             )[index % 10],
             jpeg_quality=82 if index % 4 == 1 else None,
             negative_scene=negative,
+            negative_family=NEGATIVE_FAMILIES[negative_count % len(NEGATIVE_FAMILIES)],
             include_admin_shading=index % 5 == 0 or provider == "waymo-web",
-            textured_basemap=index % 7 == 5 and provider is None,
+            textured_basemap=slice_name == "satellite" or (index % 7 == 5 and provider is None),
             provider_style=provider,
+            slice_name=slice_name,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
 
@@ -256,7 +311,48 @@ def tesla_grayline_overlay_style(seed: int) -> SyntheticOverlayStyle:
     )
 
 
-def randomized_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
+def light_fill_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
+    """Pale translucent washes: the Miami-style light fills that thin out to
+    near-basemap luminance. Low opacity over a light or mid-tone color."""
+    rng = random.Random(seed * 92821 + index)
+    hue = rng.random()
+    saturation = rng.uniform(0.2, 0.8)
+    lightness = rng.uniform(0.52, 0.86)
+    fill = colorsys.hls_to_rgb(hue, lightness, saturation)
+    stroke = colorsys.hls_to_rgb(
+        (hue + rng.uniform(-0.08, 0.08)) % 1.0,
+        max(0.15, lightness - rng.uniform(0.1, 0.35)),
+        min(1.0, saturation + 0.2),
+    )
+    return SyntheticOverlayStyle(
+        name=f"light-fill-{index:04d}",
+        fill_color=rgb_hex(fill),
+        fill_opacity=rng.uniform(0.1, 0.38),
+        stroke_color=rgb_hex(stroke) if rng.random() < 0.72 else None,
+        stroke_width_px=rng.uniform(0.0, 4.5),
+        dashed=rng.random() < 0.1,
+        labels_on_top=rng.random() < 0.5,
+    )
+
+
+def outline_only_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
+    """Boundary drawn as a stroke with no interior fill, solid or dashed."""
+    rng = random.Random(seed * 15485863 + index)
+    hue = rng.random()
+    stroke = colorsys.hls_to_rgb(hue, rng.uniform(0.22, 0.62), rng.uniform(0.45, 1.0))
+    return SyntheticOverlayStyle(
+        name=f"outline-{index:04d}",
+        fill_color="#ffffff",
+        fill_opacity=0.0,
+        stroke_color=rgb_hex(stroke),
+        stroke_width_px=rng.uniform(2.0, 8.0),
+        dashed=rng.random() < 0.45,
+        fill_enabled=False,
+        labels_on_top=rng.random() < 0.4,
+    )
+
+
+def randomized_overlay_style(seed: int, *, index: int = 0, force_fill: bool = False) -> SyntheticOverlayStyle:
     """Sample the full visual space instead of teaching the model a short palette."""
     rng = random.Random(seed * 104729 + index)
     hue = rng.random()
@@ -267,7 +363,7 @@ def randomized_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlaySt
     stroke_color = rgb_hex(
         colorsys.hls_to_rgb(stroke_hue, max(0.08, min(0.92, lightness + rng.uniform(-0.28, 0.20))), saturation)
     )
-    outline_only = rng.random() < 0.14
+    outline_only = rng.random() < 0.14 and not force_fill
     return SyntheticOverlayStyle(
         name=f"domain-random-{index:04d}",
         fill_color=fill_color,
@@ -395,6 +491,7 @@ def generate_synthetic_sample(
             "overlay_dashed": style.dashed,
             "stroke_join": style.stroke_join,
             "provider_style": config.provider_style,
+            "slice": config.slice_name,
             "renderer": "procedural-pillow",
         },
     )
@@ -408,8 +505,15 @@ def _generate_negative_sample(
     config: SyntheticSceneConfig,
     rng: random.Random,
 ) -> SyntheticRenderResult:
-    base = _render_basemap(config, rng)
-    image = _render_app_ui(base, config, rng)
+    if config.negative_family == "document":
+        image = _render_document_page(config, rng)
+    elif config.negative_family == "chart":
+        image = _render_chart_dashboard(config, rng)
+    elif config.negative_family == "photo":
+        image = _render_photo_scene(config, rng)
+    else:
+        base = _render_basemap(config, rng)
+        image = _render_app_ui(base, config, rng)
     image = _apply_capture_effects(image, config)
     mask = Image.new("L", (config.width, config.height), 0)
 
@@ -445,6 +549,8 @@ def _generate_negative_sample(
         generator_version=GENERATOR_VERSION,
         properties={
             "negative_scene": True,
+            "negative_family": config.negative_family,
+            "slice": config.slice_name or "negative",
             "touch_border": False,
             "include_ui_chrome": True,
             "include_hole": False,
@@ -600,6 +706,188 @@ def _render_app_ui(base: Image.Image, config: SyntheticSceneConfig, rng: random.
     draw.rectangle((0, 0, width, rng.randint(24, 44)), fill=bar_color)
     draw.text((width // 12, 8), "12:17", fill=text_color, font=font)
     return image
+
+
+def _render_document_page(config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    """A text document / article page: headings, paragraph bars, maybe a
+    two-column layout, an image placeholder, and a footer. No map anywhere."""
+    width, height = config.width, config.height
+    dark = rng.random() < 0.25
+    page = (28, 29, 33) if dark else rng.choice([(255, 255, 255), (250, 249, 245), (245, 246, 248)])
+    text = (176, 178, 186, 255) if dark else (72, 74, 80, 255)
+    faint = (120, 122, 130, 255) if dark else (150, 152, 158, 255)
+    image = Image.new("RGB", (width, height), page)
+    draw = ImageDraw.Draw(image, "RGBA")
+    margin = rng.randint(width // 14, width // 8)
+    columns = 2 if rng.random() < 0.35 and width > 600 else 1
+    column_width = (width - margin * (columns + 1)) // columns
+    # Title block.
+    y = rng.randint(28, 70)
+    draw.rounded_rectangle((margin, y, margin + rng.randint(column_width // 2, column_width), y + rng.randint(18, 30)), radius=4, fill=text)
+    y += rng.randint(40, 64)
+    for column in range(columns):
+        x0 = margin + column * (column_width + margin)
+        column_y = y
+        while column_y < height - 40:
+            if rng.random() < 0.12:
+                # Image placeholder with a caption bar.
+                block_height = rng.randint(80, 160)
+                gray = rng.randint(120, 200)
+                draw.rectangle((x0, column_y, x0 + column_width, column_y + block_height), fill=(gray, gray, gray + rng.randint(-8, 8)))
+                column_y += block_height + 10
+                draw.rounded_rectangle((x0, column_y, x0 + column_width // 2, column_y + 8), radius=3, fill=faint)
+                column_y += rng.randint(24, 40)
+                continue
+            if rng.random() < 0.15:
+                # Section heading.
+                draw.rounded_rectangle((x0, column_y, x0 + rng.randint(column_width // 3, int(column_width * 0.7)), column_y + rng.randint(12, 18)), radius=3, fill=text)
+                column_y += rng.randint(28, 44)
+                continue
+            # Paragraph: several full-width bars, last one short.
+            for line in range(rng.randint(3, 7)):
+                bar_width = column_width if rng.random() < 0.8 else int(column_width * rng.uniform(0.35, 0.9))
+                draw.rounded_rectangle((x0, column_y, x0 + bar_width, column_y + rng.randint(6, 10)), radius=3, fill=faint)
+                column_y += rng.randint(14, 20)
+            column_y += rng.randint(12, 26)
+    return image
+
+
+def _render_chart_dashboard(config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    """An analytics dashboard: panels holding bar/line/pie/area charts with
+    solid colored regions that must NOT read as service-area fills."""
+    width, height = config.width, config.height
+    dark = rng.random() < 0.35
+    background = (24, 26, 31) if dark else rng.choice([(248, 249, 251), (255, 255, 255)])
+    panel = (34, 37, 44) if dark else (255, 255, 255)
+    axis = (140, 144, 152, 255) if dark else (120, 122, 128, 255)
+    image = Image.new("RGB", (width, height), background)
+    draw = ImageDraw.Draw(image, "RGBA")
+    palette = [
+        (66, 133, 244),
+        (219, 68, 55),
+        (244, 180, 0),
+        (15, 157, 88),
+        (171, 71, 188),
+        (255, 112, 67),
+        (0, 172, 193),
+    ]
+    rng.shuffle(palette)
+    rows = rng.randint(1, 2)
+    cols = rng.randint(1, 2)
+    gutter = rng.randint(10, 24)
+    header = rng.randint(0, 56)
+    if header:
+        draw.rectangle((0, 0, width, header), fill=panel)
+    panel_width = (width - gutter * (cols + 1)) // cols
+    panel_height = (height - header - gutter * (rows + 1)) // rows
+    for row in range(rows):
+        for col in range(cols):
+            x0 = gutter + col * (panel_width + gutter)
+            y0 = header + gutter + row * (panel_height + gutter)
+            x1, y1 = x0 + panel_width, y0 + panel_height
+            draw.rounded_rectangle((x0, y0, x1, y1), radius=8, fill=panel, outline=(*axis[:3], 90))
+            pad = max(8, min(rng.randint(16, 30), panel_width // 8, panel_height // 8))
+            chart = rng.choice(["bars", "line", "pie", "area", "donut"])
+            cx0, cy0, cx1, cy1 = x0 + pad, y0 + pad + 14, x1 - pad, y1 - pad
+            if cx1 - cx0 < 40 or cy1 - cy0 < 30:
+                continue
+            draw.rounded_rectangle((x0 + pad, y0 + 10, x0 + pad + rng.randint(60, max(70, panel_width // 3)), y0 + 20), radius=3, fill=axis)
+            if chart == "bars":
+                bars = rng.randint(4, 9)
+                slot = (cx1 - cx0) / bars
+                color = palette[0]
+                for bar in range(bars):
+                    bar_height = rng.uniform(0.15, 1.0) * (cy1 - cy0)
+                    bx0 = cx0 + bar * slot + slot * 0.18
+                    draw.rectangle((bx0, cy1 - bar_height, bx0 + slot * 0.64, cy1), fill=(*color, 255))
+                draw.line((cx0, cy1, cx1, cy1), fill=axis, width=2)
+            elif chart in ("line", "area"):
+                points = []
+                steps = rng.randint(6, 12)
+                for step in range(steps + 1):
+                    px = cx0 + (cx1 - cx0) * step / steps
+                    py = cy1 - rng.uniform(0.05, 0.95) * (cy1 - cy0)
+                    points.append((px, py))
+                if chart == "area":
+                    ring = [(cx0, cy1), *points, (cx1, cy1)]
+                    draw.polygon(ring, fill=(*palette[1], rng.randint(120, 230)))
+                draw.line(points, fill=(*palette[0], 255), width=rng.randint(2, 4), joint="curve")
+                draw.line((cx0, cy1, cx1, cy1), fill=axis, width=2)
+                draw.line((cx0, cy0, cx0, cy1), fill=axis, width=2)
+            else:
+                radius = min(cx1 - cx0, cy1 - cy0) // 2
+                center_x, center_y = (cx0 + cx1) // 2, (cy0 + cy1) // 2
+                box = (center_x - radius, center_y - radius, center_x + radius, center_y + radius)
+                start = rng.uniform(0, 360)
+                remaining = 360.0
+                wedge = 0
+                while remaining > 8 and wedge < 6:
+                    sweep = rng.uniform(30, 140) if remaining > 150 else remaining
+                    sweep = min(sweep, remaining)
+                    draw.pieslice(box, start, start + sweep, fill=(*palette[wedge % len(palette)], 255))
+                    start += sweep
+                    remaining -= sweep
+                    wedge += 1
+                if chart == "donut":
+                    hole = int(radius * rng.uniform(0.4, 0.6))
+                    draw.ellipse((center_x - hole, center_y - hole, center_x + hole, center_y + hole), fill=panel)
+            # Legend swatches.
+            for swatch in range(rng.randint(0, 3)):
+                sx = x0 + pad + swatch * 70
+                if sx + 60 > x1:
+                    break
+                draw.rectangle((sx, y1 - 14, sx + 10, y1 - 4), fill=(*palette[swatch % len(palette)], 255))
+                draw.rounded_rectangle((sx + 16, y1 - 12, sx + 58, y1 - 6), radius=3, fill=axis)
+    return image
+
+
+def _render_photo_scene(config: SyntheticSceneConfig, rng: random.Random) -> Image.Image:
+    """A non-map photograph stand-in: sky gradient, silhouette layers, a sun
+    or moon disc, bokeh, and grain. Nothing polygonal to extract."""
+    import numpy as np
+
+    width, height = config.width, config.height
+    top = np.array([rng.randint(20, 255), rng.randint(20, 255), rng.randint(20, 255)], dtype=np.float32)
+    bottom = np.array([rng.randint(0, 235), rng.randint(0, 235), rng.randint(0, 235)], dtype=np.float32)
+    ramp = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None, None]
+    gradient = (top[None, None, :] * (1 - ramp) + bottom[None, None, :] * ramp).astype(np.uint8)
+    image = Image.fromarray(np.repeat(gradient, width, axis=1), "RGB")
+    draw = ImageDraw.Draw(image, "RGBA")
+    # Sun/moon disc.
+    if rng.random() < 0.6:
+        disc_radius = rng.randint(min(width, height) // 16, min(width, height) // 6)
+        disc_x = rng.randint(disc_radius, width - disc_radius)
+        disc_y = rng.randint(disc_radius, height // 2)
+        level = rng.randint(200, 255)
+        draw.ellipse(
+            (disc_x - disc_radius, disc_y - disc_radius, disc_x + disc_radius, disc_y + disc_radius),
+            fill=(level, level, rng.randint(170, level), rng.randint(180, 255)),
+        )
+    # Silhouette layers rising from the bottom (mountains / skyline / trees).
+    for layer in range(rng.randint(1, 3)):
+        base_y = height - rng.randint(0, height // 4) - layer * rng.randint(10, 50)
+        shade = rng.randint(8, 90)
+        points = [(0, height), (0, base_y)]
+        x = 0
+        while x < width:
+            x += rng.randint(width // 20, width // 6)
+            points.append((min(x, width), base_y - rng.randint(-height // 10, height // 5)))
+        points.append((width, height))
+        draw.polygon(points, fill=(shade, shade, shade + rng.randint(0, 20), rng.randint(200, 255)))
+    # Bokeh circles.
+    for _ in range(rng.randint(0, 12)):
+        bokeh_radius = rng.randint(4, 30)
+        bx = rng.randint(0, width)
+        by = rng.randint(0, height)
+        draw.ellipse(
+            (bx - bokeh_radius, by - bokeh_radius, bx + bokeh_radius, by + bokeh_radius),
+            fill=(rng.randint(150, 255), rng.randint(150, 255), rng.randint(120, 255), rng.randint(30, 110)),
+        )
+    # Grain.
+    arr = np.asarray(image, dtype=np.int16)
+    noise_rng = np.random.default_rng(rng.randint(0, 2**31))
+    arr = np.clip(arr + noise_rng.normal(0, rng.uniform(2, 10), arr.shape), 0, 255).astype(np.uint8)
+    return Image.fromarray(arr, "RGB")
 
 
 def _sample_slug(config: SyntheticSceneConfig) -> str:

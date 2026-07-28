@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--negative-every",
         type=int,
         default=0,
-        help="Make every Nth training sample a no-service-area app-UI negative (0 disables). Validation samples stay positive.",
+        help="Enable the quota schedule's no-service-area negative slots (0 disables). The quota table fixes their share; negatives appear in the validation split too.",
     )
     parser.add_argument("--render-width", type=int, default=640)
     parser.add_argument("--render-height", type=int, default=640)
@@ -79,8 +79,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Train with CUDA automatic mixed precision (halves activation memory, uses tensor cores).",
     )
+    parser.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.999,
+        help="Exponential-moving-average decay for a shadow copy of the weights, evaluated alongside the raw weights each epoch (0 disables).",
+    )
     parser.add_argument("--export-checkpoint", type=Path, default=None)
     parser.add_argument("--export-image-size", type=int, default=0)
+    parser.add_argument(
+        "--export-variant",
+        choices=("auto", "raw", "ema"),
+        default="auto",
+        help="Which weights to export from a checkpoint: auto uses the variant whose metrics selected it.",
+    )
     return parser
 
 
@@ -110,11 +122,10 @@ def main(argv: list[str] | None = None) -> int:
             width=args.render_width,
             height=args.render_height,
             negative_every=args.negative_every,
-            negative_start_index=args.validation_count,
         )
     samples = list(manifest.samples)
-    validation_samples = samples[: args.validation_count]
-    training_samples = samples[args.validation_count :]
+    validation_samples, training_samples = stratified_split(samples, args.validation_count)
+    validation_slices = [sample_slice(sample) for sample in validation_samples]
     train_dataset = SyntheticBoundaryDataset(
         args.dataset_dir,
         training_samples,
@@ -171,6 +182,11 @@ def main(argv: list[str] | None = None) -> int:
             start_epoch = int(checkpoint["epoch"])
             best_validation_iou = float(checkpoint.get("best_validation_iou", checkpoint.get("validation_iou", -1.0)))
             best_validation_score = float(checkpoint.get("best_validation_score", best_validation_iou))
+    ema = EmaWeights(model, args.ema_decay) if args.ema_decay > 0 else None
+    if ema is not None and args.resume_checkpoint is not None and not args.resume_weights_only:
+        resumed_ema = checkpoint.get("ema_state_dict")
+        if resumed_ema is not None:
+            ema.shadow = {key: value.to(device) for key, value in resumed_ema.items()}
 
     print(
         "training",
@@ -186,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
     if start_epoch == 0:
-        initial_metrics = evaluate_metrics(model, validation_loader, device=device)
+        initial_metrics = evaluate_metrics(model, validation_loader, device=device, slices=validation_slices)
         best_validation_iou = initial_metrics["iou"]
         best_validation_score = initial_metrics["score"]
         initial_checkpoint = {
@@ -196,10 +212,12 @@ def main(argv: list[str] | None = None) -> int:
             "image_size": args.image_size,
             "input_channels": args.input_channels,
             **validation_checkpoint_metadata(initial_metrics),
+            "selected_variant": "raw",
             "best_validation_iou": best_validation_iou,
             "best_validation_score": best_validation_score,
             **training_policy_metadata(args),
             "model_state_dict": model.state_dict(),
+            "ema_state_dict": ema.state_dict() if ema is not None else None,
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
         }
@@ -213,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             f"validation_tail_score={initial_metrics['tail_score']:.5f}",
             flush=True,
         )
+        print_slice_metrics("raw", initial_metrics)
     use_amp = bool(args.amp) and device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     model.train()
@@ -236,8 +255,19 @@ def main(argv: list[str] | None = None) -> int:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             scaler.step(optimizer)
             scaler.update()
+            if ema is not None:
+                ema.update(model)
             losses.append(float(loss.detach()))
-        validation_metrics = evaluate_metrics(model, validation_loader, device=device)
+        variant = "raw"
+        validation_metrics = evaluate_metrics(model, validation_loader, device=device, slices=validation_slices)
+        if ema is not None:
+            backup_state = {key: value.detach().clone() for key, value in model.state_dict().items()}
+            model.load_state_dict(ema.state_dict())
+            ema_metrics = evaluate_metrics(model, validation_loader, device=device, slices=validation_slices)
+            model.load_state_dict(backup_state)
+            if ema_metrics["score"] >= validation_metrics["score"]:
+                variant = "ema"
+                validation_metrics = ema_metrics
         validation_iou = validation_metrics["iou"]
         scheduler.step()
         is_best = validation_metrics["score"] >= best_validation_score
@@ -247,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"epoch={epoch + 1} "
             f"loss={sum(losses) / max(1, len(losses)):.5f} "
+            f"variant={variant} "
             f"validation_iou={validation_iou:.5f} "
             f"validation_p05_iou={validation_metrics['p05_iou']:.5f} "
             f"validation_boundary_iou_2px={validation_metrics['boundary_iou_2px']:.5f} "
@@ -255,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
             f"lr={scheduler.get_last_lr()[0]:.7f}",
             flush=True,
         )
+        print_slice_metrics(variant, validation_metrics)
         checkpoint_path = checkpoint_dir / f"epoch-{epoch + 1:03d}.pt"
         torch.save(
             {
@@ -264,10 +296,12 @@ def main(argv: list[str] | None = None) -> int:
                 "image_size": args.image_size,
                 "input_channels": args.input_channels,
                 **validation_checkpoint_metadata(validation_metrics),
+                "selected_variant": variant,
                 "best_validation_iou": best_validation_iou,
                 "best_validation_score": best_validation_score,
                 **training_policy_metadata(args),
                 "model_state_dict": model.state_dict(),
+                "ema_state_dict": ema.state_dict() if ema is not None else None,
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
             },
@@ -284,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
         model = build_model(
             str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]), input_channels=input_channels
         )
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint_export_state(checkpoint, "auto"))
         export_model(model, args.output, image_size=int(checkpoint["image_size"]), input_channels=input_channels)
         write_selector_metadata(
             args.output,
@@ -598,11 +632,99 @@ def edge_map(values):
     return pooled_max - pooled_min
 
 
+class EmaWeights:
+    """Exponential moving average over every floating-point entry of a model's
+    state dict; non-float buffers track the latest raw value."""
+
+    def __init__(self, model: nn.Module, decay: float) -> None:
+        self.decay = float(decay)
+        self.shadow = {
+            key: value.detach().clone().float() if value.dtype.is_floating_point else value.detach().clone()
+            for key, value in model.state_dict().items()
+        }
+
+    @torch.no_grad()
+    def update(self, model: nn.Module) -> None:
+        for key, value in model.state_dict().items():
+            if value.dtype.is_floating_point:
+                self.shadow[key].mul_(self.decay).add_(value.detach().float(), alpha=1.0 - self.decay)
+            else:
+                self.shadow[key] = value.detach().clone()
+
+    def state_dict(self) -> dict:
+        return {key: value.clone() for key, value in self.shadow.items()}
+
+
+def sample_slice(sample) -> str:
+    """Slice tag for a manifest sample, falling back to provider hints for
+    manifests generated before slice tags existed."""
+    properties = dict(getattr(sample, "properties", None) or {})
+    tag = properties.get("slice")
+    if tag:
+        return str(tag)
+    if properties.get("negative_scene"):
+        return "negative"
+    provider = properties.get("provider_style")
+    return str(provider) if provider else "default"
+
+
+def stratified_split(samples: Sequence, validation_count: int):
+    """Split samples so validation covers every slice proportionally (largest-
+    remainder apportionment, evenly spaced picks within each slice)."""
+    validation_count = min(validation_count, max(0, len(samples) - 1))
+    groups: dict[str, list[int]] = {}
+    for index, sample in enumerate(samples):
+        groups.setdefault(sample_slice(sample), []).append(index)
+    ordered = sorted(groups.items(), key=lambda item: (-len(item[1]), item[0]))
+    total = len(samples)
+    quotas: dict[str, int] = {}
+    remainders: list[tuple[float, str]] = []
+    for name, members in ordered:
+        exact = validation_count * len(members) / total
+        quotas[name] = min(int(exact), max(0, len(members) - 1))
+        remainders.append((exact - int(exact), name))
+    shortfall = validation_count - sum(quotas.values())
+    for _, name in sorted(remainders, reverse=True):
+        if shortfall <= 0:
+            break
+        if quotas[name] < len(groups[name]) - 1:
+            quotas[name] += 1
+            shortfall -= 1
+    validation_indices: set[int] = set()
+    for name, members in ordered:
+        take = quotas[name]
+        for pick in range(take):
+            validation_indices.add(members[pick * len(members) // take])
+    validation = [samples[index] for index in sorted(validation_indices)]
+    training = [sample for index, sample in enumerate(samples) if index not in validation_indices]
+    return validation, training
+
+
+def print_slice_metrics(variant: str, metrics: dict) -> None:
+    slice_iou = metrics.get("slice_iou")
+    if not slice_iou:
+        return
+    parts = " ".join(f"{name}={value:.3f}" for name, value in sorted(slice_iou.items()))
+    print(
+        f"  slices[{variant}]: {parts} "
+        f"worst_positive_slice={metrics.get('worst_positive_slice_iou', float('nan')):.3f} "
+        f"negative_fp_coverage={metrics.get('negative_fp_coverage', float('nan')):.4f}",
+        flush=True,
+    )
+
+
 @torch.no_grad()
-def evaluate_metrics(model: nn.Module, loader, *, device: torch.device) -> dict[str, float]:
+def evaluate_metrics(
+    model: nn.Module,
+    loader,
+    *,
+    device: torch.device,
+    slices: Sequence[str] | None = None,
+) -> dict[str, float]:
     model.eval()
     scores: list[float] = []
     boundary_scores: list[float] = []
+    coverages: list[float] = []
     kernel = torch.ones((1, 1, 5, 5), device=device)
     for images, masks in loader:
         images = images.to(device)
@@ -613,6 +735,7 @@ def evaluate_metrics(model: nn.Module, loader, *, device: torch.device) -> dict[
         intersection = (predictions & targets).sum(dim=(1, 2, 3)).float()
         union = (predictions | targets).sum(dim=(1, 2, 3)).float()
         scores.extend(((intersection + 1.0) / (union + 1.0)).detach().cpu().tolist())
+        coverages.extend(predictions.float().mean(dim=(1, 2, 3)).detach().cpu().tolist())
         predicted_boundary = edge_map(predictions.float()) > 0
         target_boundary = edge_map(targets.float()) > 0
         predicted_band = F.conv2d(predicted_boundary.float(), kernel, padding=2) > 0
@@ -623,7 +746,42 @@ def evaluate_metrics(model: nn.Module, loader, *, device: torch.device) -> dict[
             ((boundary_intersection + 1.0) / (boundary_union + 1.0)).detach().cpu().tolist()
         )
     model.train()
-    return summarize_validation_scores(scores, boundary_scores)
+    metrics = summarize_validation_scores(scores, boundary_scores)
+    if slices is not None:
+        if len(slices) != len(scores):
+            raise ValueError("slice labels must align with the validation loader")
+        metrics.update(slice_validation_metrics(scores, coverages, slices, metrics["tail_score"]))
+    return metrics
+
+
+def slice_validation_metrics(
+    scores: Sequence[float],
+    coverages: Sequence[float],
+    slices: Sequence[str],
+    tail_score: float,
+) -> dict:
+    """Per-slice means plus a selection score that a single broken slice (or
+    hallucinations on negatives) drags down — the global mean cannot hide a
+    failing style anymore."""
+    by_slice: dict[str, list[float]] = {}
+    negative_coverages: list[float] = []
+    for score, coverage, name in zip(scores, coverages, slices):
+        by_slice.setdefault(name, []).append(score)
+        if name == "negative":
+            negative_coverages.append(coverage)
+    slice_iou = {name: float(sum(values) / len(values)) for name, values in by_slice.items()}
+    positive_means = [value for name, value in slice_iou.items() if name != "negative"]
+    worst_positive = min(positive_means) if positive_means else 0.0
+    negative_fp = float(sum(negative_coverages) / len(negative_coverages)) if negative_coverages else 0.0
+    negative_score = max(0.0, 1.0 - 25.0 * negative_fp)
+    score = 0.45 * tail_score + 0.35 * worst_positive + 0.20 * negative_score
+    return {
+        "slice_iou": slice_iou,
+        "worst_positive_slice_iou": float(worst_positive),
+        "negative_fp_coverage": negative_fp,
+        "negative_score": float(negative_score),
+        "score": float(score),
+    }
 
 
 def summarize_validation_scores(scores: Sequence[float], boundary_scores: Sequence[float]) -> dict[str, float]:
@@ -690,8 +848,8 @@ def training_policy_metadata(args) -> dict[str, float | str]:
     }
 
 
-def validation_checkpoint_metadata(metrics: dict[str, float]) -> dict[str, float]:
-    return {
+def validation_checkpoint_metadata(metrics: dict[str, float]) -> dict:
+    data: dict = {
         "validation_iou": float(metrics["iou"]),
         "validation_p05_iou": float(metrics["p05_iou"]),
         "validation_boundary_iou_2px": float(metrics["boundary_iou_2px"]),
@@ -699,6 +857,21 @@ def validation_checkpoint_metadata(metrics: dict[str, float]) -> dict[str, float
         "validation_tail_score": float(metrics["tail_score"]),
         "validation_score": float(metrics["score"]),
     }
+    if "slice_iou" in metrics:
+        data["validation_slice_iou"] = {name: float(value) for name, value in metrics["slice_iou"].items()}
+        data["validation_worst_positive_slice_iou"] = float(metrics["worst_positive_slice_iou"])
+        data["validation_negative_fp_coverage"] = float(metrics["negative_fp_coverage"])
+    return data
+
+
+def checkpoint_export_state(checkpoint: dict, variant: str) -> dict:
+    """Pick which weights a checkpoint exports: the EMA shadow when it was the
+    selected variant (or explicitly requested) and present, else the raw ones."""
+    if variant == "auto":
+        variant = str(checkpoint.get("selected_variant", "raw"))
+    if variant == "ema" and checkpoint.get("ema_state_dict") is not None:
+        return checkpoint["ema_state_dict"]
+    return checkpoint["model_state_dict"]
 
 
 def export_checkpoint(args) -> None:
@@ -707,7 +880,7 @@ def export_checkpoint(args) -> None:
     model = build_model(
         str(checkpoint["arch"]), base_channels=int(checkpoint["base_channels"]), input_channels=input_channels
     )
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(checkpoint_export_state(checkpoint, args.export_variant))
     export_model(
         model,
         args.output,
