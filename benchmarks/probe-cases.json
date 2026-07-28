@@ -1,0 +1,53 @@
+{
+  "description": "Fast real-image segmentation probes for model-candidate sweeps. Each case pins the coverage band and component budget that past regressions violated. Paths are relative to the repo root unless absolute.",
+  "cases": [
+    {
+      "name": "tampa-grayline",
+      "image": "/Users/ethanmckanna/Downloads/tampa robotaxi.jpeg",
+      "coverage_min": 0.24,
+      "coverage_max": 0.33,
+      "max_components": 5,
+      "watches": "Tesla dark-mode grayline: bottom vignette fringes inflate coverage past 0.35 when broken"
+    },
+    {
+      "name": "orlando-grayline",
+      "image": "/Users/ethanmckanna/Downloads/orlando robotaxi.jpeg",
+      "coverage_min": 0.32,
+      "coverage_max": 0.41,
+      "max_components": 3,
+      "watches": "Tesla dark-mode grayline: under-fill drops below 0.30 when the gray fill is not recognized"
+    },
+    {
+      "name": "miami-light-fill",
+      "image": "tests/fixtures/reported_samples/issue-13-input.jpeg",
+      "coverage_min": 0.31,
+      "coverage_max": 0.41,
+      "max_components": 4,
+      "watches": "Translucent light fill: grayline-heavy fine-tunes punch holes in it (0.24 with holes when broken)"
+    },
+    {
+      "name": "satellite-regional",
+      "image": "tests/fixtures/reported_samples/issue-7-input.png",
+      "coverage_min": 0.1,
+      "coverage_max": 0.21,
+      "max_components": 2,
+      "watches": "Satellite multi-zone: grabbing the orange/red district zones doubles coverage (0.31+ when broken)"
+    },
+    {
+      "name": "tampa-color-png",
+      "image": "/Users/ethanmckanna/Documents/Screenshots/tampa tesla.png",
+      "coverage_min": 0.03,
+      "coverage_max": 0.6,
+      "max_components": 6,
+      "watches": "Color Tesla capture: extraction shape shifts here altered OCR/road-search inputs and broke georeferencing"
+    },
+    {
+      "name": "orlando-color-png",
+      "image": "/Users/ethanmckanna/Documents/Screenshots/orlando tesla.png",
+      "coverage_min": 0.03,
+      "coverage_max": 0.6,
+      "max_components": 6,
+      "watches": "Color Tesla capture: extraction shape shifts here altered OCR/road-search inputs and broke georeferencing"
+    }
+  ]
+}
