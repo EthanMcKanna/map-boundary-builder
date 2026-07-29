@@ -6,6 +6,10 @@
   "assets": {
     "directory": "map_boundary_builder/web_assets"
   },
+  "routes": [
+    { "pattern": "mapboundary.app", "custom_domain": true },
+    { "pattern": "www.mapboundary.app", "custom_domain": true }
+  ],
   "containers": [
     {
       "class_name": "MapBoundaryContainer",
