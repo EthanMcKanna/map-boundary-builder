@@ -1,0 +1,17 @@
+.git
+.venv
+_uv
+node_modules
+out
+build
+training-runs
+benchmarks
+tests
+tools
+docs
+api
+*.egg-info
+__pycache__
+**/__pycache__
+.vercel
+.vercelignore

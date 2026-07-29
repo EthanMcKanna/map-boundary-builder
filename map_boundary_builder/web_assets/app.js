@@ -900,9 +900,11 @@ async function prepareRunImage(file) {
   return file;
 }
 
-// Vercel serverless rejects request bodies over ~4.5 MB before they reach the
-// handler, so oversized uploads are downscaled/re-encoded in the browser.
-const MAX_UPLOAD_BODY_BYTES = 3_800_000;
+// The server accepts up to 50 MB; keep a client-side ceiling below that so
+// pathological uploads still get downscaled in the browser. (The old 3.8 MB
+// value worked around Vercel's 4.5 MB body cap; Cloudflare has no such cap,
+// and a 413 response still triggers the shrink-and-retry fallback.)
+const MAX_UPLOAD_BODY_BYTES = 24_000_000;
 
 async function fitUploadSizeLimit(file) {
   if (!file || file.size <= MAX_UPLOAD_BODY_BYTES || requiresJsonUpload(file)) {
