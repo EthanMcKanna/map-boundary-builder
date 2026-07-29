@@ -27,7 +27,7 @@ THRESHOLDS = {
     "real_max_complete_to_failed": 0,
     "real_max_complete_to_needs_city": 5,
     "real_min_correct_rejections": 8,
-    "model_max_bytes": 15 * 1024 * 1024,
+    "model_max_bytes": 32 * 1024 * 1024,  # raised for the v5 base-40 model (user-directed capacity increase)
 }
 
 

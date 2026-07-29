@@ -1,16 +1,16 @@
 {
   "architecture": "boundary-resunet-v1",
   "artifact": {
-    "bytes": 12111766,
-    "sha256": "6d00363b819b584113425224dfe50ade6b579d754c462a50d5d8266195550393"
+    "bytes": 24558955,
+    "sha256": "945b71ec79d08db89f63813355c3b1b91740cddfc754aa5528ca44b1061862a8"
   },
-  "model_generation": "v4-e16",
+  "model_generation": "v5-e8",
   "onnx_input_name": "image",
   "onnx_output_name": "mask_logits",
   "production": {
     "input_channels": 3,
-    "input_height": 384,
-    "input_width": 384,
+    "input_height": 416,
+    "input_width": 416,
     "output_activation": "logits",
     "threshold": 0.6
   },
