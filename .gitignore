@@ -24,3 +24,4 @@ build/
 promo-video/
 training-runs/
 benchmarks/real-screenshots/
+node_modules/
