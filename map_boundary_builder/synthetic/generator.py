@@ -29,7 +29,7 @@ from .manifest import (
     SyntheticSampleMetadata,
 )
 
-GENERATOR_VERSION = "synthetic-generator-v23-balanced-quotas"
+GENERATOR_VERSION = "synthetic-generator-v24-white-outline-dark"
 
 
 @dataclass(frozen=True)
@@ -200,6 +200,12 @@ def generate_synthetic_dataset(
             style = randomized_overlay_style(seed + index, index=index, force_fill=True)
         else:
             style = randomized_overlay_style(seed + index, index=index)
+        # A third of outline-only samples render over the Tesla dark basemap:
+        # white-stroke-on-dark with no fill is a real export style and needs
+        # dark backgrounds more often than the generic 25% rotation provides.
+        scene_provider_style = provider
+        if slice_name == "outline" and index % 3 == 0:
+            scene_provider_style = "tesla-dark"
         if negative:
             negative_count += 1
         config = SyntheticSceneConfig(
@@ -235,7 +241,7 @@ def generate_synthetic_dataset(
             negative_family=NEGATIVE_FAMILIES[negative_count % len(NEGATIVE_FAMILIES)],
             include_admin_shading=index % 5 == 0 or provider == "waymo-web",
             textured_basemap=slice_name == "satellite" or (index % 7 == 5 and provider is None),
-            provider_style=provider,
+            provider_style=scene_provider_style,
             slice_name=slice_name,
         )
         samples.append(generate_synthetic_sample(root, config).sample)
@@ -301,12 +307,16 @@ def tesla_grayline_overlay_style(seed: int) -> SyntheticOverlayStyle:
     fill = colorsys.hls_to_rgb(0.0, gray, rng.uniform(0.0, 0.04))
     stroke_level = rng.uniform(0.85, 1.0)
     stroke = (stroke_level, stroke_level, stroke_level)
+    # A fifth of grayline samples drop the fill entirely: some Tesla exports
+    # draw only the white boundary line over an unchanged dark basemap.
+    zero_fill = rng.random() < 0.2
     return SyntheticOverlayStyle(
         name=f"tesla-grayline-{seed % 97}",
         fill_color=rgb_hex(fill),
-        fill_opacity=rng.uniform(0.28, 0.55),
+        fill_opacity=0.0 if zero_fill else rng.uniform(0.28, 0.55),
         stroke_color=rgb_hex(stroke),
         stroke_width_px=rng.uniform(2.0, 4.5),
+        fill_enabled=not zero_fill,
         labels_on_top=True,
     )
 
@@ -336,17 +346,26 @@ def light_fill_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlaySt
 
 
 def outline_only_overlay_style(seed: int, *, index: int = 0) -> SyntheticOverlayStyle:
-    """Boundary drawn as a stroke with no interior fill, solid or dashed."""
+    """Boundary drawn as a stroke with no interior fill, solid or dashed.
+
+    A third of samples use white/near-white desaturated strokes — Tesla's
+    dark-mode exports draw the boundary as a plain white line with zero
+    interior fill, and saturated-only training left that style unlearnable.
+    """
     rng = random.Random(seed * 15485863 + index)
-    hue = rng.random()
-    stroke = colorsys.hls_to_rgb(hue, rng.uniform(0.22, 0.62), rng.uniform(0.45, 1.0))
+    if rng.random() < 0.35:
+        stroke = colorsys.hls_to_rgb(rng.random(), rng.uniform(0.82, 1.0), rng.uniform(0.0, 0.12))
+        dashed = rng.random() < 0.15
+    else:
+        stroke = colorsys.hls_to_rgb(rng.random(), rng.uniform(0.22, 0.62), rng.uniform(0.45, 1.0))
+        dashed = rng.random() < 0.45
     return SyntheticOverlayStyle(
         name=f"outline-{index:04d}",
         fill_color="#ffffff",
         fill_opacity=0.0,
         stroke_color=rgb_hex(stroke),
         stroke_width_px=rng.uniform(2.0, 8.0),
-        dashed=rng.random() < 0.45,
+        dashed=dashed,
         fill_enabled=False,
         labels_on_top=rng.random() < 0.4,
     )

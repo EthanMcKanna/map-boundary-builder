@@ -34,6 +34,14 @@
       "watches": "Satellite multi-zone: grabbing the orange/red district zones doubles coverage (0.31+ when broken)"
     },
     {
+      "name": "miami-white-outline",
+      "image": "/Users/ethanmckanna/Downloads/miami tesla.jpeg",
+      "coverage_min": 0.42,
+      "coverage_max": 0.57,
+      "max_components": 3,
+      "watches": "White outline with NO interior fill on dark basemap: models trained only on filled grayline fragment to texture patches (0.28 broken; truth 0.50)"
+    },
+    {
       "name": "tampa-color-png",
       "image": "/Users/ethanmckanna/Documents/Screenshots/tampa tesla.png",
       "coverage_min": 0.03,

@@ -358,6 +358,16 @@ class SyntheticBoundaryDataset:
         sample = self.samples[index]
         image = Image.open(self.root / sample.artifacts.screenshot).convert("RGB")
         mask = Image.open(self.root / sample.artifacts.mask).convert("L")
+        if self.augment and random.random() < 0.6:
+            # Zoom-crop: real uploads frame service areas at arbitrary zoom;
+            # partial crops also teach borders that leave the viewport.
+            width, height = image.size
+            scale = random.uniform(0.72, 1.0)
+            crop_width, crop_height = int(width * scale), int(height * scale)
+            x0 = random.randint(0, width - crop_width)
+            y0 = random.randint(0, height - crop_height)
+            image = image.crop((x0, y0, x0 + crop_width, y0 + crop_height))
+            mask = mask.crop((x0, y0, x0 + crop_width, y0 + crop_height))
         image = image.resize((self.image_size, self.image_size), Image.Resampling.BILINEAR)
         mask = mask.resize((self.image_size, self.image_size), Image.Resampling.NEAREST)
         image_arr = np.asarray(image, dtype=np.float32) / 255.0
@@ -369,7 +379,21 @@ class SyntheticBoundaryDataset:
             if random.random() < 0.5:
                 image_arr = image_arr[::-1, :, :]
                 mask_arr = mask_arr[::-1, :]
+            if random.random() < 0.4:
+                # Slight rotation: screenshots are near-north-up but not exact.
+                angle = random.uniform(-8.0, 8.0)
+                center = (self.image_size / 2.0, self.image_size / 2.0)
+                matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+                size = (self.image_size, self.image_size)
+                image_arr = cv2.warpAffine(
+                    image_arr, matrix, size, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+                )
+                mask_arr = cv2.warpAffine(
+                    mask_arr, matrix, size, flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REPLICATE
+                )
             image_arr = color_jitter(image_arr)
+            image_arr = np.ascontiguousarray(image_arr)
+            mask_arr = np.ascontiguousarray(mask_arr)
         image_tensor = np.transpose(image_arr, (2, 0, 1))
         if self.input_channels == 5:
             image_tensor = np.concatenate(
