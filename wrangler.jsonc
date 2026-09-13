@@ -4,7 +4,10 @@
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-07-01",
   "assets": {
-    "directory": "map_boundary_builder/web_assets"
+    "directory": "map_boundary_builder/web_assets",
+    // Bound so the Worker can answer index.html's /static/* references from
+    // the asset bundle instead of waking the container for CSS/JS.
+    "binding": "ASSETS"
   },
   "routes": [
     { "pattern": "mapboundary.app", "custom_domain": true },
@@ -15,7 +18,9 @@
       "class_name": "MapBoundaryContainer",
       "image": "./Dockerfile",
       "instance_type": "standard",
-      "max_instances": 2
+      // A single named instance ("primary") serves everything; a second slot
+      // only adds a warm spare that is billed like the first.
+      "max_instances": 1
     }
   ],
   "durable_objects": {
