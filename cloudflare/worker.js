@@ -10,11 +10,23 @@ import { Container } from "@cloudflare/containers";
 // Cost note: the container is billed for every second it runs. A 20-minute
 // sleepAfter plus a trickle of bot requests kept it up 24 hours a day, which
 // was most of the account's Cloudflare bill; with a short idle window it now
-// only runs while someone is actually using the app (an SSE run stream counts
-// as activity, so an in-progress run is never cut off).
+// only runs while someone is actually using the app (an open SSE run stream is
+// an in-flight request, which @cloudflare/containers >= 0.3 counts as
+// activity, so an in-progress run is never cut off).
 export class MapBoundaryContainer extends Container {
   defaultPort = 8765;
   sleepAfter = "2m";
+
+  // The default onActivityExpired sends SIGTERM, but map-boundary-web runs as
+  // PID 1 with no SIGTERM handler, and the kernel drops default-action signals
+  // to PID 1 — so the container never exited and stayed allocated 24h/day
+  // while the idle-check alarm fired about once a minute. The server keeps no
+  // state worth a graceful shutdown (run outputs sit on the container's
+  // ephemeral disk and vanish on any stop), so kill it outright.
+  async onActivityExpired() {
+    if (!this.container.running) return;
+    await this.destroy();
+  }
 }
 
 export default {
