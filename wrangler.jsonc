@@ -17,7 +17,7 @@
     {
       "class_name": "MapBoundaryContainer",
       "image": "./Dockerfile",
-      "instance_type": "standard",
+      "instance_type": "standard-1",
       // A single named instance ("primary") serves everything; a second slot
       // only adds a warm spare that is billed like the first.
       "max_instances": 1

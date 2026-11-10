@@ -29,6 +29,7 @@ from .georeference import (
 )
 from .image_io import normalize_image_for_processing
 from .ocr import OcrLabel, extract_ocr_labels_from_rgb
+from .runtime_config import RAPIDOCR_DET_LIMIT_SIDE_LEN, RAPIDOCR_MAX_DIMENSION
 from .segment import segment_image
 
 PipelineStatus = Literal["complete", "needs_city", "failed"]
@@ -272,6 +273,35 @@ def _georeference_and_export(
         # like "Tampa FL" — try matching detected road structure against
         # public OSM road geometry around that city.
         georeference = _road_search_fallback(rgb, extraction, labels, city)
+        fallback_score = _full_resolution_road_score(rgb, georeference, labels, city)
+        if georeference is None or fallback_score < ROAD_RESCUE_MIN_SCORE:
+            # Either nothing fit, or the low-resolution rescue fit matches the
+            # roads poorly at full resolution. The default OCR detector works
+            # on a ~608 px copy, where the small street labels of a large,
+            # zoomed-out screenshot disappear: read them again at full OCR
+            # resolution and retry both fits, keeping whichever fit matches
+            # the roads clearly better.
+            dense_labels = _dense_label_retry(normalized_path, rgb, labels, options)
+            if dense_labels is not None:
+                summary["ocr_dense_retry_label_count"] = len(dense_labels)
+                dense = georeference_from_labels(
+                    list(dense_labels),
+                    str(normalized_path),
+                    city,
+                    width,
+                    height,
+                    rgb=rgb,
+                    min_control_points=options.min_control_points,
+                )
+                if dense is None:
+                    dense = _road_search_fallback(rgb, extraction, dense_labels, city)
+                if dense is not None and (
+                    georeference is None
+                    or _full_resolution_road_score(rgb, dense, dense_labels, city)
+                    >= fallback_score + DENSE_RETRY_MIN_SCORE_GAIN
+                ):
+                    georeference = dense
+                    labels = dense_labels
     timings["georeference_s"] = round(time.monotonic() - stage_start, 3)
 
     if georeference is None:
@@ -367,6 +397,18 @@ def _georeference_and_export(
 
 
 ROAD_SEARCH_MAX_DIMENSION = 500
+# Dense OCR retry: only worth it when the default detector downscaled the
+# image substantially, and only kept when it reads more labels.
+DENSE_OCR_MIN_DOWNSCALE = 1.5
+# Road refinement of a north-up label-anchor fit. Street and neighbourhood
+# geocodes sit wherever the geocoder puts the name, not where the label is
+# drawn, so the anchor fit's scale can be off by a third. The road refiner
+# only searches about ±12% scale around its seed, so seed it across a
+# geometric range of scales (scaled about the image centre) and keep the
+# best road match.
+ROAD_SEED_SCALE_MULTIPLIERS = tuple(float(m) for m in np.geomspace(0.7, 1.6, 8))
+ROAD_RESCUE_MIN_SCORE = 0.85
+DENSE_RETRY_MIN_SCORE_GAIN = 0.05
 RESCUE_MAX_ROTATION_DEGREES = 8.0
 RESCUE_MIN_METERS_PER_PIXEL = 1.5
 RESCUE_MAX_METERS_PER_PIXEL = 120.0
@@ -542,7 +584,8 @@ def _road_search_fallback(
     # optima the road search can fall into.
     north_up = _north_up_anchor_fit(anchors, width, height, contexts[0].query)
     if north_up is not None and _rescue_fit_is_sane(north_up, anchors, width, height):
-        return north_up
+        refined = _road_refined_anchor_fit(rgb, north_up, contexts[0].center, anchors)
+        return refined if refined is not None else north_up
 
     # The road-structure search works on low-resolution street grids (its
     # line-feature matcher only activates below ~520 px), so search on a
@@ -590,6 +633,118 @@ def _road_search_fallback(
             continue
         return rescued
     return None
+
+
+def _full_resolution_road_score(
+    rgb: np.ndarray,
+    georeference: GeoreferenceResult | None,
+    labels: tuple[OcrLabel, ...],
+    city: str | None,
+) -> float:
+    """How well a fit lays OSM roads onto the screenshot's road strokes (0-1)."""
+    if georeference is None:
+        return 0.0
+    if georeference.road_match is not None:
+        return float(georeference.road_match.score)
+    from .osm_roads import (
+        ROAD_MATCH_MAX_POINTS,
+        feature_score_image,
+        image_feature_distance,
+        load_road_points,
+        sample_road_points,
+        score_georeference_transform_on_score_image,
+    )
+
+    try:
+        contexts = resolve_city_contexts(list(labels), city)
+        bbox = contexts[0].center.bbox if contexts else None
+        if bbox is None:
+            return 0.0
+        road_points = load_road_points(bbox)
+        if road_points.size == 0:
+            return 0.0
+        road_points = sample_road_points(road_points, max_points=ROAD_MATCH_MAX_POINTS).astype(np.float32, copy=False)
+        score, count = score_georeference_transform_on_score_image(
+            road_points,
+            feature_score_image(image_feature_distance(rgb)),
+            georeference.transform,
+        )
+    except Exception:
+        return 0.0
+    return float(score) if count >= 1000 else 0.0
+
+
+def _dense_label_retry(
+    normalized_path: Path,
+    rgb: np.ndarray,
+    labels: tuple[OcrLabel, ...],
+    options: PipelineOptions,
+) -> tuple[OcrLabel, ...] | None:
+    detector_side = min(max(rgb.shape[:2]), RAPIDOCR_MAX_DIMENSION)
+    if detector_side < DENSE_OCR_MIN_DOWNSCALE * RAPIDOCR_DET_LIMIT_SIDE_LEN:
+        return None
+    try:
+        dense = extract_ocr_labels_from_rgb(
+            str(normalized_path),
+            rgb,
+            rapidocr_detector_limit_side_len=detector_side,
+            allow_tesseract_fallback=options.allow_tesseract_fallback,
+            cache=options.ocr_cache,
+        )
+    except Exception:
+        return None
+    return tuple(dense) if len(dense) > len(labels) else None
+
+
+def _road_refined_anchor_fit(
+    rgb: np.ndarray,
+    anchor_fit: GeoreferenceResult,
+    city_center,
+    anchors: list[tuple[OcrLabel, tuple[float, float], bool]],
+) -> GeoreferenceResult | None:
+    """Sharpen a rough north-up anchor fit against OSM road geometry."""
+    from dataclasses import replace as dataclass_replace
+
+    from .georef_transform import lonlat_to_mercator, mercator_to_lonlat, pixel_to_lonlat
+    from .osm_roads import image_feature_distance, refine_transform_with_osm_roads
+
+    if getattr(city_center, "bbox", None) is None:
+        return None
+    height, width = rgb.shape[:2]
+    seed = anchor_fit.transform
+    try:
+        feature_distance = image_feature_distance(rgb)
+        center_x, center_y = lonlat_to_mercator(*pixel_to_lonlat(width / 2.0, height / 2.0, width, height, seed))
+        best = None
+        for multiplier in ROAD_SEED_SCALE_MULTIPLIERS:
+            mpp = seed.meters_per_pixel * multiplier
+            lon, lat = mercator_to_lonlat(center_x - (width / 2.0) * mpp, center_y + (height / 2.0) * mpp)
+            match = refine_transform_with_osm_roads(
+                rgb,
+                city_center,
+                dataclass_replace(seed, lon=lon, lat=lat, meters_per_pixel=mpp),
+                feature_distance=feature_distance,
+            )
+            if match is not None and (best is None or match.score > best.score):
+                best = match
+    except Exception:
+        return None
+    if best is None or best.score < ROAD_RESCUE_MIN_SCORE:
+        return None
+    refined = GeoreferenceResult(
+        transform=dataclass_replace(
+            best.transform,
+            confidence=max(seed.confidence, min(0.8, seed.confidence + (best.score - ROAD_RESCUE_MIN_SCORE) + 0.1)),
+            source="label-anchors:north-up-fit+osm-road-refine",
+        ),
+        control_points=anchor_fit.control_points,
+        residual_median_m=anchor_fit.residual_median_m,
+        residual_p90_m=anchor_fit.residual_p90_m,
+        road_match=best,
+    )
+    if not _rescue_fit_is_sane(refined, anchors, width, height):
+        return None
+    return refined
 
 
 def _needs_city_detail(labels: tuple[OcrLabel, ...], city: str | None) -> NeedsCityDetail:

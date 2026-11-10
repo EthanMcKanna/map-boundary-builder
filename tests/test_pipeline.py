@@ -272,3 +272,72 @@ def test_progress_callback_stages(image_path, patched_stages):
     stages: list[str] = []
     run_pipeline(image_path, progress=lambda stage, percent, detail: stages.append(stage))
     assert stages == ["load", "extract", "georeference", "export", "complete"]
+
+
+@pytest.fixture
+def large_image_path(tmp_path):
+    rgb = np.full((900, 1600, 3), 245, dtype=np.uint8)
+    rgb[300:600, 500:1100] = (60, 120, 235)
+    path = tmp_path / "large.png"
+    Image.fromarray(rgb).save(path)
+    return path
+
+
+def _dense_ocr(path, rgb, **kwargs):
+    labels = fake_labels()
+    if kwargs.get("rapidocr_detector_limit_side_len"):
+        labels += [
+            OcrLabel(text="Elm St", x=900.0, y=500.0, width=30.0, height=8.0, confidence=0.9),
+            OcrLabel(text="Pine Rd", x=1200.0, y=200.0, width=30.0, height=8.0, confidence=0.9),
+        ]
+    return labels
+
+
+def test_sparse_labels_retry_ocr_at_full_resolution(large_image_path, patched_stages):
+    patched_stages.setattr(pipeline_module, "extract_ocr_labels_from_rgb", _dense_ocr)
+    patched_stages.setattr(
+        pipeline_module,
+        "georeference_from_labels",
+        lambda labels, *args, **kwargs: fake_georeference() if len(labels) > 2 else None,
+    )
+    patched_stages.setattr(pipeline_module, "_road_search_fallback", lambda *args: None)
+    result = run_pipeline(large_image_path, city="Austin, TX")
+    assert result.status == "complete"
+    assert result.summary["ocr_dense_retry_label_count"] == 4
+    assert len(result.labels) == 4
+
+
+def test_dense_retry_replaces_a_weak_road_fit_only_when_clearly_better(large_image_path, patched_stages):
+    patched_stages.setattr(pipeline_module, "extract_ocr_labels_from_rgb", _dense_ocr)
+    patched_stages.setattr(pipeline_module, "georeference_from_labels", lambda *args, **kwargs: None)
+    weak = fake_georeference()
+    strong = fake_georeference()
+    patched_stages.setattr(
+        pipeline_module,
+        "_road_search_fallback",
+        lambda rgb, extraction, labels, city: strong if len(labels) > 2 else weak,
+    )
+    scores = {id(weak): 0.75, id(strong): 0.95}
+    patched_stages.setattr(
+        pipeline_module,
+        "_full_resolution_road_score",
+        lambda rgb, georeference, labels, city: scores.get(id(georeference), 0.0),
+    )
+    assert run_pipeline(large_image_path, city="Austin, TX").georeference is strong
+
+    scores[id(strong)] = 0.77
+    assert run_pipeline(large_image_path, city="Austin, TX").georeference is weak
+
+
+def test_small_images_skip_the_dense_ocr_retry(image_path, patched_stages):
+    calls = []
+
+    def ocr(path, rgb, **kwargs):
+        calls.append(kwargs.get("rapidocr_detector_limit_side_len"))
+        return fake_labels()
+
+    patched_stages.setattr(pipeline_module, "extract_ocr_labels_from_rgb", ocr)
+    patched_stages.setattr(pipeline_module, "georeference_from_labels", lambda *args, **kwargs: None)
+    patched_stages.setattr(pipeline_module, "_road_search_fallback", lambda *args: None)
+    run_pipeline(image_path, city="Austin, TX")
+    assert calls == [None]

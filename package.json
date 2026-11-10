@@ -2,7 +2,7 @@
   "name": "map-boundary-builder-worker",
   "private": true,
   "dependencies": {
-    "@cloudflare/containers": "^0.0.28"
+    "@cloudflare/containers": "^0.3.7"
   },
   "devDependencies": {
     "wrangler": "^4.115.0"

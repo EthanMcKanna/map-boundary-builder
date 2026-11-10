@@ -161,6 +161,7 @@ def _model_segmentation(
     # service areas (Tesla Orlando, Miami) ship with four or more.
     mask = keep_main_components(mask, max_components=6)
     mask = fill_binary_holes(mask)
+    mask = refine_fill_components(mask, rgb)
     try:
         pixel_geometry, contour_count = mask_to_geometry(mask, simplify_px)
     except ValueError:
@@ -235,6 +236,54 @@ def select_hinted_components(
     if best_label == 0:
         return mask
     return labels == best_label
+
+
+# Fill-contrast refinement. A component whose interior is clearly a fill
+# (far from the ground just outside it) proves the map uses filled areas;
+# any other component indistinguishable from its own surroundings is then
+# plain basemap the model mistook for the target, and is dropped. Maps with
+# no clear fill (outline-only boundaries) are left untouched.
+FILL_CLEAR_MIN_DELTA_E = 25.0
+FILL_BACKGROUND_MAX_DELTA_E = 6.0
+FILL_RING_FRACTION = 0.006
+FILL_MIN_SAMPLE_PIXELS = 50
+
+
+def refine_fill_components(mask: np.ndarray, rgb: np.ndarray) -> np.ndarray:
+    if not mask.any():
+        return mask
+    mask_u8 = mask.astype(np.uint8)
+    count, labels = cv2.connectedComponents(mask_u8)
+    if count <= 1:
+        return mask
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
+    radius = max(3, int(FILL_RING_FRACTION * max(mask.shape)))
+    inner_kernel = np.ones((2 * radius + 1, 2 * radius + 1), np.uint8)
+    outer_kernel = np.ones((4 * radius + 1, 4 * radius + 1), np.uint8)
+    outside = ~cv2.dilate(mask_u8, inner_kernel).astype(bool)
+    stats: list[tuple[np.ndarray, float | None]] = []
+    for label in range(1, count):
+        component = labels == label
+        component_u8 = component.astype(np.uint8)
+        inner = cv2.erode(component_u8, inner_kernel).astype(bool)
+        ring = cv2.dilate(component_u8, outer_kernel).astype(bool) & outside
+        if inner.sum() < FILL_MIN_SAMPLE_PIXELS or ring.sum() < FILL_MIN_SAMPLE_PIXELS:
+            stats.append((component, None))
+            continue
+        fill = np.median(lab[inner], axis=0)
+        ground = np.median(lab[ring], axis=0)
+        stats.append((component, float(np.linalg.norm(fill - ground))))
+    contrasts = [delta for _component, delta in stats if delta is not None]
+    if not contrasts or max(contrasts) < FILL_CLEAR_MIN_DELTA_E:
+        return mask
+    refined = np.zeros_like(mask)
+    for component, delta in stats:
+        if delta is not None and delta < FILL_BACKGROUND_MAX_DELTA_E:
+            continue
+        refined |= component
+    if not refined.any():
+        return mask
+    return fill_binary_holes(refined)
 
 
 ZONE_MERGE_MAX_AB_DISTANCE = 30.0
