@@ -8,6 +8,7 @@ import pytest
 from map_boundary_builder.extract import ExtractionHints
 from map_boundary_builder import segment as segment_module
 from map_boundary_builder.segment import (
+    refine_fill_components,
     DEFAULT_MODEL_THRESHOLD,
     _degenerate_reason,
     load_model_config,
@@ -197,3 +198,30 @@ def test_select_hinted_components_single_component_untouched():
     hints = ExtractionHints(seed_point=(70.0, 70.0))
     selected = select_hinted_components(mask, rgb, hints)
     assert np.array_equal(selected, mask)
+
+
+def _dark_basemap(height: int = 300, width: int = 400) -> np.ndarray:
+    rgb = np.empty((height, width, 3), dtype=np.uint8)
+    rgb[:] = (38, 58, 60)
+    rgb[::25, :] = (70, 88, 90)  # road strokes
+    return rgb
+
+
+def test_refine_fill_components_drops_basemap_islands_beside_a_clear_fill():
+    rgb = _dark_basemap()
+    rgb[100:200, 150:260] = (88, 176, 146)
+    mask = np.zeros(rgb.shape[:2], dtype=bool)
+    mask[100:200, 150:260] = True
+    mask[40:120, 20:100] = True  # basemap the model mistook for a fill
+    refined = refine_fill_components(mask, rgb)
+    assert refined[150, 200]
+    assert not refined[80, 60]
+
+
+def test_refine_fill_components_leaves_outline_only_maps_alone():
+    rgb = _dark_basemap()
+    mask = np.zeros(rgb.shape[:2], dtype=bool)
+    mask[100:200, 150:260] = True
+    mask[40:120, 20:100] = True
+    assert np.array_equal(refine_fill_components(mask, rgb), mask)
+

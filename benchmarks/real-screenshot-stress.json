@@ -2111,6 +2111,23 @@
     "status": "complete",
     "city_equals": "Orlando"
    }
+  },
+  {
+   "slug": "austin-zoox-test-area-dark-webp",
+   "image": "/Users/ethanmckanna/Downloads/austin zoox.webp",
+   "no_catalog": true,
+   "filename_hint": "upload.png",
+   "expect": {
+    "status": "complete",
+    "city_equals": "Austin",
+    "bbox_approx": [
+     -97.770375,
+     30.214055,
+     -97.684853,
+     30.313718
+    ],
+    "max_bbox_error_m": 1000
+   }
   }
  ]
 }
